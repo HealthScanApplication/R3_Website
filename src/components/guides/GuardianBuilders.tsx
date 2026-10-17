@@ -10,7 +10,7 @@ import { DietNutritionPanel } from './DietNutritionPanel';
 import { DietLocationHeader } from './DietLocationHeader';
 import { SupplementPicker } from './SupplementPicker';
 import { LinkedDiet, LinkedTraining } from './LinkedRoutine';
-import { plannerWeek, sunriseForDate, validPlannerLocation } from '../../utils/plannerSunrise';
+import { defaultHomeCity, plannerWeek, saveHomeCity, sunriseForDate, validPlannerLocation } from '../../utils/plannerSunrise';
 import { aggregateDiet, dietSelections, loadDietAnalysis, type DietAnalysis } from '../../utils/dietNutrition';
 import {
   MUSCLE_GROUPS, dayNameFor, muscleGroupOf, type MuscleGroupId, mealDrinks, mealPickKey, selectedServings, fitsSlot, DIET_FRAMEWORKS, FITNESS_GOALS, FRAMEWORK_RULES, mealTiming, resolveTiming, sessionTiming, mealIsFasting, fastingDrinkAllowed, type Anchor, type Timing, MEAL_SLOTS, WEEK, combineProtocols, draftFitnessWeek, TRAINING_TYPES, type FitnessLikes, defaultFuel, type TrainingFuel, findClashes, guideRecipeToPick,
@@ -139,6 +139,8 @@ export function DietBuilder({ accessToken, ownerId, protocols, recipes, initialP
   const [now,setNow]=useState(()=>new Date());
   useEffect(()=>{const timer=setInterval(()=>setNow(new Date()),60000);return()=>clearInterval(timer);},[]);
   const city=validPlannerLocation(cfg.location)?cfg.location:undefined;
+  // A plan without a city uses the home city (last chosen on this device, else the device timezone's largest city).
+  useEffect(() => { if (validPlannerLocation(cfg.location)) return; let live = true; defaultHomeCity().then((home) => { if (live && home) setCfg((c) => validPlannerLocation(c.location) ? c : { ...c, location: home }); }); return () => { live = false; }; }, [cfg.location]);
   const weekDates=city?plannerWeek(city.timezone,now):[];
   const [name, setName] = useState('Mediterranean week');
   const [protocolId, setProtocolId] = useState<string | null>(null);
@@ -252,7 +254,7 @@ export function DietBuilder({ accessToken, ownerId, protocols, recipes, initialP
     </aside>
     <section aria-label="Weekly diet planner" className="g-diet-plan" style={{ minWidth: 0 }}>
     <h2 style={{ fontSize: 16 }}>Weekly planner · meals, drinks &amp; supplements</h2>
-    <DietLocationHeader city={city} now={now} onChange={location=>setCfg(c=>({...c,location}))} />
+    <DietLocationHeader city={city} now={now} onChange={location=>{saveHomeCity(location);setCfg(c=>({...c,location}));}} />
     <DietFastingControls cfg={cfg} setCfg={setCfg} />
     <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
       <span style={{ display: 'flex', gap: 5 }}>{TIERS.map((t) => <button key={t} type="button" onClick={() => setTier(t)} title="Rank meals by this essential-nutrient set and show each day's coverage" style={{ ...chip(t === tier), padding: '6px 10px', fontSize: 10 }}>{tierLabel(t)}</button>)}</span>
