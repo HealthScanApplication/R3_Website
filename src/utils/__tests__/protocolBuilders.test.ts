@@ -153,3 +153,24 @@ describe('fitness likes', () => {
     for (const n of ['Sleep', 'Wake at 4am sharp', 'Digital Sunset', 'Gaming Session', 'Manage Herxheimer Reaction', 'Recovery Nap']) expect(isPostWorkoutRecovery(n)).toBe(false);
   });
 });
+
+it('saves training fuel as timed, catalog-linked items on each training day', async () => {
+  const { saveFitnessProtocol } = await import('../protocolBuilders');
+  const writes: any[] = [];
+  const config: FitnessConfig = { goal: 'general', level: 'beginner', minutes: 40, rules: [],
+    sessions: [{ day: 1, time: '07:00', anchor: 'clock', offset: 0, title: 'Do leg day', minutes: 40, intensity: 'moderate', rules: [], exercises: [] }],
+    fuel: { pre: ['Banana'], post: [{ id: 'sup-creatine', name: 'Creatine', source: 'supplement', image: 'c.jpg' }], preMinutes: 30, postMinutes: 15 } };
+  vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+    const body = init?.body ? JSON.parse(String(init.body)) : null;
+    if (init?.method === 'POST' && url.endsWith('/protocol_items')) writes.push(body);
+    return new Response(JSON.stringify(url.includes('/rpc/') ? null : init?.method === 'POST' || init?.method === 'PATCH' ? [{ id: 'fit-1', user_id: 'owner', ...body }] : []));
+  });
+  try {
+    await saveFitnessProtocol('token', 'owner', null, 'Strength week', config);
+    const fuel = writes.filter((w) => w.group_name === 'Training fuel');
+    expect(fuel).toEqual([
+      expect.objectContaining({ display_name: 'Take Banana', scheduled_time: '06:30:00', notes: 'Before Do leg day', recurrence_type: 'weekly', recurrence_days_of_week: [1] }),
+      expect.objectContaining({ display_name: 'Take Creatine', scheduled_time: '07:55:00', notes: 'After Do leg day', supplement_id: 'sup-creatine', media_image_url: 'c.jpg' }),
+    ]);
+  } finally { vi.unstubAllGlobals(); }
+});

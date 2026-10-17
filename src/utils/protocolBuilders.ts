@@ -390,7 +390,28 @@ export interface ExercisePick extends ActivityPick { sets: number | null; reps: 
 export interface FitnessSession { day: number; time: string; anchor?: Anchor; offset?: number; rules?: string[]; title: string; minutes: number; intensity: 'low' | 'moderate' | 'high'; exercises: ExercisePick[] }
 /** What the person likes doing: training types steer each session's catalog categories, sports become sessions. */
 export interface FitnessLikes { types: string[]; sports: ActivityPick[] }
-export interface FitnessConfig { goal: string; level: 'beginner' | 'intermediate' | 'advanced'; minutes: number; sessions: FitnessSession[]; rules?: string[]; likes?: FitnessLikes }
+/** Food or supplements around every training session: free text or catalog picks, like Diet supplements. */
+export type FuelItem = string | SupplementPick;
+export interface TrainingFuel { pre: FuelItem[]; post: FuelItem[]; preMinutes: number; postMinutes: number }
+export const defaultFuel = (): TrainingFuel => ({ pre: [], post: [], preMinutes: 30, postMinutes: 15 });
+export interface FitnessConfig { goal: string; level: 'beginner' | 'intermediate' | 'advanced'; minutes: number; sessions: FitnessSession[]; rules?: string[]; likes?: FitnessLikes; fuel?: TrainingFuel }
+
+export interface FuelSlot { day: number; session: string; when: 'pre' | 'post'; time: string; items: FuelItem[] }
+export const fuelName = (item: FuelItem) => (typeof item === 'string' ? item : item.name).trim();
+/** Each session's fuel, timed from the session: `preMinutes` before it starts, `postMinutes` after it ends. */
+export function trainingFuel(cfg: FitnessConfig): FuelSlot[] {
+  const f = cfg.fuel;
+  if (!f) return [];
+  const pre = f.pre.filter((i) => fuelName(i)), post = f.post.filter((i) => fuelName(i));
+  return [...cfg.sessions].sort((a, b) => a.day - b.day).flatMap((s) => {
+    const start = resolveTiming(sessionTiming(s));
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(start)) return [];
+    return [
+      ...(pre.length ? [{ day: s.day, session: s.title, when: 'pre' as const, time: toHHMM(toMin(start) - Math.max(0, f.preMinutes || 0)), items: pre }] : []),
+      ...(post.length ? [{ day: s.day, session: s.title, when: 'post' as const, time: toHHMM(toMin(start) + (s.minutes || 0) + Math.max(0, f.postMinutes || 0)), items: post }] : []),
+    ];
+  });
+}
 export const sessionTiming = (s: FitnessSession): Timing => ({ anchor: s.anchor || 'clock', time: s.time, offset: s.offset || 0 });
 
 type Template = { title: string; categories: string[]; terms: string[]; muscles?: MuscleGroupId[]; intensity: FitnessSession['intensity'] };
@@ -788,6 +809,14 @@ export async function saveFitnessProtocol(accessToken: string, ownerId: string, 
     } as Partial<AdminProtocolItem>);
     await addRules(accessToken, protocol.id, step ? { dos: step.dos, donts: step.donts } : s.rules, { parentId: parent.id, category: 'do', days: weekly(s.day).recurrence_days_of_week, next: () => order++ });
   }
+  // Training fuel: one timed item per food/supplement before or after each session, linked to the catalog like Diet supplements.
+  for (const slot of trainingFuel(cfg)) for (const pick of slot.items) await createProtocolItem(accessToken, {
+    protocol_id: protocol.id, display_name: actionTitle(fuelName(pick), 'Take'), kind: 'action', item_type: 'supplement', category: 'supplement', subtype: 'supplement',
+    group_name: 'Training fuel', scheduled_time: hhmmss(slot.time), day_number: null, sort_order: order++, enabled: true, hidden: false, has_children: false,
+    notes: `${slot.when === 'pre' ? 'Before' : 'After'} ${slot.session}`,
+    ...(typeof pick === 'string' ? {} : { [pick.source === 'product' ? 'catalog_product_id' : 'supplement_id']: pick.id, media_image_url: pick.image }),
+    ...weekly(slot.day),
+  } as Partial<AdminProtocolItem>);
   await addGroupRules(accessToken, protocol.id, review.weekRules, 'fitness', () => order++);
   const saved = await saveBuilderMeta(accessToken, protocol.id, { builder_kind: 'fitness', builder_config: cfg });
   await syncProtocolChild(accessToken, protocol.id);

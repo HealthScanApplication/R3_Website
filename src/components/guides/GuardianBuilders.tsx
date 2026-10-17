@@ -8,10 +8,12 @@ import { TIERS, tierLabel, useEssential90 } from './RecipeInsights';
 import { DietFastingControls, FastingDayCell, WeeklySupplementRows, fastHatch } from './DietSchedule';
 import { DietNutritionPanel } from './DietNutritionPanel';
 import { DietLocationHeader } from './DietLocationHeader';
+import { SupplementPicker } from './SupplementPicker';
+import { LinkedDiet, LinkedTraining } from './LinkedRoutine';
 import { plannerWeek, sunriseForDate, validPlannerLocation } from '../../utils/plannerSunrise';
 import { aggregateDiet, dietSelections, loadDietAnalysis, type DietAnalysis } from '../../utils/dietNutrition';
 import {
-  MUSCLE_GROUPS, dayNameFor, muscleGroupOf, type MuscleGroupId, mealDrinks, mealPickKey, selectedServings, fitsSlot, DIET_FRAMEWORKS, FITNESS_GOALS, FRAMEWORK_RULES, mealTiming, resolveTiming, sessionTiming, mealIsFasting, fastingDrinkAllowed, type Anchor, type Timing, MEAL_SLOTS, WEEK, combineProtocols, draftFitnessWeek, TRAINING_TYPES, type FitnessLikes, findClashes, guideRecipeToPick,
+  MUSCLE_GROUPS, dayNameFor, muscleGroupOf, type MuscleGroupId, mealDrinks, mealPickKey, selectedServings, fitsSlot, DIET_FRAMEWORKS, FITNESS_GOALS, FRAMEWORK_RULES, mealTiming, resolveTiming, sessionTiming, mealIsFasting, fastingDrinkAllowed, type Anchor, type Timing, MEAL_SLOTS, WEEK, combineProtocols, draftFitnessWeek, TRAINING_TYPES, type FitnessLikes, defaultFuel, type TrainingFuel, findClashes, guideRecipeToPick,
   dietSupportItems, isDrinkPick, SUPPLEMENT_PERIODS, listBuilderMeta, macroGrams, saveDietProtocol, saveFitnessProtocol, searchActivities, searchDietRecipes, sumNutrition,
   reviewCombined, reviewDiet, reviewFitness, type Conflict, type Review, type ReviewNote, type ActivityPick, type BuilderKind, type Clash, type DietConfig, type FitnessConfig, type FitnessSession, type MealPick,
 } from '../../utils/protocolBuilders';
@@ -232,7 +234,11 @@ export function DietBuilder({ accessToken, ownerId, protocols, recipes, initialP
       {(['protein', 'carbs', 'fat'] as const).map((k) => <label key={k}><span style={label}>{k} %</span><input style={input} type="number" min={0} max={100} value={cfg[k]} onChange={(e) => setCfg({ ...cfg, [k]: Number(e.target.value) || 0 })} /></label>)}
       <div><span style={label}>Meals</span><div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{MEAL_SLOTS.map((s) => <button key={s.id} type="button" onClick={() => setCfg({ ...cfg, slots: cfg.slots.includes(s.id) ? cfg.slots.filter((x) => x !== s.id) : [...cfg.slots, s.id] })} style={{ ...iconChip(cfg.slots.includes(s.id)), padding: '5px 9px', fontSize: 10, gap: 5 }}>{(() => { const Icon = MEAL_ICON[s.id]; return Icon && <Icon size={12} strokeWidth={1.8} aria-hidden="true" />; })()}{s.label}</button>)}</div></div>
     </div>
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', borderTop: `1px solid ${line}`, borderBottom: `1px solid ${line}`, marginBottom: 18 }}>
+    <LinkedTraining accessToken={accessToken} protocolId={protocolId} diet={cfg} meta={meta} protocols={protocols} onOpen={onOpen} />
+    {/* Wide screens: planner on the left, macros + nutrients + hazards in one sticky column on the right. Stacked below 1500px. */}
+    <div className="g-diet-split">
+    <aside className="g-diet-side" aria-label="Macros, nutrients and hazards">
+    <div className="g-macro-strip" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', borderTop: `1px solid ${line}`, borderBottom: `1px solid ${line}`, marginBottom: 18 }}>
       {([['Energy', 'energy_kcal', 'kcal'], ['Protein', 'protein_g', 'g'], ['Carbs', 'carbohydrates_g', 'g'], ['Fat', 'fats_g', 'g']] as const).map(([l, k, u]) => <div key={k} style={{ padding: '14px 14px 14px 0', borderRight: `1px solid ${line}` }}>
         <div style={{ ...label, margin: 0 }}>{l}</div>
         <div style={{ fontFamily: serif, fontSize: 26 }}>{nutritionReport.week.nutrients[k]?.amount == null ? 'Unknown' : Math.round(week[k] || 0).toLocaleString()} <span style={{ fontSize: 13, color: muted }}>/ {(targets[k] * 7).toLocaleString()} {u} week</span></div>
@@ -241,9 +247,10 @@ export function DietBuilder({ accessToken, ownerId, protocols, recipes, initialP
         <Bar value={week[k] || 0} target={targets[k] * 7} />
       </div>)}
     </div>
-    <DietNutritionPanel report={nutritionReport} loading={analysisBusy} error={analysisError} />
     {macroSum !== 100 && <p style={{ color: warn, fontSize: 12 }}>Macros add up to {macroSum}% of energy. Adjust them to 100%.</p>}
-    <section aria-label="Weekly diet planner">
+    <DietNutritionPanel report={nutritionReport} loading={analysisBusy} error={analysisError} />
+    </aside>
+    <section aria-label="Weekly diet planner" className="g-diet-plan" style={{ minWidth: 0 }}>
     <h2 style={{ fontSize: 16 }}>Weekly planner · meals, drinks &amp; supplements</h2>
     <DietLocationHeader city={city} now={now} onChange={location=>setCfg(c=>({...c,location}))} />
     <DietFastingControls cfg={cfg} setCfg={setCfg} />
@@ -292,6 +299,7 @@ export function DietBuilder({ accessToken, ownerId, protocols, recipes, initialP
       </div>
     </div>
     </section>
+    </div>
     {ideas.length > 0 && <div style={{ ...card, marginTop: 14 }}>
       <div style={{ ...label, color: acid }}>Recipe ideas for this week's gaps · ingredients ranked by nutrients per kcal, fewest hazards</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 10 }}>{ideas.map((idea) => <div key={idea.title} style={{ border: `1px solid ${line}`, padding: 12 }}>
@@ -398,6 +406,23 @@ export function FitnessBuilder({ accessToken, ownerId, protocols, initialProtoco
         likes.types.includes('recovery') && 'Harder sessions end with a recovery activity such as an ice bath or sauna.',
       ].filter(Boolean).join(' ') || 'Pick training types and sports, then draft the week to build from them.'}</p>
     </div>
+    {(() => {
+      // Training fuel: the same food/supplement catalog as the Diet planner, timed around every session.
+      const fuel: TrainingFuel = cfg.fuel || defaultFuel();
+      const setFuel = (patch: Partial<TrainingFuel>) => setCfg((c) => ({ ...c, fuel: { ...(c.fuel || defaultFuel()), ...patch } }));
+      return <div style={{ ...card, marginBottom: 14 }}>
+        <span style={label}>Training fuel</span>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 14 }}>
+          {(['pre', 'post'] as const).map((when) => <div key={when}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: muted, fontSize: 11, marginBottom: 6 }}>{when === 'pre' ? 'Before each session' : 'After each session'}
+              <input type="number" min={0} step={5} aria-label={`Minutes ${when === 'pre' ? 'before' : 'after'} each session`} value={when === 'pre' ? fuel.preMinutes : fuel.postMinutes} onChange={(e) => setFuel(when === 'pre' ? { preMinutes: Number(e.target.value) || 0 } : { postMinutes: Number(e.target.value) || 0 })} style={{ ...input, height: 28, width: 58, fontSize: 11, padding: '0 6px' }} /> min</label>
+            <SupplementPicker accessToken={accessToken} title={when === 'pre' ? 'pre-workout fuel' : 'post-workout fuel'} items={fuel[when]} onChange={(items) => setFuel({ [when]: items })} />
+          </div>)}
+        </div>
+        <p style={{ color: muted, fontSize: 12, margin: '10px 0 0' }}>Saved as timed items on every training day, linked to the catalog like Diet supplements.</p>
+      </div>;
+    })()}
+    <LinkedDiet accessToken={accessToken} protocolId={protocolId} fit={cfg} meta={meta} protocols={protocols} onOpen={onOpen} />
     <div style={{ ...card, marginBottom: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, alignItems: 'end' }}>
       <label><span style={label}>Name</span><input style={input} value={name} onChange={(e) => setName(e.target.value)} /></label>
       <div><span style={label}>Level</span><div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{(['beginner', 'intermediate', 'advanced'] as const).map((l) => <button key={l} type="button" onClick={() => setCfg((c) => ({ ...c, level: l }))} style={{ ...iconChip(cfg.level === l), padding: '6px 9px', fontSize: 10, gap: 5, textTransform: 'capitalize' }}><IconLabel Icon={LEVEL_ICON[l]} size={12}>{l}</IconLabel></button>)}</div></div>
