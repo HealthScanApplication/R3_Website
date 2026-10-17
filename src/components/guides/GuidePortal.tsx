@@ -3789,8 +3789,11 @@ export function GuidePortal() {
     .g-builder:hover>.g-builder-menu,.g-builder:has(:focus-visible)>.g-builder-menu{opacity:1;visibility:visible;transform:translateY(0)}
     /* Collapsible icon rail: 64px, expands over content on hover/focus */
     .g-railwrap{position:relative;width:64px}
-    .g-rail{position:absolute;inset:0;width:64px;overflow:hidden;background:${black};border-right:1px solid ${line};padding:20px 0;z-index:30;transition:width .18s ease,box-shadow .18s ease}
+    /* overflow-y:auto: on short screens (phone landscape) the grid row can be shorter than the ~512px of links;
+       the rail scrolls on its own instead of clipping them. Scrollbar hidden so the 64px icon column stays aligned. */
+    .g-rail{position:absolute;inset:0;width:64px;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;background:${black};border-right:1px solid ${line};padding:20px 0;z-index:30;transition:width .18s ease,box-shadow .18s ease}
     .g-railwrap:hover .g-rail,.g-rail:has(:focus-visible){width:224px;box-shadow:16px 0 40px rgba(0,0,0,.45)}
+    .g-rail::-webkit-scrollbar{display:none}
     .g-rlabel{opacity:0;transition:opacity .14s ease}
     .g-railwrap:hover .g-rail .g-rlabel,.g-rail:has(:focus-visible) .g-rlabel{opacity:1}
     @media (prefers-reduced-motion:reduce){.g-rail,.g-rlabel,.g-builder-menu,.g-chip-label{transition:none}}`}</style><GuidePortalRoutes /></div>;
