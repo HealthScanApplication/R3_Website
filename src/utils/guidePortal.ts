@@ -1,5 +1,6 @@
 import { getSupabaseClient } from './supabase/client';
 import { projectId, publicAnonKey } from './supabase/info';
+import { LIBRARY_AUDIO_MIME_TYPES, type GuideLibraryKind, type GuideLibraryMetadata } from './guideLibrarySources';
 
 export type GuideStatus = 'draft' | 'submitted' | 'approved' | 'paused';
 
@@ -94,7 +95,7 @@ export interface GuideBrand {
   is_primary: boolean;
 }
 
-export type GuideLibraryKind = 'pdf' | 'url' | 'transcript';
+export type { GuideLibraryKind, GuideLibraryMetadata };
 
 export interface GuideLibraryFolder {
   id: string;
@@ -113,6 +114,8 @@ export interface GuideLibraryItem {
   source_url: string | null;
   file_path: string | null;
   transcript: string | null;
+  /** Book, podcast, paper and audio details; empty for older kinds. */
+  metadata?: GuideLibraryMetadata | null;
   created_at: string;
   updated_at: string;
 }
@@ -147,6 +150,16 @@ export async function uploadGuideFile(userId: string, file: File): Promise<strin
   if (file.size > 50 * 1024 * 1024) throw new Error('File must be smaller than 50 MB.');
   const extension = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'pdf';
   const path = `${userId}/offer-${Date.now()}.${extension}`;
+  const { error } = await db().storage.from('guide-files').upload(path, file, { contentType: file.type, upsert: false });
+  if (error) throw error;
+  return path;
+}
+
+export async function uploadGuideLibraryAudio(userId: string, file: File): Promise<string> {
+  if (!LIBRARY_AUDIO_MIME_TYPES.includes(file.type)) throw new Error('Choose an MP3, M4A, WAV, AAC, OGG or WebM audio file.');
+  if (file.size > 50 * 1024 * 1024) throw new Error('Audio must be smaller than 50 MB.');
+  const extension = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'mp3';
+  const path = `${userId}/library-${Date.now()}.${extension}`;
   const { error } = await db().storage.from('guide-files').upload(path, file, { contentType: file.type, upsert: false });
   if (error) throw error;
   return path;
@@ -365,8 +378,10 @@ export async function listGuideLibraryItems(guideId: string): Promise<GuideLibra
   return (data || []) as GuideLibraryItem[];
 }
 
-export async function createGuideLibraryItem(guideId: string, item: Pick<GuideLibraryItem, 'folder_id' | 'kind' | 'title' | 'source_url' | 'file_path' | 'transcript'>): Promise<GuideLibraryItem> {
-  const { data, error } = await db().from('guide_library_items').insert({ guide_id: guideId, ...item }).select().single();
+export async function createGuideLibraryItem(guideId: string, item: Pick<GuideLibraryItem, 'folder_id' | 'kind' | 'title' | 'source_url' | 'file_path' | 'transcript' | 'metadata'>): Promise<GuideLibraryItem> {
+  // Older kinds leave metadata out so they keep saving before the metadata column exists.
+  const { metadata, ...row } = item;
+  const { data, error } = await db().from('guide_library_items').insert({ guide_id: guideId, ...row, ...(metadata && Object.keys(metadata).length ? { metadata } : {}) }).select().single();
   if (error) throw error;
   return data as GuideLibraryItem;
 }
