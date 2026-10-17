@@ -68,11 +68,14 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
  * Apple-style QR on a white rounded card: round dots, rounded-square finder eyes and an R³ mark in the
  * middle. The mark covers ~6% of the code, well inside error correction Q (25%); Q keeps the grid
  * coarser than H, so it still reads when the post is shown small on a screen or screenshotted.
+ * The card keeps the standard 4-module quiet zone. From version 7 an alignment pattern sits in the centre,
+ * so the mark is only drawn below version 7 (versions 2–6 have their one alignment pattern near a corner).
  */
-function drawQr(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, size: number) {
+export function drawQr(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, size: number) {
   const qr = QRCode.create(text, { errorCorrectionLevel: 'Q' });
   const n = qr.modules.size;
-  const pad = size * 0.08, cell = (size - pad * 2) / n;
+  const cell = size / (n + 8), pad = cell * 4;
+  const mark = qr.version < 7;
   ctx.save();
   ctx.shadowColor = 'rgba(17,17,17,0.18)'; ctx.shadowBlur = size * 0.06; ctx.shadowOffsetY = size * 0.015;
   ctx.fillStyle = '#FFFFFF'; roundRect(ctx, x, y, size, size, size * 0.12); ctx.fill();
@@ -80,7 +83,7 @@ function drawQr(ctx: CanvasRenderingContext2D, text: string, x: number, y: numbe
   const ox = x + pad, oy = y + pad;
   const finder = (r: number, c: number) => (r < 7 && c < 7) || (r < 7 && c >= n - 7) || (r >= n - 7 && c < 7);
   const logo = Math.round(n * 0.22) | 1, lo = (n - logo) / 2; // centre square kept clear for the mark
-  const inLogo = (r: number, c: number) => r + 1 > lo && r < lo + logo && c + 1 > lo && c < lo + logo;
+  const inLogo = (r: number, c: number) => mark && r + 1 > lo && r < lo + logo && c + 1 > lo && c < lo + logo;
   ctx.fillStyle = '#111111';
   for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
     if (!qr.modules.get(r, c) || finder(r, c) || inLogo(r, c)) continue;
@@ -92,6 +95,7 @@ function drawQr(ctx: CanvasRenderingContext2D, text: string, x: number, y: numbe
     roundRect(ctx, fx + cell / 2, fy + cell / 2, cell * 6, cell * 6, cell * 2); ctx.stroke();
     roundRect(ctx, fx + cell * 2, fy + cell * 2, cell * 3, cell * 3, cell * 1.1); ctx.fill();
   }
+  if (!mark) return;
   const m = logo * cell, mx = ox + lo * cell, my = oy + lo * cell;
   ctx.fillStyle = '#FFFFFF'; roundRect(ctx, mx, my, m, m, m * 0.24); ctx.fill();
   ctx.lineWidth = Math.max(1, m * 0.04); ctx.strokeStyle = '#111111'; roundRect(ctx, mx + m * 0.12, my + m * 0.12, m * 0.76, m * 0.76, m * 0.16); ctx.stroke();

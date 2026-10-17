@@ -77,7 +77,8 @@ const HAZARD_KEYS: Record<string, HazardFamily> = {
   sugar_family: 'limits', sugar: 'limits', fat_family: 'limits', fiber_family: 'limits', carbohydrate_total: 'limits', sodium_excess_intake: 'limits', vitamin_d_excess_intake: 'limits', ethanol: 'limits', high_fructose_corn_syrup: 'limits',
 };
 const HAZARD_RULES: Array<[HazardFamily, RegExp]> = [
-  ['drug_residues', /_water$|antibiotic|estr(one|adiol)|hormone/],
+  // Named drugs only: a key ending in _water (salmonella_water) must still reach its own substance rule.
+  ['drug_residues', /atenolol|ibuprofen|metformin|diclofenac|fluoxetine|carbamazepine|sulfamethoxazole|amoxicillin|ciprofloxacin|paracetamol|acetaminophen|naproxen|antibiotic|cycline|estr(one|adiol|iol)|hormone/],
   ['pathogens', /salmonella|listeria|e_coli|campylobacter|virus|vibrio|yersinia|cyclospora|anisakis|toxoplasma|clostridium|bacillus|staphylococ/],
   ['mycotoxins', /aflatoxin|ochratoxin|nivalenol|zearalenone|fumonisin|patulin|ergot|t_2_toxin|citrinin/],
   ['plastics', /plastic|pfa[a-z]|pfo[as]|phthalate|dehp|bisphenol/],
@@ -120,8 +121,9 @@ const FAMILY_STAGE: Record<HazardFamily, FoodStage> = {
   other: 'unknown',
 };
 // Same family, different route: nitrate in water comes from fertiliser run-off, not curing;
-// veterinary antibiotics are given on the farm, unlike drug residues found in water.
-const STAGE_KEYS: Record<string, FoodStage> = { nitrate_water: 'soil_water', antibiotics: 'farm', tetracycline: 'farm' };
+// veterinary antibiotics are given on the farm, unlike drug residues found in water;
+// high-fructose corn syrup is a nutrient to limit, but it is added in processing, not made by the plant.
+const STAGE_KEYS: Record<string, FoodStage> = { nitrate_water: 'soil_water', antibiotics: 'farm', tetracycline: 'farm', high_fructose_corn_syrup: 'processing' };
 
 export function hazardStage(key: string): FoodStage {
   const k = key.toLowerCase();

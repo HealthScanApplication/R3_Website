@@ -26,6 +26,13 @@ describe('hazard families', () => {
     expect(hazardFamily('dibutyl_phthalate')).toBe('plastics');
     expect(hazardFamily('mystery_compound')).toBe('other');
   });
+  it('only treats named drugs in water as drug residues', () => {
+    expect(hazardFamily('salmonella_water')).toBe('pathogens');
+    expect(hazardStage('salmonella_water')).toBe('handling');
+    expect(hazardFamily('naproxen_water')).toBe('drug_residues');
+    expect(hazardFamily('unknown_water')).toBe('other');
+    expect(hazardFamily('nitrate_water')).toBe('nitrates');
+  });
 });
 
 describe('farm-to-plate stages', () => {
@@ -46,6 +53,9 @@ describe('farm-to-plate stages', () => {
     expect(hazardStage('sodium_nitrite')).toBe('processing');
     expect(hazardStage('antibiotics')).toBe('farm');         // veterinary use
     expect(hazardStage('ibuprofen_water')).toBe('soil_water');
+    expect(hazardFamily('high_fructose_corn_syrup')).toBe('limits');
+    expect(hazardStage('high_fructose_corn_syrup')).toBe('processing'); // added, not made by the plant
+    expect(hazardStage('sugar_family')).toBe('in_food');
   });
   it('lists stages field to plate with a note for each', () => {
     expect(FOOD_STAGES.map((s) => s.id).slice(0, 3)).toEqual(['in_food', 'soil_water', 'farm']);

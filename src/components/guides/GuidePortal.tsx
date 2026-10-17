@@ -372,8 +372,10 @@ const GUARDIAN_BUILDERS: GuardianBuilder[] = [
  * its translucent-over-hero look; `onNavigate` switches tabs in-app (workspace) instead of
  * following the href. When signed out, every link opens the sign-in modal via `onSignIn`.
  */
-function GuardianHeader({ isSignedIn, activeTab, displayName, transparent, extra, onNavigate, onSignIn, onSignOut }: {
+export function GuardianHeader({ isSignedIn, activeTab, displayName, transparent, extra, locked, onNavigate, onSignIn, onSignOut }: {
   isSignedIn: boolean;
+  /** Why the builders can't open yet (e.g. setup not saved): links stay visible but don't navigate. */
+  locked?: string;
   activeTab?: Tab;
   displayName?: string;
   transparent?: boolean;
@@ -386,6 +388,7 @@ function GuardianHeader({ isSignedIn, activeTab, displayName, transparent, extra
   const edge = isSignedIn ? ink : 'rgba(245,242,234,.4)';
   const href = (tab: Tab) => (isSignedIn ? `/guardians/workspace?tab=${tab}` : '#guardian-apply');
   const go = (tab: Tab) => (event: React.MouseEvent) => {
+    if (locked) { event.preventDefault(); return; }
     if (!isSignedIn) { event.preventDefault(); onSignIn?.(); return; }
     if (onNavigate) { event.preventDefault(); onNavigate(tab); }
   };
@@ -404,10 +407,10 @@ function GuardianHeader({ isSignedIn, activeTab, displayName, transparent, extra
           {GUARDIAN_BUILDERS.map((builder, index) => {
             const active = activeTab === builder.tab || builder.sub.some((item) => item.tab === activeTab);
             return <div key={builder.label} className="g-builder" style={{ position: 'relative', borderLeft: index ? `1px solid ${edge}` : 0 }}>
-              <a href={href(builder.tab)} onClick={go(builder.tab)} aria-current={active ? 'page' : undefined} aria-label={builder.label} style={{ ...builderLink, opacity: isSignedIn ? 1 : .5, background: active ? 'rgba(199,216,163,.16)' : 'transparent' }}>
+              <a href={locked ? undefined : href(builder.tab)} onClick={go(builder.tab)} aria-current={active ? 'page' : undefined} aria-disabled={locked ? true : undefined} aria-label={locked ? `${builder.label} · ${locked}` : builder.label} title={locked || undefined} style={{ ...builderLink, opacity: isSignedIn && !locked ? 1 : .5, cursor: locked ? 'not-allowed' : 'pointer', background: active ? 'rgba(199,216,163,.16)' : 'transparent' }}>
                 <builder.Icon size={14} strokeWidth={1.8} aria-hidden="true" /><span className={active ? 'g-chip-label is-on' : 'g-chip-label'} aria-hidden="true">{builder.label}</span>
               </a>
-              {isSignedIn && <div className="g-builder-menu" role="menu" aria-label={builder.label} style={{ position: 'absolute', top: '100%', left: 0, minWidth: 184, background: panel, border: `1px solid ${line}`, borderRadius: 2, padding: 4, boxShadow: '0 18px 36px rgba(0,0,0,.55)' }}>
+              {isSignedIn && !locked && <div className="g-builder-menu" role="menu" aria-label={builder.label} style={{ position: 'absolute', top: '100%', left: 0, minWidth: 184, background: panel, border: `1px solid ${line}`, borderRadius: 2, padding: 4, boxShadow: '0 18px 36px rgba(0,0,0,.55)' }}>
                 {builder.sub.map((item) => <a key={item.label} role="menuitem" href={href(item.tab)} onClick={go(item.tab)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 11px', color: item.tab === activeTab ? ink : muted, textDecoration: 'none', fontFamily: sans, fontSize: 11, fontWeight: 600, letterSpacing: '.03em', whiteSpace: 'nowrap', background: item.tab === activeTab ? '#1C1E19' : 'transparent' }}><ChevronRight size={12} aria-hidden="true" />{item.label}</a>)}
               </div>}
             </div>;
@@ -416,8 +419,8 @@ function GuardianHeader({ isSignedIn, activeTab, displayName, transparent, extra
         <div className="g-header-account" style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 'none' }}>
           {extra}
           {isSignedIn ? <>
-            {displayName && <span className="g-header-name" style={{ color: muted, fontSize: 11, whiteSpace: 'nowrap' }}>{displayName}</span>}
-            <button type="button" onClick={onSignOut} title="Sign out" aria-label="Sign out" style={{ border: `1px solid ${line}`, background: 'transparent', color: ink, width: 31, height: 31, boxSizing: 'border-box', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><LogOut size={13} /></button>
+            {displayName && <span className="g-header-name" title={displayName} style={{ color: muted, fontSize: 11, whiteSpace: 'nowrap' }}>{displayName}</span>}
+            <button type="button" onClick={onSignOut} title="Sign out" aria-label="Sign out" style={{ border: `1px solid ${line}`, background: 'transparent', color: ink, width: 31, height: 31, flexShrink: 0, boxSizing: 'border-box', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><LogOut size={13} /></button>
           </> : <button type="button" onClick={onSignIn} style={{ ...builderLink, height: 31, border: `1px solid ${ink}`, borderRadius: 2, padding: '0 16px', background: 'transparent' }}>Sign in</button>}
         </div>
       </div>
@@ -1512,7 +1515,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   </div>;
 }
 
-function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, onDone }: { userId: string; accessToken: string; name: string; email: string; accountAvatarUrl?: string | null; onDone: (p: GuideProfile) => void }) {
+function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasProfile = false, onDone }: { userId: string; accessToken: string; name: string; email: string; accountAvatarUrl?: string | null; hasProfile?: boolean; onDone: (p: GuideProfile) => void }) {
   const [step, setStep] = useGuardianPage<number>('step', SETUP_STEPS, 1);
   const [displayName, setDisplayName] = useState(name);
   const { signOut } = useAuth();
@@ -2354,8 +2357,10 @@ function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, onDone
   return <div onPointerMove={tiltCard} onPointerOut={resetTilt} style={{ minHeight: '100vh', background: black, color: ink, padding: '30px clamp(20px,6vw,90px)', fontFamily: sans }}>
     <style>{`@keyframes guardian-orbit{to{transform:rotate(360deg)}}.guardian-image-loader{animation:guardian-orbit 1.8s linear infinite}.guardian-card{--card-rotate-x:0deg;--card-rotate-y:0deg;transition:transform 160ms ease,border-color 180ms ease,box-shadow 180ms ease,background-color 180ms ease;transform-origin:center;transform-style:preserve-3d;will-change:transform;text-align:left}.guardian-card>span[aria-hidden="true"],.guardian-card [role="img"]{margin-left:0!important;margin-right:0!important}.guardian-card img{transition:filter 180ms ease;filter:grayscale(1) contrast(.92)!important}.guardian-card:hover{transform:perspective(700px) translateY(-5px) rotateX(var(--card-rotate-x)) rotateY(var(--card-rotate-y));box-shadow:0 16px 30px rgba(0,0,0,.3)}.guardian-card:not([aria-pressed="true"]):not([aria-disabled="true"]):hover{border-color:#A56B48!important;background-color:#171811!important}.guardian-card:hover img{filter:grayscale(0) contrast(1.02) saturate(1.08)!important}.guardian-card[aria-disabled="true"]:hover{transform:none;box-shadow:none}.guardian-card:focus-visible{outline:2px solid #C7D8A3;outline-offset:3px}@media(prefers-reduced-motion:reduce){.guardian-card,.guardian-image-loader{transition:none;animation:none}.guardian-card:hover{transform:none!important}}`}</style>
     {/* Same shared header as the landing and tool pages; negative margins cancel this page's padding so it spans full width. */}
-    <div style={{ position: 'sticky', top: 0, zIndex: 50, margin: '-30px calc(-1 * clamp(20px,6vw,90px)) 0' }}>
-      <GuardianHeader isSignedIn displayName={displayName} onSignOut={() => signOut()} extra={<>
+    {/* maxWidth none: the site CSS caps every element at 100% under 768px, which would undo the full bleed. */}
+    <div style={{ position: 'sticky', top: 0, zIndex: 50, margin: '-30px calc(-1 * clamp(20px,6vw,90px)) 0', maxWidth: 'none' }}>
+      {/* Until a profile is saved every ?tab= URL re-renders this setup, so builder links would just reload it and drop unsaved answers. */}
+      <GuardianHeader isSignedIn displayName={displayName} locked={hasProfile ? undefined : 'finish setup to open the builders'} onSignOut={() => signOut()} extra={<>
         <button type="button" onClick={() => setSummaryView('offers')} style={{ padding: 0, border: 0, borderBottom: summaryView === 'offers' ? `1px solid ${ink}` : '1px solid transparent', background: 'transparent', color: summaryView === 'offers' ? ink : muted, cursor: 'pointer', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Offers <span style={{ color: acid }}>{builtOfferCount}/{totalOfferCount}</span></button>
         <button type="button" onClick={() => setSummaryView('sites')} style={{ padding: 0, border: 0, borderBottom: summaryView === 'sites' ? `1px solid ${ink}` : '1px solid transparent', background: 'transparent', color: summaryView === 'sites' ? ink : muted, cursor: 'pointer', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Sites <span style={{ color: acid }}>2</span></button>
         <span aria-hidden="true" style={{ width: 1, height: 14, background: line }} />
@@ -3776,9 +3781,12 @@ export function GuidePortal() {
        !important is needed to beat main's inline style, and :has() keeps it to Guardian pages. */
     body:has(.guardian-ui),#main-content:has(.guardian-ui){overflow-x:clip!important;overflow-y:visible!important}
     /* Shared header: builder dropdowns reveal on hover/focus */
-    .g-header-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px;padding:0 clamp(20px,5vw,72px)}
+    .g-header-row{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:16px;padding:0 clamp(20px,5vw,72px)}
     .g-brand{justify-self:start;display:flex}
-    .g-header-account{justify-self:end}
+    /* The account side may shrink: a long name truncates, then hides, so Sign out never leaves the screen. */
+    .g-header-account{justify-self:end;min-width:0;max-width:100%}
+    .g-header-name{min-width:0;max-width:22ch;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis}
+    @media (max-width:1100px){.g-header-name{display:none}}
     .g-brand-r3{display:none}
     .g-builders{flex-wrap:nowrap}
     /* Icon-only chips; the name slides out for the current page and on hover/keyboard focus. */
@@ -3817,7 +3825,7 @@ function GuidePortalRoutes() {
   // The step builder (Profile → Guidance → Audience → Offers → Site) is the Guardian dashboard.
   // The tool views (Library, Leads, Recipes…) open from its header via ?tab=.
   const wantsTool = new URLSearchParams(window.location.search).has('tab');
-  if (accessToken && (!profile || !wantsTool)) return <Onboarding userId={user.id} accessToken={accessToken} name={user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Guardian'} email={user.email || ''} accountAvatarUrl={user.user_metadata?.avatar_url || user.user_metadata?.picture || null} onDone={(p) => { setProfile(p); window.location.assign('/guardians/workspace?tab=home'); }} />;
+  if (accessToken && (!profile || !wantsTool)) return <Onboarding userId={user.id} accessToken={accessToken} hasProfile={Boolean(profile)} name={user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Guardian'} email={user.email || ''} accountAvatarUrl={user.user_metadata?.avatar_url || user.user_metadata?.picture || null} onDone={(p) => { setProfile(p); window.location.assign('/guardians/workspace?tab=home'); }} />;
   if (!profile) return <div style={{ minHeight: '100vh', background: black, color: ink, display: 'grid', placeItems: 'center', fontFamily: sans }}>Opening Guardian setup…</div>;
   return <Workspace profile={profile} onProfile={setProfile} />;
 }
