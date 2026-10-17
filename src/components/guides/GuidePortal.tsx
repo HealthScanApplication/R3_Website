@@ -3784,6 +3784,9 @@ export function GuidePortal() {
     /* Diet planner: stacked by default; from 1500px the macros/nutrients/hazards become one sticky column beside the planner. */
     .g-diet-split{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;align-items:start}
     @media (min-width:1500px){.g-diet-split{grid-template-columns:minmax(0,1fr) 380px;grid-template-areas:"plan side"}.g-diet-split>.g-diet-plan{grid-area:plan}.g-diet-split>.g-diet-side{grid-area:side;position:sticky;top:80px;max-height:calc(100vh - 96px);overflow-y:auto;overscroll-behavior:contain}.g-diet-side .g-macro-strip{grid-template-columns:1fr!important}.g-diet-side .g-macro-strip>div{border-right:0!important;border-bottom:1px solid rgba(245,242,234,0.24)}}
+    /* Fitness planner: an opened exercise shows beside the week as in the app (stacked under 1200px). */
+    .g-fit-split{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start}
+    @media (min-width:1200px){.g-fit-split.has-detail{grid-template-columns:minmax(0,1fr) 340px}.g-fit-split.has-detail>.g-fit-detail{position:sticky;top:80px}}
     /* Shared header: builder dropdowns reveal on hover/focus */
     .g-header-row{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:16px;padding:0 clamp(20px,5vw,72px)}
     .g-brand{justify-self:start;display:flex}

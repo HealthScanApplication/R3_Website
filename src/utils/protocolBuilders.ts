@@ -386,7 +386,10 @@ export function dayNameFor(exercises: Array<{ bodyParts?: string[]; category?: s
   }
   return 'Full body day';
 }
-export interface ExercisePick extends ActivityPick { sets: number | null; reps: string | null; rest_seconds: number | null }
+export interface ExercisePick extends ActivityPick { sets: number | null; reps: string | null; rest_seconds: number | null; role?: 'warmup' | 'recovery' }
+/** Warm-up first, then the training grouped by muscle, then recovery: the order a session is done in. */
+export const orderedExercises = <T extends ExercisePick>(list: T[]) => [...list.filter((e) => e.role === 'warmup'), ...sortByMuscle(list.filter((e) => !e.role)), ...list.filter((e) => e.role === 'recovery')];
+export const exerciseGroup = (e: ExercisePick) => (e.role === 'warmup' ? 'Warm-up' : e.role === 'recovery' ? 'Recovery' : muscleGroupOf(e));
 export interface FitnessSession { day: number; time: string; anchor?: Anchor; offset?: number; rules?: string[]; title: string; minutes: number; intensity: 'low' | 'moderate' | 'high'; exercises: ExercisePick[] }
 /** What the person likes doing: training types steer each session's catalog categories, sports become sessions. */
 export interface FitnessLikes { types: string[]; sports: ActivityPick[] }
@@ -394,7 +397,21 @@ export interface FitnessLikes { types: string[]; sports: ActivityPick[] }
 export type FuelItem = string | SupplementPick;
 export interface TrainingFuel { pre: FuelItem[]; post: FuelItem[]; preMinutes: number; postMinutes: number }
 export const defaultFuel = (): TrainingFuel => ({ pre: [], post: [], preMinutes: 30, postMinutes: 15 });
-export interface FitnessConfig { goal: string; level: 'beginner' | 'intermediate' | 'advanced'; minutes: number; sessions: FitnessSession[]; rules?: string[]; likes?: FitnessLikes; fuel?: TrainingFuel }
+/** When the person trains: which days are workdays, the time of day on workdays and on other days, and rest days. */
+export type TrainTime = 'morning' | 'lunch' | 'evening';
+export interface FitnessSchedule { workdays: number[]; workday: TrainTime; other: TrainTime; restDays: number[] }
+export const defaultSchedule = (): FitnessSchedule => ({ workdays: [1, 2, 3, 4, 5], workday: 'morning', other: 'morning', restDays: [] });
+export const TRAIN_TIMES: Array<{ id: TrainTime; label: string; timing: Timing }> = [
+  { id: 'morning', label: 'Morning', timing: { anchor: 'wake', time: '07:00', offset: 30 } },
+  { id: 'lunch', label: 'Lunchtime', timing: { anchor: 'clock', time: '12:30', offset: 0 } },
+  { id: 'evening', label: 'Evening', timing: { anchor: 'clock', time: '18:30', offset: 0 } },
+];
+/** A session's timing on this day under the schedule (morning = 30 min after waking when none is set). */
+export function sessionTimeFor(day: number, schedule?: FitnessSchedule): Timing {
+  const pref: TrainTime = !schedule ? 'morning' : schedule.workdays.includes(day) ? schedule.workday : schedule.other;
+  return { ...TRAIN_TIMES.find((t) => t.id === pref)!.timing };
+}
+export interface FitnessConfig { goal: string; level: 'beginner' | 'intermediate' | 'advanced'; minutes: number; sessions: FitnessSession[]; rules?: string[]; likes?: FitnessLikes; fuel?: TrainingFuel; schedule?: FitnessSchedule }
 
 export interface FuelSlot { day: number; session: string; when: 'pre' | 'post'; time: string; items: FuelItem[] }
 export const fuelName = (item: FuelItem) => (typeof item === 'string' ? item : item.name).trim();
@@ -459,7 +476,8 @@ const isCardioDay = (t: Template) => t.categories.includes('Cardio') && !t.categ
  * session's catalog categories (kept as-is when none of them fit that session). Picked sports take over the
  * cardio days in turn; a goal without cardio days gets one sports day on the first free day from Saturday.
  */
-export function planFitnessWeek(goal: FitnessGoal, likes?: FitnessLikes): PlannedSession[] {
+export function planFitnessWeek(goal: FitnessGoal, likes?: FitnessLikes, schedule?: FitnessSchedule): PlannedSession[] {
+  const rest = new Set(schedule?.restDays || []);
   const chosen = new Set(TRAINING_TYPES.filter((t) => likes?.types.includes(t.id) && t.id !== 'recovery').flatMap((t) => t.categories));
   const narrow = (t: Template): Template => {
     if (!chosen.size || !t.categories.length) return t;
@@ -474,8 +492,16 @@ export function planFitnessWeek(goal: FitnessGoal, likes?: FitnessLikes): Planne
     return { day, template: narrow(t) };
   });
   if (sports.length && next === 0) {
-    const free = [6, 7, 3, 5, 2, 4, 1].find((d) => !goal.days.includes(d));
+    const free = [6, 7, 3, 5, 2, 4, 1].find((d) => !goal.days.includes(d) && !rest.has(d));
     if (free) plan.push({ day: free, sport: sports[0], template: { title: sports[0].name, categories: ['Sports'], terms: [], intensity: 'moderate' } });
+  }
+  // Rest days: move a session to the nearest free day (next day first, then the day before…); keep it if none is free.
+  if (rest.size) {
+    const taken = new Set(plan.filter((p) => !rest.has(p.day)).map((p) => p.day));
+    for (const p of plan) if (rest.has(p.day)) {
+      const to = [1, 2, 3, 4, 5, 6].flatMap((d) => [p.day + d, p.day - d]).find((d) => d >= 1 && d <= 7 && !rest.has(d) && !taken.has(d));
+      if (to) { taken.add(to); p.day = to; }
+    }
   }
   return plan.sort((a, b) => a.day - b.day);
 }
@@ -500,8 +526,44 @@ export async function searchActivities(accessToken: string, opts: { query?: stri
   return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, image: r.image_url || r.primary_image_url || null, category: r.category, minutes: r.default_duration_min ?? null, bodyParts: Array.isArray(r.body_parts) ? r.body_parts.map(String) : [] }));
 }
 
+/** Everything the app's activity detail shows, for one catalog activity. */
+export interface ActivityDetail {
+  id: string; name: string; image: string | null; emoji: string | null; category: string | null; description: string | null;
+  steps: string[]; benefits: string[]; rules: string[]; tips: string | null; bodyParts: string[];
+  caloriesPerHour: number | null; intensity: string | null; sweat: string | null; minutes: number | null;
+}
+const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String).filter(Boolean) : typeof v === 'string' && v.trim() ? [v] : []);
+export async function getActivityDetail(accessToken: string, id: string): Promise<ActivityDetail | null> {
+  const res = await fetch(`${rest()}/catalog_activities?id=eq.${encodeURIComponent(id)}&select=id,name,image_url,primary_image_url,emoji_icon,category,description,instructions,steps,benefits,health_benefits,rules,tips,body_parts,calories_per_hour,intensity,sweat_level,default_duration_min&limit=1`, { headers: headers(accessToken) });
+  if (!res.ok) throw new Error(`Activity lookup failed (${res.status})`);
+  const r = ((await res.json()) as any[])[0];
+  if (!r) return null;
+  // Steps: the curated list, else the numbered instructions split into lines.
+  const steps = list(r.steps).length ? list(r.steps) : String(r.instructions || '').split('\n').map((s) => s.replace(/^\s*\d+[.)]\s*/, '').trim()).filter(Boolean);
+  const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : null; };
+  return {
+    id: r.id, name: r.name, image: r.image_url || r.primary_image_url || null, emoji: r.emoji_icon || null, category: r.category || null, description: r.description || null,
+    steps, benefits: [...new Set([...list(r.health_benefits), ...list(r.benefits)])], rules: list(r.rules), tips: r.tips || null, bodyParts: list(r.body_parts),
+    caloriesPerHour: num(r.calories_per_hour), intensity: r.intensity || null, sweat: r.sweat_level || null, minutes: num(r.default_duration_min),
+  };
+}
+
 /** Build the goal's weekly split, filling each session with catalog exercises that match its pattern. */
-export async function draftFitnessWeek(accessToken: string, goalId: string, level: FitnessConfig['level'], minutes: number, likes?: FitnessLikes): Promise<FitnessSession[]> {
+/**
+ * Warm-up stretches for a session: the stretches that cover most of the body parts it trains, preferring ones not
+ * used earlier in the week. Each is a short timed hold done before the training.
+ */
+export function pickWarmups(trained: Array<{ bodyParts?: string[] }>, stretches: ActivityPick[], usedThisWeek: Set<string>, count = 2): ExercisePick[] {
+  const parts = new Set(trained.flatMap((e) => e.bodyParts || []));
+  const score = (s: ActivityPick) => (s.bodyParts || []).filter((p) => parts.has(p)).length;
+  const ranked = [...stretches].sort((a, b) => score(b) - score(a) || Number(usedThisWeek.has(a.id)) - Number(usedThisWeek.has(b.id)));
+  const chosen = ranked.filter((s) => score(s) > 0).slice(0, count);
+  for (const s of ranked) if (chosen.length < count && !chosen.includes(s)) chosen.push(s); // no match: general stretches
+  chosen.forEach((s) => usedThisWeek.add(s.id));
+  return chosen.map((s) => ({ ...s, sets: null, reps: null, rest_seconds: null, minutes: 2, role: 'warmup' as const }));
+}
+
+export async function draftFitnessWeek(accessToken: string, goalId: string, level: FitnessConfig['level'], minutes: number, likes?: FitnessLikes, schedule?: FitnessSchedule): Promise<FitnessSession[]> {
   const goal = FITNESS_GOALS.find((g) => g.id === goalId) || FITNESS_GOALS[0];
   const dose = LEVEL[level];
   const used = new Set<string>();
@@ -510,10 +572,15 @@ export async function draftFitnessWeek(accessToken: string, goalId: string, leve
   const recovery = likes?.types.includes('recovery')
     ? (await searchActivities(accessToken, { categories: ['Recovery'], limit: 60 }).catch(() => [])).filter((a) => isPostWorkoutRecovery(a.name))
     : [];
+  // Every training session starts with stretches for the muscles it works.
+  const stretches = await searchActivities(accessToken, { categories: ['Stretch'], limit: 80 }).catch(() => []);
+  const warmedUp = new Set<string>();
   let nextRecovery = 0;
-  for (const { day, template: t, sport } of planFitnessWeek(goal, likes)) {
+  for (const { day, template: t, sport } of planFitnessWeek(goal, likes, schedule)) {
+    const when = sessionTimeFor(day, schedule);
     if (sport) {
-      sessions.push({ day, time: '07:00', anchor: 'wake', offset: 30, rules: ['Warm up for 5 minutes'], title: sport.name, minutes, intensity: 'moderate', exercises: [{ ...sport, sets: null, reps: null, rest_seconds: null, minutes }] });
+      const warmups = pickWarmups([sport], stretches, warmedUp);
+      sessions.push({ day, ...when, rules: warmups.length ? [] : ['Warm up for 5 minutes'], title: sport.name, minutes, intensity: 'moderate', exercises: [...warmups, { ...sport, sets: null, reps: null, rest_seconds: null, minutes }] });
       continue;
     }
     const exercises: ExercisePick[] = [];
@@ -527,9 +594,12 @@ export async function draftFitnessWeek(accessToken: string, goalId: string, leve
       const timed = /cardio|sports|stretch|recovery|yoga/i.test(hit.category || '') || muscleGroupOf(hit) === 'Face';
       exercises.push({ ...hit, sets: timed ? null : dose.sets, reps: timed ? null : dose.reps, rest_seconds: timed ? null : dose.rest, minutes: timed ? Math.max(2, Math.round(minutes / Math.max(1, picks.length))) : null });
     }
-    const title = dayNameFor(exercises) || t.title; // named from the training, before recovery is added
-    if (recovery.length && t.intensity !== 'low') { const r = recovery[nextRecovery++ % recovery.length]; exercises.push({ ...r, sets: null, reps: null, rest_seconds: null, minutes: r.minutes || 10 }); }
-    sessions.push({ day, time: '07:00', anchor: 'wake', offset: 30, rules: t.intensity === 'low' ? [] : ['Warm up for 5 minutes'], title, minutes: t.muscles?.includes('face') ? Math.min(minutes, 15) : minutes, intensity: level === 'beginner' && t.intensity === 'high' ? 'moderate' : t.intensity, exercises });
+    const title = dayNameFor(exercises) || t.title; // named from the training, before warm-up and recovery are added
+    // Mobility days are stretching already; everything else opens with matching stretches.
+    const warmups = t.intensity === 'low' ? [] : pickWarmups(exercises, stretches, warmedUp);
+    if (recovery.length && t.intensity !== 'low') { const r = recovery[nextRecovery++ % recovery.length]; exercises.push({ ...r, sets: null, reps: null, rest_seconds: null, minutes: r.minutes || 10, role: 'recovery' }); }
+    exercises.unshift(...warmups);
+    sessions.push({ day, ...when, rules: t.intensity === 'low' || warmups.length ? [] : ['Warm up for 5 minutes'], title, minutes: t.muscles?.includes('face') ? Math.min(minutes, 15) : minutes, intensity: level === 'beginner' && t.intensity === 'high' ? 'moderate' : t.intensity, exercises });
   }
   return sessions;
 }
@@ -797,13 +867,14 @@ export async function saveFitnessProtocol(accessToken: string, ownerId: string, 
     const parent = await createProtocolItem(accessToken, {
       protocol_id: protocol.id, display_name: step?.title || s.title, kind: 'action', item_type: 'activity', category: 'do', subtype: 'exercise',
       scheduled_time: hhmmss(step?.time || resolveTiming(sessionTiming(s))), duration_minutes: s.minutes, intensity: s.intensity, day_number: 1, sort_order: order++,
-      catalog_activity_id: s.exercises[0]?.id || null, media_image_url: s.exercises[0]?.image || null,
+      catalog_activity_id: (s.exercises.find((e) => !e.role) || s.exercises[0])?.id || null, media_image_url: (s.exercises.find((e) => !e.role) || s.exercises[0])?.image || null,
       has_children: s.exercises.length > 0 || !!(step?.dos.length || step?.donts.length), enabled: true, hidden: false,
       notes: [s.anchor && s.anchor !== 'clock' ? describeTiming(sessionTiming(s)) : '', s.exercises.map((e) => e.name).join(' · ')].filter(Boolean).join(' · '), ...weekly(s.day),
     } as Partial<AdminProtocolItem>);
-    // Exercises are saved grouped by muscle (Legs, Glutes, Chest…), like a smart list inside the session.
-    for (const e of sortByMuscle(s.exercises)) await createProtocolItem(accessToken, {
-      protocol_id: protocol.id, parent_protocol_item_id: parent.id, display_name: e.name, kind: 'action', item_type: 'activity', category: 'do', subtype: 'exercise', group_name: muscleGroupOf(e),
+    // Exercises are saved in the order they are done: warm-up stretches, the training grouped by muscle (Legs, Glutes,
+    // Chest…), then recovery, like a smart list inside the session.
+    for (const e of orderedExercises(s.exercises)) await createProtocolItem(accessToken, {
+      protocol_id: protocol.id, parent_protocol_item_id: parent.id, display_name: e.name, kind: 'action', item_type: 'activity', category: 'do', subtype: 'exercise', group_name: exerciseGroup(e),
       catalog_activity_id: e.id, sets: e.sets, reps: e.reps ? parseInt(e.reps, 10) || null : null, reps_display: e.reps, rest_seconds: e.rest_seconds,
       duration_minutes: e.minutes, day_number: 1, sort_order: order++, has_children: false, enabled: true, hidden: false, notes: '', ...weekly(s.day),
     } as Partial<AdminProtocolItem>);
