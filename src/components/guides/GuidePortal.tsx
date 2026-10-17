@@ -372,11 +372,13 @@ const GUARDIAN_BUILDERS: GuardianBuilder[] = [
  * its translucent-over-hero look; `onNavigate` switches tabs in-app (workspace) instead of
  * following the href. When signed out, every link opens the sign-in modal via `onSignIn`.
  */
-function GuardianHeader({ isSignedIn, activeTab, displayName, transparent, onNavigate, onSignIn, onSignOut }: {
+function GuardianHeader({ isSignedIn, activeTab, displayName, transparent, extra, onNavigate, onSignIn, onSignOut }: {
   isSignedIn: boolean;
   activeTab?: Tab;
   displayName?: string;
   transparent?: boolean;
+  /** Page-specific controls shown before the account, e.g. the setup dashboard's Offers / Sites toggles. */
+  extra?: React.ReactNode;
   onNavigate?: (tab: Tab) => void;
   onSignIn?: () => void;
   onSignOut?: () => void;
@@ -412,6 +414,7 @@ function GuardianHeader({ isSignedIn, activeTab, displayName, transparent, onNav
           })}
         </nav>
         <div className="g-header-account" style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 'none' }}>
+          {extra}
           {isSignedIn ? <>
             {displayName && <span className="g-header-name" style={{ color: muted, fontSize: 11, whiteSpace: 'nowrap' }}>{displayName}</span>}
             <button type="button" onClick={onSignOut} title="Sign out" aria-label="Sign out" style={{ border: `1px solid ${line}`, background: 'transparent', color: ink, width: 31, height: 31, boxSizing: 'border-box', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><LogOut size={13} /></button>
@@ -1512,6 +1515,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
 function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, onDone }: { userId: string; accessToken: string; name: string; email: string; accountAvatarUrl?: string | null; onDone: (p: GuideProfile) => void }) {
   const [step, setStep] = useGuardianPage<number>('step', SETUP_STEPS, 1);
   const [displayName, setDisplayName] = useState(name);
+  const { signOut } = useAuth();
   const [mainLanguage, setMainLanguage] = useState(defaultLanguage());
   const [contactEmail, setContactEmail] = useState(email);
   const [whatsappPhone, setWhatsappPhone] = useState('');
@@ -2349,14 +2353,13 @@ function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, onDone
   };
   return <div onPointerMove={tiltCard} onPointerOut={resetTilt} style={{ minHeight: '100vh', background: black, color: ink, padding: '30px clamp(20px,6vw,90px)', fontFamily: sans }}>
     <style>{`@keyframes guardian-orbit{to{transform:rotate(360deg)}}.guardian-image-loader{animation:guardian-orbit 1.8s linear infinite}.guardian-card{--card-rotate-x:0deg;--card-rotate-y:0deg;transition:transform 160ms ease,border-color 180ms ease,box-shadow 180ms ease,background-color 180ms ease;transform-origin:center;transform-style:preserve-3d;will-change:transform;text-align:left}.guardian-card>span[aria-hidden="true"],.guardian-card [role="img"]{margin-left:0!important;margin-right:0!important}.guardian-card img{transition:filter 180ms ease;filter:grayscale(1) contrast(.92)!important}.guardian-card:hover{transform:perspective(700px) translateY(-5px) rotateX(var(--card-rotate-x)) rotateY(var(--card-rotate-y));box-shadow:0 16px 30px rgba(0,0,0,.3)}.guardian-card:not([aria-pressed="true"]):not([aria-disabled="true"]):hover{border-color:#A56B48!important;background-color:#171811!important}.guardian-card:hover img{filter:grayscale(0) contrast(1.02) saturate(1.08)!important}.guardian-card[aria-disabled="true"]:hover{transform:none;box-shadow:none}.guardian-card:focus-visible{outline:2px solid #C7D8A3;outline-offset:3px}@media(prefers-reduced-motion:reduce){.guardian-card,.guardian-image-loader{transition:none;animation:none}.guardian-card:hover{transform:none!important}}`}</style>
-    <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
-      <Brand />
-      <nav aria-label="Guardian workspace" style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-        <GuardianToolLinks />
+    {/* Same shared header as the landing and tool pages; negative margins cancel this page's padding so it spans full width. */}
+    <div style={{ position: 'sticky', top: 0, zIndex: 50, margin: '-30px calc(-1 * clamp(20px,6vw,90px)) 0' }}>
+      <GuardianHeader isSignedIn displayName={displayName} onSignOut={() => signOut()} extra={<>
+        <button type="button" onClick={() => setSummaryView('offers')} style={{ padding: 0, border: 0, borderBottom: summaryView === 'offers' ? `1px solid ${ink}` : '1px solid transparent', background: 'transparent', color: summaryView === 'offers' ? ink : muted, cursor: 'pointer', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Offers <span style={{ color: acid }}>{builtOfferCount}/{totalOfferCount}</span></button>
+        <button type="button" onClick={() => setSummaryView('sites')} style={{ padding: 0, border: 0, borderBottom: summaryView === 'sites' ? `1px solid ${ink}` : '1px solid transparent', background: 'transparent', color: summaryView === 'sites' ? ink : muted, cursor: 'pointer', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Sites <span style={{ color: acid }}>2</span></button>
         <span aria-hidden="true" style={{ width: 1, height: 14, background: line }} />
-        <button type="button" onClick={() => setSummaryView('offers')} style={{ padding: 0, border: 0, borderBottom: summaryView === 'offers' ? `1px solid ${ink}` : '1px solid transparent', background: 'transparent', color: summaryView === 'offers' ? ink : muted, cursor: 'pointer', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>Offers <span style={{ color: acid }}>{builtOfferCount}/{totalOfferCount}</span></button>
-        <button type="button" onClick={() => setSummaryView('sites')} style={{ padding: 0, border: 0, borderBottom: summaryView === 'sites' ? `1px solid ${ink}` : '1px solid transparent', background: 'transparent', color: summaryView === 'sites' ? ink : muted, cursor: 'pointer', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>Sites <span style={{ color: acid }}>2</span></button>
-      </nav>
+      </>} />
     </div>
     <div aria-label="Guardian setup progress" style={{ maxWidth: 1100, margin: '42px auto 0', display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', borderTop: `1px solid ${line}`, borderBottom: `1px solid ${line}` }}>
       {steps.map((item) => <button type="button" key={item.n} onClick={() => { setSummaryView(null); setStep(item.n); }} aria-current={!summaryView && step === item.n ? 'step' : undefined} style={{ height: 54, border: 0, borderRight: item.n < 5 ? `1px solid ${line}` : 0, background: !summaryView && step === item.n ? ink : 'transparent', color: !summaryView && step === item.n ? black : item.n < step ? acid : muted, fontFamily: sans, cursor: 'pointer', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{String(item.n).padStart(2, '0')} · {item.label}</button>)}
@@ -3762,18 +3765,16 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
 }
 
 const GUARDIAN_STEP_LABELS = ['Profile', 'Guidance', 'Audience', 'Offers', 'Site'];
-const GUARDIAN_TOOL_LINKS = [['Library', 'library'], ['Leads', 'leads'], ['Recipes', 'recipes'], ['Protocols', 'protocols']] as const;
-
-/** Tool links shared by the step-builder dashboard and the tool pages, so both headers match. */
-function GuardianToolLinks({ active }: { active?: string }) {
-  return <>{GUARDIAN_TOOL_LINKS.map(([text, tab]) => <a key={tab} href={`/guardians/workspace?tab=${tab}`} aria-current={active === tab ? 'page' : undefined} style={{ color: active === tab ? ink : muted, borderBottom: `1px solid ${active === tab ? ink : 'transparent'}`, textDecoration: 'none', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>{text}</a>)}</>;
-}
 
 function Row({ title, meta, action, onClick, image }: { title: string; meta: string; action?: string; onClick?: () => void; image?: string | null }) { const content = <><div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 0 }}><span aria-hidden="true" style={{ position: 'relative', width: 56, height: 56, flex: '0 0 56px', display: 'grid', placeItems: 'center', overflow: 'hidden', border: `1px solid ${line}`, background: '#171812', color: muted, fontFamily: serif, fontSize: 22 }}>{title.replace(/^R3 Protocol\s*>\s*/i, '').trim().charAt(0)}{image && <img src={image} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = 'none'; }} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}</span><div style={{ minWidth: 0 }}><div style={{ fontFamily: serif, fontSize: 22 }}>{title}</div><div style={{ color: muted, fontSize: 11, marginTop: 5 }}>{meta}</div></div></div><span style={{ display: 'flex', alignItems: 'center', gap: 8, color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase' }}>{action}<ChevronRight size={16} /></span></>; return onClick ? <button type="button" onClick={onClick} style={{ width: '100%', border: 0, borderTop: `1px solid ${line}`, padding: '18px 4px', background: 'transparent', color: ink, display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'left', cursor: 'pointer' }}>{content}</button> : <div style={{ borderTop: `1px solid ${line}`, padding: '18px 4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>{content}</div>; }
 
 // Scopes Guardian styling; globals.css exempts `.guardian-ui button` from the forced 16px button size.
 export function GuidePortal() {
   return <div className="guardian-ui"><style>{`.guardian-builders-bar::-webkit-scrollbar{display:none}.g-split{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:20px;align-items:start}.g-split>.g-sticky{position:sticky;top:16px}@media (max-width: 960px){.g-split{grid-template-columns:minmax(0,1fr)}.g-split>.g-sticky{position:static}}
+    /* The app shell sets overflow-x:hidden on body and (inline, App.tsx) on #main-content, which makes
+       them scroll containers and stops the sticky header. clip keeps sideways overflow hidden without that;
+       !important is needed to beat main's inline style, and :has() keeps it to Guardian pages. */
+    body:has(.guardian-ui),#main-content:has(.guardian-ui){overflow-x:clip!important;overflow-y:visible!important}
     /* Shared header: builder dropdowns reveal on hover/focus */
     .g-header-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px;padding:0 clamp(20px,5vw,72px)}
     .g-brand{justify-self:start;display:flex}
