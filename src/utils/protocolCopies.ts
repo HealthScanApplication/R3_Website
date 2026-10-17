@@ -17,7 +17,19 @@ async function request(token: string, path: string, body?: unknown) {
   return response.status === 204 ? null : response.json();
 }
 export const listProtocolChildren = (token: string, parentId: string): Promise<ProtocolChild[]> => request(token, `protocol_children?parent_protocol_id=eq.${encodeURIComponent(parentId)}&select=*`);
-export const cloneProtocolChild = (token: string, parentId: string, sourceId: string): Promise<string> => request(token, 'rpc/clone_protocol_child', { p_parent: parentId, p_source: sourceId });
+/**
+ * The master routine a Diet or Fitness plan belongs to, and its plan of the other kind (the Diet plan for a
+ * Fitness plan and vice versa). Null when the plan is not attached to a master Protocol.
+ */
+export async function findLinkedPlan(token: string, childId: string, kind: 'diet' | 'fitness'): Promise<{ parentId: string; siblingId: string | null } | null> {
+  const links: ProtocolChild[] = await request(token, `protocol_children?child_protocol_id=eq.${encodeURIComponent(childId)}&select=*`);
+  const parentId = links[0]?.parent_protocol_id;
+  if (!parentId) return null;
+  const other = kind === 'diet' ? 'fitness' : 'diet';
+  const sibling = (await listProtocolChildren(token, parentId)).find((c) => c.kind === other && c.child_protocol_id !== childId);
+  return { parentId, siblingId: sibling?.child_protocol_id ?? null };
+}
+export const cloneProtocolChild =(token: string, parentId: string, sourceId: string): Promise<string> => request(token, 'rpc/clone_protocol_child', { p_parent: parentId, p_source: sourceId });
 export const syncProtocolChild = (token: string, childId: string): Promise<void> => request(token, 'rpc/sync_protocol_child', { p_child: childId });
 export async function customizeProtocolRecipe(token: string, protocolId: string, itemId: string): Promise<GuideRecipe> {
   const result = await request(token, 'rpc/customize_protocol_recipe', { p_protocol: protocolId, p_item: itemId });

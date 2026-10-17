@@ -2,7 +2,7 @@
 import React from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { Workspace, GuardianWebsite } from '../../components/guides/GuidePortal';
+import { Workspace, GuardianWebsite, GuardianHeader } from '../../components/guides/GuidePortal';
 import { useGuardianPage } from '../../components/guides/useGuardianPage';
 
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user:{id:'owner',app_metadata:{}},accessToken:null,signOut:()=>{} }) }));
@@ -25,7 +25,7 @@ const workspace = () => render(<Workspace profile={fixtures.profile as any} onPr
 it('keeps sidebar navigation in the URL so reload opens the selected page', async()=>{
   workspace();
   fireEvent.click(screen.getByRole('button',{name:'Profile',exact:true}));
-  expect(screen.getByRole('heading',{name:'Your profile'})).toBeTruthy();
+  expect(screen.getByRole('heading',{name:'Site builder'})).toBeTruthy();
   expect(window.location.search).toBe('?tab=profile');
 });
 it('restores the page on browser history navigation', async()=>{
@@ -103,4 +103,30 @@ it('keeps setup step clicks and browser history in sync',()=>{
   window.history.replaceState({},'','/guardians/workspace?step=2');
   fireEvent(window,new PopStateEvent('popstate'));
   expect(screen.getByText('Step 2')).toBeTruthy();
+});
+
+it('locks the builder links while setup is unsaved, so they cannot reload the setup and drop answers', ()=>{
+  const onNavigate = vi.fn();
+  render(<GuardianHeader isSignedIn locked="finish setup to open the builders" onNavigate={onNavigate} />);
+  // Without an href a locked builder is no longer a link, so find it by its label.
+  const diet = screen.getByLabelText('Diet planner · finish setup to open the builders');
+  expect(screen.queryByRole('link',{name:/Diet planner/})).toBeNull();
+  expect(diet.getAttribute('aria-disabled')).toBe('true');
+  expect(diet.getAttribute('href')).toBeNull();
+  fireEvent.click(diet);
+  expect(onNavigate).not.toHaveBeenCalled();
+  expect(document.querySelector('.g-builder-menu')).toBeNull();
+});
+it('navigates in-app from an unlocked builder link', ()=>{
+  const onNavigate = vi.fn();
+  render(<GuardianHeader isSignedIn activeTab="leads" onNavigate={onNavigate} />);
+  // The chip comes first; its dropdown also has a plain "Diet planner" link.
+  fireEvent.click(screen.getAllByRole('link',{name:'Diet planner'})[0]);
+  expect(onNavigate).toHaveBeenCalledWith('diet');
+  expect(screen.getAllByRole('link',{name:'Offer builder'})[0].getAttribute('aria-current')).toBe('page');
+});
+it('keeps a long display name readable as a tooltip when it is truncated', ()=>{
+  render(<GuardianHeader isSignedIn displayName="Dr Maximiliana Featherstonehaugh-Worthington" />);
+  expect(screen.getByText('Dr Maximiliana Featherstonehaugh-Worthington').getAttribute('title')).toBe('Dr Maximiliana Featherstonehaugh-Worthington');
+  expect(screen.getByRole('button',{name:'Sign out'})).toBeTruthy();
 });

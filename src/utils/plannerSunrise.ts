@@ -49,3 +49,22 @@ export async function nearestPlannerCity(latitude:number,longitude:number):Promi
   const cities=(await cityData()).map(locationOf).filter(validPlannerLocation);
   return cities.reduce((best,c)=>distance(c)<distance(best)?c:best);
 }
+
+/** The most populous city in a timezone: a home-city default that needs no location request. */
+export async function cityForTimezone(timezone:string):Promise<PlannerLocation|null> {
+  const best=(await cityData()).filter((c:any)=>c.timezone===timezone).sort((a:any,b:any)=>(b.pop||0)-(a.pop||0))[0];
+  const city=best?locationOf(best):null;
+  return city&&validPlannerLocation(city)?city:null;
+}
+// The chosen home city stays on this device, like city matching; it is never sent anywhere.
+const HOME_CITY_KEY='r3.planner.homeCity';
+export function savedHomeCity():PlannerLocation|null {
+  try { const value=JSON.parse(localStorage.getItem(HOME_CITY_KEY)||'null'); return validPlannerLocation(value)?value:null; } catch { return null; }
+}
+export function saveHomeCity(city?:PlannerLocation) {
+  try { if (city) localStorage.setItem(HOME_CITY_KEY,JSON.stringify(city)); else localStorage.removeItem(HOME_CITY_KEY); } catch { /* storage blocked: the default still works */ }
+}
+/** The home city for new plans: the one last chosen on this device, else the largest city in the device timezone. */
+export async function defaultHomeCity(timezone=Intl.DateTimeFormat().resolvedOptions().timeZone):Promise<PlannerLocation|null> {
+  return savedHomeCity() ?? cityForTimezone(timezone).catch(()=>null);
+}

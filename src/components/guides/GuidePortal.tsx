@@ -354,6 +354,80 @@ const nav: { id: Tab; label: string; Icon: typeof Users }[] = [
   { id: 'profile', label: 'Profile', Icon: FileText },
 ];
 
+// Shared Guardian nav: six builders, each revealing related destinations on hover.
+// Used by both the public landing header and the workspace header so the two match.
+type GuardianBuilder = { label: string; tab: Tab; Icon: typeof Users; sub: { label: string; tab: Tab }[] };
+const GUARDIAN_BUILDERS: GuardianBuilder[] = [
+  { label: 'Protocol builder', tab: 'protocols', Icon: Hammer, sub: [{ label: 'All Protocols', tab: 'protocols' }, { label: 'Library', tab: 'library' }] },
+  { label: 'Diet planner', tab: 'diet', Icon: Utensils, sub: [{ label: 'Diet planner', tab: 'diet' }, { label: 'Recipes', tab: 'recipes' }] },
+  { label: 'Fitness planner', tab: 'fitness', Icon: Dumbbell, sub: [{ label: 'Fitness planner', tab: 'fitness' }] },
+  { label: 'Offer builder', tab: 'offer_builder', Icon: PencilRuler, sub: [{ label: 'Offer builder', tab: 'offer_builder' }, { label: 'Offer paths', tab: 'value_ramps' }, { label: 'Leads', tab: 'leads' }] },
+  { label: 'Content builder', tab: 'content', Icon: Clapperboard, sub: [{ label: 'Content builder', tab: 'content' }] },
+  { label: 'Site builder', tab: 'profile', Icon: Blocks, sub: [{ label: 'Overview', tab: 'home' }, { label: 'Profile', tab: 'profile' }] },
+];
+
+/**
+ * One header shared by the public Guardian landing and the signed-in workspace, so both
+ * sit in the same position and carry the same builder nav. `transparent` gives the landing
+ * its translucent-over-hero look; `onNavigate` switches tabs in-app (workspace) instead of
+ * following the href. When signed out, every link opens the sign-in modal via `onSignIn`.
+ */
+export function GuardianHeader({ isSignedIn, activeTab, displayName, transparent, extra, locked, onNavigate, onSignIn, onSignOut }: {
+  isSignedIn: boolean;
+  /** Why the builders can't open yet (e.g. setup not saved): links stay visible but don't navigate. */
+  locked?: string;
+  activeTab?: Tab;
+  displayName?: string;
+  transparent?: boolean;
+  /** Page-specific controls shown before the account, e.g. the setup dashboard's Offers / Sites toggles. */
+  extra?: React.ReactNode;
+  onNavigate?: (tab: Tab) => void;
+  onSignIn?: () => void;
+  onSignOut?: () => void;
+}) {
+  const edge = isSignedIn ? ink : 'rgba(245,242,234,.4)';
+  const href = (tab: Tab) => (isSignedIn ? `/guardians/workspace?tab=${tab}` : '#guardian-apply');
+  const go = (tab: Tab) => (event: React.MouseEvent) => {
+    if (locked) { event.preventDefault(); return; }
+    if (!isSignedIn) { event.preventDefault(); onSignIn?.(); return; }
+    if (onNavigate) { event.preventDefault(); onNavigate(tab); }
+  };
+  // 31px matches the ROUTINE³ logo box (RoutineMark size 31) so the logo and builder bar line up.
+  const builderLink: React.CSSProperties = { height: '100%', display: 'inline-flex', alignItems: 'center', gap: 7, padding: '0 10px', color: ink, textDecoration: 'none', fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 600, fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', boxSizing: 'border-box' };
+  return (
+    <header className="g-header" style={{ position: 'sticky', top: 0, zIndex: 50, background: transparent ? 'rgba(9,10,8,.42)' : black, backdropFilter: transparent ? 'blur(12px)' : undefined, borderBottom: `1px solid ${transparent ? 'rgba(255,255,255,.22)' : line}` }}>
+      <div className="g-header-row" style={{ minHeight: 64 }}>
+        <div className="g-brand">
+          <span className="g-brand-full"><Brand /></span>
+          {/* Phones get the short square R³ mark so the row fits. */}
+          <a href="/" aria-label="ROUTINE³ Guardians" className="g-brand-r3" style={{ height: 31, minWidth: 31, padding: '0 7px', boxSizing: 'border-box', border: '1px solid rgba(245,242,234,0.58)', borderRadius: 2, placeItems: 'center', color: ink, textDecoration: 'none', fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 700, fontSize: 12, letterSpacing: '.06em' }}>R³</a>
+        </div>
+        {/* Builders are centered in the logo row: icons only, the name shows for the current page and on hover. */}
+        <nav aria-label="Guardian builders" className="g-builders" style={{ display: 'flex', alignItems: 'stretch', height: 31, boxSizing: 'border-box', border: `1px solid ${edge}`, borderRadius: 2 }}>
+          {GUARDIAN_BUILDERS.map((builder, index) => {
+            const active = activeTab === builder.tab || builder.sub.some((item) => item.tab === activeTab);
+            return <div key={builder.label} className="g-builder" style={{ position: 'relative', borderLeft: index ? `1px solid ${edge}` : 0 }}>
+              <a href={locked ? undefined : href(builder.tab)} onClick={go(builder.tab)} aria-current={active ? 'page' : undefined} aria-disabled={locked ? true : undefined} aria-label={locked ? `${builder.label} · ${locked}` : builder.label} title={locked || undefined} style={{ ...builderLink, opacity: isSignedIn && !locked ? 1 : .5, cursor: locked ? 'not-allowed' : 'pointer', background: active ? 'rgba(199,216,163,.16)' : 'transparent' }}>
+                <builder.Icon size={14} strokeWidth={1.8} aria-hidden="true" /><span className={active ? 'g-chip-label is-on' : 'g-chip-label'} aria-hidden="true">{builder.label}</span>
+              </a>
+              {isSignedIn && !locked && <div className="g-builder-menu" aria-label={builder.label} style={{ position: 'absolute', top: '100%', left: 0, minWidth: 184, background: panel, border: `1px solid ${line}`, borderRadius: 2, padding: 4, boxShadow: '0 18px 36px rgba(0,0,0,.55)' }}>
+                {builder.sub.map((item) => <a key={item.label} href={href(item.tab)} onClick={go(item.tab)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 11px', color: item.tab === activeTab ? ink : muted, textDecoration: 'none', fontFamily: sans, fontSize: 11, fontWeight: 600, letterSpacing: '.03em', whiteSpace: 'nowrap', background: item.tab === activeTab ? '#1C1E19' : 'transparent' }}><ChevronRight size={12} aria-hidden="true" />{item.label}</a>)}
+              </div>}
+            </div>;
+          })}
+        </nav>
+        <div className="g-header-account" style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 'none' }}>
+          {extra}
+          {isSignedIn ? <>
+            {displayName && <span className="g-header-name" title={displayName} style={{ color: muted, fontSize: 11, whiteSpace: 'nowrap' }}>{displayName}</span>}
+            <button type="button" onClick={onSignOut} title="Sign out" aria-label="Sign out" style={{ border: `1px solid ${line}`, background: 'transparent', color: ink, width: 31, height: 31, flexShrink: 0, boxSizing: 'border-box', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><LogOut size={13} /></button>
+          </> : <button type="button" onClick={onSignIn} style={{ ...builderLink, height: 31, border: `1px solid ${ink}`, borderRadius: 2, padding: '0 16px', background: 'transparent' }}>Sign in</button>}
+        </div>
+      </div>
+    </header>
+  );
+}
+
 const guidePlates: Record<string, string> = {
   home: '/images/guides/guide-plate.png',
   profile: '/images/guides/guide-plate.png',
@@ -708,25 +782,11 @@ function PublicGuidePage({ isSignedIn }: { isSignedIn: boolean }) {
   const suggestTypes = activeType === 'All' ? guardianDirectoryTypes.map((type) => type.label) : [activeType];
   return (
     <div style={{ minHeight: '100vh', background: black, color: ink, fontFamily: sans }}>
-      <header style={{ position: 'absolute', zIndex: 10, inset: '0 0 auto', height: 70, borderBottom: '1px solid rgba(255,255,255,.22)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 clamp(20px,5vw,72px)', background: 'rgba(9,10,8,.32)', backdropFilter: 'blur(12px)' }}>
-        <Brand />
-        {/* Joined hairline lockup, matching the main site header. */}
-        <div style={{ display: 'flex', border: `1px solid ${ink}`, borderRadius: 2 }}>
-          {isSignedIn
-            ? <><a href="/guardians/workspace" style={{ height: 32, padding: '0 14px', border: 0, background: 'transparent', color: ink, textDecoration: 'none', fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer', whiteSpace: 'nowrap' }}><LayoutDashboard size={13} strokeWidth={1.8} />Dashboard</a><button type="button" onClick={() => signOut()} style={{ height: 32, padding: '0 14px', border: 0, background: 'transparent', color: ink, textDecoration: 'none', fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer', whiteSpace: 'nowrap', borderLeft: `1px solid ${ink}` }}>Sign out</button></>
-            : <><a href="#guardian-apply" onClick={(e) => { e.preventDefault(); setAuthMode('login'); }} style={{ height: 32, padding: '0 14px', border: 0, background: 'transparent', color: ink, textDecoration: 'none', fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer', whiteSpace: 'nowrap' }}>Sign in</a></>}
-        </div>
-      </header>
-      {/* Builder links: their own bar under the header so all six fit; joined hairline lockup, scrolls sideways when narrow. */}
-      <div className="guardian-builders-bar" style={{ position: 'absolute', zIndex: 10, top: 70, left: 0, right: 0, display: 'flex', overflowX: 'auto', padding: '10px 16px', scrollbarWidth: 'none' }}>
-        <nav aria-label="Guardian builders" className="guardian-builders" style={{ margin: '0 auto', flex: 'none', display: 'flex', alignItems: 'stretch', border: `1px solid ${isSignedIn ? ink : 'rgba(245,242,234,.4)'}`, borderRadius: 2, background: 'rgba(9,10,8,.32)', backdropFilter: 'blur(12px)' }}>
-          {([['Protocol builder', 'protocols', Hammer], ['Diet planner', 'diet', Utensils], ['Fitness planner', 'fitness', Dumbbell], ['Offer builder', 'offer_builder', PencilRuler], ['Content builder', 'content', Clapperboard], ['Site builder', 'profile', Blocks]] as const).map(([text, tab, Icon], index) => <a key={text} href={isSignedIn ? `/guardians/workspace?tab=${tab}` : '#guardian-apply'} onClick={(e) => { if (!isSignedIn) { e.preventDefault(); setAuthMode('login'); } }} title={isSignedIn ? text : `${text} · sign in to use`} style={{ height: 32, fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 600, padding: '0 14px', borderLeft: index ? `1px solid ${isSignedIn ? ink : 'rgba(245,242,234,.4)'}` : 0, color: ink, opacity: isSignedIn ? 1 : .45, textDecoration: 'none', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' }}><Icon size={13} strokeWidth={1.8} />{text}</a>)}
-        </nav>
-      </div>
+      <GuardianHeader transparent isSignedIn={isSignedIn} onSignIn={() => setAuthMode('login')} onSignOut={() => signOut()} />
       {authMode && <AuthPanel key={authMode} initialMode={authMode} initialEmail={heroEmail.trim()} onModalClose={() => setAuthMode(null)} />}
       <main>
-        <section style={{ position: 'relative', minHeight: '100svh', display: 'grid', alignItems: 'center', overflow: 'hidden', backgroundImage: 'linear-gradient(rgba(9,10,8,.22),rgba(9,10,8,.84)),url(/images/guides/templates/community-table.webp)', backgroundSize: 'cover', backgroundPosition: 'center' }}>
-          <div style={{ width: '100%', boxSizing: 'border-box', padding: 'clamp(110px,14vh,150px) clamp(20px,6vw,90px) clamp(54px,8vh,90px)' }}>
+        <section style={{ position: 'relative', minHeight: 'calc(100svh - 65px)', display: 'grid', alignItems: 'center', overflow: 'hidden', backgroundImage: 'linear-gradient(rgba(9,10,8,.22),rgba(9,10,8,.84)),url(/images/guides/templates/community-table.webp)', backgroundSize: 'cover', backgroundPosition: 'center' }}>
+          <div style={{ width: '100%', boxSizing: 'border-box', padding: 'clamp(54px,8vh,90px) clamp(20px,6vw,90px)' }}>
             <div style={{ maxWidth: 860 }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', color: acid, marginBottom: 28 }}>LEARN · BUILD · GUIDE</div>
               <h1 style={{ margin: 0, fontFamily: serif, fontWeight: 300, fontSize: 'clamp(64px,10vw,142px)', lineHeight: .84, letterSpacing: '-0.055em' }}>Become a Guardian.</h1>
@@ -1455,9 +1515,10 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   </div>;
 }
 
-function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, onDone }: { userId: string; accessToken: string; name: string; email: string; accountAvatarUrl?: string | null; onDone: (p: GuideProfile) => void }) {
+function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasProfile = false, onDone }: { userId: string; accessToken: string; name: string; email: string; accountAvatarUrl?: string | null; hasProfile?: boolean; onDone: (p: GuideProfile) => void }) {
   const [step, setStep] = useGuardianPage<number>('step', SETUP_STEPS, 1);
   const [displayName, setDisplayName] = useState(name);
+  const { signOut } = useAuth();
   const [mainLanguage, setMainLanguage] = useState(defaultLanguage());
   const [contactEmail, setContactEmail] = useState(email);
   const [whatsappPhone, setWhatsappPhone] = useState('');
@@ -2295,14 +2356,15 @@ function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, onDone
   };
   return <div onPointerMove={tiltCard} onPointerOut={resetTilt} style={{ minHeight: '100vh', background: black, color: ink, padding: '30px clamp(20px,6vw,90px)', fontFamily: sans }}>
     <style>{`@keyframes guardian-orbit{to{transform:rotate(360deg)}}.guardian-image-loader{animation:guardian-orbit 1.8s linear infinite}.guardian-card{--card-rotate-x:0deg;--card-rotate-y:0deg;transition:transform 160ms ease,border-color 180ms ease,box-shadow 180ms ease,background-color 180ms ease;transform-origin:center;transform-style:preserve-3d;will-change:transform;text-align:left}.guardian-card>span[aria-hidden="true"],.guardian-card [role="img"]{margin-left:0!important;margin-right:0!important}.guardian-card img{transition:filter 180ms ease;filter:grayscale(1) contrast(.92)!important}.guardian-card:hover{transform:perspective(700px) translateY(-5px) rotateX(var(--card-rotate-x)) rotateY(var(--card-rotate-y));box-shadow:0 16px 30px rgba(0,0,0,.3)}.guardian-card:not([aria-pressed="true"]):not([aria-disabled="true"]):hover{border-color:#A56B48!important;background-color:#171811!important}.guardian-card:hover img{filter:grayscale(0) contrast(1.02) saturate(1.08)!important}.guardian-card[aria-disabled="true"]:hover{transform:none;box-shadow:none}.guardian-card:focus-visible{outline:2px solid #C7D8A3;outline-offset:3px}@media(prefers-reduced-motion:reduce){.guardian-card,.guardian-image-loader{transition:none;animation:none}.guardian-card:hover{transform:none!important}}`}</style>
-    <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
-      <Brand />
-      <nav aria-label="Guardian workspace" style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-        <GuardianToolLinks />
+    {/* Same shared header as the landing and tool pages; negative margins cancel this page's padding so it spans full width. */}
+    {/* maxWidth none: the site CSS caps every element at 100% under 768px, which would undo the full bleed. */}
+    <div style={{ position: 'sticky', top: 0, zIndex: 50, margin: '-30px calc(-1 * clamp(20px,6vw,90px)) 0', maxWidth: 'none' }}>
+      {/* Until a profile is saved every ?tab= URL re-renders this setup, so builder links would just reload it and drop unsaved answers. */}
+      <GuardianHeader isSignedIn displayName={displayName} locked={hasProfile ? undefined : 'finish setup to open the builders'} onSignOut={() => signOut()} extra={<>
+        <button type="button" onClick={() => setSummaryView('offers')} style={{ padding: 0, border: 0, borderBottom: summaryView === 'offers' ? `1px solid ${ink}` : '1px solid transparent', background: 'transparent', color: summaryView === 'offers' ? ink : muted, cursor: 'pointer', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Offers <span style={{ color: acid }}>{builtOfferCount}/{totalOfferCount}</span></button>
+        <button type="button" onClick={() => setSummaryView('sites')} style={{ padding: 0, border: 0, borderBottom: summaryView === 'sites' ? `1px solid ${ink}` : '1px solid transparent', background: 'transparent', color: summaryView === 'sites' ? ink : muted, cursor: 'pointer', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Sites <span style={{ color: acid }}>2</span></button>
         <span aria-hidden="true" style={{ width: 1, height: 14, background: line }} />
-        <button type="button" onClick={() => setSummaryView('offers')} style={{ padding: 0, border: 0, borderBottom: summaryView === 'offers' ? `1px solid ${ink}` : '1px solid transparent', background: 'transparent', color: summaryView === 'offers' ? ink : muted, cursor: 'pointer', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>Offers <span style={{ color: acid }}>{builtOfferCount}/{totalOfferCount}</span></button>
-        <button type="button" onClick={() => setSummaryView('sites')} style={{ padding: 0, border: 0, borderBottom: summaryView === 'sites' ? `1px solid ${ink}` : '1px solid transparent', background: 'transparent', color: summaryView === 'sites' ? ink : muted, cursor: 'pointer', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>Sites <span style={{ color: acid }}>2</span></button>
-      </nav>
+      </>} />
     </div>
     <div aria-label="Guardian setup progress" style={{ maxWidth: 1100, margin: '42px auto 0', display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', borderTop: `1px solid ${line}`, borderBottom: `1px solid ${line}` }}>
       {steps.map((item) => <button type="button" key={item.n} onClick={() => { setSummaryView(null); setStep(item.n); }} aria-current={!summaryView && step === item.n ? 'step' : undefined} style={{ height: 54, border: 0, borderRight: item.n < 5 ? `1px solid ${line}` : 0, background: !summaryView && step === item.n ? ink : 'transparent', color: !summaryView && step === item.n ? black : item.n < step ? acid : muted, fontFamily: sans, cursor: 'pointer', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{String(item.n).padStart(2, '0')} · {item.label}</button>)}
@@ -3338,7 +3400,7 @@ function OfferBuilder({ profile, protocols, offers, recipes = [], librarySources
     finally { setBusy(''); }
   }
   return <>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}><img src={guidePlates.offer_builder} alt="" style={{ width: 74, height: 74, objectFit: 'contain', filter: 'grayscale(1) contrast(.9) brightness(.74)' }} /><div><div style={{ ...label, color: acid }}>Reusable building blocks</div><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 300, margin: '8px 0 0' }}>Offer Builder</h1></div></div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}><img src={guidePlates.offer_builder} alt="" style={{ width: 74, height: 74, objectFit: 'contain', filter: 'grayscale(1) contrast(.9) brightness(.74)' }} /><div><div style={{ ...label, color: acid }}>Reusable building blocks</div><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 300, margin: '8px 0 0' }}>Offer builder</h1></div></div>
     <p style={{ color: muted, maxWidth: 720, lineHeight: 1.6 }}>Create the things people receive. Reuse any offer across more than one offer path.</p>
     {librarySources.length > 0 && <div style={{ border: `1px solid ${acid}`, background: '#1B2017', color: acid, padding: 13, marginTop: 18, fontSize: 11 }}><strong>{librarySources.length} Library source{librarySources.length === 1 ? '' : 's'} attached:</strong> {librarySources.map((source) => source.title).join(', ')}</div>}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 12, marginTop: 28 }}>{offerBuilderTypes.map(({ kind, title, eyebrow, copy, Icon }) => <button key={kind} type="button" onClick={() => build(kind, title)} disabled={busy === kind} style={{ minHeight: 220, border: `1px solid ${line}`, background: panel, color: ink, padding: 22, textAlign: 'left', cursor: 'pointer', fontFamily: sans, display: 'flex', flexDirection: 'column' }}><span style={{ width: 48, height: 48, border: `1px solid ${line}`, display: 'grid', placeItems: 'center', color: acid }}><Icon size={22} /></span><span style={{ ...label, color: acid, margin: '24px 0 7px' }}>{eyebrow}</span><strong style={{ fontSize: 22 }}>{title}</strong><span style={{ color: muted, fontSize: 12, lineHeight: 1.55, marginTop: 8 }}>{copy}</span><span style={{ marginTop: 'auto', paddingTop: 18, fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>{busy === kind ? 'Creating...' : kind === 'routine' ? 'Open R3 builder →' : 'Create offer →'}</span></button>)}</div>
@@ -3596,29 +3658,24 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
     finally { setCreating(false); }
   }
   return <div style={{ minHeight: '100vh', background: black, color: ink, fontFamily: sans }}>
-    <header style={{ borderBottom: `1px solid ${line}`, padding: '22px clamp(20px,6vw,90px) 0' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
-        <Brand />
-        <nav aria-label="Guardian workspace" style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-          <GuardianToolLinks active={tab} />
-          <span aria-hidden="true" style={{ width: 1, height: 14, background: line }} />
-          <span style={{ color: muted, fontSize: 11 }}>{profile.display_name}</span>
-          <button onClick={signOut} title="Sign out" style={{ border: `1px solid ${line}`, background: 'transparent', color: muted, width: 30, height: 30, cursor: 'pointer', display: 'grid', placeItems: 'center' }}><LogOut size={13} /></button>
-        </nav>
-      </div>
-      {/* Same Profile → Site bar as the dashboard; each step opens the builder at that step. */}
-      <div aria-label="Guardian setup steps" style={{ maxWidth: 1100, margin: '22px auto 0', display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', borderTop: `1px solid ${line}` }}>
+    <GuardianHeader isSignedIn activeTab={tab} displayName={profile.display_name} onNavigate={(next) => { setTab(next); setProtocolId(null); setRecipeId(null); setChildPlanId(null); setParentContext(null); }} onSignOut={signOut} />
+    {/* Profile → Site setup steps, kept as workspace context under the shared header. */}
+    <div aria-label="Guardian setup steps" style={{ padding: '0 clamp(20px,6vw,90px)', borderBottom: `1px solid ${line}` }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(5,1fr)' }}>
         {GUARDIAN_STEP_LABELS.map((stepLabel, index) => <a key={stepLabel} href={`/guardians/workspace?step=${index + 1}`} style={{ height: 50, display: 'grid', placeItems: 'center', borderRight: index < 4 ? `1px solid ${line}` : 0, color: muted, textDecoration: 'none', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{String(index + 1).padStart(2, '0')} · {stepLabel}</a>)}
       </div>
-    </header>
-    <div style={{ display: 'grid', gridTemplateColumns: '210px minmax(0,1fr)', minHeight: 'calc(100vh - 63px)' }}>
-      <aside style={{ borderRight: `1px solid ${line}`, padding: '25px 14px' }}><a href="/guardians/workspace" style={{ display: 'flex', alignItems: 'center', gap: 10, height: 42, padding: '0 12px', marginBottom: 10, borderBottom: `1px solid ${line}`, color: ink, textDecoration: 'none', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>← Dashboard</a>{navItems.map(({ id, label: n, Icon }) => <button key={id} onClick={() => { setTab(id); setProtocolId(null); setRecipeId(null); setChildPlanId(null); setParentContext(null); }} style={{ width: '100%', height: 42, border: 0, background: (tab === id || (id === 'offer_builder' && tab === 'value_ramps')) ? '#1C1E19' : 'transparent', color: (tab === id || (id === 'offer_builder' && tab === 'value_ramps')) ? ink : muted, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', paddingLeft: id === 'recipes' ? 44 : ['diet', 'fitness'].includes(id) ? 28 : 12, cursor: 'pointer', fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}><Icon size={14} />{n}</button>)}</aside>
-      <main style={{ padding: 'clamp(26px,5vw,68px)', overflow: 'hidden' }}>
+    </div>
+    <div style={{ display: 'grid', gridTemplateColumns: '64px minmax(0,1fr)', minHeight: 'calc(100vh - 63px)' }}>
+      <div className="g-railwrap">
+        <aside className="g-rail" aria-label="Guardian sections"><a href="/guardians/workspace" title="Dashboard" style={{ display: 'flex', alignItems: 'center', gap: 12, height: 42, padding: '0 20px', marginBottom: 10, borderBottom: `1px solid ${line}`, color: ink, textDecoration: 'none', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}><LayoutDashboard size={16} style={{ flex: '0 0 auto' }} /><span className="g-rlabel">Dashboard</span></a>{navItems.map(({ id, label: n, Icon }) => { const on = tab === id || (id === 'offer_builder' && tab === 'value_ramps'); const indent = id === 'recipes' ? 22 : ['diet', 'fitness'].includes(id) ? 12 : 0; return <button key={id} onClick={() => { setTab(id); setProtocolId(null); setRecipeId(null); setChildPlanId(null); setParentContext(null); }} title={n} style={{ width: '100%', height: 42, border: 0, background: on ? '#1C1E19' : 'transparent', color: on ? ink : muted, display: 'flex', alignItems: 'center', gap: 12, padding: '0 20px', cursor: 'pointer', fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}><Icon size={16} style={{ flex: '0 0 auto' }} /><span className="g-rlabel" style={{ marginLeft: indent }}>{n}</span></button>; })}</aside>
+      </div>
+      {/* overflow-x clip, not hidden: hidden makes main a scroll container and breaks sticky columns inside (Diet planner). */}
+      <main style={{ padding: 'clamp(26px,5vw,68px)', overflowX: 'clip' }}>
         {createError && <p role="alert" style={{ color: '#E8B86A' }}>{createError}</p>}
         {tab === 'admin' && isAdminUser && <GuardianAdminPanel />}
         {tab === 'home' && <><div style={{ ...label, color: acid }}>Guardian workspace</div><h1 style={{ fontFamily: serif, fontWeight: 300, fontSize: 'clamp(44px,6vw,76px)', lineHeight: .95, margin: '15px 0 18px' }}>Build what people follow.</h1><p style={{ color: muted, maxWidth: 650, lineHeight: 1.6 }}>Create reusable offers, then arrange them into as many audience-specific offer paths as you need.</p><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', borderTop: `1px solid ${line}`, marginTop: 55 }}>{metric.map((m) => <div key={m.l} style={{ borderRight: `1px solid ${line}`, padding: '25px 18px 25px 0' }}><div style={{ fontFamily: serif, fontSize: 42 }}>{m.n}</div><div style={{ ...label, margin: '7px 0 0' }}>{m.l}</div></div>)}</div><div style={{ marginTop: 48, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 14 }}>{nav.slice(1,5).map(({ id, label: title }) => <button key={id} onClick={() => setTab(id)} style={{ border: `1px solid ${line}`, background: panel, color: ink, minHeight: 210, padding: 22, textAlign: 'left', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', position: 'relative', overflow: 'hidden' }}><span><img src={guidePlates[id]} alt="" style={{ width: 86, height: 86, objectFit: 'contain', filter: 'grayscale(1) contrast(.9) brightness(.75)', opacity: .82 }} /><span style={{ display: 'block', fontFamily: serif, fontSize: 25, fontWeight: 300, marginTop: 12 }}>{title}</span></span><ChevronRight size={17} color={muted} /></button>)}</div></>}
         {tab === 'profile' && <>
-          <h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 350 }}>Your profile</h1>
+          <h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 350 }}>Site builder</h1>
           <div style={{ maxWidth: 680 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
               <div><label style={label}>Public name</label><input style={input} value={profile.display_name} onChange={(e) => onProfile({ ...profile, display_name: e.target.value })} /></div>
@@ -3649,7 +3706,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
         {tab === 'leads' && !protocolId && !recipeId && user && <ReviewsPanel userId={user.id} slug={profile.slug} />}
         {tab === 'protocols' && !protocolId && protocols.length > 1 && <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}><button onClick={() => setCombining(!combining)} style={{ ...btn, background: 'transparent', color: ink }}><Combine size={14} /> Combine for a person</button></div>}
         {tab === 'protocols' && !protocolId && combining && accessToken && user && <CombineProtocols accessToken={accessToken} ownerId={user.id} protocols={protocols} leads={leads} onClose={() => setCombining(false)} onSaved={(saved) => setProtocols((current) => [saved, ...current])} onOpen={(id) => { setCombining(false); setProtocolId(id); }} />}
-        {(['leads','value_ramps','recipes','protocols'] as Tab[]).includes(tab) && !protocolId && !recipeId && <><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 20 }}><div style={{ display: 'flex', alignItems: 'center', gap: 18 }}><img src={guidePlates[tab]} alt="" style={{ width: 74, height: 74, objectFit: 'contain', filter: 'grayscale(1) contrast(.9) brightness(.74)', opacity: .86 }} /><div><div style={{ ...label, color: acid }}>{tab === 'value_ramps' ? 'Customer journeys' : 'Build'}</div><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 300, margin: '8px 0 0' }}>{tab === 'value_ramps' ? 'Offers' : tab.charAt(0).toUpperCase() + tab.slice(1)}</h1></div></div><button onClick={() => setAdding(!adding)} style={btn}><Plus size={14} /> Add {tab === 'value_ramps' ? 'Offer path' : tab === 'protocols' ? 'Protocol' : tab.slice(0,-1)}</button></div>{adding && <div style={{ display: 'grid', gridTemplateColumns: tab === 'leads' ? '1fr 1fr 1.2fr auto' : '1fr 1.4fr auto', gap: 9, margin: '28px 0' }}><input style={input} placeholder={tab === 'leads' ? 'Name' : tab === 'value_ramps' ? 'Ramp name' : 'Title'} value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />{tab === 'leads' && <input style={input} type="email" placeholder="Email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />}<input style={input} placeholder={tab === 'value_ramps' ? 'Audience problem or goal' : tab === 'leads' ? 'Goal' : 'Short description'} value={newGoal} onChange={(e) => setNewGoal(e.target.value)} /><button onClick={quickAdd} disabled={creating || !newTitle.trim()} style={btn}>{creating ? 'Creating…' : 'Create'}</button></div>}<div style={{ marginTop: 30 }}>{tab === 'leads' && (leads.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18 }}>{leads.map((x) => <ProductCard key={x.id} kind="lead" imageUrl="/images/guides/lead-plate.png" eyebrow={[x.stage.charAt(0).toUpperCase() + x.stage.slice(1), new Date(x.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })].join(' · ')} title={x.name} copy={x.goal || 'No goal yet'} name={x.email} accent={acid} cta="Email" href={`mailto:${x.email}`} />)}</div> : <Empty image={guidePlates.leads} title="No leads yet" copy="Add a lead or share your public guide page." />)}{tab === 'value_ramps' && (valueRamps.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(270px,1fr))', gap: 12 }}>{valueRamps.map((ramp) => <article key={ramp.id} style={{ border: `1px solid ${line}`, background: panel, padding: 22, minHeight: 220, display: 'flex', flexDirection: 'column' }}><Route size={24} color={acid} /><div style={{ ...label, color: acid, marginTop: 24 }}>{ramp.audience} · {ramp.problem}</div><h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 29, margin: '4px 0 8px' }}>{ramp.name}</h2><p style={{ color: muted, fontSize: 11, lineHeight: 1.5 }}>{ramp.offer_ids.length} reusable offers · {ramp.status}</p><a aria-label={`Open offer path ${ramp.name}`} href={`/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}`} style={{ marginTop: 'auto', color: ink, fontSize: 9, fontWeight: 800 }}>Open offer path →</a></article>)}</div> : <Empty image={guidePlates.value_ramps} title="Create your first offer path" copy="Choose one audience problem, then arrange reusable offers from a free first win to deeper support." action={<button type="button" onClick={() => setAdding(true)} style={btn}>Create offer path</button>} />)}{tab === 'recipes' && accessToken && <GuardianRecipeAI userId={user.id} accessToken={accessToken} offers={offers} recipes={recipes} author={profile.display_name} onSaved={(saved) => setRecipes((current) => [saved, ...current.filter((r) => r.id !== saved.id)])} />}{tab === 'recipes' && (recipes.length ? (() => {
+        {(['leads','value_ramps','recipes','protocols'] as Tab[]).includes(tab) && !protocolId && !recipeId && <><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 20 }}><div style={{ display: 'flex', alignItems: 'center', gap: 18 }}><img src={guidePlates[tab]} alt="" style={{ width: 74, height: 74, objectFit: 'contain', filter: 'grayscale(1) contrast(.9) brightness(.74)', opacity: .86 }} /><div><div style={{ ...label, color: acid }}>{tab === 'value_ramps' ? 'Customer journeys' : 'Build'}</div><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 300, margin: '8px 0 0' }}>{tab === 'value_ramps' ? 'Offer paths' : tab === 'protocols' ? 'Protocol builder' : tab.charAt(0).toUpperCase() + tab.slice(1)}</h1></div></div><button onClick={() => setAdding(!adding)} style={btn}><Plus size={14} /> Add {tab === 'value_ramps' ? 'Offer path' : tab === 'protocols' ? 'Protocol' : tab.slice(0,-1)}</button></div>{adding && <div style={{ display: 'grid', gridTemplateColumns: tab === 'leads' ? '1fr 1fr 1.2fr auto' : '1fr 1.4fr auto', gap: 9, margin: '28px 0' }}><input style={input} placeholder={tab === 'leads' ? 'Name' : tab === 'value_ramps' ? 'Ramp name' : 'Title'} value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />{tab === 'leads' && <input style={input} type="email" placeholder="Email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />}<input style={input} placeholder={tab === 'value_ramps' ? 'Audience problem or goal' : tab === 'leads' ? 'Goal' : 'Short description'} value={newGoal} onChange={(e) => setNewGoal(e.target.value)} /><button onClick={quickAdd} disabled={creating || !newTitle.trim()} style={btn}>{creating ? 'Creating…' : 'Create'}</button></div>}<div style={{ marginTop: 30 }}>{tab === 'leads' && (leads.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18 }}>{leads.map((x) => <ProductCard key={x.id} kind="lead" imageUrl="/images/guides/lead-plate.png" eyebrow={[x.stage.charAt(0).toUpperCase() + x.stage.slice(1), new Date(x.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })].join(' · ')} title={x.name} copy={x.goal || 'No goal yet'} name={x.email} accent={acid} cta="Email" href={`mailto:${x.email}`} />)}</div> : <Empty image={guidePlates.leads} title="No leads yet" copy="Add a lead or share your public guide page." />)}{tab === 'value_ramps' && (valueRamps.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(270px,1fr))', gap: 12 }}>{valueRamps.map((ramp) => <article key={ramp.id} style={{ border: `1px solid ${line}`, background: panel, padding: 22, minHeight: 220, display: 'flex', flexDirection: 'column' }}><Route size={24} color={acid} /><div style={{ ...label, color: acid, marginTop: 24 }}>{ramp.audience} · {ramp.problem}</div><h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 29, margin: '4px 0 8px' }}>{ramp.name}</h2><p style={{ color: muted, fontSize: 11, lineHeight: 1.5 }}>{ramp.offer_ids.length} reusable offers · {ramp.status}</p><a aria-label={`Open offer path ${ramp.name}`} href={`/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}`} style={{ marginTop: 'auto', color: ink, fontSize: 9, fontWeight: 800 }}>Open offer path →</a></article>)}</div> : <Empty image={guidePlates.value_ramps} title="Create your first offer path" copy="Choose one audience problem, then arrange reusable offers from a free first win to deeper support." action={<button type="button" onClick={() => setAdding(true)} style={btn}>Create offer path</button>} />)}{tab === 'recipes' && accessToken && <GuardianRecipeAI userId={user.id} accessToken={accessToken} offers={offers} recipes={recipes} author={profile.display_name} onSaved={(saved) => setRecipes((current) => [saved, ...current.filter((r) => r.id !== saved.id)])} />}{tab === 'recipes' && (recipes.length ? (() => {
           const kcal = (x: GuideRecipe) => { const v = Number((x.nutrition_per_serving as any)?.energy_kcal); return Number.isFinite(v) && v > 0 ? `${Math.round(v)} kcal` : ''; };
           const meta = (x: GuideRecipe) => [x.meal_slot && x.meal_slot !== 'any' ? x.meal_slot.charAt(0).toUpperCase() + x.meal_slot.slice(1) : 'Any meal', kcal(x), x.status === 'published' ? 'Published' : x.status === 'submitted' ? 'Ready for review' : 'Draft'].filter(Boolean).join(' · ');
           const short = (d?: string | null) => { const t = (d || '').replace(/\s+/g, ' ').trim(); return t.length > 110 ? `${t.slice(0, 110).replace(/\s+\S*$/, '')}…` : t || undefined; };
@@ -3714,18 +3771,47 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
 }
 
 const GUARDIAN_STEP_LABELS = ['Profile', 'Guidance', 'Audience', 'Offers', 'Site'];
-const GUARDIAN_TOOL_LINKS = [['Library', 'library'], ['Leads', 'leads'], ['Recipes', 'recipes'], ['Protocols', 'protocols']] as const;
-
-/** Tool links shared by the step-builder dashboard and the tool pages, so both headers match. */
-function GuardianToolLinks({ active }: { active?: string }) {
-  return <>{GUARDIAN_TOOL_LINKS.map(([text, tab]) => <a key={tab} href={`/guardians/workspace?tab=${tab}`} aria-current={active === tab ? 'page' : undefined} style={{ color: active === tab ? ink : muted, borderBottom: `1px solid ${active === tab ? ink : 'transparent'}`, textDecoration: 'none', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>{text}</a>)}</>;
-}
 
 function Row({ title, meta, action, onClick, image }: { title: string; meta: string; action?: string; onClick?: () => void; image?: string | null }) { const content = <><div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 0 }}><span aria-hidden="true" style={{ position: 'relative', width: 56, height: 56, flex: '0 0 56px', display: 'grid', placeItems: 'center', overflow: 'hidden', border: `1px solid ${line}`, background: '#171812', color: muted, fontFamily: serif, fontSize: 22 }}>{title.replace(/^R3 Protocol\s*>\s*/i, '').trim().charAt(0)}{image && <img src={image} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = 'none'; }} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}</span><div style={{ minWidth: 0 }}><div style={{ fontFamily: serif, fontSize: 22 }}>{title}</div><div style={{ color: muted, fontSize: 11, marginTop: 5 }}>{meta}</div></div></div><span style={{ display: 'flex', alignItems: 'center', gap: 8, color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase' }}>{action}<ChevronRight size={16} /></span></>; return onClick ? <button type="button" onClick={onClick} style={{ width: '100%', border: 0, borderTop: `1px solid ${line}`, padding: '18px 4px', background: 'transparent', color: ink, display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'left', cursor: 'pointer' }}>{content}</button> : <div style={{ borderTop: `1px solid ${line}`, padding: '18px 4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>{content}</div>; }
 
 // Scopes Guardian styling; globals.css exempts `.guardian-ui button` from the forced 16px button size.
 export function GuidePortal() {
-  return <div className="guardian-ui"><style>{`.guardian-builders-bar::-webkit-scrollbar{display:none}.g-split{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:20px;align-items:start}.g-split>.g-sticky{position:sticky;top:16px}@media (max-width: 960px){.g-split{grid-template-columns:minmax(0,1fr)}.g-split>.g-sticky{position:static}}`}</style><GuidePortalRoutes /></div>;
+  return <div className="guardian-ui"><style>{`.guardian-builders-bar::-webkit-scrollbar{display:none}.g-split{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:20px;align-items:start}.g-split>.g-sticky{position:sticky;top:16px}@media (max-width: 960px){.g-split{grid-template-columns:minmax(0,1fr)}.g-split>.g-sticky{position:static}}
+    /* The app shell sets overflow-x:hidden on body and (inline, App.tsx) on #main-content, which makes
+       them scroll containers and stops the sticky header. clip keeps sideways overflow hidden without that;
+       !important is needed to beat main's inline style, and :has() keeps it to Guardian pages. */
+    body:has(.guardian-ui),#main-content:has(.guardian-ui){overflow-x:clip!important;overflow-y:visible!important}
+    /* Diet planner: stacked by default; from 1500px the macros/nutrients/hazards become one sticky column beside the planner. */
+    .g-diet-split{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;align-items:start}
+    @media (min-width:1500px){.g-diet-split{grid-template-columns:minmax(0,1fr) 380px;grid-template-areas:"plan side"}.g-diet-split>.g-diet-plan{grid-area:plan}.g-diet-split>.g-diet-side{grid-area:side;position:sticky;top:80px;max-height:calc(100vh - 96px);overflow-y:auto;overscroll-behavior:contain}.g-diet-side .g-macro-strip{grid-template-columns:1fr!important}.g-diet-side .g-macro-strip>div{border-right:0!important;border-bottom:1px solid rgba(245,242,234,0.24)}}
+    /* Fitness planner: an opened exercise shows beside the week as in the app (stacked under 1200px). */
+    .g-fit-split{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start}
+    @media (min-width:1200px){.g-fit-split.has-detail{grid-template-columns:minmax(0,1fr) 340px}.g-fit-split.has-detail>.g-fit-detail{position:sticky;top:80px}}
+    /* Shared header: builder dropdowns reveal on hover/focus */
+    .g-header-row{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:16px;padding:0 clamp(20px,5vw,72px)}
+    .g-brand{justify-self:start;display:flex}
+    /* The account side may shrink: a long name truncates, then hides, so Sign out never leaves the screen. */
+    .g-header-account{justify-self:end;min-width:0;max-width:100%}
+    .g-header-name{min-width:0;max-width:22ch;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis}
+    @media (max-width:1100px){.g-header-name{display:none}}
+    .g-brand-r3{display:none}
+    .g-builders{flex-wrap:nowrap}
+    /* Icon-only chips; the name slides out for the current page and on hover/keyboard focus. */
+    .g-chip-label{display:inline-block;overflow:hidden;max-width:0;opacity:0;margin-left:-7px;transition:max-width .45s cubic-bezier(.65,0,.35,1),opacity .35s cubic-bezier(.65,0,.35,1),margin-left .45s cubic-bezier(.65,0,.35,1)}
+    .g-chip-label.is-on,.g-builder:hover .g-chip-label,.g-builder:has(:focus-visible) .g-chip-label{max-width:180px;opacity:1;margin-left:0}
+    @media (max-width:720px){.g-header-row{grid-template-columns:auto 1fr;row-gap:10px;padding-top:10px;padding-bottom:10px}.g-builders{grid-column:1/-1;grid-row:2;justify-self:center}.g-brand-full{display:none}.g-brand-r3{display:inline-grid}.g-header-name{display:none}}
+    .g-builder-menu{opacity:0;visibility:hidden;transform:translateY(-4px);transition:opacity .14s ease,transform .14s ease,visibility .14s;z-index:60}
+    .g-builder:hover>.g-builder-menu,.g-builder:has(:focus-visible)>.g-builder-menu{opacity:1;visibility:visible;transform:translateY(0)}
+    /* Collapsible icon rail: 64px, expands over content on hover/focus */
+    .g-railwrap{position:relative;width:64px}
+    /* overflow-y:auto: on short screens (phone landscape) the grid row can be shorter than the ~512px of links;
+       the rail scrolls on its own instead of clipping them. Scrollbar hidden so the 64px icon column stays aligned. */
+    .g-rail{position:absolute;inset:0;width:64px;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;background:${black};border-right:1px solid ${line};padding:20px 0;z-index:30;transition:width .18s ease,box-shadow .18s ease}
+    .g-railwrap:hover .g-rail,.g-rail:has(:focus-visible){width:224px;box-shadow:16px 0 40px rgba(0,0,0,.45)}
+    .g-rail::-webkit-scrollbar{display:none}
+    .g-rlabel{opacity:0;transition:opacity .14s ease}
+    .g-railwrap:hover .g-rail .g-rlabel,.g-rail:has(:focus-visible) .g-rlabel{opacity:1}
+    @media (prefers-reduced-motion:reduce){.g-rail,.g-rlabel,.g-builder-menu,.g-chip-label{transition:none}}`}</style><GuidePortalRoutes /></div>;
 }
 
 function GuidePortalRoutes() {
@@ -3746,7 +3832,7 @@ function GuidePortalRoutes() {
   // The step builder (Profile → Guidance → Audience → Offers → Site) is the Guardian dashboard.
   // The tool views (Library, Leads, Recipes…) open from its header via ?tab=.
   const wantsTool = new URLSearchParams(window.location.search).has('tab');
-  if (accessToken && (!profile || !wantsTool)) return <Onboarding userId={user.id} accessToken={accessToken} name={user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Guardian'} email={user.email || ''} accountAvatarUrl={user.user_metadata?.avatar_url || user.user_metadata?.picture || null} onDone={(p) => { setProfile(p); window.location.assign('/guardians/workspace?tab=home'); }} />;
+  if (accessToken && (!profile || !wantsTool)) return <Onboarding userId={user.id} accessToken={accessToken} hasProfile={Boolean(profile)} name={user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Guardian'} email={user.email || ''} accountAvatarUrl={user.user_metadata?.avatar_url || user.user_metadata?.picture || null} onDone={(p) => { setProfile(p); window.location.assign('/guardians/workspace?tab=home'); }} />;
   if (!profile) return <div style={{ minHeight: '100vh', background: black, color: ink, display: 'grid', placeItems: 'center', fontFamily: sans }}>Opening Guardian setup…</div>;
   return <Workspace profile={profile} onProfile={setProfile} />;
 }

@@ -121,3 +121,93 @@ describe('fitness hard gate', () => {
     expect(notes).toHaveLength(2);
   });
 });
+
+import { planFitnessWeek, isPostWorkoutRecovery, FITNESS_GOALS, sessionTimeFor, defaultSchedule, pickWarmups, orderedExercises, exerciseGroup, type ExercisePick } from '../protocolBuilders';
+
+describe('fitness likes', () => {
+  const goal = (id: string) => FITNESS_GOALS.find((g) => g.id === id)!;
+  const sport = (name: string) => ({ id: name, name, image: null, category: 'Sports', minutes: null });
+
+  it('keeps the goal split when nothing is picked', () => {
+    const plan = planFitnessWeek(goal('general'));
+    expect(plan.map((p) => [p.day, p.template.title])).toEqual([[1, 'Full body day'], [3, 'Cardio day'], [5, 'Mobility day']]);
+  });
+  it('narrows sessions to picked training types, leaving sessions none of them fit', () => {
+    const plan = planFitnessWeek(goal('general'), { types: ['calisthenics'], sports: [] });
+    expect(plan[0].template.categories).toEqual(['Calisthenics']);      // full body: strength → calisthenics only
+    expect(plan[2].template.categories).toEqual(['Stretch', 'Recovery', 'Yoga']); // mobility untouched
+  });
+  it('turns cardio days into the picked sports, in turn', () => {
+    const plan = planFitnessWeek(goal('weight_loss'), { types: [], sports: [sport('Tennis'), sport('Padel')] });
+    expect(plan.filter((p) => p.sport).map((p) => [p.day, p.sport!.name])).toEqual([[2, 'Tennis'], [6, 'Padel']]);
+    expect(plan.some((p) => p.template.title === 'Cardio day')).toBe(false);
+  });
+  it('adds one sports day when the goal has no cardio day', () => {
+    const plan = planFitnessWeek(goal('muscle_gain'), { types: [], sports: [sport('Bouldering')] });
+    expect(plan).toHaveLength(5);
+    expect(plan.find((p) => p.sport)).toMatchObject({ day: 6, sport: { name: 'Bouldering' } });
+    expect(plan.map((p) => p.day)).toEqual([1, 2, 4, 5, 6]);
+  });
+  it('keeps only recovery that belongs after training', () => {
+    for (const n of ['Ice Bath / Cold Water Immersion', 'Sauna Session', 'Foam Rolling', 'Contrast Therapy', 'Normatec Compression Boots', 'Cool-Down Swim or Run']) expect(isPostWorkoutRecovery(n)).toBe(true);
+    for (const n of ['Sleep', 'Wake at 4am sharp', 'Digital Sunset', 'Gaming Session', 'Manage Herxheimer Reaction', 'Recovery Nap']) expect(isPostWorkoutRecovery(n)).toBe(false);
+  });
+});
+
+it('saves training fuel as timed, catalog-linked items on each training day', async () => {
+  const { saveFitnessProtocol } = await import('../protocolBuilders');
+  const writes: any[] = [];
+  const config: FitnessConfig = { goal: 'general', level: 'beginner', minutes: 40, rules: [],
+    sessions: [{ day: 1, time: '07:00', anchor: 'clock', offset: 0, title: 'Do leg day', minutes: 40, intensity: 'moderate', rules: [], exercises: [] }],
+    fuel: { pre: ['Banana'], post: [{ id: 'sup-creatine', name: 'Creatine', source: 'supplement', image: 'c.jpg' }], preMinutes: 30, postMinutes: 15 } };
+  vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+    const body = init?.body ? JSON.parse(String(init.body)) : null;
+    if (init?.method === 'POST' && url.endsWith('/protocol_items')) writes.push(body);
+    return new Response(JSON.stringify(url.includes('/rpc/') ? null : init?.method === 'POST' || init?.method === 'PATCH' ? [{ id: 'fit-1', user_id: 'owner', ...body }] : []));
+  });
+  try {
+    await saveFitnessProtocol('token', 'owner', null, 'Strength week', config);
+    const fuel = writes.filter((w) => w.group_name === 'Training fuel');
+    expect(fuel).toEqual([
+      expect.objectContaining({ display_name: 'Take Banana', scheduled_time: '06:30:00', notes: 'Before Do leg day', recurrence_type: 'weekly', recurrence_days_of_week: [1] }),
+      expect.objectContaining({ display_name: 'Take Creatine', scheduled_time: '07:55:00', notes: 'After Do leg day', supplement_id: 'sup-creatine', media_image_url: 'c.jpg' }),
+    ]);
+  } finally { vi.unstubAllGlobals(); }
+});
+
+describe('fitness schedule and warm-ups', () => {
+  const goal = (id: string) => FITNESS_GOALS.find((g) => g.id === id)!;
+  it('times sessions by workday and other-day preference', () => {
+    const s = { ...defaultSchedule(), workday: 'evening' as const, other: 'morning' as const };
+    expect(sessionTimeFor(2, s)).toEqual({ anchor: 'clock', time: '18:30', offset: 0 });   // Tue, workday
+    expect(sessionTimeFor(6, s)).toEqual({ anchor: 'wake', time: '07:00', offset: 30 });   // Sat
+    expect(sessionTimeFor(3, { ...s, workdays: [1, 2, 4, 5] })).toEqual({ anchor: 'wake', time: '07:00', offset: 30 }); // Wed off
+    expect(sessionTimeFor(1)).toEqual({ anchor: 'wake', time: '07:00', offset: 30 });       // no schedule: morning
+  });
+  it('moves sessions off rest days to the nearest free day', () => {
+    // general = Mon, Wed, Fri; Wed is a rest day → Thu (next day, free)
+    expect(planFitnessWeek(goal('general'), undefined, { ...defaultSchedule(), restDays: [3] }).map((p) => p.day)).toEqual([1, 4, 5]);
+    // muscle gain = Mon, Tue, Thu, Fri; Mon + Tue rest → Wed and Sun… nearest free each time
+    expect(planFitnessWeek(goal('muscle_gain'), undefined, { ...defaultSchedule(), restDays: [1, 2] }).map((p) => p.day)).toEqual([3, 4, 5, 6]);
+  });
+  const ex = (id: string, bodyParts: string[], role?: ExercisePick['role']): ExercisePick => ({ id, name: id, image: null, category: role === 'warmup' ? 'Stretch' : 'Strength', minutes: null, bodyParts, sets: 2, reps: '10', rest_seconds: 60, role });
+  const stretch = (id: string, bodyParts: string[]) => ({ id, name: id, image: null, category: 'Stretch', minutes: null, bodyParts });
+  it('picks warm-up stretches for the trained body parts, rotating through the week', () => {
+    const pool = [stretch('chest-opener', ['chest']), stretch('quad-stretch', ['quadriceps']), stretch('hamstring-stretch', ['hamstrings']), stretch('neck-roll', ['neck'])];
+    const week = new Set<string>();
+    const legs = pickWarmups([ex('squat', ['quadriceps', 'hamstrings'])], pool, week);
+    expect(legs.map((w) => [w.id, w.role, w.minutes])).toEqual([['quad-stretch', 'warmup', 2], ['hamstring-stretch', 'warmup', 2]]);
+    expect(pickWarmups([ex('push-up', ['chest'])], pool, week, 1).map((w) => w.id)).toEqual(['chest-opener']);
+    expect(pickWarmups([ex('mystery', ['ankles'])], pool, week, 1).map((w) => w.id)).toEqual(['neck-roll']); // unused general stretch
+  });
+  it('orders a session warm-up first, training by muscle, recovery last', () => {
+    const list = [ex('ice-bath', [], 'recovery'), ex('squat', ['quadriceps']), ex('quad-stretch', ['quadriceps'], 'warmup'), ex('bench', ['chest'])];
+    const ids = orderedExercises(list).map((e) => e.id);
+    expect(ids).toHaveLength(4);
+    expect(ids.slice(1, 3).sort()).toEqual(['bench', 'squat']);
+    expect(ids[0]).toBe('quad-stretch');
+    expect(ids.at(-1)).toBe('ice-bath');
+    expect(exerciseGroup(list[2])).toBe('Warm-up');
+    expect(exerciseGroup(list[0])).toBe('Recovery');
+  });
+});
