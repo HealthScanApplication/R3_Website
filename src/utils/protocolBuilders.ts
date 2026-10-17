@@ -388,7 +388,9 @@ export function dayNameFor(exercises: Array<{ bodyParts?: string[]; category?: s
 }
 export interface ExercisePick extends ActivityPick { sets: number | null; reps: string | null; rest_seconds: number | null }
 export interface FitnessSession { day: number; time: string; anchor?: Anchor; offset?: number; rules?: string[]; title: string; minutes: number; intensity: 'low' | 'moderate' | 'high'; exercises: ExercisePick[] }
-export interface FitnessConfig { goal: string; level: 'beginner' | 'intermediate' | 'advanced'; minutes: number; sessions: FitnessSession[]; rules?: string[] }
+/** What the person likes doing: training types steer each session's catalog categories, sports become sessions. */
+export interface FitnessLikes { types: string[]; sports: ActivityPick[] }
+export interface FitnessConfig { goal: string; level: 'beginner' | 'intermediate' | 'advanced'; minutes: number; sessions: FitnessSession[]; rules?: string[]; likes?: FitnessLikes }
 export const sessionTiming = (s: FitnessSession): Timing => ({ anchor: s.anchor || 'clock', time: s.time, offset: s.offset || 0 });
 
 type Template = { title: string; categories: string[]; terms: string[]; muscles?: MuscleGroupId[]; intensity: FitnessSession['intensity'] };
@@ -397,8 +399,8 @@ export interface FitnessGoal { id: string; label: string; note: string; days: nu
 const STRENGTH_UPPER: Template = { title: 'Upper body day', categories: ['Strength', 'Gym', 'Calisthenics'], terms: [], muscles: ['chest', 'back', 'shoulders', 'arms', 'back'], intensity: 'moderate' };
 const STRENGTH_LOWER: Template = { title: 'Leg day', categories: ['Strength', 'Gym', 'Calisthenics'], terms: [], muscles: ['legs', 'glutes', 'legs', 'core', 'glutes'], intensity: 'moderate' };
 const FULL_BODY: Template = { title: 'Full body day', categories: ['Strength', 'Gym', 'Calisthenics'], terms: [], muscles: ['legs', 'chest', 'back', 'core', 'shoulders'], intensity: 'moderate' };
-const CARDIO: Template = { title: 'Cardio day', categories: ['Cardio', 'Sports'], terms: ['walk', 'run', 'cycl', 'swim'], intensity: 'moderate' };
-const HIIT: Template = { title: 'Intervals day', categories: ['Hiit', 'Cardio', 'Calisthenics'], terms: ['burpee', 'climber', 'jump', 'sprint'], intensity: 'high' };
+const CARDIO: Template = { title: 'Cardio day', categories: ['Cardio', 'Sports', 'Water Sports'], terms: ['walk', 'run', 'cycl', 'swim'], intensity: 'moderate' };
+const HIIT: Template = { title: 'Intervals day', categories: ['Hiit', 'Cardio', 'Calisthenics', 'Martial Arts'], terms: ['burpee', 'climber', 'jump', 'sprint'], intensity: 'high' };
 const MOBILITY: Template = { title: 'Mobility day', categories: ['Stretch', 'Recovery', 'Yoga'], terms: ['hip', 'hamstring', 'shoulder', 'spine'], intensity: 'low' };
 
 /** Weekly splits per goal; days are WEEK.day numbers (1 = Mon). */
@@ -410,6 +412,52 @@ export const FITNESS_GOALS: FitnessGoal[] = [
   { id: 'face', label: 'Face', note: 'Short facial muscle and jaw sessions, most days. Add your own face exercises where the catalog has none yet.', days: [1, 2, 3, 4, 5, 6], pattern: [{ title: 'Face workout', categories: [], terms: [], muscles: ['face', 'face', 'face', 'neck'], intensity: 'low' }] },
   { id: 'general', label: 'General fitness', note: 'Balanced week: strength, cardio and mobility.', days: [1, 3, 5], pattern: [FULL_BODY, CARDIO, MOBILITY] },
 ];
+
+/** Training types a person can pick; each maps to catalog_activities categories. */
+export const TRAINING_TYPES: Array<{ id: string; label: string; categories: string[] }> = [
+  { id: 'strength', label: 'Strength', categories: ['Strength', 'Gym', 'Fitness'] },
+  { id: 'calisthenics', label: 'Calisthenics', categories: ['Calisthenics'] },
+  { id: 'cardio', label: 'Cardio', categories: ['Cardio'] },
+  { id: 'hiit', label: 'HIIT', categories: ['Hiit'] },
+  { id: 'stretching', label: 'Stretching & mobility', categories: ['Stretch'] },
+  { id: 'yoga', label: 'Yoga', categories: ['Yoga'] },
+  { id: 'martial_arts', label: 'Martial arts', categories: ['Martial Arts'] },
+  { id: 'water', label: 'Water sports', categories: ['Water Sports'] },
+  { id: 'recovery', label: 'Recovery', categories: ['Recovery'] },
+];
+
+/** Recovery activities that belong straight after training (ice bath, sauna, foam rolling…), not sleep or light hygiene. */
+export const isPostWorkoutRecovery = (name: string) =>
+  /ice bath|cold water|cryo|contrast|sauna|steam|foam roll|massage|compression|normatec|percussion|theragun|float tank|red light|active recovery|cool-down|easy spin|gentle walk|light walk|progressive muscle relaxation|recovery breath/i.test(name);
+
+export interface PlannedSession { day: number; template: Template; sport?: ActivityPick }
+const isCardioDay = (t: Template) => t.categories.includes('Cardio') && !t.categories.includes('Hiit');
+
+/**
+ * Which template each training day gets, adjusted to what the person likes. Picked training types narrow a
+ * session's catalog categories (kept as-is when none of them fit that session). Picked sports take over the
+ * cardio days in turn; a goal without cardio days gets one sports day on the first free day from Saturday.
+ */
+export function planFitnessWeek(goal: FitnessGoal, likes?: FitnessLikes): PlannedSession[] {
+  const chosen = new Set(TRAINING_TYPES.filter((t) => likes?.types.includes(t.id) && t.id !== 'recovery').flatMap((t) => t.categories));
+  const narrow = (t: Template): Template => {
+    if (!chosen.size || !t.categories.length) return t;
+    const kept = t.categories.filter((c) => chosen.has(c));
+    return kept.length ? { ...t, categories: kept } : t;
+  };
+  const sports = likes?.sports || [];
+  let next = 0;
+  const plan: PlannedSession[] = goal.days.map((day, i) => {
+    const t = goal.pattern[i % goal.pattern.length];
+    if (sports.length && isCardioDay(t)) { const sport = sports[next++ % sports.length]; return { day, sport, template: { title: sport.name, categories: ['Sports'], terms: [], intensity: 'moderate' } }; }
+    return { day, template: narrow(t) };
+  });
+  if (sports.length && next === 0) {
+    const free = [6, 7, 3, 5, 2, 4, 1].find((d) => !goal.days.includes(d));
+    if (free) plan.push({ day: free, sport: sports[0], template: { title: sports[0].name, categories: ['Sports'], terms: [], intensity: 'moderate' } });
+  }
+  return plan.sort((a, b) => a.day - b.day);
+}
 
 const LEVEL = { beginner: { sets: 2, reps: '10', rest: 90, exercises: 3 }, intermediate: { sets: 3, reps: '8–12', rest: 75, exercises: 4 }, advanced: { sets: 4, reps: '6–10', rest: 60, exercises: 5 } };
 
@@ -432,13 +480,21 @@ export async function searchActivities(accessToken: string, opts: { query?: stri
 }
 
 /** Build the goal's weekly split, filling each session with catalog exercises that match its pattern. */
-export async function draftFitnessWeek(accessToken: string, goalId: string, level: FitnessConfig['level'], minutes: number): Promise<FitnessSession[]> {
+export async function draftFitnessWeek(accessToken: string, goalId: string, level: FitnessConfig['level'], minutes: number, likes?: FitnessLikes): Promise<FitnessSession[]> {
   const goal = FITNESS_GOALS.find((g) => g.id === goalId) || FITNESS_GOALS[0];
   const dose = LEVEL[level];
   const used = new Set<string>();
   const sessions: FitnessSession[] = [];
-  for (const [index, day] of goal.days.entries()) {
-    const t = goal.pattern[index % goal.pattern.length];
+  // Recovery picked: each moderate/high session ends with a different post-workout recovery activity.
+  const recovery = likes?.types.includes('recovery')
+    ? (await searchActivities(accessToken, { categories: ['Recovery'], limit: 60 }).catch(() => [])).filter((a) => isPostWorkoutRecovery(a.name))
+    : [];
+  let nextRecovery = 0;
+  for (const { day, template: t, sport } of planFitnessWeek(goal, likes)) {
+    if (sport) {
+      sessions.push({ day, time: '07:00', anchor: 'wake', offset: 30, rules: ['Warm up for 5 minutes'], title: sport.name, minutes, intensity: 'moderate', exercises: [{ ...sport, sets: null, reps: null, rest_seconds: null, minutes }] });
+      continue;
+    }
     const exercises: ExercisePick[] = [];
     const picks: Array<{ term?: string; muscle?: MuscleGroupId }> = t.muscles?.length ? t.muscles.map((muscle) => ({ muscle })) : t.terms.map((term) => ({ term }));
     for (const pick of picks) {
@@ -450,7 +506,9 @@ export async function draftFitnessWeek(accessToken: string, goalId: string, leve
       const timed = /cardio|sports|stretch|recovery|yoga/i.test(hit.category || '') || muscleGroupOf(hit) === 'Face';
       exercises.push({ ...hit, sets: timed ? null : dose.sets, reps: timed ? null : dose.reps, rest_seconds: timed ? null : dose.rest, minutes: timed ? Math.max(2, Math.round(minutes / Math.max(1, picks.length))) : null });
     }
-    sessions.push({ day, time: '07:00', anchor: 'wake', offset: 30, rules: t.intensity === 'low' ? [] : ['Warm up for 5 minutes'], title: dayNameFor(exercises) || t.title, minutes: t.muscles?.includes('face') ? Math.min(minutes, 15) : minutes, intensity: level === 'beginner' && t.intensity === 'high' ? 'moderate' : t.intensity, exercises });
+    const title = dayNameFor(exercises) || t.title; // named from the training, before recovery is added
+    if (recovery.length && t.intensity !== 'low') { const r = recovery[nextRecovery++ % recovery.length]; exercises.push({ ...r, sets: null, reps: null, rest_seconds: null, minutes: r.minutes || 10 }); }
+    sessions.push({ day, time: '07:00', anchor: 'wake', offset: 30, rules: t.intensity === 'low' ? [] : ['Warm up for 5 minutes'], title, minutes: t.muscles?.includes('face') ? Math.min(minutes, 15) : minutes, intensity: level === 'beginner' && t.intensity === 'high' ? 'moderate' : t.intensity, exercises });
   }
   return sessions;
 }

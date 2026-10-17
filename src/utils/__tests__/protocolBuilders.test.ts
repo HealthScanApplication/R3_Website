@@ -121,3 +121,35 @@ describe('fitness hard gate', () => {
     expect(notes).toHaveLength(2);
   });
 });
+
+import { planFitnessWeek, isPostWorkoutRecovery, FITNESS_GOALS } from '../protocolBuilders';
+
+describe('fitness likes', () => {
+  const goal = (id: string) => FITNESS_GOALS.find((g) => g.id === id)!;
+  const sport = (name: string) => ({ id: name, name, image: null, category: 'Sports', minutes: null });
+
+  it('keeps the goal split when nothing is picked', () => {
+    const plan = planFitnessWeek(goal('general'));
+    expect(plan.map((p) => [p.day, p.template.title])).toEqual([[1, 'Full body day'], [3, 'Cardio day'], [5, 'Mobility day']]);
+  });
+  it('narrows sessions to picked training types, leaving sessions none of them fit', () => {
+    const plan = planFitnessWeek(goal('general'), { types: ['calisthenics'], sports: [] });
+    expect(plan[0].template.categories).toEqual(['Calisthenics']);      // full body: strength → calisthenics only
+    expect(plan[2].template.categories).toEqual(['Stretch', 'Recovery', 'Yoga']); // mobility untouched
+  });
+  it('turns cardio days into the picked sports, in turn', () => {
+    const plan = planFitnessWeek(goal('weight_loss'), { types: [], sports: [sport('Tennis'), sport('Padel')] });
+    expect(plan.filter((p) => p.sport).map((p) => [p.day, p.sport!.name])).toEqual([[2, 'Tennis'], [6, 'Padel']]);
+    expect(plan.some((p) => p.template.title === 'Cardio day')).toBe(false);
+  });
+  it('adds one sports day when the goal has no cardio day', () => {
+    const plan = planFitnessWeek(goal('muscle_gain'), { types: [], sports: [sport('Bouldering')] });
+    expect(plan).toHaveLength(5);
+    expect(plan.find((p) => p.sport)).toMatchObject({ day: 6, sport: { name: 'Bouldering' } });
+    expect(plan.map((p) => p.day)).toEqual([1, 2, 4, 5, 6]);
+  });
+  it('keeps only recovery that belongs after training', () => {
+    for (const n of ['Ice Bath / Cold Water Immersion', 'Sauna Session', 'Foam Rolling', 'Contrast Therapy', 'Normatec Compression Boots', 'Cool-Down Swim or Run']) expect(isPostWorkoutRecovery(n)).toBe(true);
+    for (const n of ['Sleep', 'Wake at 4am sharp', 'Digital Sunset', 'Gaming Session', 'Manage Herxheimer Reaction', 'Recovery Nap']) expect(isPostWorkoutRecovery(n)).toBe(false);
+  });
+});

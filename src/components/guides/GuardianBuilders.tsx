@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { Dumbbell, Loader2, Plus, Search, Sparkles, Trash2, Utensils, Users, X, Combine, AlertTriangle, Apple, Bean, Beef, Carrot, Egg, Fish, Grape, Leaf, MilkOff, Moon, Salad, Scale, Sun, Sunrise, WheatOff, type LucideIcon } from 'lucide-react';
+import { Dumbbell, Loader2, Plus, Search, Sparkles, Trash2, Utensils, Users, X, Combine, AlertTriangle, Apple, Bean, Beef, Carrot, Egg, Fish, Grape, Leaf, MilkOff, Moon, Salad, Scale, Sun, Sunrise, WheatOff, Activity, Bike, Flame, Flower2, Footprints, HeartPulse, Medal, Mountain, PersonStanding, SignalHigh, SignalLow, SignalMedium, Smile, Snowflake, StretchHorizontal, Swords, Target, Trophy, Volleyball, Waves, Zap, type LucideIcon } from 'lucide-react';
 import { listProtocolItems, type AdminProtocol, type AdminProtocolItem } from '../../utils/protocolAdmin';
 import type { GuideLead, GuideRecipe } from '../../utils/guidePortal';
 import { smartFill, type RecipeIdea } from '../../utils/dietPlanner';
@@ -11,7 +11,7 @@ import { DietLocationHeader } from './DietLocationHeader';
 import { plannerWeek, sunriseForDate, validPlannerLocation } from '../../utils/plannerSunrise';
 import { aggregateDiet, dietSelections, loadDietAnalysis, type DietAnalysis } from '../../utils/dietNutrition';
 import {
-  MUSCLE_GROUPS, dayNameFor, muscleGroupOf, type MuscleGroupId, mealDrinks, mealPickKey, selectedServings, fitsSlot, DIET_FRAMEWORKS, FITNESS_GOALS, FRAMEWORK_RULES, mealTiming, resolveTiming, sessionTiming, mealIsFasting, fastingDrinkAllowed, type Anchor, type Timing, MEAL_SLOTS, WEEK, combineProtocols, draftFitnessWeek, findClashes, guideRecipeToPick,
+  MUSCLE_GROUPS, dayNameFor, muscleGroupOf, type MuscleGroupId, mealDrinks, mealPickKey, selectedServings, fitsSlot, DIET_FRAMEWORKS, FITNESS_GOALS, FRAMEWORK_RULES, mealTiming, resolveTiming, sessionTiming, mealIsFasting, fastingDrinkAllowed, type Anchor, type Timing, MEAL_SLOTS, WEEK, combineProtocols, draftFitnessWeek, TRAINING_TYPES, type FitnessLikes, findClashes, guideRecipeToPick,
   dietSupportItems, isDrinkPick, SUPPLEMENT_PERIODS, listBuilderMeta, macroGrams, saveDietProtocol, saveFitnessProtocol, searchActivities, searchDietRecipes, sumNutrition,
   reviewCombined, reviewDiet, reviewFitness, type Conflict, type Review, type ReviewNote, type ActivityPick, type BuilderKind, type Clash, type DietConfig, type FitnessConfig, type FitnessSession, type MealPick,
 } from '../../utils/protocolBuilders';
@@ -35,6 +35,17 @@ const chip = (on: boolean): React.CSSProperties => ({ border: `1px solid ${on ? 
 const FRAMEWORK_ICON: Record<string, LucideIcon> = { balanced: Scale, mediterranean: Grape, vegan: Leaf, vegetarian: Carrot, pescatarian: Fish, keto: Egg, low_carb: Salad, high_protein: Beef, gluten_free: WheatOff, dairy_free: MilkOff, low_fodmap: Bean };
 const MEAL_ICON: Record<string, LucideIcon> = { breakfast: Sunrise, lunch: Sun, snack: Apple, dinner: Moon };
 const iconChip = (on: boolean): React.CSSProperties => ({ ...chip(on), display: 'inline-flex', alignItems: 'center', gap: 6 });
+// Leading icons for the fitness goal, level, training-type and sport chips.
+const GOAL_ICON: Record<string, LucideIcon> = { weight_loss: Flame, muscle_gain: Dumbbell, endurance: Activity, mobility: StretchHorizontal, face: Smile, general: Target };
+const LEVEL_ICON: Record<string, LucideIcon> = { beginner: SignalLow, intermediate: SignalMedium, advanced: SignalHigh };
+const TYPE_ICON: Record<string, LucideIcon> = { strength: Dumbbell, calisthenics: PersonStanding, cardio: HeartPulse, hiit: Zap, stretching: StretchHorizontal, yoga: Flower2, martial_arts: Swords, water: Waves, recovery: Snowflake };
+const SPORT_ICONS: Array<[RegExp, LucideIcon]> = [
+  [/run|walk|hik|jog|triathlon|parkour/i, Footprints], [/cycl|bik/i, Bike], [/swim|surf|kayak|canoe|row|sail|paddle|scuba|water polo|pool/i, Waves],
+  [/box|kick|muay|judo|karate|jiu|taekwondo|wrestl|fenc|martial|sparring/i, Swords], [/climb|boulder/i, Mountain], [/ski|snow|ice skat/i, Snowflake],
+  [/volleyball/i, Volleyball], [/ball|hockey|cricket|tennis|padel|squash|badminton|racquet|pickle|golf|lacrosse|rugby/i, Trophy],
+];
+const sportIcon = (name: string) => SPORT_ICONS.find(([re]) => re.test(name))?.[1] || Medal;
+const IconLabel = ({ Icon, size = 13, children }: { Icon?: LucideIcon; size?: number; children: React.ReactNode }) => <>{Icon && <Icon size={size} strokeWidth={1.8} aria-hidden="true" />}{children}</>;
 const card: React.CSSProperties = { border: `1px solid ${line}`, background: panel, padding: 16 };
 const iconBtn: React.CSSProperties = { border: 0, background: 'transparent', color: muted, cursor: 'pointer', padding: 2, display: 'inline-flex' };
 
@@ -208,7 +219,7 @@ export function DietBuilder({ accessToken, ownerId, protocols, recipes, initialP
   const shownResults = results.filter(r => !picking || drinkIndex == null || (isDrinkPick(r) && fastingDrinkAllowed(cfg,Number(picking.split(':')[0]),picking.split(':')[1],r)));
 
   return <div>
-    <Header Icon={Utensils} kicker="Build" title="Diet" copy="Plan meals and drinks from your recipes and the published recipe database. Daily and weekly macros, micronutrients and hazards use recorded nutrition and selected servings; missing data stays unknown." />
+    <Header Icon={Utensils} kicker="Build" title="Diet planner" copy="Plan meals and drinks from your recipes and the published recipe database. Daily and weekly macros, micronutrients and hazards use recorded nutrition and selected servings; missing data stays unknown." />
     <SavedList kind="diet" protocols={initialProtocolId ? protocols.filter((p) => p.id === initialProtocolId) : protocols} meta={meta} activeId={protocolId} onPick={load} onOpen={onOpen} />
     <div style={{ ...card, marginBottom: 14 }}>
       <span style={label}>Diet framework</span>
@@ -330,6 +341,12 @@ export function FitnessBuilder({ accessToken, ownerId, protocols, initialProtoco
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const goal = FITNESS_GOALS.find((g) => g.id === cfg.goal) || FITNESS_GOALS[0];
+  // What the person likes doing; picked sports and training types shape the drafted week.
+  const [sportsList, setSportsList] = useState<ActivityPick[]>([]);
+  const [sportFilter, setSportFilter] = useState('');
+  const likes: FitnessLikes = cfg.likes || { types: [], sports: [] };
+  const setLikes = (next: FitnessLikes) => setCfg((c) => ({ ...c, likes: next }));
+  useEffect(() => { searchActivities(accessToken, { categories: ['Sports'], limit: 120 }).then((list) => setSportsList([...list].sort((a, b) => a.name.localeCompare(b.name)))).catch(() => setSportsList([])); }, [accessToken]);
 
   useEffect(() => { listBuilderMeta(accessToken, ownerId).then(setMeta).catch(() => {}); }, [accessToken, ownerId]);
   useEffect(() => {
@@ -345,7 +362,7 @@ export function FitnessBuilder({ accessToken, ownerId, protocols, initialProtoco
   }, [adding, query, muscle, accessToken]);
 
   const run = async (label: string, work: () => Promise<void>) => { setBusy(true); setMessage(label); try { await work(); } catch (e) { const failedId = (e as { protocolId?: string }).protocolId; if (failedId) setProtocolId(failedId); setMessage(`Failed: ${(e as Error).message}`); setBusy(false); return; } setBusy(false); };
-  const draft = () => run('Building the week from catalog activities…', async () => { setCfg({ ...cfg, sessions: await draftFitnessWeek(accessToken, cfg.goal, cfg.level, cfg.minutes) }); setMessage('Week drafted. Edit sessions, sets and reps below.'); });
+  const draft = () => run('Building the week from catalog activities…', async () => { setCfg({ ...cfg, sessions: await draftFitnessWeek(accessToken, cfg.goal, cfg.level, cfg.minutes, likes) }); setMessage('Week drafted. Edit sessions, sets and reps below.'); });
   const save = () => run('Saving to Protocols…', async () => {
     const { protocol, metaSaved } = await saveFitnessProtocol(accessToken, ownerId, protocolId, name.trim() || `${goal.label} week`, cfg);
     setProtocolId(protocol.id); setMeta((m) => ({ ...m, [protocol.id]: { builder_kind: 'fitness', builder_config: cfg } })); onSaved(protocol);
@@ -356,16 +373,34 @@ export function FitnessBuilder({ accessToken, ownerId, protocols, initialProtoco
   const totalMinutes = cfg.sessions.reduce((sum, s) => sum + (s.minutes || 0), 0);
 
   return <div>
-    <Header Icon={Dumbbell} kicker="Build" title="Fitness" copy="Choose a goal and level for a suggested weekly split, then shape each session with activities from the catalog." />
+    <Header Icon={Dumbbell} kicker="Build" title="Fitness planner" copy="Choose a goal and level for a suggested weekly split, then shape each session with activities from the catalog." />
     <SavedList kind="fitness" protocols={initialProtocolId ? protocols.filter((p) => p.id === initialProtocolId) : protocols} meta={meta} activeId={protocolId} onPick={load} onOpen={onOpen} />
     <div style={{ ...card, marginBottom: 14 }}>
       <span style={label}>Goal</span>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>{FITNESS_GOALS.map((g) => <button key={g.id} type="button" onClick={() => { setCfg({ ...cfg, goal: g.id }); if (!protocolId) setName(`${g.label} week`); }} style={chip(g.id === cfg.goal)}>{g.label}</button>)}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>{FITNESS_GOALS.map((g) => <button key={g.id} type="button" onClick={() => { setCfg((c) => ({ ...c, goal: g.id })); if (!protocolId) setName(`${g.label} week`); }} style={iconChip(g.id === cfg.goal)}><IconLabel Icon={GOAL_ICON[g.id]}>{g.label}</IconLabel></button>)}</div>
       <p style={{ color: muted, fontSize: 12, margin: '10px 0 0' }}>{goal.note} Suggested: {goal.days.length} sessions a week.</p>
+    </div>
+    <div style={{ ...card, marginBottom: 14 }}>
+      <span style={label}>What they like to do</span>
+      <div role="group" aria-label="Training types" style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>{TRAINING_TYPES.map((t) => { const on = likes.types.includes(t.id); return <button key={t.id} type="button" aria-pressed={on} onClick={() => setLikes({ ...likes, types: on ? likes.types.filter((x) => x !== t.id) : [...likes.types, t.id] })} style={iconChip(on)}><IconLabel Icon={TYPE_ICON[t.id]}>{t.label}</IconLabel></button>; })}</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', margin: '16px 0 8px' }}>
+        <span style={{ ...label, margin: 0 }}>Sports{likes.sports.length ? ` · ${likes.sports.length} picked` : ''}</span>
+        <div style={{ position: 'relative', width: 200 }}><Search size={12} color={muted} style={{ position: 'absolute', left: 9, top: 10 }} /><input aria-label="Filter sports" placeholder="Filter sports" value={sportFilter} onChange={(e) => setSportFilter(e.target.value)} style={{ ...input, height: 32, fontSize: 12, paddingLeft: 27 }} /></div>
+      </div>
+      <div role="group" aria-label="Sports" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 168, overflowY: 'auto' }}>
+        {!sportsList.length && <span style={{ color: muted, fontSize: 12 }}>Loading sports from the catalog…</span>}
+        {/* Picked sports stay visible even when the filter hides them. */}
+        {sportsList.filter((s) => likes.sports.some((x) => x.id === s.id) || s.name.toLowerCase().includes(sportFilter.trim().toLowerCase())).map((s) => { const on = likes.sports.some((x) => x.id === s.id); return <button key={s.id} type="button" aria-pressed={on} onClick={() => setLikes({ ...likes, sports: on ? likes.sports.filter((x) => x.id !== s.id) : [...likes.sports, s] })} style={{ ...iconChip(on), padding: '5px 10px', fontSize: 10, gap: 5 }}><IconLabel Icon={sportIcon(s.name)} size={12}>{s.name}</IconLabel></button>; })}
+      </div>
+      <p style={{ color: muted, fontSize: 12, margin: '10px 0 0' }}>{[
+        likes.types.some((t) => t !== 'recovery') && 'Sessions use the picked training types where they fit.',
+        likes.sports.length && (goal.pattern.some((p) => p.categories.includes('Cardio') && !p.categories.includes('Hiit')) ? 'Picked sports take over the cardio days.' : 'A sports day is added to the week.'),
+        likes.types.includes('recovery') && 'Harder sessions end with a recovery activity such as an ice bath or sauna.',
+      ].filter(Boolean).join(' ') || 'Pick training types and sports, then draft the week to build from them.'}</p>
     </div>
     <div style={{ ...card, marginBottom: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, alignItems: 'end' }}>
       <label><span style={label}>Name</span><input style={input} value={name} onChange={(e) => setName(e.target.value)} /></label>
-      <div><span style={label}>Level</span><div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{(['beginner', 'intermediate', 'advanced'] as const).map((l) => <button key={l} type="button" onClick={() => setCfg({ ...cfg, level: l })} style={{ ...chip(cfg.level === l), padding: '6px 9px', fontSize: 10, textTransform: 'capitalize' }}>{l}</button>)}</div></div>
+      <div><span style={label}>Level</span><div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{(['beginner', 'intermediate', 'advanced'] as const).map((l) => <button key={l} type="button" onClick={() => setCfg((c) => ({ ...c, level: l }))} style={{ ...iconChip(cfg.level === l), padding: '6px 9px', fontSize: 10, gap: 5, textTransform: 'capitalize' }}><IconLabel Icon={LEVEL_ICON[l]} size={12}>{l}</IconLabel></button>)}</div></div>
       <label><span style={label}>Minutes / session</span><input style={input} type="number" min={10} step={5} value={cfg.minutes} onChange={(e) => setCfg({ ...cfg, minutes: Number(e.target.value) || 0 })} /></label>
       <div><span style={label}>This week</span><div style={{ fontFamily: serif, fontSize: 22 }}>{cfg.sessions.length} sessions · {totalMinutes} min</div></div>
     </div>

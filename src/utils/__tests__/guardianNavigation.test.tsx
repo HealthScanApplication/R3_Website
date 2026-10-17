@@ -25,7 +25,7 @@ const workspace = () => render(<Workspace profile={fixtures.profile as any} onPr
 it('keeps sidebar navigation in the URL so reload opens the selected page', async()=>{
   workspace();
   fireEvent.click(screen.getByRole('button',{name:'Profile',exact:true}));
-  expect(screen.getByRole('heading',{name:'Your profile'})).toBeTruthy();
+  expect(screen.getByRole('heading',{name:'Site builder'})).toBeTruthy();
   expect(window.location.search).toBe('?tab=profile');
 });
 it('restores the page on browser history navigation', async()=>{

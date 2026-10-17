@@ -53,7 +53,7 @@ export function ContentBuilder({ profile, offers, protocols, recipes }: { profil
   return <div>
     <div style={{ display: 'flex', gap: 18, alignItems: 'center', marginBottom: 26 }}>
       <div style={{ width: 64, height: 64, border: `1px solid ${line}`, display: 'grid', placeItems: 'center' }}><Clapperboard size={26} color={acid} /></div>
-      <div><div style={{ ...label, color: acid, margin: 0 }}>Build</div><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 300, margin: '6px 0 4px' }}>Content</h1><p style={{ color: muted, margin: 0, fontSize: 13, maxWidth: 640, lineHeight: 1.5 }}>Create stories, posts and thumbnails in the R³ template, about an offer, a Protocol, a recipe, or just your topic.</p></div>
+      <div><div style={{ ...label, color: acid, margin: 0 }}>Build</div><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 300, margin: '6px 0 4px' }}>Content builder</h1><p style={{ color: muted, margin: 0, fontSize: 13, maxWidth: 640, lineHeight: 1.5 }}>Create stories, posts and thumbnails in the R³ template, about an offer, a Protocol, a recipe, or just your topic.</p></div>
     </div>
     <div style={{ border: `1px solid ${line}`, background: panel, padding: 16, marginBottom: 14, display: 'grid', gap: 14 }}>
       <div><span style={label}>Post about</span><div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
