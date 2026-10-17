@@ -10,6 +10,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, Download, ExternalLink } from 'lucide-react';
+import QRCode from 'qrcode';
 
 const FIGMA_TEMPLATE = 'https://www.figma.com/design/6HS7WXK5SFoLh41AkzKzMZ/--R%C2%B3---Routine%C2%B3-%E2%80%A2-Libray?node-id=12-886';
 const FONT_HREF = 'https://fonts.googleapis.com/css2?family=Italiana&family=Inter:wght@600&family=Nanum+Myeongjo&display=swap';
@@ -59,7 +60,47 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string
   return lines;
 }
 
-async function drawPost(canvas: HTMLCanvasElement, fmt: (typeof FORMATS)[number], bg: string, copy: { headline: string; subline: string; cta: string; credit: string }) {
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+
+/**
+ * Apple-style QR on a white rounded card: round dots, rounded-square finder eyes and an R³ mark in the
+ * middle. The mark covers ~6% of the code, well inside error correction Q (25%); Q keeps the grid
+ * coarser than H, so it still reads when the post is shown small on a screen or screenshotted.
+ */
+function drawQr(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, size: number) {
+  const qr = QRCode.create(text, { errorCorrectionLevel: 'Q' });
+  const n = qr.modules.size;
+  const pad = size * 0.08, cell = (size - pad * 2) / n;
+  ctx.save();
+  ctx.shadowColor = 'rgba(17,17,17,0.18)'; ctx.shadowBlur = size * 0.06; ctx.shadowOffsetY = size * 0.015;
+  ctx.fillStyle = '#FFFFFF'; roundRect(ctx, x, y, size, size, size * 0.12); ctx.fill();
+  ctx.restore();
+  const ox = x + pad, oy = y + pad;
+  const finder = (r: number, c: number) => (r < 7 && c < 7) || (r < 7 && c >= n - 7) || (r >= n - 7 && c < 7);
+  const logo = Math.round(n * 0.22) | 1, lo = (n - logo) / 2; // centre square kept clear for the mark
+  const inLogo = (r: number, c: number) => r + 1 > lo && r < lo + logo && c + 1 > lo && c < lo + logo;
+  ctx.fillStyle = '#111111';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+    if (!qr.modules.get(r, c) || finder(r, c) || inLogo(r, c)) continue;
+    ctx.beginPath(); ctx.arc(ox + (c + 0.5) * cell, oy + (r + 0.5) * cell, cell * 0.47, 0, Math.PI * 2); ctx.fill();
+  }
+  for (const [r, c] of [[0, 0], [0, n - 7], [n - 7, 0]]) {
+    const fx = ox + c * cell, fy = oy + r * cell;
+    ctx.lineWidth = cell; ctx.strokeStyle = '#111111';
+    roundRect(ctx, fx + cell / 2, fy + cell / 2, cell * 6, cell * 6, cell * 2); ctx.stroke();
+    roundRect(ctx, fx + cell * 2, fy + cell * 2, cell * 3, cell * 3, cell * 1.1); ctx.fill();
+  }
+  const m = logo * cell, mx = ox + lo * cell, my = oy + lo * cell;
+  ctx.fillStyle = '#FFFFFF'; roundRect(ctx, mx, my, m, m, m * 0.24); ctx.fill();
+  ctx.lineWidth = Math.max(1, m * 0.04); ctx.strokeStyle = '#111111'; roundRect(ctx, mx + m * 0.12, my + m * 0.12, m * 0.76, m * 0.76, m * 0.16); ctx.stroke();
+  ctx.fillStyle = '#111111'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `600 ${m * 0.36}px Inter`; ctx.fillText('R³', mx + m / 2, my + m / 2 + m * 0.02);
+  ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+}
+
+async function drawPost(canvas: HTMLCanvasElement, fmt: (typeof FORMATS)[number], bg: string, copy: { headline: string; subline: string; cta: string; credit: string; qr?: string }) {
   const { w, h } = fmt;
   canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext('2d')!;
@@ -82,15 +123,27 @@ async function drawPost(canvas: HTMLCanvasElement, fmt: (typeof FORMATS)[number]
     const g = ctx.createLinearGradient(0, h * 0.35, 0, h); g.addColorStop(0, 'rgba(239,230,219,0)'); g.addColorStop(0.45, 'rgba(239,230,219,0.92)'); g.addColorStop(1, 'rgba(239,230,219,1)');
     ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
   }
-  const x = 91 * s, maxW = (fmt.id === 'thumb' ? 640 : 743) * s;
+  const x = 91 * s;
   ctx.fillStyle = '#111111'; ctx.textBaseline = 'alphabetic';
+  // CTA box size first: the QR sits beside it, and the text above wraps short of the QR.
+  ctx.font = `600 ${28 * s}px Inter`;
+  const label = copy.cta.toUpperCase();
+  const tracking = 28 * s * 0.3;
+  const textW = [...label].reduce((sum, ch) => sum + ctx.measureText(ch).width + tracking, -tracking);
+  const boxW = textW + 64 * s, boxH = 95 * s;
+  // QR to the CTA link, bottom-aligned with the button on the right; shrinks (or is left out) if the button is long.
+  const right = w - 91 * s;
+  const qrFit = copy.qr ? Math.min((fmt.id === 'thumb' ? 220 : 260) * s, right - (x + boxW + 36 * s)) : 0;
+  const qrSize = qrFit >= 150 * s ? qrFit : 0;
+  const maxW = Math.min((fmt.id === 'thumb' ? 640 : 743) * s, qrSize ? right - qrSize - 36 * s - x : Infinity);
   ctx.font = `${111 * s}px Italiana`;
   const head = wrap(ctx, copy.headline, maxW);
   ctx.font = `${52 * s}px "Nanum Myeongjo", serif`;
   const sub = copy.subline ? wrap(ctx, copy.subline, maxW) : [];
   const blockH = head.length * 116 * s + 30 * s + sub.length * 66 * s + 52 * s + 95 * s;
-  // 9:16 keeps the Figma position (y 1271); other ratios sit the block 93px from the bottom.
-  let y = fmt.id === 'story' ? 1271 * s : fmt.id === 'thumb' ? (h - blockH) / 2 : h - 93 * s - blockH;
+  // 9:16 keeps the Figma position (y 1271) unless a long headline/subline would push the CTA off the frame;
+  // other ratios sit the block 93px from the bottom.
+  let y = fmt.id === 'story' ? Math.min(1271 * s, h - 93 * s - blockH) : fmt.id === 'thumb' ? (h - blockH) / 2 : h - 93 * s - blockH;
   ctx.font = `${111 * s}px Italiana`;
   for (const line of head) { y += 116 * s; ctx.fillText(line, x, y - 22 * s); }
   y += 30 * s;
@@ -99,15 +152,12 @@ async function drawPost(canvas: HTMLCanvasElement, fmt: (typeof FORMATS)[number]
   y += 52 * s;
   // CTA box: Inter SemiBold 28 / 30% tracking, 2px black border on white.
   ctx.font = `600 ${28 * s}px Inter`;
-  const label = copy.cta.toUpperCase();
-  const tracking = 28 * s * 0.3;
-  const textW = [...label].reduce((sum, ch) => sum + ctx.measureText(ch).width + tracking, -tracking);
-  const boxW = textW + 64 * s, boxH = 95 * s;
   ctx.fillStyle = '#FFFFFF'; ctx.fillRect(x, y, boxW, boxH);
   ctx.lineWidth = 2 * s; ctx.strokeStyle = '#111111'; ctx.strokeRect(x, y, boxW, boxH);
   ctx.fillStyle = '#111111';
   let cx = x + 32 * s;
   for (const ch of label) { ctx.fillText(ch, cx, y + boxH / 2 + 10 * s); cx += ctx.measureText(ch).width + tracking; }
+  if (copy.qr && qrSize) drawQr(ctx, copy.qr, right - qrSize, y + boxH - qrSize, qrSize);
   // Creator credit, top left: who this guidance comes from.
   if (copy.credit) {
     ctx.font = `600 ${20 * s}px Inter`;
@@ -146,10 +196,10 @@ export function ContentStudio({ creator, audience, problem, offers, siteUrl, hea
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const background = bg || autoBg;
   const credit = creator ? `Guidance by ${creator}` : '';
-  useEffect(() => {
-    if (canvasRef.current) drawPost(canvasRef.current, fmt, bgUrl(background), { headline, subline, cta, credit });
-  }, [fmt, background, headline, subline, cta, credit, fontsReady]);
   const fullUrl = siteUrl.startsWith('http') ? siteUrl : `https://routine3.com${siteUrl}`;
+  useEffect(() => {
+    if (canvasRef.current) drawPost(canvasRef.current, fmt, bgUrl(background), { headline, subline, cta, credit, qr: fullUrl });
+  }, [fmt, background, headline, subline, cta, credit, fullUrl, fontsReady]);
   const tag = solution.replace(/\s+/g, '');
   const captions: Record<string, string> = {
     TikTok: `${problem}? Here's a simple routine for ${solution} for ${audience.toLowerCase()}. ${offer.free ? 'Free' : 'Start'} "${offer.title}" by ${creator}. Link in bio. #${tag} #routine #wellbeing`,

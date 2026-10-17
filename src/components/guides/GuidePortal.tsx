@@ -3782,7 +3782,7 @@ export function GuidePortal() {
     .g-brand-r3{display:none}
     .g-builders{flex-wrap:nowrap}
     /* Icon-only chips; the name slides out for the current page and on hover/keyboard focus. */
-    .g-chip-label{display:inline-block;overflow:hidden;max-width:0;opacity:0;margin-left:-7px;transition:max-width .2s ease,opacity .15s ease,margin-left .2s ease}
+    .g-chip-label{display:inline-block;overflow:hidden;max-width:0;opacity:0;margin-left:-7px;transition:max-width .45s cubic-bezier(.65,0,.35,1),opacity .35s cubic-bezier(.65,0,.35,1),margin-left .45s cubic-bezier(.65,0,.35,1)}
     .g-chip-label.is-on,.g-builder:hover .g-chip-label,.g-builder:has(:focus-visible) .g-chip-label{max-width:180px;opacity:1;margin-left:0}
     @media (max-width:720px){.g-header-row{grid-template-columns:auto 1fr;row-gap:10px;padding-top:10px;padding-bottom:10px}.g-builders{grid-column:1/-1;grid-row:2;justify-self:center}.g-brand-full{display:none}.g-brand-r3{display:inline-grid}.g-header-name{display:none}}
     .g-builder-menu{opacity:0;visibility:hidden;transform:translateY(-4px);transition:opacity .14s ease,transform .14s ease,visibility .14s;z-index:60}
