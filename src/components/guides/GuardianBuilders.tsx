@@ -374,7 +374,7 @@ export function FitnessBuilder({ accessToken, ownerId, protocols, initialProtoco
   }, [adding, query, muscle, accessToken]);
 
   const run = async (label: string, work: () => Promise<void>) => { setBusy(true); setMessage(label); try { await work(); } catch (e) { const failedId = (e as { protocolId?: string }).protocolId; if (failedId) setProtocolId(failedId); setMessage(`Failed: ${(e as Error).message}`); setBusy(false); return; } setBusy(false); };
-  const draft = () => run('Building the week from catalog activities…', async () => { setCfg({ ...cfg, sessions: await draftFitnessWeek(accessToken, cfg.goal, cfg.level, cfg.minutes, likes, cfg.schedule) }); setMessage('Week drafted. Edit sessions, sets and reps below.'); });
+  const draft = () => run('Building the week from catalog activities…', async () => { const sessions = await draftFitnessWeek(accessToken, cfg.goal, cfg.level, cfg.minutes, likes, cfg.schedule); setCfg((c) => ({ ...c, sessions })); setMessage('Week drafted. Edit sessions, sets and reps below.'); });
   const save = () => run('Saving to Protocols…', async () => {
     const { protocol, metaSaved } = await saveFitnessProtocol(accessToken, ownerId, protocolId, name.trim() || `${goal.label} week`, cfg);
     setProtocolId(protocol.id); setMeta((m) => ({ ...m, [protocol.id]: { builder_kind: 'fitness', builder_config: cfg } })); onSaved(protocol);
@@ -402,7 +402,7 @@ export function FitnessBuilder({ accessToken, ownerId, protocols, initialProtoco
       <div role="group" aria-label="Sports" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 168, overflowY: 'auto' }}>
         {!sportsList.length && <span style={{ color: muted, fontSize: 12 }}>Loading sports from the catalog…</span>}
         {/* Picked sports stay visible even when the filter hides them. */}
-        {sportsList.filter((s) => likes.sports.some((x) => x.id === s.id) || s.name.toLowerCase().includes(sportFilter.trim().toLowerCase())).map((s) => { const on = likes.sports.some((x) => x.id === s.id); return <button key={s.id} type="button" aria-pressed={on} onClick={() => setLikes({ ...likes, sports: on ? likes.sports.filter((x) => x.id !== s.id) : [...likes.sports, s] })} style={{ ...iconChip(on), padding: '5px 10px', fontSize: 10, gap: 5 }}><IconLabel Icon={sportIcon(s.name)} size={12}>{s.name}</IconLabel></button>; })}
+        {[...new Map([...sportsList, ...likes.sports].map((s) => [s.id, s])).values()].sort((a, b) => a.name.localeCompare(b.name)).filter((s) => likes.sports.some((x) => x.id === s.id) || s.name.toLowerCase().includes(sportFilter.trim().toLowerCase())).map((s) => { const on = likes.sports.some((x) => x.id === s.id); return <button key={s.id} type="button" aria-pressed={on} onClick={() => setLikes({ ...likes, sports: on ? likes.sports.filter((x) => x.id !== s.id) : [...likes.sports, s] })} style={{ ...iconChip(on), padding: '5px 10px', fontSize: 10, gap: 5 }}><IconLabel Icon={sportIcon(s.name)} size={12}>{s.name}</IconLabel></button>; })}
       </div>
       <p style={{ color: muted, fontSize: 12, margin: '10px 0 0' }}>{[
         likes.types.some((t) => t !== 'recovery') && 'Sessions use the picked training types where they fit.',

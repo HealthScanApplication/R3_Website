@@ -120,9 +120,10 @@ it('locks the builder links while setup is unsaved, so they cannot reload the se
 it('navigates in-app from an unlocked builder link', ()=>{
   const onNavigate = vi.fn();
   render(<GuardianHeader isSignedIn activeTab="leads" onNavigate={onNavigate} />);
-  fireEvent.click(screen.getByRole('link',{name:'Diet planner'}));
+  // The chip comes first; its dropdown also has a plain "Diet planner" link.
+  fireEvent.click(screen.getAllByRole('link',{name:'Diet planner'})[0]);
   expect(onNavigate).toHaveBeenCalledWith('diet');
-  expect(screen.getByRole('link',{name:'Offer builder'}).getAttribute('aria-current')).toBe('page');
+  expect(screen.getAllByRole('link',{name:'Offer builder'})[0].getAttribute('aria-current')).toBe('page');
 });
 it('keeps a long display name readable as a tooltip when it is truncated', ()=>{
   render(<GuardianHeader isSignedIn displayName="Dr Maximiliana Featherstonehaugh-Worthington" />);

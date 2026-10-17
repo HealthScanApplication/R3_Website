@@ -580,7 +580,8 @@ export async function draftFitnessWeek(accessToken: string, goalId: string, leve
     const when = sessionTimeFor(day, schedule);
     if (sport) {
       const warmups = pickWarmups([sport], stretches, warmedUp);
-      sessions.push({ day, ...when, rules: warmups.length ? [] : ['Warm up for 5 minutes'], title: sport.name, minutes, intensity: 'moderate', exercises: [...warmups, { ...sport, sets: null, reps: null, rest_seconds: null, minutes }] });
+      const after = recovery.length ? [{ ...recovery[nextRecovery++ % recovery.length], sets: null, reps: null, rest_seconds: null, role: 'recovery' as const }] : [];
+      sessions.push({ day, ...when, rules: warmups.length ? [] : ['Warm up for 5 minutes'], title: sport.name, minutes, intensity: 'moderate', exercises: [...warmups, { ...sport, sets: null, reps: null, rest_seconds: null, minutes }, ...after.map((r) => ({ ...r, minutes: r.minutes || 10 }))] });
       continue;
     }
     const exercises: ExercisePick[] = [];
