@@ -387,21 +387,25 @@ function GuardianHeader({ isSignedIn, activeTab, displayName, transparent, onNav
     if (!isSignedIn) { event.preventDefault(); onSignIn?.(); return; }
     if (onNavigate) { event.preventDefault(); onNavigate(tab); }
   };
-  const builderLink: React.CSSProperties = { height: 36, display: 'inline-flex', alignItems: 'center', gap: 7, padding: '0 13px', color: ink, textDecoration: 'none', fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 600, fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer' };
+  // 31px matches the ROUTINE³ logo box (RoutineMark size 31) so the logo and builder bar line up.
+  const builderLink: React.CSSProperties = { height: '100%', display: 'inline-flex', alignItems: 'center', gap: 7, padding: '0 10px', color: ink, textDecoration: 'none', fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 600, fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', boxSizing: 'border-box' };
   return (
     <header className="g-header" style={{ position: 'sticky', top: 0, zIndex: 50, background: transparent ? 'rgba(9,10,8,.42)' : black, backdropFilter: transparent ? 'blur(12px)' : undefined, borderBottom: `1px solid ${transparent ? 'rgba(255,255,255,.22)' : line}` }}>
-      <div className="g-header-row" style={{ minHeight: 64, display: 'flex', alignItems: 'center', gap: 16, padding: '0 clamp(20px,5vw,72px)' }}>
-        <Brand />
-        {/* Builders share the logo row: icons only, with the label shown for the page you're on. */}
-        <nav aria-label="Guardian builders" className="g-builders" style={{ display: 'flex', alignItems: 'stretch', border: `1px solid ${edge}`, borderRadius: 2, marginRight: 'auto' }}>
+      <div className="g-header-row" style={{ minHeight: 64 }}>
+        <div className="g-brand">
+          <span className="g-brand-full"><Brand /></span>
+          {/* Phones get the short square R³ mark so the row fits. */}
+          <a href="/" aria-label="ROUTINE³ Guardians" className="g-brand-r3" style={{ height: 31, minWidth: 31, padding: '0 7px', boxSizing: 'border-box', border: '1px solid rgba(245,242,234,0.58)', borderRadius: 2, placeItems: 'center', color: ink, textDecoration: 'none', fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 700, fontSize: 12, letterSpacing: '.06em' }}>R³</a>
+        </div>
+        {/* Builders are centered in the logo row: icons only, the name shows for the current page and on hover. */}
+        <nav aria-label="Guardian builders" className="g-builders" style={{ display: 'flex', alignItems: 'stretch', height: 31, boxSizing: 'border-box', border: `1px solid ${edge}`, borderRadius: 2 }}>
           {GUARDIAN_BUILDERS.map((builder, index) => {
             const active = activeTab === builder.tab || builder.sub.some((item) => item.tab === activeTab);
             return <div key={builder.label} className="g-builder" style={{ position: 'relative', borderLeft: index ? `1px solid ${edge}` : 0 }}>
-              <a href={href(builder.tab)} onClick={go(builder.tab)} aria-current={active ? 'page' : undefined} aria-label={builder.label} title={isSignedIn ? builder.label : `${builder.label} · sign in to use`} style={{ ...builderLink, padding: active ? '0 13px' : '0 11px', opacity: isSignedIn ? 1 : .5, background: active ? 'rgba(199,216,163,.16)' : 'transparent' }}>
-                <builder.Icon size={14} strokeWidth={1.8} aria-hidden="true" />{active && <span>{builder.label}</span>}
+              <a href={href(builder.tab)} onClick={go(builder.tab)} aria-current={active ? 'page' : undefined} aria-label={builder.label} style={{ ...builderLink, opacity: isSignedIn ? 1 : .5, background: active ? 'rgba(199,216,163,.16)' : 'transparent' }}>
+                <builder.Icon size={14} strokeWidth={1.8} aria-hidden="true" /><span className={active ? 'g-chip-label is-on' : 'g-chip-label'} aria-hidden="true">{builder.label}</span>
               </a>
               {isSignedIn && <div className="g-builder-menu" role="menu" aria-label={builder.label} style={{ position: 'absolute', top: '100%', left: 0, minWidth: 184, background: panel, border: `1px solid ${line}`, borderRadius: 2, padding: 4, boxShadow: '0 18px 36px rgba(0,0,0,.55)' }}>
-                <div aria-hidden="true" style={{ padding: '8px 11px 7px', marginBottom: 4, borderBottom: `1px solid ${line}`, color: acid, fontFamily: sans, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{builder.label}</div>
                 {builder.sub.map((item) => <a key={item.label} role="menuitem" href={href(item.tab)} onClick={go(item.tab)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 11px', color: item.tab === activeTab ? ink : muted, textDecoration: 'none', fontFamily: sans, fontSize: 11, fontWeight: 600, letterSpacing: '.03em', whiteSpace: 'nowrap', background: item.tab === activeTab ? '#1C1E19' : 'transparent' }}><ChevronRight size={12} aria-hidden="true" />{item.label}</a>)}
               </div>}
             </div>;
@@ -410,8 +414,8 @@ function GuardianHeader({ isSignedIn, activeTab, displayName, transparent, onNav
         <div className="g-header-account" style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 'none' }}>
           {isSignedIn ? <>
             {displayName && <span className="g-header-name" style={{ color: muted, fontSize: 11, whiteSpace: 'nowrap' }}>{displayName}</span>}
-            <button type="button" onClick={onSignOut} title="Sign out" aria-label="Sign out" style={{ border: `1px solid ${line}`, background: 'transparent', color: ink, width: 30, height: 30, cursor: 'pointer', display: 'grid', placeItems: 'center' }}><LogOut size={13} /></button>
-          </> : <button type="button" onClick={onSignIn} style={{ ...builderLink, border: `1px solid ${ink}`, borderRadius: 2, padding: '0 16px' }}>Sign in</button>}
+            <button type="button" onClick={onSignOut} title="Sign out" aria-label="Sign out" style={{ border: `1px solid ${line}`, background: 'transparent', color: ink, width: 31, height: 31, boxSizing: 'border-box', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><LogOut size={13} /></button>
+          </> : <button type="button" onClick={onSignIn} style={{ ...builderLink, height: 31, border: `1px solid ${ink}`, borderRadius: 2, padding: '0 16px', background: 'transparent' }}>Sign in</button>}
         </div>
       </div>
     </header>
@@ -3771,8 +3775,15 @@ function Row({ title, meta, action, onClick, image }: { title: string; meta: str
 export function GuidePortal() {
   return <div className="guardian-ui"><style>{`.guardian-builders-bar::-webkit-scrollbar{display:none}.g-split{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:20px;align-items:start}.g-split>.g-sticky{position:sticky;top:16px}@media (max-width: 960px){.g-split{grid-template-columns:minmax(0,1fr)}.g-split>.g-sticky{position:static}}
     /* Shared header: builder dropdowns reveal on hover/focus */
+    .g-header-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px;padding:0 clamp(20px,5vw,72px)}
+    .g-brand{justify-self:start;display:flex}
+    .g-header-account{justify-self:end}
+    .g-brand-r3{display:none}
     .g-builders{flex-wrap:nowrap}
-    @media (max-width:720px){.g-header-row{flex-wrap:wrap;padding-top:10px;padding-bottom:10px}.g-header-account{margin-left:auto}.g-builders{order:3;margin-right:0!important}.g-header-name{display:none}}
+    /* Icon-only chips; the name slides out for the current page and on hover/keyboard focus. */
+    .g-chip-label{display:inline-block;overflow:hidden;max-width:0;opacity:0;margin-left:-7px;transition:max-width .2s ease,opacity .15s ease,margin-left .2s ease}
+    .g-chip-label.is-on,.g-builder:hover .g-chip-label,.g-builder:has(:focus-visible) .g-chip-label{max-width:180px;opacity:1;margin-left:0}
+    @media (max-width:720px){.g-header-row{grid-template-columns:auto 1fr;row-gap:10px;padding-top:10px;padding-bottom:10px}.g-builders{grid-column:1/-1;grid-row:2;justify-self:center}.g-brand-full{display:none}.g-brand-r3{display:inline-grid}.g-header-name{display:none}}
     .g-builder-menu{opacity:0;visibility:hidden;transform:translateY(-4px);transition:opacity .14s ease,transform .14s ease,visibility .14s;z-index:60}
     .g-builder:hover>.g-builder-menu,.g-builder:has(:focus-visible)>.g-builder-menu{opacity:1;visibility:visible;transform:translateY(0)}
     /* Collapsible icon rail: 64px, expands over content on hover/focus */
@@ -3781,7 +3792,7 @@ export function GuidePortal() {
     .g-railwrap:hover .g-rail,.g-rail:has(:focus-visible){width:224px;box-shadow:16px 0 40px rgba(0,0,0,.45)}
     .g-rlabel{opacity:0;transition:opacity .14s ease}
     .g-railwrap:hover .g-rail .g-rlabel,.g-rail:has(:focus-visible) .g-rlabel{opacity:1}
-    @media (prefers-reduced-motion:reduce){.g-rail,.g-rlabel,.g-builder-menu{transition:none}}`}</style><GuidePortalRoutes /></div>;
+    @media (prefers-reduced-motion:reduce){.g-rail,.g-rlabel,.g-builder-menu,.g-chip-label{transition:none}}`}</style><GuidePortalRoutes /></div>;
 }
 
 function GuidePortalRoutes() {
