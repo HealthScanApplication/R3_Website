@@ -107,10 +107,17 @@ What this means for us:
 
    The brand **voice** and words stay out, because they are about copy. The Guardian can edit the prompt. Once edited, a brief change doesn't overwrite it, and "Use suggested" restores the generated prompt.
 
+7. **Script and text overlay, matching the image posts.**
+   - **Script** (`src/utils/videoScript.ts`): a hook, two or three lines and the CTA, drafted from the brief and the brand brief. It uses one of the brand's "words to use" and drops any line containing a word to avoid. The Guardian can edit it. "Copy AI prompt for a script" gives a prompt built on `copyPrompt`, in the brand voice.
+   - **Text overlay**: ContentStudio's `drawPost` with no background draws the post's text layer (headline, subline, CTA, QR, credit, logo) on a transparent canvas over the preview. It has the same 6 text styles and 4 positions as the image posts. Headline, subline and button default to the script's hook, first line and CTA, and each can be edited.
+   - **Downloads**: "Download with text" records the video plus the text layer on a canvas (MediaRecorder; MP4 where the browser supports it, otherwise WebM), in real time. "Video only" downloads the plain MP4. "Text layer PNG" gives a transparent overlay for editors like CapCut.
+   - **CORS caveat**: recording needs the video served with CORS headers. Our `guardian-videos` signed URLs have them. If copying to storage failed and the URL is Higgsfield's CDN, the panel says so and offers the separate downloads instead.
+
 ### Not built yet (proposed next)
 
 - **Image-to-video from the post's background or brand imagery.** The server already supports `image_url` (public https). The panel doesn't expose it yet because the post background lives inside ContentStudio.
-- Burning the headline, CTA and QR into the video (ffmpeg or a canvas recorder), so a video matches the post template.
+- Server-side burn-in (ffmpeg) for a guaranteed MP4 with text, if browser recording proves unreliable.
+- Voice-over from the script (Higgsfield or another TTS) and captions timed to the script.
 - Webhooks (`hf_webhook`) as a hint to re-poll sooner.
 - MCP OAuth as an alternative for Guardians who have only a subscription and no API balance. This needs Higgsfield's agreement and an MCP client.
 - Higgsfield's cost estimate shown in the panel before Generate.

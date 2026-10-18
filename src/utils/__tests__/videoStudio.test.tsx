@@ -72,6 +72,27 @@ describe('VideoStudio', () => {
     expect(prompt.value).toMatch(/stress/i);
   });
 
+  it('drafts an editable script and lays the post text over the video, drafted from the script', async () => {
+    api.higgsfieldStatus.mockResolvedValue({ connected: true, key_hint: 'ef12', connected_at: null, live: false, models });
+    render(<VideoStudio {...props} free siteUrl="/guardians/john" />);
+    const script = await screen.findByLabelText(/Script · hook/) as HTMLTextAreaElement;
+    expect(script.value.split('\n')[0]).toBe('Sleep problems? It might be your routine.');
+    expect(script.value.split('\n').at(-1)).toBe('Get the free routine at the link in bio.');
+    expect(screen.getByLabelText('Text on the video').tagName).toBe('CANVAS');
+    expect((screen.getByLabelText('Video headline') as HTMLInputElement).value).toBe('Sleep problems? It might be your routine.');
+    expect((screen.getByLabelText('Video button') as HTMLInputElement).value).toBe('Get the free routine');
+    expect(screen.getByRole('group', { name: 'Video text style' }).querySelectorAll('button')).toHaveLength(6);
+    expect(screen.getByLabelText('Video text position').querySelectorAll('option')).toHaveLength(4);
+    // Editing the script's hook moves the headline with it, until the headline itself is edited.
+    fireEvent.change(script, { target: { value: 'Tired of 3am wake-ups?\nOne line.\nJoin free.' } });
+    expect((screen.getByLabelText('Video headline') as HTMLInputElement).value).toBe('Tired of 3am wake-ups?');
+    fireEvent.change(screen.getByLabelText('Video headline'), { target: { value: 'My headline' } });
+    fireEvent.change(script, { target: { value: 'Another hook\nOne line.\nJoin free.' } });
+    expect((screen.getByLabelText('Video headline') as HTMLInputElement).value).toBe('My headline');
+    fireEvent.click(screen.getByRole('checkbox', { name: /Text on the video/ }));
+    expect(screen.queryByLabelText('Text on the video')).toBeNull();
+  });
+
   it('says so when the function is not deployed on this environment', async () => {
     api.higgsfieldStatus.mockRejectedValue(new Error('Video generation is not configured yet.'));
     render(<VideoStudio {...props} />);
