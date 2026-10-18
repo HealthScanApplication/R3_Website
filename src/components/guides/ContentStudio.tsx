@@ -93,8 +93,9 @@ export interface QrStyle { invert?: boolean; logo?: QrLogoSize; size?: QrLogoSiz
 /** Share of the code's width kept clear for the R³ mark. Large switches to error correction H (30%). */
 const QR_LOGO: Record<QrLogoSize, number> = { small: 0.22, medium: 0.3, large: 0.36 };
 export function drawQr(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, size: number, style: QrStyle = {}) {
-  const logoSize = style.logo || 'medium';
-  const fg = style.invert ? '#FFFFFF' : '#111111', paper = style.invert ? '#111111' : '#FFFFFF';
+  const logoSize = style.logo || 'large';
+  const invert = style.invert ?? true;
+  const fg = invert ? '#FFFFFF' : '#111111', paper = invert ? '#111111' : '#FFFFFF';
   const qr = QRCode.create(text, { errorCorrectionLevel: logoSize === 'large' ? 'H' : 'Q' });
   const n = qr.modules.size;
   const cell = size / (n + 8), pad = cell * 4;
@@ -219,7 +220,7 @@ export async function drawPost(canvas: HTMLCanvasElement, fmt: { id: FormatId; w
   const prefixTextW = [...PREFIX].reduce((sum, ch) => sum + ctx.measureText(ch).width + prefixTrack, -prefixTrack);
   // The QR sits in the corner diagonally opposite the text, so the text keeps its full width. Small (180) is the
   // least that still decoded with the post scaled to a phone's width (390 px); medium still reads at 270 px.
-  const qrBase = { small: 180, medium: 250, large: 320 }[copy.qrStyle?.size || 'medium'];
+  const qrBase = { small: 180, medium: 250, large: 320 }[copy.qrStyle?.size || 'small'];
   const qrSize = copy.qr ? qrBase * (fmt.id === 'thumb' ? 0.8 : 1) * s : 0;
   const prefixW = prefixTextW + 52 * s;
   const boxW = prefixW + textW + 64 * s, boxH = 95 * s;
@@ -331,9 +332,9 @@ export function ContentStudio({ creator, avatar = null, audience, problem, offer
   const [cta, setCta] = useState('');
   const [textStyle, setTextStyle] = useState<TextStyleId>('editorial');
   const [position, setPosition] = useState<TextPosition>('bottom-left');
-  const [qrInvert, setQrInvert] = useState(false);
-  const [qrLogo, setQrLogo] = useState<QrLogoSize>('medium');
-  const [qrSizeId, setQrSizeId] = useState<QrLogoSize>('medium');
+  const [qrInvert, setQrInvert] = useState(true);
+  const [qrLogo, setQrLogo] = useState<QrLogoSize>('large');
+  const [qrSizeId, setQrSizeId] = useState<QrLogoSize>('small');
   const [copied, setCopied] = useState('');
   useEffect(() => {
     setHeadline(`Build a routine for ${solution}`);
