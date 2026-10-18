@@ -9,7 +9,8 @@ import { queryClient } from './lib/queryClient';
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { DesignSystemProvider } from "./contexts/DesignSystemContext";
 import { PageRenderer } from "./components/PageRenderer";
-import { Header } from "./components/Header";
+import { Header, RoutineMark } from "./components/Header";
+import heroPoster from "./assets/5f38caf68dd6b8af22362056b70854ea4cf4b933.png";
 import { Footer } from "./components/Footer";
 import { EmailConfirmationBanner } from "./components/EmailConfirmationBanner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -29,17 +30,24 @@ import {
   isRefreshTokenError 
 } from "./utils/refreshTokenRecovery";
 
-// Loading screen component
-function LoadingScreen() {
+// Loading screen: the ROUTINE³ masthead mark and a hairline that sweeps, on the page it opens into: the homepage hero
+// photo (same image and filter as HeroSection, so the hero fades in over it) or the Guardian portal's dark ink.
+export function LoadingScreen() {
+  const guardian = /^\/(guardians|guides?)(\/|$)/.test(window.location.pathname);
+  const bg = guardian ? '#090A08' : '#F4F1EA', ink = guardian ? '#F5F2EA' : '#16140F';
+  const soft = guardian ? 'rgba(245,242,234,0.62)' : 'rgba(22,20,15,0.62)', line = guardian ? 'rgba(245,242,234,0.18)' : 'rgba(22,20,15,0.14)';
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100">
-      <div className="text-center">
-        <div className="w-16 h-16 border-4 border-[var(--healthscan-green)] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-        <h2 className="text-xl font-semibold text-gray-800">
-          Loading ROUTINE³...
-        </h2>
-        <p className="text-gray-600 mt-2">
-          Preparing your health dashboard
+    <div role="status" aria-live="polite" style={{ position: 'relative', overflow: 'hidden', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, color: ink, padding: 24 }}>
+      {!guardian && <img src={heroPoster} alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'saturate(0.95) contrast(1.03)' }} />}
+      <style>{`@keyframes r3-sweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+        @media (prefers-reduced-motion: reduce) { .r3-sweep { animation: none !important; transform: none !important; width: 100% !important; opacity: .5; } }`}</style>
+      <div style={{ position: 'relative', display: 'grid', justifyItems: 'center', gap: 18, width: 'min(260px, 100%)' }}>
+        <RoutineMark size={32} textColor={ink} hairline={ink} suffix={guardian ? 'Guardians' : ''} />
+        <div aria-hidden="true" style={{ position: 'relative', width: '100%', height: 1, background: line, overflow: 'hidden' }}>
+          <span className="r3-sweep" style={{ position: 'absolute', inset: 0, width: '40%', background: ink, animation: 'r3-sweep 1.4s cubic-bezier(.45,0,.55,1) infinite' }} />
+        </div>
+        <p style={{ margin: 0, color: soft, fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase' }}>
+          {guardian ? 'Opening your workspace' : 'Loading'}
         </p>
       </div>
     </div>
