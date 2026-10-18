@@ -78,3 +78,16 @@ it('falls back to an offline draft from the brand details when AI is unavailable
   expect(screen.getByRole('button', { name: /Redraft with AI/ })).toBeTruthy();
   vi.unstubAllGlobals();
 });
+
+it('keeps font edits made while the AI brief is pending, and caps brief fields at 600 characters', async () => {
+  let answer!: (r: Response) => void;
+  vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => { answer = resolve; })));
+  const onKit = vi.fn();
+  render(<BriefDemo onKit={onKit} token="t" />);
+  fireEvent.click(screen.getByRole('button', { name: /Draft with AI/ }));
+  fireEvent.change(screen.getByLabelText(/Typeface/), { target: { value: 'Fraunces' } });
+  answer(new Response(JSON.stringify({ brief: { voice: 'Calm.', visual: 'Linen.', words: 'rest', avoid: 'cure' } }), { status: 200 }));
+  await waitFor(() => expect(onKit).toHaveBeenLastCalledWith(expect.objectContaining({ font: 'Fraunces', voice: 'Calm.' })));
+  expect((screen.getByLabelText('Brand voice') as HTMLTextAreaElement).maxLength).toBe(600);
+  vi.unstubAllGlobals();
+});

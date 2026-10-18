@@ -685,7 +685,10 @@ Plain English, no hype, no medical claims, no emojis.`
     const text = raw.replace(/^```(json)?/m, '').replace(/```\s*$/m, '').trim()
     const parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1))
     const b = parsed?.brief || {}
-    return c.json({ brief: { voice: clip(b.voice, 600), visual: clip(b.visual, 600), words: clip(b.words, 300), avoid: clip(b.avoid, 300) } })
+    const brief = { voice: clip(b.voice, 600), visual: clip(b.visual, 600), words: clip(b.words, 300), avoid: clip(b.avoid, 300) }
+    // An incomplete answer is a failure, so the client falls back to its offline draft instead of blank fields.
+    if (!brief.voice || !brief.visual || !brief.words || !brief.avoid) return c.json({ error: 'AI returned an incomplete brand brief' }, 502)
+    return c.json({ brief })
   } catch (error) {
     console.error('brand-brief error:', error)
     return c.json({ error: 'Could not draft the brand brief' }, 500)
