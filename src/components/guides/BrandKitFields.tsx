@@ -3,7 +3,7 @@
  * Fonts, and CTA colours (two brand colours, or monochrome black on white / white on black), with a live preview.
  * Used by setup step 01 and the Site builder, so both edit the same thing.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ImagePlus, Loader2, MessageSquareQuote, Palette, Sparkles, Type, Upload, X } from 'lucide-react';
 import { BRAND_FONTS, ctaColours, ensureBrandFont, type BrandKit, type MonoStyle } from '../../utils/brandKit';
 import { uploadGuideImage } from '../../utils/guidePortal';
@@ -25,6 +25,10 @@ export function BrandKitFields({ userId, brandName, kit, onChange, logoUrl, onLo
   const [error, setError] = useState('');
   useEffect(() => { ensureBrandFont(kit.font); }, [kit.font]);
   const set = (patch: Partial<BrandKit>) => onChange({ ...kit, ...patch });
+  // The kit as of the latest render, so a brief that arrives after an await keeps font / colour edits made meanwhile.
+  const latest = useRef(kit);
+  latest.current = kit;
+  const applyBrief = (brief: Partial<BrandKit>) => onChange({ ...latest.current, ...brief });
   const upload = async (which: 'logo' | 'background', file?: File) => {
     if (!file) return;
     setBusy(which); setError('');
@@ -39,11 +43,11 @@ export function BrandKitFields({ userId, brandName, kit, onChange, logoUrl, onLo
     setBusy('brief'); setBriefNote('');
     try {
       if (!accessToken) throw new Error('not signed in');
-      set(await generateBrandBrief(accessToken, f, kit));
+      applyBrief(await generateBrandBrief(accessToken, f, kit));
       setBriefNote('Drafted with AI. Edit anything that does not sound like you.');
     } catch {
       // AI unavailable (not deployed, no key, offline): an honest draft from the same details instead.
-      set(draftBrandBrief(f, kit));
+      applyBrief(draftBrandBrief(f, latest.current));
       setBriefNote('AI is not available right now, so this draft comes from your brand details. Edit it to sound like you.');
     } finally { setBusy(null); }
   };
@@ -106,7 +110,7 @@ export function BrandKitFields({ userId, brandName, kit, onChange, logoUrl, onLo
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 12 }}>
           {([['voice', 'Brand voice', 'How you sound: tone, personality, how you speak to people.'], ['visual', 'Visual language', 'How images and video should look: light, setting, people, colour, mood.'], ['words', 'Words to use', 'Words and phrases that sound like you, comma separated.'], ['avoid', 'Words and claims to avoid', 'e.g. cure, detox, miracle, guaranteed.']] as const).map(([key, title, hint]) => <label key={key} style={{ display: 'block' }}>
             <span style={label}>{title}</span>
-            <textarea aria-label={title} value={kit[key]} placeholder={hint} onChange={(e) => set({ [key]: e.target.value })} rows={key === 'words' || key === 'avoid' ? 2 : 3} style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${line}`, background: '#090A08', color: ink, padding: '9px 10px', fontFamily: sans, fontSize: 12, lineHeight: 1.5, resize: 'vertical' }} />
+            <textarea aria-label={title} maxLength={600} value={kit[key]} placeholder={hint} onChange={(e) => set({ [key]: e.target.value })} rows={key === 'words' || key === 'avoid' ? 2 : 3} style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${line}`, background: '#090A08', color: ink, padding: '9px 10px', fontFamily: sans, fontSize: 12, lineHeight: 1.5, resize: 'vertical' }} />
           </label>)}
         </div>
         {briefNote && <p role="status" style={{ color: muted, fontSize: 11, margin: '8px 0 0' }}>{briefNote}</p>}

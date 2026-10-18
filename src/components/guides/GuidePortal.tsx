@@ -1599,14 +1599,18 @@ function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasPro
   }, [userId]);
   // Saved brands come back (they were written on publish but never read): the personal brand stays active and
   // takes its kit; business brands keep theirs for when they are selected.
+  // Publishing replaces every brand, so it waits for this load: a failed load must not wipe saved business brands.
+  const [brandsLoaded, setBrandsLoaded] = useState<'loading' | 'ok' | 'failed'>('loading');
   useEffect(() => {
+    setBrandsLoaded('loading');
     listGuideBrands(userId).then((saved) => {
+      setBrandsLoaded('ok');
       if (!saved.length) return;
       const drafts: BrandDraft[] = saved.map((b) => ({ localId: b.kind === 'personal' ? 'personal' : `brand-${b.id}`, name: b.name, kind: b.kind, logo_url: b.logo_url, contact_email: b.contact_email, whatsapp_phone: b.whatsapp_phone, website_url: b.website_url, social_links: b.social_links || {}, language: b.language, pricing_region: b.pricing_region, currency: b.currency as BrandDraft['currency'] }));
       setBrandProfiles((current) => [drafts.find((d) => d.localId === 'personal') || current.find((d) => d.localId === 'personal')!, ...drafts.filter((d) => d.localId !== 'personal')].filter(Boolean));
       const personal = drafts.find((d) => d.localId === 'personal');
       if (personal) setBrandKit(brandKitOf(personal.social_links));
-    }).catch(() => {});
+    }).catch(() => setBrandsLoaded('failed'));
   }, [userId]);
   // Existing items shown under each step ("In your workspace").
   const [related, setRelated] = useState<{ leads: GuideLead[]; offers: GuideOffer[]; ramps: GuideValueRamp[]; protocols: AdminProtocol[] }>({ leads: [], offers: [], ramps: [], protocols: [] });
@@ -2070,6 +2074,8 @@ function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasPro
       if (!displayName.trim()) throw new Error('Add the name people should call you.');
       if (!/^\S+@\S+\.\S+$/.test(contactEmail.trim())) throw new Error('Add a valid contact email.');
       if (!chosen.length) throw new Error('Choose at least one area you can help with.');
+      if (brandsLoaded === 'loading') throw new Error('Your saved brands are still loading. Try again in a moment.');
+      if (brandsLoaded === 'failed') throw new Error('Your saved brands could not be loaded, so publishing is paused to avoid overwriting them. Reload the page to try again.');
       const slug = guardianSlug;
       const audienceText = audience.join(', ').toLowerCase();
       const headline = generatedHeadline;
@@ -3763,6 +3769,9 @@ function SiteProfileForm({ userId, profile, onProfile }: { userId: string; profi
   const setLinks = (patch: Record<string, string>) => onProfile({ ...profile, social_links: { ...links, ...patch } });
   const [brands, setBrands] = useState<SiteBrand[]>([]);            // business brands
   const [personalKit, setPersonalKit] = useState<BrandKit>(defaultBrandKit());
+  // The saved personal brand row. When a business brand is primary, the profile mirrors that business, so the
+  // personal brand is kept from this row on save rather than rebuilt from the profile.
+  const [personalRow, setPersonalRow] = useState<Omit<GuideBrand, 'id' | 'guide_id'> | null>(null);
   const [active, setActive] = useState('personal');
   const [busy, setBusy] = useState<'save' | 'upload' | null>(null);
   const [message, setMessage] = useState('');
@@ -3774,7 +3783,7 @@ function SiteProfileForm({ userId, profile, onProfile }: { userId: string; profi
     listGuideBrands(userId).then((saved) => {
       if (!live) return;
       const personal = saved.find((b) => b.kind === 'personal');
-      if (personal) setPersonalKit(brandKitOf(personal.social_links));
+      if (personal) { const { id: _id, guide_id: _g, ...row } = personal; setPersonalRow(row); setPersonalKit(brandKitOf(personal.social_links)); }
       setBrands(saved.filter((b) => b.kind !== 'personal').map(({ id, guide_id, ...b }) => ({ ...b, key: `brand-${id}` })));
       setBrandsLoaded('ok');
     }).catch(() => { if (live) setBrandsLoaded('failed'); });
@@ -3815,12 +3824,12 @@ function SiteProfileForm({ userId, profile, onProfile }: { userId: string; profi
       const saved = await saveGuideProfile(profile);
       onProfile(saved);
       const l = saved.social_links || {};
-      await replaceGuideBrands(userId, [
-        { name: saved.display_name, kind: 'personal', logo_url: l.logo_url || saved.avatar_url || null, contact_email: saved.contact_email || '', whatsapp_phone: saved.whatsapp_phone || '', website_url: l.website || '',
+      const personal = personalRow && brands.some((b) => b.is_primary)
+        ? { ...personalRow, social_links: { ...(personalRow.social_links || {}), ...brandKitLinks(personalKit) }, is_primary: false }
+        : { name: saved.display_name, kind: 'personal' as const, logo_url: l.logo_url || saved.avatar_url || null, contact_email: saved.contact_email || '', whatsapp_phone: saved.whatsapp_phone || '', website_url: l.website || '',
           social_links: { instagram: l.instagram || '', tiktok: l.tiktok || '', youtube: l.youtube || '', linktree: l.linktree || '', ...brandKitLinks(personalKit) },
-          language: l.language || 'English', pricing_region: l.pricing_region || 'United Kingdom', currency: l.currency || 'GBP', is_primary: !brands.some((b) => b.is_primary) },
-        ...brands.map(({ key, ...b }) => b),
-      ]);
+          language: l.language || 'English', pricing_region: l.pricing_region || 'United Kingdom', currency: l.currency || 'GBP', is_primary: !brands.some((b) => b.is_primary) };
+      await replaceGuideBrands(userId, [personal, ...brands.map(({ key, ...b }) => b)]);
       setMessage('Saved.');
     } catch (e) { setMessage(`Could not save: ${(e as Error).message || 'try again'}`); }
     finally { setBusy(null); }
