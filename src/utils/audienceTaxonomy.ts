@@ -103,14 +103,18 @@ const SYNONYMS: Record<string, string[]> = { sleep: ['insomnia', 'sleep', 'rest'
 /** Words that identify a focus in titles and descriptions (with a few common synonyms). */
 export function focusTerms(f: Focus): string[] {
   const words = f.label.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 2 && !STOP.has(w));
-  return [...new Set(words.flatMap((w) => [w.replace(/s$/, ''), ...(SYNONYMS[w.replace(/s$/, '')] || [])]))];
+  // Plural "s" is dropped for matching, but not from words that only look plural: "-ss" (stress, mindfulness),
+  // "-us" (focus) and "-is" (psoriasis). Synonyms are looked up by the full word first, then the singular.
+  const singular = (w: string) => (/(ss|us|is)$/.test(w) ? w : w.replace(/s$/, ''));
+  return [...new Set(words.flatMap((w) => [singular(w), ...(SYNONYMS[w] || SYNONYMS[singular(w)] || [])]))];
 }
 /** How well a solution (offer, Protocol, recipe) matches the focus and audience: 0 = no match. */
 export function solutionScore(text: string, f: Focus | null, a: Audience): number {
   if (!f) return 0;
   const t = text.toLowerCase();
   let score = focusTerms(f).filter((w) => t.includes(w)).length * 3;
-  if (a.population !== 'Everyone' && t.includes(a.population.toLowerCase().replace(/ren$|s$/, ''))) score += 1;
+  // Whole word: "men" must not match "women" or "menopause".
+  if (a.population !== 'Everyone' && new RegExp(`\\b${a.population.toLowerCase().replace(/ren$|s$/, '')}`).test(t)) score += 1;
   if (a.stage !== 'Not specified' && t.includes(a.stage.toLowerCase().split(' ')[0])) score += 1;
   return score;
 }

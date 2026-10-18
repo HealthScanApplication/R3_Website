@@ -60,3 +60,18 @@ describe('matching solutions to the focus', () => {
     expect(solutionScore('anything', null, a)).toBe(0);
   });
 });
+
+describe('review fixes', () => {
+  it('keeps -ss words whole and finds their synonyms', () => {
+    const t = focusTerms({ kind: 'goal', area: 'mind', label: 'Less stress' });
+    expect(t).toEqual(expect.arrayContaining(['stress', 'anxiety', 'calm', 'cortisol']));
+    expect(focusTerms({ kind: 'goal', area: 'mind', label: 'Mindfulness' })).toContain('mindfulness');
+    expect(focusTerms({ kind: 'goal', area: 'mind', label: 'Better focus' })).toContain('focus');
+  });
+  it('matches the population as a whole word', () => {
+    const men = { population: 'Men' as const, age: 'All ages', stage: 'Not specified' };
+    const sleep = { kind: 'goal' as const, area: 'health', label: 'Sleep better' };
+    expect(solutionScore('Menopause sleep challenge for women', sleep, men)).toBe(solutionScore('Menopause sleep challenge', sleep, men));
+    expect(solutionScore('Sleep plan for men', sleep, men)).toBe(solutionScore('Sleep plan', sleep, men) + 1);
+  });
+});

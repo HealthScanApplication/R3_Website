@@ -3,13 +3,21 @@ import { projectId, publicAnonKey } from './supabase/info';
 import { isTargetableProblem, type CatalogProblem } from './audienceTaxonomy';
 
 let cache: Promise<CatalogProblem[]> | null = null;
+const PAGE = 1000; // PostgREST returns at most 1,000 rows per request: read every page, then filter
 export function loadProblemCatalog(): Promise<CatalogProblem[]> {
-  cache ??= fetch(`https://${projectId}.supabase.co/rest/v1/catalog_symptoms?select=id,name,lay_term,body_system,category,population_risk&is_active=eq.true&order=name.asc&limit=3000`, {
-    headers: { apikey: publicAnonKey, Authorization: `Bearer ${publicAnonKey}` },
-  }).then(async (res) => {
-    if (!res.ok) throw new Error(`Problem catalog failed (${res.status})`);
-    return ((await res.json()) as CatalogProblem[]).filter(isTargetableProblem);
-  }).catch((e) => { cache = null; throw e; });
+  cache ??= (async () => {
+    const rows: CatalogProblem[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const res = await fetch(`https://${projectId}.supabase.co/rest/v1/catalog_symptoms?select=id,name,lay_term,body_system,category,population_risk&is_active=eq.true&order=name.asc`, {
+        headers: { apikey: publicAnonKey, Authorization: `Bearer ${publicAnonKey}`, Range: `${from}-${from + PAGE - 1}`, 'Range-Unit': 'items' },
+      });
+      if (!res.ok) throw new Error(`Problem catalog failed (${res.status})`);
+      const page = (await res.json()) as CatalogProblem[];
+      rows.push(...page);
+      if (page.length < PAGE) break;
+    }
+    return rows.filter(isTargetableProblem);
+  })().catch((e) => { cache = null; throw e; });
   return cache;
 }
 
