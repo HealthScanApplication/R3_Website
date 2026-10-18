@@ -24,6 +24,7 @@ import { APP_STORE_URL } from '../../config/appLinks';
 import { EventProtocolBuilder } from './EventProtocolBuilder';
 import { GuardianModal } from './GuardianModal';
 import { BrandKitFields } from './BrandKitFields';
+import { AGE_RANGES, LIFE_STAGES } from '../../utils/audienceTaxonomy';
 import { brandKitLinks, brandKitOf, defaultBrandKit, type BrandKit } from '../../utils/brandKit';
 import { buildProtocolWithAI, foldSleepSteps, saveDraftStep, updateProtocolWithAI, listProtocolItems, createProtocol, findOrCreateProtocol, createProtocolItem, listProtocols, type AdminProtocol } from '../../utils/protocolAdmin';
 import {
@@ -95,18 +96,9 @@ type HeaderStyle = 'white' | 'hidden';
 type OfferNextStep = 'builder' | 'link' | 'video' | 'booking';
 type BillingModel = 'one_time' | 'subscription' | 'pack_10';
 
-const targetAgeRanges: Record<string, string[]> = {
-  Everyone: ['All ages', 'Children 0–5', 'Children 6–12', 'Teens 13–17', 'Adults 18–24', 'Adults 25–44', 'Adults 45–64', 'Adults 65+'],
-  Women: ['All ages', 'Girls 0–12', 'Teens 13–17', 'Women 18–24', 'Women 25–44', 'Women 45–64', 'Women 65+'],
-  Men: ['All ages', 'Boys 0–12', 'Teens 13–17', 'Men 18–24', 'Men 25–44', 'Men 45–64', 'Men 65+'],
-  Children: ['All childhood', 'Infants 0–1', 'Toddlers 1–3', 'Children 4–8', 'Children 9–12', 'Teens 13–17'],
-};
-const targetLifeStages: Record<string, string[]> = {
-  Everyone: ['Not specified', 'Early life', 'Adolescence', 'Young adulthood', 'Midlife', 'Healthy ageing'],
-  Women: ['Not specified', 'Childhood', 'Puberty', 'Reproductive years', 'Preconception', 'Pregnancy', 'Postpartum', 'Premenopause', 'Perimenopause', 'Menopause', 'Postmenopause', 'Healthy ageing'],
-  Men: ['Not specified', 'Childhood', 'Puberty', 'Reproductive years', 'Preconception and fertility', 'Fatherhood', 'Midlife', 'Andropause', 'Healthy ageing'],
-  Children: ['Not specified', 'Infancy', 'Toddler years', 'Early childhood', 'Middle childhood', 'Puberty', 'Adolescence'],
-};
+// One source for audience lists: the setup and the Content builder pick from the same options.
+const targetAgeRanges: Record<string, string[]> = AGE_RANGES;
+const targetLifeStages: Record<string, string[]> = LIFE_STAGES;
 
 const pricingRegions: { region: string; currency: CurrencyCode; label: string }[] = [
   { region: 'United Kingdom', currency: 'GBP', label: '🇬🇧 UK · Pound' },
