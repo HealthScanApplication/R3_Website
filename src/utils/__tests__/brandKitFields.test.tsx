@@ -35,6 +35,16 @@ it('uploads a logo and a looping video background', async () => {
   render(<Demo onKit={onKit} />);
   fireEvent.change(screen.getByLabelText('Upload logo'), { target: { files: [new File(['x'], 'logo.png', { type: 'image/png' })] } });
   expect(await screen.findByAltText('Calm Co logo')).toHaveProperty('src', 'https://cdn.example/logo.png');
-  fireEvent.change(screen.getByLabelText('Upload background image or video'), { target: { files: [new File(['x'], 'loop.mp4', { type: 'video/mp4' })] } });
+  fireEvent.change(screen.getByLabelText('Upload background image, GIF or video'), { target: { files: [new File(['x'], 'loop.mp4', { type: 'video/mp4' })] } });
   await waitFor(() => expect(onKit).toHaveBeenLastCalledWith(expect.objectContaining({ background: 'https://cdn.example/loop.mp4', backgroundType: 'video' })));
+});
+
+it('accepts an animated GIF background as an image', async () => {
+  const onKit = vi.fn();
+  render(<Demo onKit={onKit} />);
+  const input = screen.getByLabelText('Upload background image, GIF or video') as HTMLInputElement;
+  expect(input.accept).toContain('image/gif');
+  fireEvent.change(input, { target: { files: [new File(['GIF89a'], 'calm.gif', { type: 'image/gif' })] } });
+  await waitFor(() => expect(onKit).toHaveBeenLastCalledWith(expect.objectContaining({ background: 'https://cdn.example/calm.gif', backgroundType: 'image' })));
+  expect((screen.getByLabelText('Upload logo') as HTMLInputElement).accept).toContain('image/gif');
 });

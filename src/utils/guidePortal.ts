@@ -129,12 +129,14 @@ export interface ImportedGuideProfile {
 }
 
 export async function uploadGuideImage(userId: string, file: File): Promise<string> {
-  const isImage = /^image\/(?:jpeg|png|webp)$/.test(file.type);
+  const isGif = file.type === 'image/gif';
+  const isImage = isGif || /^image\/(?:jpeg|png|webp)$/.test(file.type);
   const isVideo = /^video\/(?:mp4|webm)$/.test(file.type);
-  if (!isImage && !isVideo) throw new Error('Choose a JPG, PNG, WebP, MP4, or WebM file.');
-  const sizeLimit = isVideo ? 25 : 8;
-  if (file.size > sizeLimit * 1024 * 1024) throw new Error(`${isVideo ? 'Video' : 'Image'} must be smaller than ${sizeLimit} MB.`);
-  const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : file.type === 'video/mp4' ? 'mp4' : file.type === 'video/webm' ? 'webm' : 'jpg';
+  if (!isImage && !isVideo) throw new Error('Choose a JPG, PNG, WebP, GIF, MP4, or WebM file.');
+  // Animated GIFs run larger than stills; videos and GIFs share the bucket's 25 MB ceiling.
+  const sizeLimit = isVideo ? 25 : isGif ? 15 : 8;
+  if (file.size > sizeLimit * 1024 * 1024) throw new Error(`${isVideo ? 'Video' : isGif ? 'GIF' : 'Image'} must be smaller than ${sizeLimit} MB.`);
+  const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : isGif ? 'gif' : file.type === 'video/mp4' ? 'mp4' : file.type === 'video/webm' ? 'webm' : 'jpg';
   const path = `${userId}/profile-${Date.now()}.${extension}`;
   const { error } = await db().storage.from('guide-assets').upload(path, file, { contentType: file.type, upsert: false });
   if (error) throw error;

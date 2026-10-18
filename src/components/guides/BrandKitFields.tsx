@@ -38,13 +38,13 @@ export function BrandKitFields({ userId, brandName, kit, onChange, logoUrl, onLo
       <div style={{ display: 'grid', gap: 16 }}>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <span style={{ width: 40, height: 40, border: `1px solid ${line}`, display: 'grid', placeItems: 'center', overflow: 'hidden', background: '#FFF' }}>{logoUrl ? <img src={logoUrl} alt={`${name} logo`} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <ImagePlus size={15} color="#888" aria-hidden="true" />}</span>
-          <label style={uploadBtn}>{busy === 'logo' ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}{logoUrl ? 'Replace logo' : 'Upload logo'}<input type="file" accept="image/png,image/jpeg,image/webp" aria-label="Upload logo" onChange={(e) => upload('logo', e.target.files?.[0])} style={{ display: 'none' }} /></label>
+          <label style={uploadBtn}>{busy === 'logo' ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}{logoUrl ? 'Replace logo' : 'Upload logo'}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label="Upload logo" onChange={(e) => upload('logo', e.target.files?.[0])} style={{ display: 'none' }} /></label>
           {logoUrl && <button type="button" onClick={() => onLogo(null)} style={{ ...uploadBtn, border: 0, color: muted }}><X size={12} />Remove</button>}
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <label style={uploadBtn}>{busy === 'background' ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}{kit.background ? 'Replace background' : 'Background image or video'}<input type="file" accept="image/png,image/jpeg,image/webp,video/mp4,video/webm" aria-label="Upload background image or video" onChange={(e) => upload('background', e.target.files?.[0])} style={{ display: 'none' }} /></label>
+          <label style={uploadBtn}>{busy === 'background' ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}{kit.background ? 'Replace background' : 'Background image, GIF or video'}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm" aria-label="Upload background image, GIF or video" onChange={(e) => upload('background', e.target.files?.[0])} style={{ display: 'none' }} /></label>
           {kit.background && <button type="button" onClick={() => set({ background: '', backgroundType: '' })} style={{ ...uploadBtn, border: 0, color: muted }}><X size={12} />Remove</button>}
-          <span style={{ color: muted, fontSize: 10 }}>JPG, PNG, WebP or a looping MP4/WebM (up to 25 MB).</span>
+          <span style={{ color: muted, fontSize: 10 }}>JPG, PNG, WebP, an animated GIF (up to 15 MB) or a looping MP4/WebM (up to 25 MB).</span>
         </div>
         <div>
           <label htmlFor="brand-font" style={label}><Type size={11} aria-hidden="true" />Typeface · Google Fonts</label>
