@@ -73,7 +73,7 @@ export function ContentBuilder({ profile, offers, protocols, recipes }: { profil
     const b = brands.find((x) => x.id === brandId);
     if (!b) return null;
     const kit = brandKitOf(b.social_links);
-    return { name: b.name, font: kit.font, cta: ctaColours(kit).primary, logo: b.logo_url };
+    return { name: b.name, font: kit.font, cta: ctaColours(kit).primary, logo: b.logo_url, kit };
   }, [brands, brandId]);
 
   return <div>

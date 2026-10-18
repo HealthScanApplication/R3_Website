@@ -11,10 +11,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, Download, ExternalLink } from 'lucide-react';
 import QRCode from 'qrcode';
-import { ensureBrandFont, type ButtonColours } from '../../utils/brandKit';
+import { ensureBrandFont, type BrandKit, type ButtonColours } from '../../utils/brandKit';
+import { copyPrompt, imagePrompt } from '../../utils/brandBrief';
 
 /** A Guardian brand's look on posts: its typeface for headline and button, CTA colours and logo. */
-export interface PostBrand { name: string; font: string; cta: ButtonColours; logo: string | null }
+export interface PostBrand { name: string; font: string; cta: ButtonColours; logo: string | null; kit?: BrandKit | null }
 
 const FIGMA_TEMPLATE = 'https://www.figma.com/design/6HS7WXK5SFoLh41AkzKzMZ/--R%C2%B3---Routine%C2%B3-%E2%80%A2-Libray?node-id=12-886';
 const FONT_HREF = 'https://fonts.googleapis.com/css2?family=Italiana&family=Inter:wght@600&family=Nanum+Myeongjo&display=swap';
@@ -238,7 +239,10 @@ export function ContentStudio({ creator, audience, problem, offers, siteUrl, hea
     YouTube: `${headline} | ${offer.title}\n\n${creator} shares a practical routine for ${audience.toLowerCase()} with ${problem.toLowerCase()}.\n\n${cta}: ${fullUrl}`,
   };
   const download = () => { const url = canvasRef.current?.toDataURL('image/png'); if (!url) return; const a = document.createElement('a'); a.href = url; a.download = `${tag}-${fmt.id}-${fmt.w}x${fmt.h}.png`; a.click(); };
-  const copy = (key: string) => { navigator.clipboard?.writeText(captions[key]).then(() => { setCopied(key); window.setTimeout(() => setCopied(''), 1600); }); };
+  // Ready-to-paste prompts for image/video and copy tools, in the selected brand's voice and visual language.
+  const promptCtx = { brandName: brand?.name || creator, kit: brand?.kit || null, audience, focus: problem, offer: offer.title, format: `${fmt.label} (${fmt.platforms.split(' · ')[0]})`, headline, cta };
+  const prompts: Record<string, string> = { 'Image & video': imagePrompt(promptCtx), Copy: copyPrompt(promptCtx) };
+  const copy = (key: string) => { navigator.clipboard?.writeText(({ ...captions, ...prompts })[key]).then(() => { setCopied(key); window.setTimeout(() => setCopied(''), 1600); }); };
   const ink = '#F5F2EA', muted = '#B8B6AF', line = 'rgba(245,242,234,0.24)', acid = '#C7D8A3';
   const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', height: 38, border: `1px solid ${line}`, background: '#090A08', color: ink, padding: '0 10px', fontSize: 13, borderRadius: 2 };
   const lab: React.CSSProperties = { display: 'block', color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', margin: '0 0 5px' };
@@ -264,6 +268,13 @@ export function ContentStudio({ creator, audience, problem, offers, siteUrl, hea
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}><span style={{ ...lab, margin: 0, color: acid }}>{k} caption</span><button type="button" onClick={() => copy(k)} style={{ border: 0, background: 'transparent', color: muted, fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}><Copy size={12} />{copied === k ? 'Copied' : 'Copy'}</button></div>
           <p style={{ margin: 0, color: ink, fontSize: 11.5, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{captions[k]}</p>
         </div>)}</div>
+        <div aria-label="Prompts for AI tools" style={{ display: 'grid', gap: 8 }}>
+          <span style={{ ...lab, margin: '6px 0 0' }}>Prompts for AI tools{brand?.kit && (brand.kit.voice || brand.kit.visual) ? ` · ${brand.name} voice & visuals` : brand ? ` · add ${brand.name}'s voice in the Site builder` : ''}</span>
+          {Object.keys(prompts).map((k) => <div key={k} style={{ border: `1px dashed ${line}`, padding: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}><span style={{ ...lab, margin: 0, color: acid }}>{k} prompt</span><button type="button" onClick={() => copy(k)} style={{ border: 0, background: 'transparent', color: muted, fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}><Copy size={12} />{copied === k ? 'Copied' : 'Copy'}</button></div>
+            <p style={{ margin: 0, color: muted, fontSize: 11, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{prompts[k]}</p>
+          </div>)}
+        </div>
       </div>
       <div className="g-sticky" style={{ display: 'grid', placeItems: 'center' }}>
         <canvas ref={canvasRef} aria-label={`${fmt.platforms} preview`} style={{ width: fmt.w >= fmt.h ? '100%' : `${Math.round(640 * fmt.w / fmt.h)}px`, maxWidth: '100%', aspectRatio: `${fmt.w} / ${fmt.h}`, height: 'auto', boxShadow: '0 14px 36px rgba(0,0,0,.4)' }} />

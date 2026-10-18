@@ -48,3 +48,33 @@ it('accepts an animated GIF background as an image', async () => {
   await waitFor(() => expect(onKit).toHaveBeenLastCalledWith(expect.objectContaining({ background: 'https://cdn.example/calm.gif', backgroundType: 'image' })));
   expect((screen.getByLabelText('Upload logo') as HTMLInputElement).accept).toContain('image/gif');
 });
+
+function BriefDemo({ onKit, token }: { onKit: (k: BrandKit) => void; token: string | null }) {
+  const [kit, setKit] = useState(defaultBrandKit());
+  return <BrandKitFields userId="u" brandName="Calm Co" kit={kit} onChange={(k) => { setKit(k); onKit(k); }} logoUrl={null} onLogo={() => {}} accessToken={token} facts={{ about: 'Sleep coach', tags: ['Sleep'] }} />;
+}
+
+it('drafts the voice and visual brief with AI when the route answers', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    expect(url).toContain('/guides/brand-brief');
+    return new Response(JSON.stringify({ brief: { voice: 'Gentle and practical.', visual: 'Dawn light, linen, quiet rooms.', words: 'routine, rest', avoid: 'cure, detox' } }), { status: 200 });
+  }));
+  const onKit = vi.fn();
+  render(<BriefDemo onKit={onKit} token="t" />);
+  fireEvent.click(screen.getByRole('button', { name: /Draft with AI/ }));
+  await waitFor(() => expect(onKit).toHaveBeenLastCalledWith(expect.objectContaining({ voice: 'Gentle and practical.', visual: 'Dawn light, linen, quiet rooms.' })));
+  expect(screen.getByRole('status').textContent).toMatch(/Drafted with AI/);
+  expect((screen.getByLabelText('Brand voice') as HTMLTextAreaElement).value).toBe('Gentle and practical.');
+  vi.unstubAllGlobals();
+});
+
+it('falls back to an offline draft from the brand details when AI is unavailable', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'AI brand brief is not configured' }), { status: 501 })));
+  const onKit = vi.fn();
+  render(<BriefDemo onKit={onKit} token="t" />);
+  fireEvent.click(screen.getByRole('button', { name: /Draft with AI/ }));
+  await waitFor(() => expect(onKit).toHaveBeenLastCalledWith(expect.objectContaining({ voice: expect.stringMatching(/^Calm Co sounds/) })));
+  expect(screen.getByRole('status').textContent).toMatch(/AI is not available/);
+  expect(screen.getByRole('button', { name: /Redraft with AI/ })).toBeTruthy();
+  vi.unstubAllGlobals();
+});

@@ -5,7 +5,8 @@
  */
 export type CtaMode = 'colour' | 'mono';
 export type MonoStyle = 'black_on_white' | 'white_on_black';
-export interface BrandKit { font: string; background: string; backgroundType: 'image' | 'video' | ''; ctaMode: CtaMode; primary: string; secondary: string; mono: MonoStyle }
+/** voice / visual / words / avoid: the brand brief that steers AI copy, image and video prompts. */
+export interface BrandKit { font: string; background: string; backgroundType: 'image' | 'video' | ''; ctaMode: CtaMode; primary: string; secondary: string; mono: MonoStyle; voice: string; visual: string; words: string; avoid: string }
 
 /** Curated Google Fonts: a few clean sans, editorial serifs and display faces that hold up on posts and sites. */
 export const BRAND_FONTS: Array<{ family: string; kind: 'Sans' | 'Serif' | 'Display' }> = [
@@ -15,9 +16,10 @@ export const BRAND_FONTS: Array<{ family: string; kind: 'Sans' | 'Serif' | 'Disp
   { family: 'Libre Baskerville', kind: 'Serif' }, { family: 'DM Serif Display', kind: 'Serif' }, { family: 'Italiana', kind: 'Display' }, { family: 'Bebas Neue', kind: 'Display' },
 ];
 
-export const defaultBrandKit = (): BrandKit => ({ font: 'Inter', background: '', backgroundType: '', ctaMode: 'mono', primary: '#111111', secondary: '#F5F2EA', mono: 'black_on_white' });
+export const defaultBrandKit = (): BrandKit => ({ font: 'Inter', background: '', backgroundType: '', ctaMode: 'mono', primary: '#111111', secondary: '#F5F2EA', mono: 'black_on_white', voice: '', visual: '', words: '', avoid: '' });
 
 const HEX = /^#[0-9a-f]{6}$/i;
+const text = (v: unknown, max = 600) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const fontOk = (f: unknown): f is string => typeof f === 'string' && BRAND_FONTS.some((x) => x.family === f);
 
 /** Read a brand kit from a brand's social_links, falling back to defaults for anything missing or invalid. */
@@ -32,6 +34,7 @@ export function brandKitOf(links?: Record<string, string> | null): BrandKit {
     primary: HEX.test(l.brand_primary || '') ? l.brand_primary.toUpperCase() : d.primary,
     secondary: HEX.test(l.brand_secondary || '') ? l.brand_secondary.toUpperCase() : d.secondary,
     mono: l.brand_mono === 'white_on_black' ? 'white_on_black' : 'black_on_white',
+    voice: text(l.brand_voice), visual: text(l.brand_visual), words: text(l.brand_words), avoid: text(l.brand_avoid),
   };
 }
 
@@ -39,6 +42,7 @@ export function brandKitOf(links?: Record<string, string> | null): BrandKit {
 export const brandKitLinks = (k: BrandKit): Record<string, string> => ({
   brand_font: k.font, brand_bg: k.background, brand_bg_type: k.background ? k.backgroundType : '', brand_cta_mode: k.ctaMode,
   brand_primary: k.primary, brand_secondary: k.secondary, brand_mono: k.mono,
+  brand_voice: k.voice, brand_visual: k.visual, brand_words: k.words, brand_avoid: k.avoid,
 });
 
 /** Black or white, whichever reads better on this colour (WCAG relative luminance). */
