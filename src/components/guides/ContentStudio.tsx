@@ -232,19 +232,42 @@ export async function drawPost(canvas: HTMLCanvasElement, fmt: { id: FormatId; w
   const sub = copy.subline ? wrap(ctx, copy.subline, maxW) : [];
   const subW = Math.max(0, ...sub.map((l) => ctx.measureText(l).width));
   const hl = st.head.line * s, sl = st.sub.line * s;
-  const blockH = head.length * hl + 30 * s + sub.length * sl + 52 * s + boxH;
+  // The creator credit (photo + "Guidance by …") opens the text package, above the headline.
+  const creditText = copy.credit.toUpperCase(), face = 34 * s, creditLead = face + 10 * s;
+  ctx.font = `600 ${20 * s}px Inter`;
+  const creditW = copy.credit ? ctx.measureText(creditText).width + 14 * s + 5 * s + creditLead : 0;
+  const creditH = copy.credit ? 44 * s + 26 * s : 0;
+  const blockH = creditH + head.length * hl + 30 * s + sub.length * sl + 52 * s + boxH;
   // Bottom: 9:16 keeps the Figma position (y 1271) unless long copy would push the CTA off the frame. Top: clear of
-  // the app bars on stories. The credit and logo move to the opposite edge from the text.
+  // the app bars on stories. The brand logo moves to the opposite edge from the text.
   const edge = fmt.id === 'thumb' ? 60 * s : 93 * s;
   let y = top ? (fmt.id === 'story' ? 220 * s : edge) : fmt.id === 'story' ? Math.min(1271 * s, h - edge - blockH) : h - edge - blockH;
   if (st.panel) {
-    const pad = 48 * s, pw = Math.max(headW, subW, boxW) + pad * 2;
+    const pad = 48 * s, pw = Math.max(headW, subW, boxW, creditW) + pad * 2;
     ctx.save(); ctx.shadowColor = 'rgba(17,17,17,0.22)'; ctx.shadowBlur = 30 * s; ctx.shadowOffsetY = 8 * s;
     ctx.fillStyle = 'rgba(255,255,255,0.96)'; roundRect(ctx, alignRight ? anchor + pad - pw : anchor - pad, y - pad, pw, blockH + pad * 2, 18 * s); ctx.fill();
     ctx.restore();
   }
   const strip = (lineW: number, top0: number, lineH: number) => { const px = 16 * s; ctx.fillStyle = '#FFFFFF'; ctx.fillRect(alignRight ? anchor - lineW - px : anchor - px, top0 + lineH * 0.1, lineW + px * 2, lineH * 0.86); };
   ctx.textBaseline = 'alphabetic';
+  if (copy.credit) {
+    // The creator's profile photo leads the credit as a circle inside the tag; without one, their initial.
+    const cx0 = alignRight ? anchor - creditW : anchor, fx = cx0 + 5 * s, fy = y + 5 * s;
+    ctx.fillStyle = 'rgba(255,255,255,0.88)'; ctx.fillRect(cx0, y, creditW, 44 * s);
+    ctx.save(); ctx.beginPath(); ctx.arc(fx + face / 2, fy + face / 2, face / 2, 0, Math.PI * 2); ctx.clip();
+    if (avatar?.naturalWidth) {
+      const k = Math.max(face / avatar.naturalWidth, face / avatar.naturalHeight);
+      ctx.drawImage(avatar, fx + (face - avatar.naturalWidth * k) / 2, fy + (face - avatar.naturalHeight * k) / 2, avatar.naturalWidth * k, avatar.naturalHeight * k);
+    } else {
+      ctx.fillStyle = '#111111'; ctx.fillRect(fx, fy, face, face);
+      ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'center'; ctx.font = `700 ${17 * s}px Archivo, Inter, sans-serif`;
+      ctx.fillText((creditText.split(' BY ').pop() || creditText).trim().charAt(0), fx + face / 2, fy + face / 2 + 6 * s);
+    }
+    ctx.restore();
+    ctx.textAlign = 'left'; ctx.font = `600 ${20 * s}px Inter`; ctx.fillStyle = '#111111';
+    ctx.fillText(creditText, fx + creditLead, y + 29 * s);
+    y += creditH;
+  }
   ctx.font = headFontCss;
   for (const line of head) {
     if (st.highlight) strip(ctx.measureText(line).width, y, hl);
@@ -274,33 +297,11 @@ export async function drawPost(canvas: HTMLCanvasElement, fmt: { id: FormatId; w
   ctx.font = `600 ${28 * s}px ${ctaFont}`;
   let cx = bx + prefixW + 32 * s;
   for (const ch of label) { ctx.fillText(ch, cx, y + boxH / 2 + 10 * s); cx += ctx.measureText(ch).width + tracking; }
-  // QR in the opposite corner; the creator credit and brand logo share the opposite edge on the text's side.
+  // QR in the opposite corner; the brand logo sits on the opposite edge on the text's side.
   const qrEdge = fmt.id === 'thumb' ? 50 * s : 60 * s;
   if (copy.qr && qrSize) drawQr(ctx, copy.qr, alignRight ? margin : w - margin - qrSize, top ? h - qrEdge - qrSize : qrEdge, qrSize, copy.qrStyle);
   const markTop = top ? h - 70 * s - 44 * s : 70 * s;
-  let mx = alignRight ? w - margin : margin; // advances away from the text's edge
-  if (copy.credit) {
-    ctx.font = `600 ${20 * s}px Inter`;
-    const t = copy.credit.toUpperCase();
-    // The creator's profile photo leads the credit as a circle inside the tag; without one, their initial.
-    const pad = 14 * s, face = 34 * s, lead = face + 10 * s;
-    const cw = ctx.measureText(t).width + pad + 5 * s + lead, cx0 = alignRight ? mx - cw : mx;
-    ctx.fillStyle = 'rgba(255,255,255,0.88)'; ctx.fillRect(cx0, markTop, cw, 44 * s);
-    const fx = cx0 + 5 * s, fy = markTop + 5 * s;
-    ctx.save(); ctx.beginPath(); ctx.arc(fx + face / 2, fy + face / 2, face / 2, 0, Math.PI * 2); ctx.clip();
-    if (avatar?.naturalWidth) {
-      const k = Math.max(face / avatar.naturalWidth, face / avatar.naturalHeight);
-      ctx.drawImage(avatar, fx + (face - avatar.naturalWidth * k) / 2, fy + (face - avatar.naturalHeight * k) / 2, avatar.naturalWidth * k, avatar.naturalHeight * k);
-    } else {
-      ctx.fillStyle = '#111111'; ctx.fillRect(fx, fy, face, face);
-      ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'center'; ctx.font = `700 ${17 * s}px Archivo, Inter, sans-serif`;
-      ctx.fillText((t.split(' BY ').pop() || t).trim().charAt(0), fx + face / 2, fy + face / 2 + 6 * s);
-      ctx.textAlign = 'left'; ctx.font = `600 ${20 * s}px Inter`;
-    }
-    ctx.restore();
-    ctx.fillStyle = '#111111'; ctx.fillText(t, fx + lead, markTop + 29 * s);
-    mx += (alignRight ? -1 : 1) * (cw + 14 * s);
-  }
+  const mx = alignRight ? w - margin : margin;
   // CORS-enabled so the canvas can still be downloaded; skipped if it fails.
   if (logo?.naturalWidth) {
     const lh = 44 * s, lw = Math.min(200 * s, lh * logo.naturalWidth / logo.naturalHeight), pad = 8 * s;
