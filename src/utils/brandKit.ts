@@ -66,10 +66,24 @@ export function ctaColours(k: BrandKit): { primary: ButtonColours; secondary: Bu
 
 /** Google Fonts stylesheet for one family (regular to bold). */
 export const googleFontHref = (family: string) => `https://fonts.googleapis.com/css2?family=${family.trim().replace(/ /g, '+')}:wght@400;600;700&display=swap`;
-/** Load a brand font once per page (no-op outside the browser). */
-export function ensureBrandFont(family: string) {
-  if (typeof document === 'undefined' || !fontOk(family)) return;
+/**
+ * Load a brand font's stylesheet once per page. Resolves when the stylesheet (and so its @font-face rules) has
+ * loaded, or failed, so callers can then await `document.fonts.load` for the family. No-op outside the browser.
+ */
+const fontLoads = new Map<string, Promise<void>>();
+export function ensureBrandFont(family: string): Promise<void> {
+  if (typeof document === 'undefined' || !fontOk(family)) return Promise.resolve();
   const href = googleFontHref(family);
-  if (document.querySelector(`link[href="${href}"]`)) return;
-  const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = href; document.head.appendChild(link);
+  const pending = fontLoads.get(href);
+  if (pending) return pending;
+  const load = new Promise<void>((resolve) => {
+    const existing = document.querySelector<HTMLLinkElement>(`link[href="${href}"]`);
+    if (existing?.sheet) { resolve(); return; }
+    const link = existing || Object.assign(document.createElement('link'), { rel: 'stylesheet', href });
+    link.addEventListener('load', () => resolve(), { once: true });
+    link.addEventListener('error', () => resolve(), { once: true }); // fallback font, never a hang
+    if (!existing) document.head.appendChild(link);
+  });
+  fontLoads.set(href, load);
+  return load;
 }

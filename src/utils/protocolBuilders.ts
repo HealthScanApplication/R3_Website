@@ -169,7 +169,7 @@ export function planMealItems(cfg: DietConfig): SlotPlan[] {
 }
 
 export interface DietConfig {
-  location?: import('./plannerSunrise').PlannerLocation;
+  location?: import('./plannerSunrise').PlannerLocation | null; // null = the user cleared it (no default re-applied)
   framework: string;
   kcal: number;
   protein: number; carbs: number; fat: number; // % of energy

@@ -3765,12 +3765,19 @@ function SiteProfileForm({ userId, profile, onProfile }: { userId: string; profi
   const [active, setActive] = useState('personal');
   const [busy, setBusy] = useState<'save' | 'upload' | null>(null);
   const [message, setMessage] = useState('');
+  // Saving replaces every brand row, so it waits until the saved brands have loaded; a failed load blocks it.
+  const [brandsLoaded, setBrandsLoaded] = useState<'loading' | 'ok' | 'failed'>('loading');
   useEffect(() => {
+    let live = true;
+    setBrandsLoaded('loading');
     listGuideBrands(userId).then((saved) => {
+      if (!live) return;
       const personal = saved.find((b) => b.kind === 'personal');
       if (personal) setPersonalKit(brandKitOf(personal.social_links));
       setBrands(saved.filter((b) => b.kind !== 'personal').map(({ id, guide_id, ...b }) => ({ ...b, key: `brand-${id}` })));
-    }).catch(() => {});
+      setBrandsLoaded('ok');
+    }).catch(() => { if (live) setBrandsLoaded('failed'); });
+    return () => { live = false; };
   }, [userId]);
   const biz = brands.find((b) => b.key === active);
   const patchBiz = (patch: Partial<SiteBrand>) => setBrands((list) => list.map((b) => (b.key === active ? { ...b, ...patch } : b)));
@@ -3801,6 +3808,7 @@ function SiteProfileForm({ userId, profile, onProfile }: { userId: string; profi
     try { set.image(await uploadGuideImage(userId, file)); } catch (e) { setMessage((e as Error).message || 'Upload failed.'); } finally { setBusy(null); }
   };
   const save = async () => {
+    if (brandsLoaded !== 'ok') return; // never overwrite brands that were not loaded
     setBusy('save'); setMessage('');
     try {
       const saved = await saveGuideProfile(profile);
@@ -3866,7 +3874,8 @@ function SiteProfileForm({ userId, profile, onProfile }: { userId: string; profi
       <label style={{ ...label, marginTop: 18 }}>Bio</label><textarea style={{ ...input, height: 150, paddingTop: 12 }} value={profile.bio} onChange={(e) => onProfile({ ...profile, bio: e.target.value })} />
     </>}
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18 }}>
-      <button type="button" onClick={save} disabled={busy === 'save'} style={btn}>{busy === 'save' ? 'Saving…' : 'Save profile and brands'}</button>
+      <button type="button" onClick={save} disabled={busy === 'save' || brandsLoaded !== 'ok'} style={{ ...btn, opacity: brandsLoaded === 'ok' ? 1 : .5 }}>{busy === 'save' ? 'Saving…' : brandsLoaded === 'loading' ? 'Loading brands…' : 'Save profile and brands'}</button>
+      {brandsLoaded === 'failed' && <span role="alert" style={{ color: '#E8B86A', fontSize: 12 }}>Your saved brands could not be loaded, so saving is paused to avoid overwriting them. Reload the page to try again.</span>}
       {message && <span role={message.startsWith('Could not') ? 'alert' : 'status'} style={{ color: message.startsWith('Could not') ? '#E8B86A' : acid, fontSize: 12 }}>{message}</span>}
     </div>
   </div>;

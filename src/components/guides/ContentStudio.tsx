@@ -108,16 +108,26 @@ export function drawQr(ctx: CanvasRenderingContext2D, text: string, x: number, y
   ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
 }
 
-async function drawPost(canvas: HTMLCanvasElement, fmt: (typeof FORMATS)[number], bg: string, copy: { headline: string; subline: string; cta: string; credit: string; qr?: string; brand?: PostBrand | null }) {
+const loadImage = (src: string, cors = false) => new Promise<HTMLImageElement | null>((resolve) => {
+  const img = new Image(); if (cors) img.crossOrigin = 'anonymous'; // CORS so the canvas can still be downloaded
+  img.onload = () => resolve(img); img.onerror = () => resolve(null); img.src = src;
+});
+
+/**
+ * Everything is loaded first (fonts, background, logo); a run that `isStale()` by then stops before touching the
+ * canvas, so a slower earlier run can never paint over a newer one. The drawing itself is synchronous.
+ */
+async function drawPost(canvas: HTMLCanvasElement, fmt: (typeof FORMATS)[number], bg: string, copy: { headline: string; subline: string; cta: string; credit: string; qr?: string; brand?: PostBrand | null }, isStale: () => boolean = () => false) {
   const { w, h } = fmt;
-  canvas.width = w; canvas.height = h;
-  const ctx = canvas.getContext('2d')!;
   const brand = copy.brand || null;
   const headFont = brand ? `"${brand.font}"` : 'Italiana', ctaFont = brand ? `"${brand.font}"` : 'Inter';
-  if (brand) ensureBrandFont(brand.font);
+  if (brand) await ensureBrandFont(brand.font); // the @font-face must exist before document.fonts.load can find it
   await Promise.all([document.fonts.load(`111px ${headFont}`), document.fonts.load('52px "Nanum Myeongjo"'), document.fonts.load(`600 28px ${ctaFont}`)]).catch(() => {});
-  const img = new Image(); img.src = bg;
-  await new Promise((resolve) => { img.onload = resolve; img.onerror = resolve; });
+  const [loaded, logo] = await Promise.all([loadImage(bg), brand?.logo ? loadImage(brand.logo, true) : Promise.resolve(null)]);
+  if (isStale()) return;
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d')!;
+  const img = loaded || new Image();
   ctx.fillStyle = '#EFE6DB'; ctx.fillRect(0, 0, w, h);
   // Cover the frame from the top of the photo (faces and objects sit high in the library images).
   if (img.naturalWidth) {
@@ -179,15 +189,11 @@ async function drawPost(canvas: HTMLCanvasElement, fmt: (typeof FORMATS)[number]
     ctx.fillStyle = '#111111'; ctx.fillText(t, x + pad, 70 * s + 29 * s);
   }
   // Brand logo, top right on a white tile. CORS-enabled so the canvas can still be downloaded; skipped if it fails.
-  if (brand?.logo) {
-    const logo = new Image(); logo.crossOrigin = 'anonymous'; logo.src = brand.logo;
-    const ok = await new Promise<boolean>((resolve) => { logo.onload = () => resolve(true); logo.onerror = () => resolve(false); });
-    if (ok && logo.naturalWidth) {
-      const lh = 64 * s, lw = Math.min(240 * s, lh * logo.naturalWidth / logo.naturalHeight), pad = 10 * s;
-      const lx = w - 91 * s - lw - pad * 2, ly = 60 * s;
-      ctx.fillStyle = '#FFFFFF'; ctx.fillRect(lx, ly, lw + pad * 2, lh + pad * 2);
-      ctx.drawImage(logo, lx + pad, ly + pad, lw, lh);
-    }
+  if (logo?.naturalWidth) {
+    const lh = 64 * s, lw = Math.min(240 * s, lh * logo.naturalWidth / logo.naturalHeight), pad = 10 * s;
+    const lx = w - 91 * s - lw - pad * 2, ly = 60 * s;
+    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(lx, ly, lw + pad * 2, lh + pad * 2);
+    ctx.drawImage(logo, lx + pad, ly + pad, lw, lh);
   }
 }
 
@@ -221,7 +227,9 @@ export function ContentStudio({ creator, audience, problem, offers, siteUrl, hea
   const credit = creator ? `Guidance by ${creator}` : '';
   const fullUrl = siteUrl.startsWith('http') ? siteUrl : `https://routine3.com${siteUrl}`;
   useEffect(() => {
-    if (canvasRef.current) drawPost(canvasRef.current, fmt, bgUrl(background), { headline, subline, cta, credit, qr: fullUrl, brand });
+    let stale = false; // a newer run (or unmount) supersedes this one
+    if (canvasRef.current) drawPost(canvasRef.current, fmt, bgUrl(background), { headline, subline, cta, credit, qr: fullUrl, brand }, () => stale);
+    return () => { stale = true; };
   }, [fmt, background, headline, subline, cta, credit, fullUrl, fontsReady, brand]);
   const tag = solution.replace(/\s+/g, '');
   const captions: Record<string, string> = {
