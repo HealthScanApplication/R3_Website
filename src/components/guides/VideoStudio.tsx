@@ -7,7 +7,8 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Film, KeyRound, Loader2, RotateCcw, Unplug } from 'lucide-react';
-import { buildVideoPrompt, VIDEO_ASPECTS, VIDEO_PROMPT_MAX, type BrandStyle, type VideoAspect } from '../../utils/videoPrompt';
+import { buildVideoPrompt, VIDEO_ASPECTS, VIDEO_PROMPT_MAX, type VideoAspect } from '../../utils/videoPrompt';
+import type { BrandKit } from '../../utils/brandKit';
 import { connectHiggsfield, disconnectHiggsfield, generateVideo, higgsfieldStatus, isFinished, listVideos, pollDelay, pollVideo, progressOf, type HiggsfieldStatus, type VideoJob } from '../../utils/higgsfieldVideo';
 
 const ink = '#F5F2EA', muted = '#B8B6AF', line = 'rgba(245,242,234,0.24)', acid = '#C7D8A3', warn = '#E8B07A';
@@ -17,7 +18,7 @@ const primary: React.CSSProperties = { height: 42, border: `1px solid ${ink}`, b
 const quiet: React.CSSProperties = { border: 0, background: 'transparent', color: muted, fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', padding: 0 };
 const ratio = (a: string) => a.replace(':', ' / ');
 
-export function VideoStudio({ creator, audience, problem, offer, brand = null, brandId = null }: { creator: string; audience: string; problem: string; offer?: string; brand?: BrandStyle | null; brandId?: string | null }) {
+export function VideoStudio({ creator, audience, problem, offer, brandName, kit = null, brandId = null }: { creator: string; audience: string; problem: string; offer?: string; brandName?: string; kit?: BrandKit | null; brandId?: string | null }) {
   const [status, setStatus] = useState<HiggsfieldStatus | null>(null);
   const [setupError, setSetupError] = useState('');
   const [error, setError] = useState('');
@@ -27,7 +28,7 @@ export function VideoStudio({ creator, audience, problem, offer, brand = null, b
   const [aspect, setAspect] = useState<VideoAspect>('9:16');
   const [modelId, setModelId] = useState('kling-3-std');
   const [duration, setDuration] = useState(5);
-  const suggested = useMemo(() => buildVideoPrompt({ audience, problem, offer, creator, brand, aspect }), [audience, problem, offer, creator, brand, aspect]);
+  const suggested = useMemo(() => buildVideoPrompt({ audience, problem, offer, brandName: brandName || creator, kit, aspect }), [audience, problem, offer, brandName, creator, kit, aspect]);
   const [prompt, setPrompt] = useState(suggested);
   const [edited, setEdited] = useState(false);
   useEffect(() => { if (!edited) setPrompt(suggested); }, [suggested, edited]);
@@ -123,7 +124,7 @@ export function VideoStudio({ creator, audience, problem, offer, brand = null, b
       </div>
       <div><div style={{ ...lab, display: 'flex', justifyContent: 'space-between' }}><label htmlFor="video-prompt">Prompt</label>{edited && <button type="button" onClick={() => setEdited(false)} style={quiet}><RotateCcw size={11} />Use suggested</button>}</div>
         <textarea id="video-prompt" value={prompt} maxLength={VIDEO_PROMPT_MAX} onChange={(e) => { setPrompt(e.target.value); setEdited(true); }} rows={8} style={{ ...field, height: 'auto', padding: 10, lineHeight: 1.5, resize: 'vertical' }} />
-        <span style={{ display: 'block', color: muted, fontSize: 9.5, marginTop: 4 }}>Built from your audience, {problem.toLowerCase()}{offer ? ', the offer' : ''}{brand ? ` and ${brand.name}’s tone and look` : ''}. {prompt.length}/{VIDEO_PROMPT_MAX}</span>
+        <span style={{ display: 'block', color: muted, fontSize: 9.5, marginTop: 4 }}>Built from your audience, {problem.toLowerCase()}{offer ? ', the offer' : ''}{kit && brandName ? ` and ${brandName}’s visual language` : ''}. {prompt.length}/{VIDEO_PROMPT_MAX}</span>
       </div>
       <button type="button" onClick={generate} disabled={busy === 'generate' || (!!job && !isFinished(job.status)) || prompt.trim().length < 10} style={primary}>{busy === 'generate' ? <Loader2 size={14} className="animate-spin" /> : <Film size={14} />} Generate {duration}s video</button>
       <span style={{ color: muted, fontSize: 10 }}>Uses your Higgsfield API balance{status.live ? '' : ' (test mode: nothing is spent)'}. Failed or blocked videos aren’t charged.</span>

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Clapperboard } from 'lucide-react';
 import { ContentStudio, type PostBrand, type StudioOffer } from './ContentStudio';
 import { VideoStudio } from './VideoStudio';
-import { brandStyleOf, type BrandStyle } from '../../utils/videoPrompt';
 import type { AdminProtocol } from '../../utils/protocolAdmin';
 import { listGuideBrands, type GuideBrand, type GuideOffer, type GuideProfile, type GuideRecipe } from '../../utils/guidePortal';
 import { brandKitOf, ctaColours } from '../../utils/brandKit';
@@ -77,10 +76,10 @@ export function ContentBuilder({ profile, offers, protocols, recipes }: { profil
     const kit = brandKitOf(b.social_links);
     return { name: b.name, font: kit.font, cta: ctaColours(kit).primary, logo: b.logo_url, kit };
   }, [brands, brandId]);
-  // The same brand's tone and visual language for video prompts (voice/visual keys are read when the brand has them).
-  const videoBrand = useMemo<BrandStyle | null>(() => {
+  // The same brand kit (and its brief: visual language, palette) steers the video prompt.
+  const videoBrand = useMemo(() => {
     const b = brands.find((x) => x.id === brandId);
-    return b ? brandStyleOf(b.name, b.social_links, brandKitOf(b.social_links)) : null;
+    return b ? { name: b.name, kit: brandKitOf(b.social_links) } : null;
   }, [brands, brandId]);
 
   return <div>
@@ -112,6 +111,6 @@ export function ContentBuilder({ profile, offers, protocols, recipes }: { profil
       </div>
     </div>
     <ContentStudio key={`${source}-${picked?.id || ''}`} creator={profile.display_name} audience={audience} problem={problem} siteUrl={siteUrl} offers={studioOffers} heading={picked && source !== 'none' ? `Create posts about ${picked.name}` : 'Create posts about your topic'} brand={postBrand} />
-    <VideoStudio creator={profile.display_name} audience={audience} problem={problem} offer={source !== 'none' ? studioOffers[0]?.title : undefined} brand={videoBrand} brandId={brandId} />
+    <VideoStudio creator={profile.display_name} audience={audience} problem={problem} offer={source !== 'none' ? studioOffers[0]?.title : undefined} brandName={videoBrand?.name} kit={videoBrand?.kit} brandId={brandId} />
   </div>;
 }

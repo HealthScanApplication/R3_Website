@@ -93,15 +93,19 @@ What this means for us:
    - Polling is used instead of webhooks because webhooks are unsigned and would need re-checking anyway. Webhooks could be added later as a "check now" trigger.
 4. **Spend guard** on the Guardian's own balance: at most 3 videos rendering at once and 20 a day (`HIGGSFIELD_DAILY_LIMIT`). Sound is off by default, which is cheaper, and posts usually get music on-platform.
 5. **Mock mode by default.** Until `HIGGSFIELD_LIVE=true` is set on the function, it never calls Higgsfield and never spends credits. Jobs "render" for about 12 s and finish without a video, and the panel shows a **Test mode** badge. The same pattern as `ALLOW_LIVE_PAYMENTS` for Stripe.
-6. **The prompt is built from the brief** (`src/utils/videoPrompt.ts`):
-   - audience, problem or goal, and offer;
-   - a topic scene (sleep → evening wind-down, and so on);
-   - the brand's tone (`brand_voice` / `brand_tone`) and visual language (`brand_visual` / `brand_visual_style` / `brand_imagery`) from `guide_brands.social_links` when present, otherwise ROUTINE³'s editorial default;
-   - brand colours from the brand kit;
+6. **The prompt is built on the brand brief** (`src/utils/videoPrompt.ts`). It extends `imagePrompt` from `src/utils/brandBrief.ts` (the same text as ContentStudio's "Prompts for AI tools" panel), so a brand's posts and videos share:
+   - the scene for the audience and the problem or goal;
+   - the offer;
+   - the kit's **visual language** and palette.
+
+   Video additions:
+   - a concrete moment for the topic (sleep → evening wind-down, and so on);
+   - mood;
+   - slow, gentle camera motion;
    - framing for the chosen format;
    - "no on-screen text" (captions and the CTA belong on-platform or in the post designer).
 
-   The Guardian can edit it. Once edited, a brief change doesn't overwrite the edit; "Use suggested" restores the generated prompt.
+   The brand **voice** and words stay out, because they are about copy. The Guardian can edit the prompt. Once edited, a brief change doesn't overwrite it, and "Use suggested" restores the generated prompt.
 
 ### Not built yet (proposed next)
 

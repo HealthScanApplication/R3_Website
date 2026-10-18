@@ -1,37 +1,34 @@
 import { describe, expect, it } from 'vitest';
-import { brandStyleOf, buildVideoPrompt } from '../videoPrompt';
+import { buildVideoPrompt } from '../videoPrompt';
+import { imagePrompt } from '../brandBrief';
 import { defaultBrandKit } from '../brandKit';
 
 describe('buildVideoPrompt', () => {
-  it('builds the scene from the problem, audience and offer', () => {
-    const p = buildVideoPrompt({ audience: 'Women 45–64 · Menopause', problem: 'Sleep problems', offer: '7-day menopause sleep challenge', creator: 'John Ferreira', aspect: '9:16' });
-    expect(p).toMatch(/for women 45–64 · menopause/);
-    expect(p).toMatch(/evening wind-down/);
-    expect(p).toMatch(/"7-day menopause sleep challenge" by John Ferreira/);
-    expect(p).toMatch(/vertical 9:16/);
-    expect(p).toMatch(/No on-screen text/);
+  it('turns the brand brief image prompt into a video prompt for the brief', () => {
+    const p = buildVideoPrompt({ audience: 'Women 45–64 · Menopause', problem: 'Sleep problems', offer: '7-day menopause sleep challenge', brandName: 'John Ferreira', aspect: '9:16' });
+    expect(p.split('\n')[0]).toBe('A short 9:16 social video for John Ferreira promoting "7-day menopause sleep challenge".');
+    expect(p).toMatch(/Scene: Women 45–64 · Menopause in a calm, real moment/);
+    expect(p).toMatch(/Moment: an evening wind-down/);
+    expect(p).toMatch(/Motion: realistic, slow and gentle/);
+    expect(p).toMatch(/Framing: vertical 9:16/);
+    expect(p).not.toMatch(/Leave clean space/);
+    expect(p.split('\n').at(-1)).toBe('No on-screen text, logos or watermarks.');
   });
-  it('leaves out "for everyone" and falls back to a general scene', () => {
+  it('shares the scene and brand lines with imagePrompt, so posts and videos stay on-brand together', () => {
+    const kit = { ...defaultBrandKit(), ctaMode: 'colour' as const, primary: '#2F4A3A', secondary: '#EFE6DB', visual: 'film grain, 35mm, muted greens', voice: 'witty and plain' };
+    const ctx = { audience: 'Everyone', problem: 'Stress', aspect: '1:1' as const, brandName: 'Calm Co', kit };
+    const image = imagePrompt({ brandName: 'Calm Co', kit, audience: 'Everyone', focus: 'Stress', format: '1:1' });
+    const video = buildVideoPrompt(ctx);
+    for (const line of image.split('\n').filter((l) => /^(Scene|Visual language|Palette)/.test(l))) expect(video).toContain(line);
+    expect(video).toMatch(/Visual language: film grain, 35mm, muted greens/);
+    expect(video).toMatch(/#2F4A3A and #EFE6DB/);
+    expect(video).not.toMatch(/witty/); // brand voice is for words; videos carry no on-screen text
+    expect(video).toMatch(/slow breathing by a window/);
+  });
+  it('works without a brand and falls back to a general scene', () => {
     const p = buildVideoPrompt({ audience: 'Everyone', problem: 'Wellbeing', aspect: '16:9' });
-    expect(p).not.toMatch(/for everyone/);
+    expect(p).toMatch(/a wellness guide/);
     expect(p).toMatch(/calm daily routine/);
     expect(p).toMatch(/wide 16:9/);
-  });
-  it('uses the brand voice, visual language and colours when the brand has them', () => {
-    const kit = { ...defaultBrandKit(), ctaMode: 'colour' as const, primary: '#2F4A3A', secondary: '#EFE6DB' };
-    const brand = brandStyleOf('Calm Co', { brand_voice: 'gentle, witty, plain English', brand_visual: 'film grain, 35mm, muted greens' }, kit);
-    const p = buildVideoPrompt({ audience: 'Everyone', problem: 'Stress', aspect: '1:1', brand });
-    expect(p).toMatch(/Tone: gentle, witty, plain English\./);
-    expect(p).toMatch(/Visual style: film grain, 35mm, muted greens\./);
-    expect(p).toMatch(/#2F4A3A, #EFE6DB/);
-    expect(p).not.toMatch(/never clinical/);
-  });
-  it('defaults the tone and look when the brand has no voice yet', () => {
-    const brand = brandStyleOf('Plain', {}, defaultBrandKit());
-    expect(brand.voice).toBe('');
-    const p = buildVideoPrompt({ audience: 'Men', problem: 'Low energy', aspect: '4:5', brand });
-    expect(p).toMatch(/never clinical/);
-    expect(p).toMatch(/black and white/);
-    expect(p).toMatch(/portrait 4:5/);
   });
 });

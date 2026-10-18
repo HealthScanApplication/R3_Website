@@ -3,6 +3,7 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { pollDelay, progressOf } from '../higgsfieldVideo';
+import { defaultBrandKit } from '../brandKit';
 
 const models = [{ id: 'kling-3-std', label: 'Kling 3.0 Standard', durations: [3, 15], aspects: [{ aspect: '9:16', delivered: '9:16' }, { aspect: '4:5', delivered: '9:16' }, { aspect: '1:1', delivered: '1:1' }, { aspect: '16:9', delivered: '16:9' }] }];
 const api = vi.hoisted(() => ({
@@ -30,7 +31,7 @@ describe('progress copy and polling', () => {
 });
 
 describe('VideoStudio', () => {
-  const props = { creator: 'John Ferreira', audience: 'Women 45–64 · Menopause', problem: 'Sleep problems', offer: '7-day menopause sleep challenge' };
+  const props = { creator: 'John Ferreira', brandName: 'John Ferreira', audience: 'Women 45–64 · Menopause', problem: 'Sleep problems', offer: '7-day menopause sleep challenge' };
 
   it('asks a Guardian to connect their own Higgsfield key and never keeps it in the form', async () => {
     api.higgsfieldStatus.mockResolvedValue({ connected: false, key_hint: null, connected_at: null, live: false, models });
@@ -48,9 +49,9 @@ describe('VideoStudio', () => {
   it('pre-fills the prompt from the brief, generates, and shows progress', async () => {
     api.higgsfieldStatus.mockResolvedValue({ connected: true, key_hint: 'ef12', connected_at: null, live: false, models });
     api.generateVideo.mockResolvedValue({ job: { id: 'j1', model: 'kling-3-std', prompt: 'p', aspect_ratio: '4:5', duration_seconds: 5, image_url: null, status: 'queued', video_url: null, storage_path: null, error: null, mock: true, created_at: new Date().toISOString() } });
-    render(<VideoStudio {...props} brand={{ name: 'Calm Co', voice: 'gentle and plain', visual: 'film grain' }} />);
+    render(<VideoStudio {...props} brandName="Calm Co" kit={{ ...defaultBrandKit(), visual: 'film grain, muted greens' }} />);
     const prompt = await screen.findByRole('textbox', { name: /Prompt/ }) as HTMLTextAreaElement;
-    expect(prompt.value).toMatch(/women 45–64/); expect(prompt.value).toMatch(/Tone: gentle and plain/);
+    expect(prompt.value).toMatch(/Women 45–64/); expect(prompt.value).toMatch(/Visual language: film grain, muted greens/); expect(prompt.value).toMatch(/for Calm Co/);
     fireEvent.click(screen.getByRole('button', { name: /^4:5/ }));
     expect(screen.getByText(/renders at 9:16/)).toBeTruthy();
     expect(prompt.value).toMatch(/portrait 4:5/);
@@ -68,7 +69,7 @@ describe('VideoStudio', () => {
     rerender(<VideoStudio {...props} problem="Stress" />);
     expect(prompt.value).toBe('My own idea for a sleepy video.');
     fireEvent.click(screen.getByRole('button', { name: /Use suggested/ }));
-    expect(prompt.value).toMatch(/stress/);
+    expect(prompt.value).toMatch(/stress/i);
   });
 
   it('says so when the function is not deployed on this environment', async () => {
