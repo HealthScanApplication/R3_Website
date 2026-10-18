@@ -23,12 +23,14 @@ import { buildRecipesWithAI, computeNutrition, gramsFor, searchCatalogIngredient
 import { APP_STORE_URL } from '../../config/appLinks';
 import { EventProtocolBuilder } from './EventProtocolBuilder';
 import { GuardianModal } from './GuardianModal';
+import { BrandKitFields } from './BrandKitFields';
+import { brandKitLinks, brandKitOf, defaultBrandKit, type BrandKit } from '../../utils/brandKit';
 import { buildProtocolWithAI, foldSleepSteps, saveDraftStep, updateProtocolWithAI, listProtocolItems, createProtocol, findOrCreateProtocol, createProtocolItem, listProtocols, type AdminProtocol } from '../../utils/protocolAdmin';
 import {
   recoverUpsellPayment, createGuideLead, createGuideOffer, createGuideRecipe, createGuideValueRamp, getGuideProfile, getGuideProfileBySlug,
   importGuideProfile, listGuideLeads, listGuideOffers, listGuideRecipes, listGuideValueRamps, listRoutineOwners, upsertGuideOffer, upsertGuideValueRamp, listPublicGuideProfiles, saveGuideProfile, listGuardianReviews, listGuardianReviewRequests, createGuardianReviewRequest, submitGuardianReview, setGuardianReviewStatus, createOfferPayment, confirmOfferPayment, buyUpsellOneClick, getFreeOfferDownload, requestGuardianReview, decideGuardianSite, listAllGuideProfiles, listGuardianSuggestions, setGuardianSuggestionStatus, listPublicGuardianOffers, listReviewSummaries, type AdminGuideProfile, type GuardianSuggestionRow, type GuardianReview, type GuardianReviewRequest, submitGuardianSuggestion, submitGuardianOptIn,
   createGuideLibraryFolder, createGuideLibraryItem, deleteGuideLibraryItem, getGuideFileDownloadUrl,
-  listGuideLibraryFolders, listGuideLibraryItems, replaceGuideBrands, updateGuideRecipe, saveGuideRecipeDraft, listPersonalProtocolPeople, uploadGuideFile, uploadGuideImage,
+  listGuideLibraryFolders, listGuideLibraryItems, replaceGuideBrands, listGuideBrands, updateGuideRecipe, saveGuideRecipeDraft, listPersonalProtocolPeople, uploadGuideFile, uploadGuideImage,
   type GuideBrand, type GuideLead, type GuideLibraryFolder, type GuideLibraryItem, type GuideOffer, type GuideProfile, type GuideRecipe,
   type GuideValueRamp, type ImportedGuideProfile,
 } from '../../utils/guidePortal';
@@ -1529,6 +1531,7 @@ function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasPro
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null>(accountAvatarUrl || null);
   const [activeBrandId, setActiveBrandId] = useState('personal');
+  const [brandKit, setBrandKit] = useState<BrandKit>(defaultBrandKit()); // the active brand's look
   const [brandProfiles, setBrandProfiles] = useState<BrandDraft[]>([{ localId: 'personal', name: name || 'Personal brand', kind: 'personal', logo_url: accountAvatarUrl || null, contact_email: email, whatsapp_phone: '', website_url: '', social_links: {}, language: defaultLanguage(), pricing_region: defaultPricingRegion().region, currency: defaultPricingRegion().currency }]);
   const [bookingProvider, setBookingProvider] = useState<BookingProvider>('ROUTINE³ Booking');
   const [bookingUrl, setBookingUrl] = useState('');
@@ -1600,6 +1603,17 @@ function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasPro
       if (links.expertise_tags) setExpertiseTags(parseExpertiseTags(links.expertise_tags));
       if (links.offer_videos) { try { setOfferVideos(JSON.parse(String(links.offer_videos))); } catch { /* ignore bad JSON */ } }
       if (links.roles) setRoles(String(links.roles).split(',').filter(Boolean));
+    }).catch(() => {});
+  }, [userId]);
+  // Saved brands come back (they were written on publish but never read): the personal brand stays active and
+  // takes its kit; business brands keep theirs for when they are selected.
+  useEffect(() => {
+    listGuideBrands(userId).then((saved) => {
+      if (!saved.length) return;
+      const drafts: BrandDraft[] = saved.map((b) => ({ localId: b.kind === 'personal' ? 'personal' : `brand-${b.id}`, name: b.name, kind: b.kind, logo_url: b.logo_url, contact_email: b.contact_email, whatsapp_phone: b.whatsapp_phone, website_url: b.website_url, social_links: b.social_links || {}, language: b.language, pricing_region: b.pricing_region, currency: b.currency as BrandDraft['currency'] }));
+      setBrandProfiles((current) => [drafts.find((d) => d.localId === 'personal') || current.find((d) => d.localId === 'personal')!, ...drafts.filter((d) => d.localId !== 'personal')].filter(Boolean));
+      const personal = drafts.find((d) => d.localId === 'personal');
+      if (personal) setBrandKit(brandKitOf(personal.social_links));
     }).catch(() => {});
   }, [userId]);
   // Existing items shown under each step ("In your workspace").
@@ -1684,7 +1698,7 @@ function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasPro
       contact_email: contactEmail.trim(),
       whatsapp_phone: whatsappPhone.trim(),
       website_url: websiteUrl.trim(),
-      social_links: { instagram: instagramUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim() },
+      social_links: { instagram: instagramUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), ...brandKitLinks(brandKit) },
       language: mainLanguage,
       pricing_region: pricingRegion,
       currency,
@@ -1697,6 +1711,7 @@ function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasPro
     setInstagramUrl(brand.social_links.instagram || ''); setTiktokUrl(brand.social_links.tiktok || '');
     setYoutubeUrl(brand.social_links.youtube || ''); setLinktreeUrl(brand.social_links.linktree || '');
     setMainLanguage(brand.language); setPricingRegion(brand.pricing_region); setCurrency(brand.currency);
+    setBrandKit(brandKitOf(brand.social_links));
   }
 
   function selectBrand(localId: string) {
@@ -2477,6 +2492,8 @@ function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasPro
         <SocialUrlField label="Linktree" Icon={Link2} value={linktreeUrl} onChange={setLinktreeUrl} placeholder="https://linktr.ee/yourname" />
         <SocialUrlField label="Personal website" Icon={Globe2} value={websiteUrl} onChange={setWebsiteUrl} placeholder="https://yourwebsite.com" />
       </div>
+      {/* The selected brand's look: logo, background, typeface and buttons. */}
+      <BrandKitFields userId={userId} brandName={displayName} kit={brandKit} onChange={setBrandKit} logoUrl={logoUrl} onLogo={setLogoUrl} />
       {importedProfile?.topics.length ? <div style={{ borderTop: `1px solid ${line}`, paddingTop: 18, marginTop: 24 }}><span style={label}>Detected guidance</span><div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>{importedProfile.topics.map((topic) => <span key={topic} style={{ border: `1px solid ${acid}`, color: acid, padding: '6px 9px', fontSize: 10 }}>{topic}</span>)}</div></div> : null}
       <div style={{ border: `1px solid ${line}`, background: panel, padding: 14, marginTop: 24 }}>
         <label style={{ ...label, color: ink }}>How should clients book with you? <span style={{ color: muted }}>· optional</span></label>
@@ -3638,10 +3655,6 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
   const [protocolRevision, setProtocolRevision] = useState(0);
   const [selectedLibraryIds, setSelectedLibraryIds] = useState<string[]>([]);
   const [builderLibrarySources, setBuilderLibrarySources] = useState<GuideLibraryItem[]>([]);
-  const profileBookingProvider = (profile.social_links?.booking_provider as BookingProvider) || 'ROUTINE³ Booking';
-  const profileBookingUrl = profile.social_links?.booking_url || '';
-  const profileLanguage = profile.social_links?.language || 'English';
-  const updateProfileLink = (key: string, value: string) => onProfile({ ...profile, social_links: { ...(profile.social_links || {}), [key]: value } });
   useEffect(() => { if (!user) return; Promise.all([listGuideLeads(user.id), listGuideOffers(user.id), listGuideRecipes(user.id), accessToken ? listProtocols(accessToken, user.id) : Promise.resolve([])]).then(([l,o,r,p]) => { setLeads(l); setOffers(o); setRecipes(r); setProtocols(p); }).catch(() => {}); listGuideValueRamps(user.id).then(setValueRamps).catch(() => setValueRamps([])); listRoutineOwners(user.id, profile.display_name, profile.avatar_url).then(setRoutineOwners).catch(() => {}); }, [user?.id, accessToken]);
   const metric = useMemo(() => [{ n: leads.length, l: 'Leads' }, { n: valueRamps.length, l: 'Offers' }, { n: offers.length + recipes.length + protocols.length, l: 'Items' }, { n: protocols.length, l: 'R3 Protocols' }], [leads.length, offers.length, recipes.length, protocols.length, valueRamps.length]);
   async function quickAdd() {
@@ -3674,32 +3687,8 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
         {createError && <p role="alert" style={{ color: '#E8B86A' }}>{createError}</p>}
         {tab === 'admin' && isAdminUser && <GuardianAdminPanel />}
         {tab === 'home' && <><div style={{ ...label, color: acid }}>Guardian workspace</div><h1 style={{ fontFamily: serif, fontWeight: 300, fontSize: 'clamp(44px,6vw,76px)', lineHeight: .95, margin: '15px 0 18px' }}>Build what people follow.</h1><p style={{ color: muted, maxWidth: 650, lineHeight: 1.6 }}>Create reusable offers, then arrange them into as many audience-specific offer paths as you need.</p><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', borderTop: `1px solid ${line}`, marginTop: 55 }}>{metric.map((m) => <div key={m.l} style={{ borderRight: `1px solid ${line}`, padding: '25px 18px 25px 0' }}><div style={{ fontFamily: serif, fontSize: 42 }}>{m.n}</div><div style={{ ...label, margin: '7px 0 0' }}>{m.l}</div></div>)}</div><div style={{ marginTop: 48, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 14 }}>{nav.slice(1,5).map(({ id, label: title }) => <button key={id} onClick={() => setTab(id)} style={{ border: `1px solid ${line}`, background: panel, color: ink, minHeight: 210, padding: 22, textAlign: 'left', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', position: 'relative', overflow: 'hidden' }}><span><img src={guidePlates[id]} alt="" style={{ width: 86, height: 86, objectFit: 'contain', filter: 'grayscale(1) contrast(.9) brightness(.75)', opacity: .82 }} /><span style={{ display: 'block', fontFamily: serif, fontSize: 25, fontWeight: 300, marginTop: 12 }}>{title}</span></span><ChevronRight size={17} color={muted} /></button>)}</div></>}
-        {tab === 'profile' && <>
-          <h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 350 }}>Site builder</h1>
-          <div style={{ maxWidth: 680 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
-              <div><label style={label}>Public name</label><input style={input} value={profile.display_name} onChange={(e) => onProfile({ ...profile, display_name: e.target.value })} /></div>
-              <div><label style={label}>Main language</label><select style={input} value={profileLanguage} onChange={(event) => updateProfileLink('language', event.target.value)}>{languageOptions.map((language) => <option key={language.code}>{language.name}</option>)}</select></div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12, marginTop: 18 }}>
-              <div><label style={label}>Contact email</label><input type="email" style={input} value={profile.contact_email || ''} onChange={(e) => onProfile({ ...profile, contact_email: e.target.value })} /></div>
-              <div><label style={label}>WhatsApp number <span style={{ color: muted }}>· optional</span></label><input type="tel" style={input} value={profile.whatsapp_phone || ''} onChange={(e) => onProfile({ ...profile, whatsapp_phone: e.target.value })} /></div>
-            </div>
-            <div style={{ border: `1px solid ${line}`, background: panel, padding: 14, marginTop: 18 }}>
-              <label style={{ ...label, color: ink }}>Booking provider</label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(135px,1fr))', gap: 7, marginBottom: 10 }}>
-                {bookingProviders.map((provider) => <button type="button" key={provider.value} onClick={() => updateProfileLink('booking_provider', provider.value)} style={{ ...btn, height: 38, padding: '0 9px', background: profileBookingProvider === provider.value ? acid : 'transparent', color: profileBookingProvider === provider.value ? black : ink, borderColor: profileBookingProvider === provider.value ? acid : line, fontSize: 8, whiteSpace: 'nowrap', minWidth: 0 }}>{provider.label}</button>)}
-              </div>
-              <label style={label}>Booking page URL</label>
-              <input type="url" style={input} value={profileBookingUrl} onChange={(e) => updateProfileLink('booking_url', e.target.value)} placeholder={bookingProviders.find((provider) => provider.value === profileBookingProvider)?.placeholder} />
-            </div>
-            <label style={{ ...label, marginTop: 18 }}>Headline</label><input style={input} value={profile.headline} onChange={(e) => onProfile({ ...profile, headline: e.target.value })} />
-            <label style={{ ...label, marginTop: 18 }}>Expertise tags <span style={{ color: muted }}>· separate with commas</span></label><input style={input} value={profile.social_links?.expertise_tags || ''} onChange={(e) => updateProfileLink('expertise_tags', e.target.value)} placeholder="Hypnosis, compassionate care, equity" />
-            <div style={{ marginTop: 8 }}><ExpertiseTags tags={parseExpertiseTags(profile.social_links?.expertise_tags)} color={acid} compact /></div>
-            <label style={{ ...label, marginTop: 18 }}>Bio</label><textarea style={{ ...input, height: 150, paddingTop: 12 }} value={profile.bio} onChange={(e) => onProfile({ ...profile, bio: e.target.value })} />
-            <button onClick={async () => onProfile(await saveGuideProfile(profile))} style={{ ...btn, marginTop: 18 }}>Save profile</button>
-          </div>
-        </>}
+        {/* Site builder: the same profile and brand fields as setup step 01. */}
+        {tab === 'profile' && user && <><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 350 }}>Site builder</h1><SiteProfileForm userId={user.id} profile={profile} onProfile={onProfile} /></>}
         {tab === 'library' && user && <GuideLibrary guideId={user.id} selectedIds={selectedLibraryIds} onSelectedIds={setSelectedLibraryIds} onUse={(destination, sources) => { setBuilderLibrarySources(sources); setTab(destination === 'protocol' ? 'protocols' : 'offer_builder'); }} />}
         {(tab === 'offer_builder' || tab === 'value_ramps') && !protocolId && !recipeId && <div role="tablist" aria-label="Offers" style={{ display: 'inline-flex', border: `1px solid ${line}`, marginBottom: 18 }}>{([['offer_builder', 'Offer builder'], ['value_ramps', 'Offer paths']] as const).map(([id, text], index) => <button type="button" role="tab" key={id} aria-selected={tab === id} onClick={() => setTab(id)} style={{ height: 36, padding: '0 16px', border: 0, borderLeft: index ? `1px solid ${line}` : 0, background: tab === id ? ink : 'transparent', color: tab === id ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer' }}>{text}</button>)}</div>}
         {tab === 'offer_builder' && <OfferBuilder profile={profile} protocols={protocols} offers={offers} recipes={recipes} librarySources={builderLibrarySources} onOpenProtocols={() => setTab('protocols')} onCreated={(offer) => setOffers((current) => [offer, ...current])} />}
@@ -3766,6 +3755,127 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
           <ProtocolAIBar key={editorProtocolId || protocolId} accessToken={accessToken} protocolId={editorProtocolId || protocolId} guideId={user.id} onUpdated={() => setProtocolRevision((value) => value + 1)} />
         </div>}
       </main>
+    </div>
+  </div>;
+}
+
+/**
+ * Site builder profile: the same fields as setup step 01 (brand picker, name and image, language, pricing region,
+ * contact, socials, brand kit, booking), plus headline, expertise tags and bio for the personal brand. The personal
+ * brand edits the profile; a business brand edits its own guide_brands row. Save writes the profile and all brands.
+ */
+type SiteBrand = Omit<GuideBrand, 'id' | 'guide_id'> & { key: string };
+function SiteProfileForm({ userId, profile, onProfile }: { userId: string; profile: GuideProfile; onProfile: (p: GuideProfile) => void }) {
+  const links = profile.social_links || {};
+  const setLinks = (patch: Record<string, string>) => onProfile({ ...profile, social_links: { ...links, ...patch } });
+  const [brands, setBrands] = useState<SiteBrand[]>([]);            // business brands
+  const [personalKit, setPersonalKit] = useState<BrandKit>(defaultBrandKit());
+  const [active, setActive] = useState('personal');
+  const [busy, setBusy] = useState<'save' | 'upload' | null>(null);
+  const [message, setMessage] = useState('');
+  useEffect(() => {
+    listGuideBrands(userId).then((saved) => {
+      const personal = saved.find((b) => b.kind === 'personal');
+      if (personal) setPersonalKit(brandKitOf(personal.social_links));
+      setBrands(saved.filter((b) => b.kind !== 'personal').map(({ id, guide_id, ...b }) => ({ ...b, key: `brand-${id}` })));
+    }).catch(() => {});
+  }, [userId]);
+  const biz = brands.find((b) => b.key === active);
+  const patchBiz = (patch: Partial<SiteBrand>) => setBrands((list) => list.map((b) => (b.key === active ? { ...b, ...patch } : b)));
+  // One view of the fields for whichever brand is selected.
+  const v = biz
+    ? { name: biz.name, image: biz.logo_url, logo: biz.logo_url, email: biz.contact_email, whatsapp: biz.whatsapp_phone, language: biz.language || 'English', region: biz.pricing_region || 'United Kingdom', social: { ...biz.social_links, website: biz.website_url }, kit: brandKitOf(biz.social_links) }
+    : { name: profile.display_name, image: profile.avatar_url, logo: links.logo_url || null, email: profile.contact_email || '', whatsapp: profile.whatsapp_phone || '', language: links.language || 'English', region: links.pricing_region || 'United Kingdom', social: links, kit: personalKit };
+  const set = {
+    name: (x: string) => (biz ? patchBiz({ name: x }) : onProfile({ ...profile, display_name: x })),
+    image: (x: string | null) => (biz ? patchBiz({ logo_url: x }) : onProfile({ ...profile, avatar_url: x })),
+    logo: (x: string | null) => (biz ? patchBiz({ logo_url: x }) : setLinks({ logo_url: x || '' })),
+    email: (x: string) => (biz ? patchBiz({ contact_email: x }) : onProfile({ ...profile, contact_email: x })),
+    whatsapp: (x: string) => (biz ? patchBiz({ whatsapp_phone: x }) : onProfile({ ...profile, whatsapp_phone: x })),
+    language: (x: string) => (biz ? patchBiz({ language: x }) : setLinks({ language: x })),
+    region: (x: string) => { const o = pricingRegions.find((r) => r.region === x); if (!o) return; biz ? patchBiz({ pricing_region: x, currency: o.currency }) : setLinks({ pricing_region: x, currency: o.currency }); },
+    social: (key: string, x: string) => (biz ? (key === 'website' ? patchBiz({ website_url: x }) : patchBiz({ social_links: { ...biz.social_links, [key]: x } })) : setLinks({ [key]: x })),
+    kit: (kit: BrandKit) => (biz ? patchBiz({ social_links: { ...biz.social_links, ...brandKitLinks(kit) } }) : setPersonalKit(kit)),
+  };
+  const addBrand = () => {
+    const key = `brand-new-${Date.now()}`;
+    setBrands((list) => [...list, { key, name: 'New brand', kind: 'business', logo_url: null, contact_email: profile.contact_email || '', whatsapp_phone: '', website_url: '', social_links: {}, language: v.language, pricing_region: v.region, currency: pricingRegions.find((r) => r.region === v.region)?.currency || 'GBP', is_primary: false }]);
+    setActive(key);
+  };
+  const removeBrand = () => { setBrands((list) => list.filter((b) => b.key !== active)); setActive('personal'); };
+  const uploadImage = async (file?: File) => {
+    if (!file) return;
+    setBusy('upload'); setMessage('');
+    try { set.image(await uploadGuideImage(userId, file)); } catch (e) { setMessage((e as Error).message || 'Upload failed.'); } finally { setBusy(null); }
+  };
+  const save = async () => {
+    setBusy('save'); setMessage('');
+    try {
+      const saved = await saveGuideProfile(profile);
+      onProfile(saved);
+      const l = saved.social_links || {};
+      await replaceGuideBrands(userId, [
+        { name: saved.display_name, kind: 'personal', logo_url: l.logo_url || saved.avatar_url || null, contact_email: saved.contact_email || '', whatsapp_phone: saved.whatsapp_phone || '', website_url: l.website || '',
+          social_links: { instagram: l.instagram || '', tiktok: l.tiktok || '', youtube: l.youtube || '', linktree: l.linktree || '', ...brandKitLinks(personalKit) },
+          language: l.language || 'English', pricing_region: l.pricing_region || 'United Kingdom', currency: l.currency || 'GBP', is_primary: !brands.some((b) => b.is_primary) },
+        ...brands.map(({ key, ...b }) => b),
+      ]);
+      setMessage('Saved.');
+    } catch (e) { setMessage(`Could not save: ${(e as Error).message || 'try again'}`); }
+    finally { setBusy(null); }
+  };
+  const isPersonal = !biz;
+  return <div style={{ maxWidth: 820 }}>
+    <div aria-label="Publishing brand" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '0 0 16px', marginBottom: 20, borderBottom: `1px solid ${line}` }}>
+      <span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', marginRight: 4 }}>Publishing as</span>
+      {[{ key: 'personal', name: profile.display_name || 'Personal brand', img: profile.avatar_url }, ...brands.map((b) => ({ key: b.key, name: b.name || 'Untitled brand', img: b.logo_url }))].map((b) => <button key={b.key} type="button" aria-pressed={active === b.key} onClick={() => setActive(b.key)} style={{ border: `1px solid ${active === b.key ? ink : line}`, background: 'transparent', color: active === b.key ? ink : muted, padding: '5px 9px', fontFamily: sans, fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+        <span style={{ width: 18, height: 18, border: `1px solid ${line}`, overflow: 'hidden', display: 'grid', placeItems: 'center', fontFamily: serif, fontSize: 10 }}>{b.img ? <img src={b.img} alt="" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : b.name.trim().charAt(0)}</span>{b.name}</button>)}
+      <button type="button" onClick={addBrand} style={{ border: 0, background: 'transparent', color: muted, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}><Plus size={12} />Add brand</button>
+      {!isPersonal && <button type="button" onClick={removeBrand} style={{ border: 0, background: 'transparent', color: muted, fontFamily: sans, fontSize: 10, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>Remove brand</button>}
+    </div>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
+      <div><label style={label}>{isPersonal ? 'Your public name' : 'Brand name'}</label><input style={input} value={v.name} onChange={(e) => set.name(e.target.value)} /></div>
+      <div><label style={label}>Main language</label><div style={{ position: 'relative' }}><span aria-hidden="true" style={{ position: 'absolute', zIndex: 1, left: 11, top: 11, fontSize: 16 }}>{languageOptions.find((l) => l.name === v.language)?.flag || '🌐'}</span><select aria-label="Main language" style={{ ...input, paddingLeft: 42 }} value={v.language} onChange={(e) => set.language(e.target.value)}>{languageOptions.map((l) => <option key={l.code} value={l.name}>{l.name}</option>)}</select></div></div>
+      <div><label style={label}>Pricing region</label><select aria-label="Pricing region" style={input} value={v.region} onChange={(e) => set.region(e.target.value)}>{pricingRegions.map((r) => <option key={r.region} value={r.region}>{r.label}</option>)}</select></div>
+    </div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18 }}>
+      {v.image ? <img src={v.image} alt="Profile" referrerPolicy="no-referrer" style={{ width: 36, height: 36, objectFit: 'cover', border: `1px solid ${line}` }} /> : <span aria-hidden="true" style={{ width: 36, height: 36, border: `1px solid ${line}` }} />}
+      <span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{isPersonal ? 'Profile image' : 'Brand image'} · optional</span>
+      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>
+        {busy === 'upload' ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}{busy === 'upload' ? 'Uploading' : v.image ? 'Replace' : 'Upload'}
+        <input type="file" aria-label={isPersonal ? 'Upload profile image' : 'Upload brand image'} accept="image/jpeg,image/png,image/webp" onChange={(e) => uploadImage(e.target.files?.[0])} style={{ display: 'none' }} />
+      </label>
+    </div>
+    <p style={{ color: muted, fontSize: 10, lineHeight: 1.5, margin: '9px 0 0' }}>Language applies to your page and content. Pricing region sets the currency for every paid stage.</p>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12, marginTop: 18 }}>
+      <div><label style={label}>Contact email</label><input type="email" style={input} value={v.email} onChange={(e) => set.email(e.target.value)} /></div>
+      <div><label style={label}>WhatsApp number <span style={{ color: muted }}>· optional</span></label><input type="tel" inputMode="tel" style={input} value={v.whatsapp} onChange={(e) => set.whatsapp(e.target.value)} placeholder="+44 7700 900000" /></div>
+    </div>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12, marginTop: 22 }}>
+      <SocialUrlField label="Instagram" Icon={Instagram} value={v.social.instagram || ''} onChange={(x) => set.social('instagram', x)} placeholder="https://instagram.com/yourname" />
+      <SocialUrlField label="TikTok" Icon={AtSign} value={v.social.tiktok || ''} onChange={(x) => set.social('tiktok', x)} placeholder="https://tiktok.com/@yourname" />
+      <SocialUrlField label="YouTube" Icon={Youtube} value={v.social.youtube || ''} onChange={(x) => set.social('youtube', x)} placeholder="https://youtube.com/@yourname" />
+      <SocialUrlField label="Linktree" Icon={Link2} value={v.social.linktree || ''} onChange={(x) => set.social('linktree', x)} placeholder="https://linktr.ee/yourname" />
+      <SocialUrlField label={isPersonal ? 'Personal website' : 'Website'} Icon={Globe2} value={v.social.website || ''} onChange={(x) => set.social('website', x)} placeholder="https://yourwebsite.com" />
+    </div>
+    <BrandKitFields userId={userId} brandName={v.name} kit={v.kit} onChange={set.kit} logoUrl={v.logo} onLogo={set.logo} />
+    {isPersonal && <>
+      <div style={{ border: `1px solid ${line}`, background: panel, padding: 14, marginTop: 24 }}>
+        <label style={{ ...label, color: ink }}>How should clients book with you? <span style={{ color: muted }}>· optional</span></label>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(135px,1fr))', gap: 7, marginBottom: 10 }}>
+          {bookingProviders.map((p) => { const on = (links.booking_provider || 'ROUTINE³ Booking') === p.value; return <button type="button" key={p.value} onClick={() => setLinks({ booking_provider: p.value })} style={{ ...btn, height: 38, padding: '0 9px', background: on ? acid : 'transparent', color: on ? black : ink, borderColor: on ? acid : line, fontSize: 8, whiteSpace: 'nowrap', minWidth: 0 }}>{p.label}</button>; })}
+        </div>
+        <label style={label}>Booking page URL</label>
+        <input type="url" style={input} value={links.booking_url || ''} onChange={(e) => setLinks({ booking_url: e.target.value })} placeholder={bookingProviders.find((p) => p.value === (links.booking_provider || 'ROUTINE³ Booking'))?.placeholder} />
+      </div>
+      <label style={{ ...label, marginTop: 18 }}>Headline</label><input style={input} value={profile.headline} onChange={(e) => onProfile({ ...profile, headline: e.target.value })} />
+      <label style={{ ...label, marginTop: 18 }}>Expertise tags <span style={{ color: muted }}>· separate with commas</span></label><input style={input} value={links.expertise_tags || ''} onChange={(e) => setLinks({ expertise_tags: e.target.value })} placeholder="Hypnosis, compassionate care, equity" />
+      <div style={{ marginTop: 8 }}><ExpertiseTags tags={parseExpertiseTags(links.expertise_tags)} color={acid} compact /></div>
+      <label style={{ ...label, marginTop: 18 }}>Bio</label><textarea style={{ ...input, height: 150, paddingTop: 12 }} value={profile.bio} onChange={(e) => onProfile({ ...profile, bio: e.target.value })} />
+    </>}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18 }}>
+      <button type="button" onClick={save} disabled={busy === 'save'} style={btn}>{busy === 'save' ? 'Saving…' : 'Save profile and brands'}</button>
+      {message && <span role={message.startsWith('Could not') ? 'alert' : 'status'} style={{ color: message.startsWith('Could not') ? '#E8B86A' : acid, fontSize: 12 }}>{message}</span>}
     </div>
   </div>;
 }

@@ -305,6 +305,13 @@ export async function createGuideValueRamp(guideId: string, ramp: Pick<GuideValu
   return data as GuideValueRamp;
 }
 
+/** The Guardian's saved brands (personal first, then business brands), each with its own brand kit in social_links. */
+export async function listGuideBrands(guideId: string): Promise<GuideBrand[]> {
+  const { data, error } = await db().from('guide_brands').select('*').eq('guide_id', guideId);
+  if (error) throw error;
+  return ((data || []) as GuideBrand[]).sort((a, b) => Number(b.kind === 'personal') - Number(a.kind === 'personal') || a.name.localeCompare(b.name));
+}
+
 export async function replaceGuideBrands(guideId: string, brands: Omit<GuideBrand, 'id' | 'guide_id'>[]): Promise<GuideBrand[]> {
   const { error: deleteError } = await db().from('guide_brands').delete().eq('guide_id', guideId);
   if (deleteError) throw deleteError;

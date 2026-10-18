@@ -11,6 +11,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, Download, ExternalLink } from 'lucide-react';
 import QRCode from 'qrcode';
+import { ensureBrandFont, type ButtonColours } from '../../utils/brandKit';
+
+/** A Guardian brand's look on posts: its typeface for headline and button, CTA colours and logo. */
+export interface PostBrand { name: string; font: string; cta: ButtonColours; logo: string | null }
 
 const FIGMA_TEMPLATE = 'https://www.figma.com/design/6HS7WXK5SFoLh41AkzKzMZ/--R%C2%B3---Routine%C2%B3-%E2%80%A2-Libray?node-id=12-886';
 const FONT_HREF = 'https://fonts.googleapis.com/css2?family=Italiana&family=Inter:wght@600&family=Nanum+Myeongjo&display=swap';
@@ -104,11 +108,14 @@ export function drawQr(ctx: CanvasRenderingContext2D, text: string, x: number, y
   ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
 }
 
-async function drawPost(canvas: HTMLCanvasElement, fmt: (typeof FORMATS)[number], bg: string, copy: { headline: string; subline: string; cta: string; credit: string; qr?: string }) {
+async function drawPost(canvas: HTMLCanvasElement, fmt: (typeof FORMATS)[number], bg: string, copy: { headline: string; subline: string; cta: string; credit: string; qr?: string; brand?: PostBrand | null }) {
   const { w, h } = fmt;
   canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext('2d')!;
-  await Promise.all([document.fonts.load('111px Italiana'), document.fonts.load('52px "Nanum Myeongjo"'), document.fonts.load('600 28px Inter')]).catch(() => {});
+  const brand = copy.brand || null;
+  const headFont = brand ? `"${brand.font}"` : 'Italiana', ctaFont = brand ? `"${brand.font}"` : 'Inter';
+  if (brand) ensureBrandFont(brand.font);
+  await Promise.all([document.fonts.load(`111px ${headFont}`), document.fonts.load('52px "Nanum Myeongjo"'), document.fonts.load(`600 28px ${ctaFont}`)]).catch(() => {});
   const img = new Image(); img.src = bg;
   await new Promise((resolve) => { img.onload = resolve; img.onerror = resolve; });
   ctx.fillStyle = '#EFE6DB'; ctx.fillRect(0, 0, w, h);
@@ -130,7 +137,7 @@ async function drawPost(canvas: HTMLCanvasElement, fmt: (typeof FORMATS)[number]
   const x = 91 * s;
   ctx.fillStyle = '#111111'; ctx.textBaseline = 'alphabetic';
   // CTA box size first: the QR sits beside it, and the text above wraps short of the QR.
-  ctx.font = `600 ${28 * s}px Inter`;
+  ctx.font = `600 ${28 * s}px ${ctaFont}`;
   const label = copy.cta.toUpperCase();
   const tracking = 28 * s * 0.3;
   const textW = [...label].reduce((sum, ch) => sum + ctx.measureText(ch).width + tracking, -tracking);
@@ -140,7 +147,7 @@ async function drawPost(canvas: HTMLCanvasElement, fmt: (typeof FORMATS)[number]
   const qrFit = copy.qr ? Math.min((fmt.id === 'thumb' ? 220 : 260) * s, right - (x + boxW + 36 * s)) : 0;
   const qrSize = qrFit >= 150 * s ? qrFit : 0;
   const maxW = Math.min((fmt.id === 'thumb' ? 640 : 743) * s, qrSize ? right - qrSize - 36 * s - x : Infinity);
-  ctx.font = `${111 * s}px Italiana`;
+  ctx.font = `${111 * s}px ${headFont}`;
   const head = wrap(ctx, copy.headline, maxW);
   ctx.font = `${52 * s}px "Nanum Myeongjo", serif`;
   const sub = copy.subline ? wrap(ctx, copy.subline, maxW) : [];
@@ -148,17 +155,18 @@ async function drawPost(canvas: HTMLCanvasElement, fmt: (typeof FORMATS)[number]
   // 9:16 keeps the Figma position (y 1271) unless a long headline/subline would push the CTA off the frame;
   // other ratios sit the block 93px from the bottom.
   let y = fmt.id === 'story' ? Math.min(1271 * s, h - 93 * s - blockH) : fmt.id === 'thumb' ? (h - blockH) / 2 : h - 93 * s - blockH;
-  ctx.font = `${111 * s}px Italiana`;
+  ctx.font = `${111 * s}px ${headFont}`;
   for (const line of head) { y += 116 * s; ctx.fillText(line, x, y - 22 * s); }
   y += 30 * s;
   ctx.font = `${52 * s}px "Nanum Myeongjo", serif`;
   for (const line of sub) { y += 66 * s; ctx.fillText(line, x, y - 14 * s); }
   y += 52 * s;
-  // CTA box: Inter SemiBold 28 / 30% tracking, 2px black border on white.
-  ctx.font = `600 ${28 * s}px Inter`;
-  ctx.fillStyle = '#FFFFFF'; ctx.fillRect(x, y, boxW, boxH);
-  ctx.lineWidth = 2 * s; ctx.strokeStyle = '#111111'; ctx.strokeRect(x, y, boxW, boxH);
-  ctx.fillStyle = '#111111';
+  // CTA box: Inter SemiBold 28 / 30% tracking, 2px black border on white; a brand swaps in its font and CTA colours.
+  ctx.font = `600 ${28 * s}px ${ctaFont}`;
+  const btn = brand?.cta || { background: '#FFFFFF', color: '#111111', border: '#111111' };
+  ctx.fillStyle = btn.background; ctx.fillRect(x, y, boxW, boxH);
+  ctx.lineWidth = 2 * s; ctx.strokeStyle = btn.border; ctx.strokeRect(x, y, boxW, boxH);
+  ctx.fillStyle = btn.color;
   let cx = x + 32 * s;
   for (const ch of label) { ctx.fillText(ch, cx, y + boxH / 2 + 10 * s); cx += ctx.measureText(ch).width + tracking; }
   if (copy.qr && qrSize) drawQr(ctx, copy.qr, right - qrSize, y + boxH - qrSize, qrSize);
@@ -170,9 +178,20 @@ async function drawPost(canvas: HTMLCanvasElement, fmt: (typeof FORMATS)[number]
     ctx.fillStyle = 'rgba(255,255,255,0.88)'; ctx.fillRect(x, 70 * s, tw + pad * 2, 44 * s);
     ctx.fillStyle = '#111111'; ctx.fillText(t, x + pad, 70 * s + 29 * s);
   }
+  // Brand logo, top right on a white tile. CORS-enabled so the canvas can still be downloaded; skipped if it fails.
+  if (brand?.logo) {
+    const logo = new Image(); logo.crossOrigin = 'anonymous'; logo.src = brand.logo;
+    const ok = await new Promise<boolean>((resolve) => { logo.onload = () => resolve(true); logo.onerror = () => resolve(false); });
+    if (ok && logo.naturalWidth) {
+      const lh = 64 * s, lw = Math.min(240 * s, lh * logo.naturalWidth / logo.naturalHeight), pad = 10 * s;
+      const lx = w - 91 * s - lw - pad * 2, ly = 60 * s;
+      ctx.fillStyle = '#FFFFFF'; ctx.fillRect(lx, ly, lw + pad * 2, lh + pad * 2);
+      ctx.drawImage(logo, lx + pad, ly + pad, lw, lh);
+    }
+  }
 }
 
-export function ContentStudio({ creator, audience, problem, offers, siteUrl, heading = 'Create posts for this offer path' }: { creator: string; audience: string; problem: string; offers: StudioOffer[]; siteUrl: string; heading?: string }) {
+export function ContentStudio({ creator, audience, problem, offers, siteUrl, heading = 'Create posts for this offer path', brand = null }: { creator: string; audience: string; problem: string; offers: StudioOffer[]; siteUrl: string; heading?: string; brand?: PostBrand | null }) {
   // Template fonts load from Google Fonts; redraw once they are registered, or the first frame uses a fallback.
   const [fontsReady, setFontsReady] = useState(0);
   useEffect(() => {
@@ -202,8 +221,8 @@ export function ContentStudio({ creator, audience, problem, offers, siteUrl, hea
   const credit = creator ? `Guidance by ${creator}` : '';
   const fullUrl = siteUrl.startsWith('http') ? siteUrl : `https://routine3.com${siteUrl}`;
   useEffect(() => {
-    if (canvasRef.current) drawPost(canvasRef.current, fmt, bgUrl(background), { headline, subline, cta, credit, qr: fullUrl });
-  }, [fmt, background, headline, subline, cta, credit, fullUrl, fontsReady]);
+    if (canvasRef.current) drawPost(canvasRef.current, fmt, bgUrl(background), { headline, subline, cta, credit, qr: fullUrl, brand });
+  }, [fmt, background, headline, subline, cta, credit, fullUrl, fontsReady, brand]);
   const tag = solution.replace(/\s+/g, '');
   const captions: Record<string, string> = {
     TikTok: `${problem}? Here's a simple routine for ${solution} for ${audience.toLowerCase()}. ${offer.free ? 'Free' : 'Start'} "${offer.title}" by ${creator}. Link in bio. #${tag} #routine #wellbeing`,

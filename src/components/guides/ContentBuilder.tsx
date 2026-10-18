@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Clapperboard } from 'lucide-react';
-import { ContentStudio, type StudioOffer } from './ContentStudio';
+import { ContentStudio, type PostBrand, type StudioOffer } from './ContentStudio';
 import type { AdminProtocol } from '../../utils/protocolAdmin';
-import type { GuideOffer, GuideProfile, GuideRecipe } from '../../utils/guidePortal';
+import { listGuideBrands, type GuideBrand, type GuideOffer, type GuideProfile, type GuideRecipe } from '../../utils/guidePortal';
+import { brandKitOf, ctaColours } from '../../utils/brandKit';
 
 // Guardian dark tokens (same values as GuidePortal.tsx).
 const ink = '#F5F2EA';
@@ -49,6 +50,23 @@ export function ContentBuilder({ profile, offers, protocols, recipes }: { profil
   }, [source, picked?.id, offers, protocols, recipes, problem, profile.display_name]);
 
   const siteUrl = `/guardians/${profile.slug}`;
+  // Brand look: the R³ template, or any saved brand that has a brand kit (defaults to the primary brand's kit).
+  const [brands, setBrands] = useState<GuideBrand[]>([]);
+  const [brandId, setBrandId] = useState<string | null>(null);
+  useEffect(() => {
+    listGuideBrands(profile.user_id).then((list) => {
+      const kitted = list.filter((b) => b.social_links?.brand_font);
+      setBrands(kitted);
+      const primary = kitted.find((b) => b.is_primary) || kitted.find((b) => b.kind === 'personal');
+      if (primary?.id) setBrandId((current) => current ?? primary.id!);
+    }).catch(() => setBrands([]));
+  }, [profile.user_id]);
+  const postBrand = useMemo<PostBrand | null>(() => {
+    const b = brands.find((x) => x.id === brandId);
+    if (!b) return null;
+    const kit = brandKitOf(b.social_links);
+    return { name: b.name, font: kit.font, cta: ctaColours(kit).primary, logo: b.logo_url };
+  }, [brands, brandId]);
 
   return <div>
     <div style={{ display: 'flex', gap: 18, alignItems: 'center', marginBottom: 26 }}>
@@ -66,8 +84,12 @@ export function ContentBuilder({ profile, offers, protocols, recipes }: { profil
         </label>}
         <label><span style={label}>Audience</span><input style={input} value={audience} onChange={(e) => setAudience(e.target.value)} /></label>
         <label><span style={label}>Problem or goal</span><input style={input} value={problem} onChange={(e) => setProblem(e.target.value)} /></label>
+        <label><span style={label}>Brand look</span><select aria-label="Brand look" style={input} value={brandId || ''} onChange={(e) => setBrandId(e.target.value || null)}>
+          <option value="">ROUTINE³ template</option>
+          {brands.map((b) => <option key={b.id} value={b.id}>{b.name} · {brandKitOf(b.social_links).font}</option>)}
+        </select>{!brands.length && <span style={{ display: 'block', color: muted, fontSize: 10, marginTop: 5 }}>Add a brand kit in the Site builder to use your font, colours and logo.</span>}</label>
       </div>
     </div>
-    <ContentStudio key={`${source}-${picked?.id || ''}`} creator={profile.display_name} audience={audience} problem={problem} siteUrl={siteUrl} offers={studioOffers} heading={picked && source !== 'none' ? `Create posts about ${picked.name}` : 'Create posts about your topic'} />
+    <ContentStudio key={`${source}-${picked?.id || ''}`} creator={profile.display_name} audience={audience} problem={problem} siteUrl={siteUrl} offers={studioOffers} heading={picked && source !== 'none' ? `Create posts about ${picked.name}` : 'Create posts about your topic'} brand={postBrand} />
   </div>;
 }
