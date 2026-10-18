@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Clapperboard } from 'lucide-react';
 import { ContentStudio, type PostBrand, type StudioOffer } from './ContentStudio';
+import { VideoStudio } from './VideoStudio';
+import { brandStyleOf, type BrandStyle } from '../../utils/videoPrompt';
 import type { AdminProtocol } from '../../utils/protocolAdmin';
 import { listGuideBrands, type GuideBrand, type GuideOffer, type GuideProfile, type GuideRecipe } from '../../utils/guidePortal';
 import { brandKitOf, ctaColours } from '../../utils/brandKit';
@@ -75,11 +77,16 @@ export function ContentBuilder({ profile, offers, protocols, recipes }: { profil
     const kit = brandKitOf(b.social_links);
     return { name: b.name, font: kit.font, cta: ctaColours(kit).primary, logo: b.logo_url };
   }, [brands, brandId]);
+  // The same brand's tone and visual language for video prompts (voice/visual keys are read when the brand has them).
+  const videoBrand = useMemo<BrandStyle | null>(() => {
+    const b = brands.find((x) => x.id === brandId);
+    return b ? brandStyleOf(b.name, b.social_links, brandKitOf(b.social_links)) : null;
+  }, [brands, brandId]);
 
   return <div>
     <div style={{ display: 'flex', gap: 18, alignItems: 'center', marginBottom: 26 }}>
       <div style={{ width: 64, height: 64, border: `1px solid ${line}`, display: 'grid', placeItems: 'center' }}><Clapperboard size={26} color={acid} /></div>
-      <div><div style={{ ...label, color: acid, margin: 0 }}>Build</div><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 300, margin: '6px 0 4px' }}>Content builder</h1><p style={{ color: muted, margin: 0, fontSize: 13, maxWidth: 640, lineHeight: 1.5 }}>Create stories, posts and thumbnails in the R³ template, about an offer, a Protocol, a recipe, or just your topic.</p></div>
+      <div><div style={{ ...label, color: acid, margin: 0 }}>Build</div><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 300, margin: '6px 0 4px' }}>Content builder</h1><p style={{ color: muted, margin: 0, fontSize: 13, maxWidth: 640, lineHeight: 1.5 }}>Create stories, posts, thumbnails and short videos about an offer, a Protocol, a recipe, or just your topic.</p></div>
     </div>
     <div style={{ border: `1px solid ${line}`, background: panel, padding: 16, marginBottom: 14, display: 'grid', gap: 14 }}>
       <TargetPicker audience={audienceSel} onAudience={setAudienceSel} focus={focus} onFocus={(f) => { setFocus(f); setPickedId(''); }} />
@@ -105,5 +112,6 @@ export function ContentBuilder({ profile, offers, protocols, recipes }: { profil
       </div>
     </div>
     <ContentStudio key={`${source}-${picked?.id || ''}`} creator={profile.display_name} audience={audience} problem={problem} siteUrl={siteUrl} offers={studioOffers} heading={picked && source !== 'none' ? `Create posts about ${picked.name}` : 'Create posts about your topic'} brand={postBrand} />
+    <VideoStudio creator={profile.display_name} audience={audience} problem={problem} offer={source !== 'none' ? studioOffers[0]?.title : undefined} brand={videoBrand} brandId={brandId} />
   </div>;
 }
