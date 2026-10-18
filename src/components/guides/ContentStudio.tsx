@@ -70,11 +70,23 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 }
 
 /**
- * Apple-style QR on a white rounded card: round dots, rounded-square finder eyes and an R³ mark in the
- * middle. The mark covers ~6% of the code, well inside error correction Q (25%); Q keeps the grid
- * coarser than H, so it still reads when the post is shown small on a screen or screenshotted.
- * The card keeps the standard 4-module quiet zone. From version 7 an alignment pattern sits in the centre,
- * so the mark is only drawn below version 7 (versions 2–6 have their one alignment pattern near a corner).
+ * The link a post's QR encodes. A Guardian page becomes the short `HTTPS://ROUTINE3.COM/G/<SLUG>`: upper case
+ * fits QR alphanumeric mode (5.5 bits a character instead of 8), so the code drops a version or two and the
+ * dots get bigger. The site lower-cases /g/<slug> back to /guardians/<slug>. Anything else is encoded as is.
+ */
+export function qrLink(siteUrl: string): string {
+  const slug = siteUrl.match(/^(?:https:\/\/routine3\.com)?\/guardians\/([a-z0-9-]+)$/)?.[1];
+  if (slug) return `HTTPS://ROUTINE3.COM/G/${slug.toUpperCase()}`;
+  return siteUrl.startsWith('http') ? siteUrl : `https://routine3.com${siteUrl}`;
+}
+
+/**
+ * Apple-style QR on a white rounded card: round dots, rounded-square finder eyes and a blank centre with a
+ * large R³. The centre is ~31% of the width (~9.5% of the area), inside error correction Q (25% of codewords,
+ * the clear square touches well under half of that); Q keeps the grid coarser than H, so it still reads when
+ * the post is shown small on a screen or screenshotted. The card keeps the standard 4-module quiet zone.
+ * From version 7 an alignment pattern sits in the centre, so the mark is only drawn below version 7
+ * (versions 2–6 have their one alignment pattern near a corner).
  */
 export function drawQr(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, size: number) {
   const qr = QRCode.create(text, { errorCorrectionLevel: 'Q' });
@@ -87,7 +99,7 @@ export function drawQr(ctx: CanvasRenderingContext2D, text: string, x: number, y
   ctx.restore();
   const ox = x + pad, oy = y + pad;
   const finder = (r: number, c: number) => (r < 7 && c < 7) || (r < 7 && c >= n - 7) || (r >= n - 7 && c < 7);
-  const logo = Math.round(n * 0.22) | 1, lo = (n - logo) / 2; // centre square kept clear for the mark
+  const logo = Math.round(n * 0.3) | 1, lo = (n - logo) / 2; // centre square kept clear for the mark
   const inLogo = (r: number, c: number) => mark && r + 1 > lo && r < lo + logo && c + 1 > lo && c < lo + logo;
   ctx.fillStyle = '#111111';
   for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
@@ -102,10 +114,8 @@ export function drawQr(ctx: CanvasRenderingContext2D, text: string, x: number, y
   }
   if (!mark) return;
   const m = logo * cell, mx = ox + lo * cell, my = oy + lo * cell;
-  ctx.fillStyle = '#FFFFFF'; roundRect(ctx, mx, my, m, m, m * 0.24); ctx.fill();
-  ctx.lineWidth = Math.max(1, m * 0.04); ctx.strokeStyle = '#111111'; roundRect(ctx, mx + m * 0.12, my + m * 0.12, m * 0.76, m * 0.76, m * 0.16); ctx.stroke();
   ctx.fillStyle = '#111111'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = `600 ${m * 0.36}px Inter`; ctx.fillText('R³', mx + m / 2, my + m / 2 + m * 0.02);
+  ctx.font = `700 ${m * 0.62}px Inter`; ctx.fillText('R³', mx + m / 2, my + m / 2 + m * 0.03);
   ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
 }
 
@@ -227,11 +237,12 @@ export function ContentStudio({ creator, audience, problem, offers, siteUrl, hea
   const background = bg || autoBg;
   const credit = creator ? `Guidance by ${creator}` : '';
   const fullUrl = siteUrl.startsWith('http') ? siteUrl : `https://routine3.com${siteUrl}`;
+  const qrUrl = qrLink(siteUrl);
   useEffect(() => {
     let stale = false; // a newer run (or unmount) supersedes this one
-    if (canvasRef.current) drawPost(canvasRef.current, fmt, bgUrl(background), { headline, subline, cta, credit, qr: fullUrl, brand }, () => stale);
+    if (canvasRef.current) drawPost(canvasRef.current, fmt, bgUrl(background), { headline, subline, cta, credit, qr: qrUrl, brand }, () => stale);
     return () => { stale = true; };
-  }, [fmt, background, headline, subline, cta, credit, fullUrl, fontsReady, brand]);
+  }, [fmt, background, headline, subline, cta, credit, qrUrl, fontsReady, brand]);
   const tag = solution.replace(/\s+/g, '');
   const captions: Record<string, string> = {
     TikTok: `${problem}? Here's a simple routine for ${solution} for ${audience.toLowerCase()}. ${offer.free ? 'Free' : 'Start'} "${offer.title}" by ${creator}. Link in bio. #${tag} #routine #wellbeing`,

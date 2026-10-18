@@ -14,7 +14,13 @@ export function useUrlParameterHandling({ setCurrentPage }: UseUrlParameterHandl
   // is bounced back to home once auth resolves). The session persists in
   // localStorage, so once you're signed in as admin, reloading /admin lands here.
   useEffect(() => {
-    const path = window.location.pathname.replace(/\/+$/, '');
+    let path = window.location.pathname.replace(/\/+$/, '');
+    // Short Guardian link from post QR codes: /g/<slug>, often upper-cased (QR alphanumeric mode) → /guardians/<slug>.
+    const short = path.match(/^\/g\/([a-z0-9-]+)$/i);
+    if (short) {
+      path = `/guardians/${short[1].toLowerCase()}`;
+      window.history.replaceState({}, document.title, path + window.location.search);
+    }
     if (path === '/admin') {
       setCurrentPage('admin');
     } else if (path === '/guardians' || path.startsWith('/guardians/') || path === '/guides' || path === '/guide' || path.startsWith('/guides/')) {
