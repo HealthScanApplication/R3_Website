@@ -18,7 +18,7 @@ import { copyPrompt, imagePrompt } from '../../utils/brandBrief';
 export interface PostBrand { name: string; font: string; cta: ButtonColours; logo: string | null; kit?: BrandKit | null }
 
 const FIGMA_TEMPLATE = 'https://www.figma.com/design/6HS7WXK5SFoLh41AkzKzMZ/--R%C2%B3---Routine%C2%B3-%E2%80%A2-Libray?node-id=12-886';
-const FONT_HREF = 'https://fonts.googleapis.com/css2?family=Italiana&family=Inter:wght@600&family=Nanum+Myeongjo&display=swap';
+const FONT_HREF = 'https://fonts.googleapis.com/css2?family=Italiana&family=Inter:wght@400;600;700;800&family=Nanum+Myeongjo&family=Bebas+Neue&family=Fraunces:wght@400&display=swap';
 
 type FormatId = 'story' | 'post' | 'square' | 'thumb';
 const FORMATS: { id: FormatId; label: string; platforms: string; w: number; h: number }[] = [
@@ -125,84 +125,132 @@ const loadImage = (src: string, cors = false) => new Promise<HTMLImageElement | 
 });
 
 /**
+ * Six text styles in the ROUTINE³ look. Sizes are on the 1081-wide frame. `fade` washes the photo behind the
+ * text so it stays legible; `panel` sits the text on a white card; `highlight` puts each line on its own strip.
+ * A brand look swaps its own typeface in for the headline.
+ */
+export type TextStyleId = 'editorial' | 'night' | 'bold' | 'classic' | 'card' | 'caption';
+export const TEXT_STYLES: { id: TextStyleId; label: string; head: { font: string; weight: number; size: number; line: number; upper?: boolean }; sub: { font: string; weight: number; size: number; line: number }; ink: string; fade: string | null; panel?: boolean; highlight?: boolean; maxW: number }[] = [
+  { id: 'editorial', label: 'Editorial', head: { font: 'Italiana', weight: 400, size: 111, line: 116 }, sub: { font: '"Nanum Myeongjo", serif', weight: 400, size: 52, line: 66 }, ink: '#111111', fade: '239,230,219', maxW: 743 },
+  { id: 'night', label: 'Night', head: { font: 'Italiana', weight: 400, size: 111, line: 116 }, sub: { font: '"Nanum Myeongjo", serif', weight: 400, size: 52, line: 66 }, ink: '#F5F2EA', fade: '17,18,15', maxW: 743 },
+  { id: 'bold', label: 'Bold', head: { font: '"Bebas Neue"', weight: 400, size: 150, line: 140, upper: true }, sub: { font: 'Inter', weight: 600, size: 40, line: 54 }, ink: '#111111', fade: '239,230,219', maxW: 780 },
+  { id: 'classic', label: 'Classic', head: { font: 'Fraunces', weight: 400, size: 96, line: 106 }, sub: { font: 'Inter', weight: 400, size: 40, line: 54 }, ink: '#111111', fade: '239,230,219', maxW: 760 },
+  { id: 'card', label: 'Card', head: { font: 'Inter', weight: 700, size: 76, line: 86 }, sub: { font: 'Inter', weight: 400, size: 38, line: 52 }, ink: '#111111', fade: null, panel: true, maxW: 700 },
+  { id: 'caption', label: 'Caption', head: { font: 'Inter', weight: 800, size: 68, line: 92 }, sub: { font: 'Inter', weight: 600, size: 36, line: 58 }, ink: '#111111', fade: null, highlight: true, maxW: 760 },
+];
+export type TextPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+export const TEXT_POSITIONS: { id: TextPosition; label: string }[] = [
+  { id: 'bottom-left', label: 'Bottom left' }, { id: 'bottom-right', label: 'Bottom right' }, { id: 'top-left', label: 'Top left' }, { id: 'top-right', label: 'Top right' },
+];
+
+export interface PostCopy { headline: string; subline: string; cta: string; credit: string; qr?: string; brand?: PostBrand | null; style?: TextStyleId; position?: TextPosition }
+
+/**
  * Everything is loaded first (fonts, background, logo); a run that `isStale()` by then stops before touching the
  * canvas, so a slower earlier run can never paint over a newer one. The drawing itself is synchronous.
+ * With no background (`bg` empty) the canvas stays transparent apart from the text layer, so it can sit over video.
  */
-async function drawPost(canvas: HTMLCanvasElement, fmt: (typeof FORMATS)[number], bg: string, copy: { headline: string; subline: string; cta: string; credit: string; qr?: string; brand?: PostBrand | null }, isStale: () => boolean = () => false) {
+export async function drawPost(canvas: HTMLCanvasElement, fmt: { id: FormatId; w: number; h: number }, bg: string, copy: PostCopy, isStale: () => boolean = () => false) {
   const { w, h } = fmt;
   const brand = copy.brand || null;
-  const headFont = brand ? `"${brand.font}"` : 'Italiana', ctaFont = brand ? `"${brand.font}"` : 'Inter';
+  const st = TEXT_STYLES.find((t) => t.id === copy.style) || TEXT_STYLES[0];
+  const position = copy.position || 'bottom-left';
+  const top = position.startsWith('top'), alignRight = position.endsWith('right');
+  const headFont = brand ? `"${brand.font}"` : st.head.font, ctaFont = brand ? `"${brand.font}"` : 'Inter';
   if (brand) await ensureBrandFont(brand.font); // the @font-face must exist before document.fonts.load can find it
-  await Promise.all([document.fonts.load(`111px ${headFont}`), document.fonts.load('52px "Nanum Myeongjo"'), document.fonts.load(`600 28px ${ctaFont}`)]).catch(() => {});
-  const [loaded, logo] = await Promise.all([loadImage(bg), brand?.logo ? loadImage(brand.logo, true) : Promise.resolve(null)]);
+  await Promise.all([document.fonts.load(`${st.head.weight} ${st.head.size}px ${headFont}`), document.fonts.load(`${st.sub.weight} ${st.sub.size}px ${st.sub.font}`), document.fonts.load(`600 28px ${ctaFont}`), document.fonts.load('600 20px Inter')]).catch(() => {});
+  const [loaded, logo] = await Promise.all([bg ? loadImage(bg) : Promise.resolve(null), brand?.logo ? loadImage(brand.logo, true) : Promise.resolve(null)]);
   if (isStale()) return;
   canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext('2d')!;
-  const img = loaded || new Image();
-  ctx.fillStyle = '#EFE6DB'; ctx.fillRect(0, 0, w, h);
+  ctx.clearRect(0, 0, w, h);
+  if (bg) { ctx.fillStyle = '#EFE6DB'; ctx.fillRect(0, 0, w, h); }
   // Cover the frame from the top of the photo (faces and objects sit high in the library images).
-  if (img.naturalWidth) {
-    const scale = Math.max(w / img.naturalWidth, (fmt.id === 'thumb' ? h : h * 1.0) / img.naturalHeight);
-    const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale;
-    ctx.drawImage(img, (w - dw) / 2, fmt.id === 'story' ? 0 : -dh * 0.06, dw, dh);
+  if (loaded?.naturalWidth) {
+    const scale = Math.max(w / loaded.naturalWidth, h / loaded.naturalHeight);
+    const dw = loaded.naturalWidth * scale, dh = loaded.naturalHeight * scale;
+    ctx.drawImage(loaded, (w - dw) / 2, fmt.id === 'story' ? 0 : -dh * 0.06, dw, dh);
   }
-  // Cream fade behind the text (the library images carry their own fade at 9:16; this keeps other ratios legible).
   const s = fmt.id === 'thumb' ? h / 1080 : w / 1081;
-  if (fmt.id === 'thumb') {
-    const g = ctx.createLinearGradient(0, 0, w * 0.62, 0); g.addColorStop(0, 'rgba(239,230,219,0.96)'); g.addColorStop(0.75, 'rgba(239,230,219,0.75)'); g.addColorStop(1, 'rgba(239,230,219,0)');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
-  } else if (fmt.id !== 'story') {
-    const g = ctx.createLinearGradient(0, h * 0.35, 0, h); g.addColorStop(0, 'rgba(239,230,219,0)'); g.addColorStop(0.45, 'rgba(239,230,219,0.92)'); g.addColorStop(1, 'rgba(239,230,219,1)');
+  // A wash on the text's side. The 9:16 library images already fade to cream at the bottom, so cream needs no extra.
+  if (st.fade && !(fmt.id === 'story' && !top && st.fade === '239,230,219' && bg)) {
+    const c = (a: number) => `rgba(${st.fade},${a})`;
+    const g = fmt.id === 'thumb'
+      ? (alignRight ? ctx.createLinearGradient(w, 0, w * 0.38, 0) : ctx.createLinearGradient(0, 0, w * 0.62, 0))
+      : (top ? ctx.createLinearGradient(0, h * 0.65, 0, 0) : ctx.createLinearGradient(0, h * 0.35, 0, h));
+    if (fmt.id === 'thumb') { g.addColorStop(0, c(0.96)); g.addColorStop(0.75, c(0.75)); g.addColorStop(1, c(0)); }
+    else { g.addColorStop(0, c(0)); g.addColorStop(0.45, c(0.92)); g.addColorStop(1, c(1)); }
     ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
   }
-  const x = 91 * s;
-  ctx.fillStyle = '#111111'; ctx.textBaseline = 'alphabetic';
-  // CTA box size first: the QR sits beside it, and the text above wraps short of the QR.
+  const margin = 91 * s, anchor = alignRight ? w - margin : margin;
+  // CTA box size first: the QR sits beside it (on the far side from the text), and the text wraps short of the QR.
   ctx.font = `600 ${28 * s}px ${ctaFont}`;
   const label = copy.cta.toUpperCase();
   const tracking = 28 * s * 0.3;
   const textW = [...label].reduce((sum, ch) => sum + ctx.measureText(ch).width + tracking, -tracking);
   const boxW = textW + 64 * s, boxH = 95 * s;
-  // QR to the CTA link, bottom-aligned with the button on the right; shrinks (or is left out) if the button is long.
-  const right = w - 91 * s;
-  const qrFit = copy.qr ? Math.min((fmt.id === 'thumb' ? 220 : 260) * s, right - (x + boxW + 36 * s)) : 0;
+  const qrFit = copy.qr ? Math.min((fmt.id === 'thumb' ? 220 : 260) * s, w - 2 * margin - boxW - 36 * s) : 0;
   const qrSize = qrFit >= 150 * s ? qrFit : 0;
-  const maxW = Math.min((fmt.id === 'thumb' ? 640 : 743) * s, qrSize ? right - qrSize - 36 * s - x : Infinity);
-  ctx.font = `${111 * s}px ${headFont}`;
-  const head = wrap(ctx, copy.headline, maxW);
-  ctx.font = `${52 * s}px "Nanum Myeongjo", serif`;
+  const maxW = Math.min((fmt.id === 'thumb' ? 640 : st.maxW) * s, qrSize ? w - 2 * margin - qrSize - 36 * s : Infinity);
+  const headFontCss = `${st.head.weight} ${st.head.size * s}px ${headFont}`, subFontCss = `${st.sub.weight} ${st.sub.size * s}px ${st.sub.font}`;
+  ctx.font = headFontCss;
+  const head = wrap(ctx, st.head.upper ? copy.headline.toUpperCase() : copy.headline, maxW);
+  const headW = Math.max(0, ...head.map((l) => ctx.measureText(l).width));
+  ctx.font = subFontCss;
   const sub = copy.subline ? wrap(ctx, copy.subline, maxW) : [];
-  const blockH = head.length * 116 * s + 30 * s + sub.length * 66 * s + 52 * s + 95 * s;
-  // 9:16 keeps the Figma position (y 1271) unless a long headline/subline would push the CTA off the frame;
-  // other ratios sit the block 93px from the bottom.
-  let y = fmt.id === 'story' ? Math.min(1271 * s, h - 93 * s - blockH) : fmt.id === 'thumb' ? (h - blockH) / 2 : h - 93 * s - blockH;
-  ctx.font = `${111 * s}px ${headFont}`;
-  for (const line of head) { y += 116 * s; ctx.fillText(line, x, y - 22 * s); }
+  const subW = Math.max(0, ...sub.map((l) => ctx.measureText(l).width));
+  const hl = st.head.line * s, sl = st.sub.line * s;
+  const blockH = head.length * hl + 30 * s + sub.length * sl + 52 * s + boxH;
+  // Bottom: 9:16 keeps the Figma position (y 1271) unless long copy would push the CTA off the frame. Top: clear of
+  // the app bars on stories. The credit and logo move to the opposite edge from the text.
+  const edge = fmt.id === 'thumb' ? 60 * s : 93 * s;
+  let y = top ? (fmt.id === 'story' ? 220 * s : edge) : fmt.id === 'story' ? Math.min(1271 * s, h - edge - blockH) : h - edge - blockH;
+  if (st.panel) {
+    const pad = 48 * s, pw = Math.max(headW, subW, boxW) + (qrSize ? qrSize + 36 * s : 0) + pad * 2;
+    ctx.save(); ctx.shadowColor = 'rgba(17,17,17,0.22)'; ctx.shadowBlur = 30 * s; ctx.shadowOffsetY = 8 * s;
+    ctx.fillStyle = 'rgba(255,255,255,0.96)'; roundRect(ctx, alignRight ? anchor + pad - pw : anchor - pad, y - pad, pw, blockH + pad * 2, 18 * s); ctx.fill();
+    ctx.restore();
+  }
+  const strip = (lineW: number, top0: number, lineH: number) => { const px = 16 * s; ctx.fillStyle = '#FFFFFF'; ctx.fillRect(alignRight ? anchor - lineW - px : anchor - px, top0 + lineH * 0.1, lineW + px * 2, lineH * 0.86); };
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = headFontCss;
+  for (const line of head) {
+    if (st.highlight) strip(ctx.measureText(line).width, y, hl);
+    ctx.fillStyle = st.ink; ctx.textAlign = alignRight ? 'right' : 'left'; ctx.fillText(line, anchor, y + hl * 0.81);
+    y += hl;
+  }
   y += 30 * s;
-  ctx.font = `${52 * s}px "Nanum Myeongjo", serif`;
-  for (const line of sub) { y += 66 * s; ctx.fillText(line, x, y - 14 * s); }
+  ctx.font = subFontCss;
+  for (const line of sub) {
+    if (st.highlight) strip(ctx.measureText(line).width, y, sl);
+    ctx.fillStyle = st.ink; ctx.textAlign = alignRight ? 'right' : 'left'; ctx.fillText(line, anchor, y + sl * 0.79);
+    y += sl;
+  }
   y += 52 * s;
+  ctx.textAlign = 'left';
   // CTA box: Inter SemiBold 28 / 30% tracking, 2px black border on white; a brand swaps in its font and CTA colours.
   ctx.font = `600 ${28 * s}px ${ctaFont}`;
   const btn = brand?.cta || { background: '#FFFFFF', color: '#111111', border: '#111111' };
-  ctx.fillStyle = btn.background; ctx.fillRect(x, y, boxW, boxH);
-  ctx.lineWidth = 2 * s; ctx.strokeStyle = btn.border; ctx.strokeRect(x, y, boxW, boxH);
+  const bx = alignRight ? anchor - boxW : anchor;
+  ctx.fillStyle = btn.background; ctx.fillRect(bx, y, boxW, boxH);
+  ctx.lineWidth = 2 * s; ctx.strokeStyle = btn.border; ctx.strokeRect(bx, y, boxW, boxH);
   ctx.fillStyle = btn.color;
-  let cx = x + 32 * s;
+  let cx = bx + 32 * s;
   for (const ch of label) { ctx.fillText(ch, cx, y + boxH / 2 + 10 * s); cx += ctx.measureText(ch).width + tracking; }
-  if (copy.qr && qrSize) drawQr(ctx, copy.qr, right - qrSize, y + boxH - qrSize, qrSize);
-  // Creator credit, top left: who this guidance comes from.
+  if (copy.qr && qrSize) drawQr(ctx, copy.qr, alignRight ? margin : w - margin - qrSize, y + boxH - qrSize, qrSize);
+  // Creator credit (left) and brand logo (right), on the edge away from the text.
+  const markTop = top ? h - 70 * s - 44 * s : 70 * s;
   if (copy.credit) {
     ctx.font = `600 ${20 * s}px Inter`;
     const t = copy.credit.toUpperCase();
     const pad = 14 * s, tw = ctx.measureText(t).width;
-    ctx.fillStyle = 'rgba(255,255,255,0.88)'; ctx.fillRect(x, 70 * s, tw + pad * 2, 44 * s);
-    ctx.fillStyle = '#111111'; ctx.fillText(t, x + pad, 70 * s + 29 * s);
+    ctx.fillStyle = 'rgba(255,255,255,0.88)'; ctx.fillRect(margin, markTop, tw + pad * 2, 44 * s);
+    ctx.fillStyle = '#111111'; ctx.fillText(t, margin + pad, markTop + 29 * s);
   }
-  // Brand logo, top right on a white tile. CORS-enabled so the canvas can still be downloaded; skipped if it fails.
+  // CORS-enabled so the canvas can still be downloaded; skipped if it fails.
   if (logo?.naturalWidth) {
     const lh = 64 * s, lw = Math.min(240 * s, lh * logo.naturalWidth / logo.naturalHeight), pad = 10 * s;
-    const lx = w - 91 * s - lw - pad * 2, ly = 60 * s;
+    const lx = w - margin - lw - pad * 2, ly = top ? h - 60 * s - lh - pad * 2 : 60 * s;
     ctx.fillStyle = '#FFFFFF'; ctx.fillRect(lx, ly, lw + pad * 2, lh + pad * 2);
     ctx.drawImage(logo, lx + pad, ly + pad, lw, lh);
   }
@@ -226,6 +274,8 @@ export function ContentStudio({ creator, audience, problem, offers, siteUrl, hea
   const [headline, setHeadline] = useState('');
   const [subline, setSubline] = useState('');
   const [cta, setCta] = useState('');
+  const [textStyle, setTextStyle] = useState<TextStyleId>('editorial');
+  const [position, setPosition] = useState<TextPosition>('bottom-left');
   const [copied, setCopied] = useState('');
   useEffect(() => {
     setHeadline(`Build a routine for ${solution}`);
@@ -240,9 +290,9 @@ export function ContentStudio({ creator, audience, problem, offers, siteUrl, hea
   const qrUrl = qrLink(siteUrl);
   useEffect(() => {
     let stale = false; // a newer run (or unmount) supersedes this one
-    if (canvasRef.current) drawPost(canvasRef.current, fmt, bgUrl(background), { headline, subline, cta, credit, qr: qrUrl, brand }, () => stale);
+    if (canvasRef.current) drawPost(canvasRef.current, fmt, bgUrl(background), { headline, subline, cta, credit, qr: qrUrl, brand, style: textStyle, position }, () => stale);
     return () => { stale = true; };
-  }, [fmt, background, headline, subline, cta, credit, qrUrl, fontsReady, brand]);
+  }, [fmt, background, headline, subline, cta, credit, qrUrl, fontsReady, brand, textStyle, position]);
   const tag = solution.replace(/\s+/g, '');
   const captions: Record<string, string> = {
     TikTok: `${problem}? Here's a simple routine for ${solution} for ${audience.toLowerCase()}. ${offer.free ? 'Free' : 'Start'} "${offer.title}" by ${creator}. Link in bio. #${tag} #routine #wellbeing`,
@@ -270,6 +320,10 @@ export function ContentStudio({ creator, audience, problem, offers, siteUrl, hea
       <div style={{ display: 'grid', gap: 12, alignContent: 'start' }}>
         {offers.length > 1 && <label><span style={lab}>Offer</span><select value={offerIndex} onChange={(e) => setOfferIndex(Number(e.target.value))} style={field}>{offers.map((o, i) => <option key={i} value={i}>{String(i + 1).padStart(2, '0')} · {o.title} · {o.free ? 'Free' : o.price}</option>)}</select></label>}
         <div><span style={lab}>Format</span><div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 6 }}>{FORMATS.map((f) => <button key={f.id} type="button" aria-pressed={fmtId === f.id} onClick={() => setFmtId(f.id)} style={{ minHeight: 44, border: `1px solid ${fmtId === f.id ? acid : line}`, background: fmtId === f.id ? '#20251B' : 'transparent', color: ink, textAlign: 'left', padding: '6px 10px', cursor: 'pointer' }}><strong style={{ display: 'block', fontSize: 12 }}>{f.label}</strong><span style={{ display: 'block', color: muted, fontSize: 9.5 }}>{f.platforms}</span></button>)}</div></div>
+        <div><span style={lab}>Text style</span><div role="group" aria-label="Text style" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6 }}>{TEXT_STYLES.map((t) => <button key={t.id} type="button" aria-pressed={textStyle === t.id} onClick={() => setTextStyle(t.id)} style={{ minHeight: 52, border: `1px solid ${textStyle === t.id ? acid : line}`, background: textStyle === t.id ? '#20251B' : 'transparent', color: ink, padding: '6px 8px', cursor: 'pointer', display: 'grid', placeItems: 'center', gap: 2 }}>
+          <span aria-hidden="true" style={{ display: 'inline-block', fontFamily: t.head.font, fontWeight: t.head.weight, fontSize: t.id === 'bold' ? 22 : 18, lineHeight: 1, padding: '2px 6px', color: t.panel || t.highlight ? '#111' : t.id === 'night' ? '#F5F2EA' : '#111', background: t.highlight || t.panel ? '#FFF' : t.id === 'night' ? '#11120F' : '#EFE6DB', border: t.id === 'night' ? `1px solid ${line}` : 0 }}>{t.head.upper ? 'AA' : 'Aa'}</span>
+          <span style={{ fontSize: 9.5, color: muted }}>{t.label}</span></button>)}</div></div>
+        <label><span style={lab}>Text position</span><select value={position} onChange={(e) => setPosition(e.target.value as TextPosition)} style={field}>{TEXT_POSITIONS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
         <label><span style={lab}>Headline</span><input value={headline} onChange={(e) => setHeadline(e.target.value)} style={field} /></label>
         <label><span style={lab}>Subline</span><input value={subline} onChange={(e) => setSubline(e.target.value)} style={field} /></label>
         <label><span style={lab}>Button</span><input value={cta} onChange={(e) => setCta(e.target.value)} style={field} /></label>
