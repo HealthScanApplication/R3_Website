@@ -3,7 +3,7 @@ import {
   ArrowRight, ChevronRight, FileText, HeartPulse, LogOut,
   Mail, Package, Plus, Salad, Sparkles, Users, Globe2, Loader2,
   Upload, Check, Instagram, Youtube, Link2, AtSign, Route, CalendarDays, Download,
-  MoreHorizontal, FolderOpen, Trash2, ExternalLink, Hammer, PencilRuler, Blocks, LayoutDashboard, Play, Clock, ShieldCheck, Utensils, Dumbbell, Combine, Clapperboard } from 'lucide-react';
+  MoreHorizontal, FolderOpen, Trash2, ExternalLink, Hammer, PencilRuler, Blocks, LayoutDashboard, Play, Clock, ShieldCheck, Utensils, Dumbbell, Combine, Clapperboard, BookOpen, Podcast, GraduationCap, AudioLines } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ProtocolEditor } from '../admin/ProtocolEditor';
 import { RoutineMark } from '../Header';
@@ -26,15 +26,17 @@ import { GuardianModal } from './GuardianModal';
 import { BrandKitFields } from './BrandKitFields';
 import { AGE_RANGES, LIFE_STAGES } from '../../utils/audienceTaxonomy';
 import { brandKitLinks, brandKitOf, defaultBrandKit, type BrandKit } from '../../utils/brandKit';
+import { GuardianProducts, GuardianShop } from './GuardianProducts';
 import { buildProtocolWithAI, foldSleepSteps, saveDraftStep, updateProtocolWithAI, listProtocolItems, createProtocol, findOrCreateProtocol, createProtocolItem, listProtocols, type AdminProtocol } from '../../utils/protocolAdmin';
 import {
   recoverUpsellPayment, createGuideLead, createGuideOffer, createGuideRecipe, createGuideValueRamp, getGuideProfile, getGuideProfileBySlug,
   importGuideProfile, listGuideLeads, listGuideOffers, listGuideRecipes, listGuideValueRamps, listRoutineOwners, upsertGuideOffer, upsertGuideValueRamp, listPublicGuideProfiles, saveGuideProfile, listGuardianReviews, listGuardianReviewRequests, createGuardianReviewRequest, submitGuardianReview, setGuardianReviewStatus, createOfferPayment, confirmOfferPayment, buyUpsellOneClick, getFreeOfferDownload, requestGuardianReview, decideGuardianSite, listAllGuideProfiles, listGuardianSuggestions, setGuardianSuggestionStatus, listPublicGuardianOffers, listReviewSummaries, type AdminGuideProfile, type GuardianSuggestionRow, type GuardianReview, type GuardianReviewRequest, submitGuardianSuggestion, submitGuardianOptIn,
   createGuideLibraryFolder, createGuideLibraryItem, deleteGuideLibraryItem, getGuideFileDownloadUrl,
-  listGuideLibraryFolders, listGuideLibraryItems, replaceGuideBrands, listGuideBrands, updateGuideRecipe, saveGuideRecipeDraft, listPersonalProtocolPeople, uploadGuideFile, uploadGuideImage,
-  type GuideBrand, type GuideLead, type GuideLibraryFolder, type GuideLibraryItem, type GuideOffer, type GuideProfile, type GuideRecipe,
+  listGuideLibraryFolders, listGuideLibraryItems, replaceGuideBrands, listGuideBrands, updateGuideRecipe, saveGuideRecipeDraft, listPersonalProtocolPeople, uploadGuideFile, uploadGuideImage, uploadGuideLibraryAudio,
+  type GuideBrand, type GuideLead, type GuideLibraryFolder, type GuideLibraryItem, type GuideLibraryKind, type GuideOffer, type GuideProfile, type GuideRecipe,
   type GuideValueRamp, type ImportedGuideProfile,
 } from '../../utils/guidePortal';
+import { LIBRARY_KINDS, buildLibraryDraft, filterLibraryItems, libraryErrorMessage, libraryKindDefinition, librarySourceDocumentPath, librarySourcePrompt, librarySourceSubtitle, librarySourceUrls, type LibraryDraftInput } from '../../utils/guideLibrarySources';
 
 const ink = '#F5F2EA';
 const muted = '#B8B6AF';
@@ -81,8 +83,8 @@ function ExpertiseTags({ tags, color = '#667245', compact = false }: { tags: str
   </div>;
 }
 
-type Tab = 'home' | 'profile' | 'library' | 'leads' | 'value_ramps' | 'offer_builder' | 'recipes' | 'diet' | 'fitness' | 'content' | 'protocols' | 'admin';
-const WORKSPACE_TABS: readonly Tab[] = ['home', 'profile', 'library', 'leads', 'value_ramps', 'offer_builder', 'recipes', 'diet', 'fitness', 'content', 'protocols', 'admin'];
+type Tab = 'home' | 'profile' | 'library' | 'leads' | 'value_ramps' | 'offer_builder' | 'products' | 'recipes' | 'diet' | 'fitness' | 'content' | 'protocols' | 'admin';
+const WORKSPACE_TABS: readonly Tab[] = ['home', 'profile', 'library', 'leads', 'value_ramps', 'offer_builder', 'products', 'recipes', 'diet', 'fitness', 'content', 'protocols', 'admin'];
 const SETUP_STEPS = [1, 2, 3, 4, 5] as const;
 type FreeOfferKind = 'ebook' | 'one_to_one_call' | 'group_call' | 'recipe_book' | 'routine' | 'in_person';
 type UpsellKind = 'ebook' | 'routine' | 'routine_guidance' | 'recipe_book' | 'group_call' | 'one_to_one_call' | 'in_person' | 'festival';
@@ -1505,6 +1507,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
         cards={valueRamps.filter((ramp) => ramp.status === 'published').length ? valueRamps.filter((ramp) => ramp.status === 'published').map((ramp) => ({ key: ramp.id, eyebrow: ramp.problem || undefined, title: customerFacingOfferTitle(offers.find((offer) => offer.id === ramp.offer_ids[0])?.title || ramp.name), copy: offers.find((offer) => offer.id === ramp.offer_ids[0])?.description || '', kind: offers.find((offer) => offer.id === ramp.offer_ids[0])?.kind, price: offers.find((offer) => offer.id === ramp.offer_ids[0])?.access_model === 'free' ? 'Free' : undefined, href: pathSlug === encodeURIComponent(ramp.slug) ? '#offers' : `/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}` })) : freeOffers.slice(0, 1).map((offer) => ({ key: offer.id, eyebrow: profile.specialties.slice(0, 2).join(' · '), title: customerFacingOfferTitle(offer.title), copy: offer.description || '', kind: offer.kind, price: 'Free', href: '#start' }))} />
       {reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}
       <GuardianFunnel key={selectedRamp?.id || 'default'} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={offers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} />
+      <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} />
     </main>
   </div>;
 }
@@ -3425,25 +3428,34 @@ function OfferBuilder({ profile, protocols, offers, recipes = [], librarySources
   </>;
 }
 
-function GuideLibrary({ guideId, selectedIds, onSelectedIds, onUse }: { guideId: string; selectedIds: string[]; onSelectedIds: (ids: string[]) => void; onUse: (destination: 'protocol' | 'pdf', sources: GuideLibraryItem[]) => void }) {
+const LIBRARY_KIND_ICONS: Record<GuideLibraryKind, typeof FileText> = { pdf: Upload, url: Link2, transcript: FileText, book: BookOpen, podcast: Podcast, paper: GraduationCap, audio: AudioLines };
+
+export function GuideLibrary({ guideId, selectedIds, onSelectedIds, onUse }: { guideId: string; selectedIds: string[]; onSelectedIds: (ids: string[]) => void; onUse: (destination: 'protocol' | 'pdf', sources: GuideLibraryItem[]) => void }) {
   const [folders, setFolders] = useState<GuideLibraryFolder[]>([]);
   const [items, setItems] = useState<GuideLibraryItem[]>([]);
   const [folder, setFolder] = useState('all');
-  const [mode, setMode] = useState<'pdf' | 'url' | 'transcript' | null>(null);
+  const [kindFilter, setKindFilter] = useState<GuideLibraryKind | 'all'>('all');
+  const [mode, setMode] = useState<GuideLibraryKind | null>(null);
   const [folderName, setFolderName] = useState('');
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const [transcript, setTranscript] = useState('');
+  const [fields, setFields] = useState<LibraryDraftInput['fields']>({});
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const selectedFolder = folder === 'all' || folder === 'unfiled' ? null : folder;
-  const visibleItems = items.filter((item) => folder === 'all' || (folder === 'unfiled' ? !item.folder_id : item.folder_id === folder));
+  const visibleItems = filterLibraryItems(items, folder, kindFilter);
+  const kindDefinition = mode ? libraryKindDefinition(mode) : null;
+  const richMode = mode === 'book' || mode === 'podcast' || mode === 'paper' || mode === 'audio' ? mode : null;
 
   useEffect(() => {
     Promise.all([listGuideLibraryFolders(guideId), listGuideLibraryItems(guideId)])
       .then(([nextFolders, nextItems]) => { setFolders(nextFolders); setItems(nextItems); })
       .catch((error) => setMessage(error?.message || 'Could not open the library. Apply the latest database migration and try again.'));
   }, [guideId]);
+
+  function resetForm() { setMode(null); setTitle(''); setUrl(''); setTranscript(''); setFields({}); setPendingFile(null); }
 
   async function addFolder() {
     if (!folderName.trim()) return;
@@ -3457,24 +3469,33 @@ function GuideLibrary({ guideId, selectedIds, onSelectedIds, onUse }: { guideId:
     if (!mode) return;
     setBusy(true); setMessage('');
     try {
-      let filePath: string | null = null;
-      let body = transcript.trim() || null;
-      let itemTitle = title.trim();
-      if (mode === 'pdf') {
-        if (!file) throw new Error('Choose a PDF first.');
-        filePath = await uploadGuideFile(guideId, file);
-        itemTitle ||= file.name.replace(/\.pdf$/i, '');
+      let created: GuideLibraryItem;
+      if (richMode) {
+        // Validate the form before uploading anything, then attach the stored file.
+        buildLibraryDraft(richMode, { title, fields, notes: transcript, file: pendingFile ? { path: 'pending', name: pendingFile.name } : null });
+        const path = pendingFile ? await (richMode === 'audio' ? uploadGuideLibraryAudio(guideId, pendingFile) : uploadGuideFile(guideId, pendingFile)) : null;
+        const draft = buildLibraryDraft(richMode, { title, fields, notes: transcript, file: path && pendingFile ? { path, name: pendingFile.name } : null });
+        created = await createGuideLibraryItem(guideId, { folder_id: selectedFolder, kind: richMode, ...draft });
+      } else {
+        let filePath: string | null = null;
+        const body = transcript.trim() || null;
+        let itemTitle = title.trim();
+        if (mode === 'pdf') {
+          if (!file) throw new Error('Choose a PDF first.');
+          filePath = await uploadGuideFile(guideId, file);
+          itemTitle ||= file.name.replace(/\.pdf$/i, '');
+        }
+        if (mode === 'url') {
+          if (!url.trim()) throw new Error('Add a website address first.');
+          new URL(url.trim());
+          itemTitle ||= new URL(url.trim()).hostname.replace(/^www\./, '');
+        }
+        if (mode === 'transcript' && !body) throw new Error('Paste or import a transcript first.');
+        itemTitle ||= 'Untitled transcript';
+        created = await createGuideLibraryItem(guideId, { folder_id: selectedFolder, kind: mode, title: itemTitle, source_url: mode === 'url' ? url.trim() : null, file_path: filePath, transcript: body, metadata: null });
       }
-      if (mode === 'url') {
-        if (!url.trim()) throw new Error('Add a website address first.');
-        new URL(url.trim());
-        itemTitle ||= new URL(url.trim()).hostname.replace(/^www\./, '');
-      }
-      if (mode === 'transcript' && !body) throw new Error('Paste or import a transcript first.');
-      itemTitle ||= 'Untitled transcript';
-      const created = await createGuideLibraryItem(guideId, { folder_id: selectedFolder, kind: mode, title: itemTitle, source_url: mode === 'url' ? url.trim() : null, file_path: filePath, transcript: body });
-      setItems((current) => [created, ...current]); setMode(null); setTitle(''); setUrl(''); setTranscript(''); setMessage(`${itemTitle} saved to the library.`);
-    } catch (error: any) { setMessage(error?.message === 'Invalid URL' ? 'Enter a complete URL, including https://.' : error?.message || 'Could not save this source.'); }
+      setItems((current) => [created, ...current]); resetForm(); setMessage(`${created.title} saved to the library.`);
+    } catch (error: any) { setMessage(error?.message === 'Invalid URL' ? 'Enter a complete URL, including https://.' : libraryErrorMessage(error, mode)); }
     finally { setBusy(false); }
   }
 
@@ -3484,23 +3505,41 @@ function GuideLibrary({ guideId, selectedIds, onSelectedIds, onUse }: { guideId:
   }
 
   async function openItem(item: GuideLibraryItem) {
-    if (item.kind === 'pdf' && item.file_path) window.open(await getGuideFileDownloadUrl(item.file_path), '_blank', 'noopener,noreferrer');
-    if (item.kind === 'url' && item.source_url) window.open(item.source_url, '_blank', 'noopener,noreferrer');
     if (item.kind === 'transcript' && item.transcript) {
       const href = URL.createObjectURL(new Blob([item.transcript], { type: 'text/plain' }));
       const anchor = document.createElement('a'); anchor.href = href; anchor.download = `${item.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'transcript'}.txt`; anchor.click(); URL.revokeObjectURL(href);
+      return;
     }
+    // Private uploads (PDFs, audio, attached paper PDFs) open through a short-lived signed URL.
+    if (item.file_path && (item.kind === 'pdf' || item.kind === 'audio' || (item.kind === 'paper' && !item.source_url))) { window.open(await getGuideFileDownloadUrl(item.file_path), '_blank', 'noopener,noreferrer'); return; }
+    if (item.source_url) window.open(item.source_url, '_blank', 'noopener,noreferrer');
   }
 
+  const filterButton = (active: boolean) => ({ width: '100%', border: 0, background: active ? '#25291F' : 'transparent', color: active ? acid : muted, padding: '11px 10px', textAlign: 'left' as const, fontFamily: sans, cursor: 'pointer' });
+
   return <section>
-    <div style={{ minHeight: 230, border: `1px solid ${line}`, padding: 'clamp(24px,4vw,46px)', background: panel, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 180px', alignItems: 'center', gap: 24 }}><div><div style={{ ...label, color: acid }}>Source library</div><h1 style={{ fontFamily: serif, fontSize: 'clamp(42px,6vw,72px)', lineHeight: .95, fontWeight: 300, margin: '12px 0 16px' }}>Build from what you trust.</h1><p style={{ color: muted, lineHeight: 1.6, maxWidth: 650, margin: 0 }}>Keep PDFs, useful webpages and transcripts organised, then select the sources that should inform your next Protocol or PDF guide.</p></div><FolderOpen size={128} strokeWidth={.7} color={acid} style={{ opacity: .7 }} /></div>
+    <div style={{ minHeight: 230, border: `1px solid ${line}`, padding: 'clamp(24px,4vw,46px)', background: panel, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 180px', alignItems: 'center', gap: 24 }}><div><div style={{ ...label, color: acid }}>Source library</div><h1 style={{ fontFamily: serif, fontSize: 'clamp(42px,6vw,72px)', lineHeight: .95, fontWeight: 300, margin: '12px 0 16px' }}>Build from what you trust.</h1><p style={{ color: muted, lineHeight: 1.6, maxWidth: 650, margin: 0 }}>Keep PDFs, webpages, transcripts, books, podcasts, research papers and audio organised, then select the sources that should inform your next Protocol or PDF guide.</p></div><FolderOpen size={128} strokeWidth={.7} color={acid} style={{ opacity: .7 }} /></div>
     <div style={{ display: 'grid', gridTemplateColumns: '220px minmax(0,1fr)', border: `1px solid ${line}`, borderTop: 0 }}>
-      <aside style={{ padding: 18, borderRight: `1px solid ${line}` }}><div style={{ ...label, color: ink }}>Folders</div>{[['all','All sources'],['unfiled','Unfiled']].map(([id, name]) => <button key={id} onClick={() => setFolder(id)} style={{ width: '100%', border: 0, background: folder === id ? '#25291F' : 'transparent', color: folder === id ? acid : muted, padding: '11px 10px', textAlign: 'left', fontFamily: sans, cursor: 'pointer' }}>{name}</button>)}{folders.map((entry) => <button key={entry.id} onClick={() => setFolder(entry.id)} style={{ width: '100%', border: 0, background: folder === entry.id ? '#25291F' : 'transparent', color: folder === entry.id ? acid : muted, padding: '11px 10px', textAlign: 'left', fontFamily: sans, cursor: 'pointer' }}>{entry.name}</button>)}<div style={{ display: 'flex', gap: 6, marginTop: 16 }}><input aria-label="New folder name" style={{ ...input, height: 38, minWidth: 0 }} value={folderName} onChange={(event) => setFolderName(event.target.value)} placeholder="New folder" /><button type="button" onClick={addFolder} disabled={busy || !folderName.trim()} style={{ ...btn, width: 40, minHeight: 38, padding: 0 }}><Plus size={14} /></button></div></aside>
-      <div style={{ padding: 'clamp(18px,3vw,32px)' }}><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{([['pdf','Upload PDF',Upload],['url','Save URL',Link2],['transcript','Add transcript',FileText]] as const).map(([id, text, Icon]) => <button key={id} type="button" onClick={() => { setMode(mode === id ? null : id); setMessage(''); }} style={{ ...btn, background: mode === id ? acid : 'transparent', color: mode === id ? black : ink }}><Icon size={14} />{text}</button>)}</div>
-        {mode && <div style={{ border: `1px solid ${line}`, background: '#0D0E0C', padding: 18, marginTop: 14 }}><label style={label}>Source title</label><input style={input} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Give this source a clear name" />{mode === 'pdf' && <label style={{ ...btn, width: '100%', boxSizing: 'border-box', marginTop: 10, background: acid }}><input type="file" accept="application/pdf,.pdf" hidden disabled={busy} onChange={(event) => { void addItem(event.target.files?.[0]); event.currentTarget.value = ''; }} />{busy ? <Loader2 className="animate-spin" size={14} /> : <Upload size={14} />} Choose PDF and save</label>}{mode === 'url' && <><label style={{ ...label, marginTop: 12 }}>Website address</label><input type="url" style={input} value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com/research" /><button type="button" onClick={() => void addItem()} disabled={busy || !url.trim()} style={{ ...btn, marginTop: 10, background: acid }}>Save webpage</button></>}{mode === 'transcript' && <><label style={{ ...label, marginTop: 12 }}>Transcript</label><textarea style={{ ...input, height: 150, paddingTop: 12, resize: 'vertical' }} value={transcript} onChange={(event) => setTranscript(event.target.value)} placeholder="Paste transcript text here" /><div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}><label style={{ ...btn, background: 'transparent', color: ink }}><input type="file" accept=".txt,.md,text/plain,text/markdown" hidden onChange={(event) => { importTranscript(event.target.files?.[0]); event.currentTarget.value = ''; }} />Import .txt or .md</label><button type="button" onClick={() => void addItem()} disabled={busy || !transcript.trim()} style={{ ...btn, background: acid }}>Save transcript</button></div></>}</div>}
+      <aside style={{ padding: 18, borderRight: `1px solid ${line}` }}><div style={{ ...label, color: ink }}>Folders</div>{[['all','All sources'],['unfiled','Unfiled']].map(([id, name]) => <button key={id} onClick={() => setFolder(id)} style={filterButton(folder === id)}>{name}</button>)}{folders.map((entry) => <button key={entry.id} onClick={() => setFolder(entry.id)} style={filterButton(folder === entry.id)}>{entry.name}</button>)}<div style={{ display: 'flex', gap: 6, marginTop: 16 }}><input aria-label="New folder name" style={{ ...input, height: 38, minWidth: 0 }} value={folderName} onChange={(event) => setFolderName(event.target.value)} placeholder="New folder" /><button type="button" onClick={addFolder} disabled={busy || !folderName.trim()} style={{ ...btn, width: 40, minHeight: 38, padding: 0 }}><Plus size={14} /></button></div>
+        <div style={{ ...label, color: ink, marginTop: 26 }}>Types</div>
+        <button type="button" onClick={() => setKindFilter('all')} style={filterButton(kindFilter === 'all')}>All types</button>
+        {LIBRARY_KINDS.map(({ kind, plural }) => { const Icon = LIBRARY_KIND_ICONS[kind]; const count = items.filter((item) => item.kind === kind).length; return <button key={kind} type="button" aria-pressed={kindFilter === kind} onClick={() => setKindFilter(kindFilter === kind ? 'all' : kind)} style={{ ...filterButton(kindFilter === kind), display: 'flex', alignItems: 'center', gap: 9 }}><Icon size={14} strokeWidth={1.6} /><span style={{ flex: 1 }}>{plural}</span><span style={{ fontSize: 10, opacity: count ? 1 : .45 }}>{count}</span></button>; })}
+      </aside>
+      <div style={{ padding: 'clamp(18px,3vw,32px)' }}><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{LIBRARY_KINDS.map(({ kind, addLabel }) => { const Icon = LIBRARY_KIND_ICONS[kind]; return <button key={kind} type="button" onClick={() => { if (mode === kind) resetForm(); else { resetForm(); setMode(kind); } setMessage(''); }} style={{ ...btn, background: mode === kind ? acid : 'transparent', color: mode === kind ? black : ink }}><Icon size={14} />{addLabel}</button>; })}</div>
+        {mode && kindDefinition && <div style={{ border: `1px solid ${line}`, background: '#0D0E0C', padding: 18, marginTop: 14 }}><label style={label}>{kindDefinition.titleLabel}</label><input style={input} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={kindDefinition.titlePlaceholder} />
+          {mode === 'pdf' && <label style={{ ...btn, width: '100%', boxSizing: 'border-box', marginTop: 10, background: acid }}><input type="file" accept="application/pdf,.pdf" hidden disabled={busy} onChange={(event) => { void addItem(event.target.files?.[0]); event.currentTarget.value = ''; }} />{busy ? <Loader2 className="animate-spin" size={14} /> : <Upload size={14} />} Choose PDF and save</label>}
+          {mode === 'url' && <><label style={{ ...label, marginTop: 12 }}>Website address</label><input type="url" style={input} value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com/research" /><button type="button" onClick={() => void addItem()} disabled={busy || !url.trim()} style={{ ...btn, marginTop: 10, background: acid }}>Save webpage</button></>}
+          {mode === 'transcript' && <><label style={{ ...label, marginTop: 12 }}>Transcript</label><textarea style={{ ...input, height: 150, paddingTop: 12, resize: 'vertical' }} value={transcript} onChange={(event) => setTranscript(event.target.value)} placeholder="Paste transcript text here" /><div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}><label style={{ ...btn, background: 'transparent', color: ink }}><input type="file" accept=".txt,.md,text/plain,text/markdown" hidden onChange={(event) => { importTranscript(event.target.files?.[0]); event.currentTarget.value = ''; }} />Import .txt or .md</label><button type="button" onClick={() => void addItem()} disabled={busy || !transcript.trim()} style={{ ...btn, background: acid }}>Save transcript</button></div></>}
+          {richMode && <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '0 12px' }}>{kindDefinition.fields.map((field) => <div key={field.key}><label style={{ ...label, marginTop: 12 }}>{field.label}</label><input style={input} type={field.inputMode === 'url' ? 'url' : 'text'} inputMode={field.inputMode} value={fields[field.key] || ''} onChange={(event) => setFields((current) => ({ ...current, [field.key]: event.target.value }))} placeholder={field.placeholder} /></div>)}</div>
+            {kindDefinition.file && <label style={{ ...btn, width: '100%', boxSizing: 'border-box', marginTop: 12, background: 'transparent', color: pendingFile ? acid : ink }}><input type="file" accept={kindDefinition.file.accept} hidden disabled={busy} onChange={(event) => { setPendingFile(event.target.files?.[0] || null); event.currentTarget.value = ''; }} />{mode === 'audio' ? <AudioLines size={14} /> : <Upload size={14} />}{pendingFile ? pendingFile.name : kindDefinition.file.label}</label>}
+            {kindDefinition.notes && <><label style={{ ...label, marginTop: 12 }}>{kindDefinition.notes} <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>(optional, used by the AI)</span></label><textarea style={{ ...input, height: 110, paddingTop: 12, resize: 'vertical' }} value={transcript} onChange={(event) => setTranscript(event.target.value)} placeholder={`Paste ${kindDefinition.notes.toLowerCase()} here`} /></>}
+            <button type="button" onClick={() => void addItem()} disabled={busy} style={{ ...btn, marginTop: 12, background: acid }}>{busy ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />}Save {kindDefinition.label.toLowerCase()}</button>
+          </>}
+        </div>}
         {message && <p role="status" style={{ color: message.includes('saved') ? acid : '#F0A7A7', fontSize: 11 }}>{message}</p>}
         {selectedIds.length > 0 && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 14, marginTop: 18, border: `1px solid ${acid}`, background: '#1B2017', flexWrap: 'wrap' }}><strong style={{ fontSize: 12, color: acid }}>{selectedIds.length} source{selectedIds.length === 1 ? '' : 's'} selected</strong><span style={{ display: 'flex', gap: 8 }}><button type="button" onClick={() => onUse('protocol', items.filter((item) => selectedIds.includes(item.id)))} style={{ ...btn, background: acid }}>Use in Protocol</button><button type="button" onClick={() => onUse('pdf', items.filter((item) => selectedIds.includes(item.id)))} style={{ ...btn }}>Use in PDF</button></span></div>}
-        <div style={{ marginTop: 20 }}>{visibleItems.length ? visibleItems.map((item) => { const active = selectedIds.includes(item.id); return <article key={item.id} style={{ display: 'grid', gridTemplateColumns: '34px minmax(0,1fr) auto', gap: 13, alignItems: 'center', borderTop: `1px solid ${line}`, padding: '16px 2px' }}><input aria-label={`Select ${item.title}`} type="checkbox" checked={active} onChange={() => onSelectedIds(active ? selectedIds.filter((id) => id !== item.id) : [...selectedIds, item.id])} style={{ width: 18, height: 18, accentColor: acid }} /><div><span style={{ color: acid, fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{item.kind} · {folders.find((entry) => entry.id === item.folder_id)?.name || 'Unfiled'}</span><h3 style={{ fontFamily: serif, fontSize: 23, fontWeight: 300, margin: '5px 0 3px' }}>{item.title}</h3><span style={{ color: muted, fontSize: 10 }}>{item.kind === 'url' ? item.source_url : item.kind === 'transcript' ? `${item.transcript?.split(/\s+/).filter(Boolean).length || 0} words` : 'Private PDF'}</span></div><div style={{ display: 'flex', gap: 6 }}><button type="button" title={item.kind === 'transcript' ? 'Download transcript' : 'Open source'} onClick={() => void openItem(item)} style={{ ...btn, width: 38, minHeight: 38, padding: 0, background: 'transparent', color: ink }}>{item.kind === 'transcript' ? <Download size={14} /> : <ExternalLink size={14} />}</button><button type="button" title="Delete source" onClick={async () => { await deleteGuideLibraryItem(item.id); setItems((current) => current.filter((entry) => entry.id !== item.id)); onSelectedIds(selectedIds.filter((id) => id !== item.id)); }} style={{ ...btn, width: 38, minHeight: 38, padding: 0, background: 'transparent', color: muted }}><Trash2 size={14} /></button></div></article>; }) : <Empty title="This folder is empty" copy="Upload a PDF, save a useful webpage or add a transcript." />}</div>
+        <div style={{ marginTop: 20 }}>{visibleItems.length ? visibleItems.map((item) => { const active = selectedIds.includes(item.id); const KindIcon = LIBRARY_KIND_ICONS[item.kind] || FileText; const canOpen = item.kind === 'transcript' ? !!item.transcript : !!(item.source_url || item.file_path); return <article key={item.id} style={{ display: 'grid', gridTemplateColumns: '34px minmax(0,1fr) auto', gap: 13, alignItems: 'center', borderTop: `1px solid ${line}`, padding: '16px 2px' }}><input aria-label={`Select ${item.title}`} type="checkbox" checked={active} onChange={() => onSelectedIds(active ? selectedIds.filter((id) => id !== item.id) : [...selectedIds, item.id])} style={{ width: 18, height: 18, accentColor: acid }} /><div style={{ minWidth: 0 }}><span style={{ color: acid, fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 6 }}><KindIcon size={11} strokeWidth={2} />{libraryKindDefinition(item.kind).label} · {folders.find((entry) => entry.id === item.folder_id)?.name || 'Unfiled'}</span><h3 style={{ fontFamily: serif, fontSize: 23, fontWeight: 300, margin: '5px 0 3px' }}>{item.title}</h3><span style={{ color: muted, fontSize: 10, overflowWrap: 'anywhere' }}>{librarySourceSubtitle(item)}</span></div><div style={{ display: 'flex', gap: 6 }}><button type="button" title={item.kind === 'transcript' ? 'Download transcript' : 'Open source'} disabled={!canOpen} onClick={() => void openItem(item)} style={{ ...btn, width: 38, minHeight: 38, padding: 0, background: 'transparent', color: ink, opacity: canOpen ? 1 : .35 }}>{item.kind === 'transcript' ? <Download size={14} /> : <ExternalLink size={14} />}</button><button type="button" title="Delete source" onClick={async () => { await deleteGuideLibraryItem(item.id); setItems((current) => current.filter((entry) => entry.id !== item.id)); onSelectedIds(selectedIds.filter((id) => id !== item.id)); }} style={{ ...btn, width: 38, minHeight: 38, padding: 0, background: 'transparent', color: muted }}><Trash2 size={14} /></button></div></article>; }) : <Empty title={kindFilter === 'all' ? 'This folder is empty' : `No ${libraryKindDefinition(kindFilter).plural.toLowerCase()} here yet`} copy="Upload a PDF, save a webpage, or add a transcript, book, podcast, paper or audio." />}</div>
       </div>
     </div>
   </section>;
@@ -3525,7 +3564,7 @@ function ProtocolAIBar({ accessToken, protocolId, guideId, onUpdated }: { access
     if (!instruction.trim() || busy) return;
     setBusy(true); setResult('');
     try {
-      const refs = libraryItems.filter((item) => folderId && item.folder_id === folderId).map((item) => item.kind === 'url' ? `- ${item.title}: ${item.source_url}` : item.kind === 'transcript' ? `- ${item.title}: ${(item.transcript || '').slice(0, 1500)}` : `- ${item.title} (uploaded file ${item.file_path})`).join('\n');
+      const refs = libraryItems.filter((item) => folderId && item.folder_id === folderId).map((item) => librarySourcePrompt(item)).join('\n');
       const items = await listProtocolItems(accessToken, protocolId);
       const r = await updateProtocolWithAI(accessToken, protocolId, instruction, items, refs);
       setResult(`${r.updated} updated · ${r.added} added · ${r.hidden} hidden${r.summary ? ` — ${r.summary}` : ''}`);
@@ -3688,8 +3727,9 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
         {/* Site builder: the same profile and brand fields as setup step 01. */}
         {tab === 'profile' && user && <><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 350 }}>Site builder</h1><SiteProfileForm userId={user.id} profile={profile} onProfile={onProfile} /></>}
         {tab === 'library' && user && <GuideLibrary guideId={user.id} selectedIds={selectedLibraryIds} onSelectedIds={setSelectedLibraryIds} onUse={(destination, sources) => { setBuilderLibrarySources(sources); setTab(destination === 'protocol' ? 'protocols' : 'offer_builder'); }} />}
-        {(tab === 'offer_builder' || tab === 'value_ramps') && !protocolId && !recipeId && <div role="tablist" aria-label="Offers" style={{ display: 'inline-flex', border: `1px solid ${line}`, marginBottom: 18 }}>{([['offer_builder', 'Offer builder'], ['value_ramps', 'Offer paths']] as const).map(([id, text], index) => <button type="button" role="tab" key={id} aria-selected={tab === id} onClick={() => setTab(id)} style={{ height: 36, padding: '0 16px', border: 0, borderLeft: index ? `1px solid ${line}` : 0, background: tab === id ? ink : 'transparent', color: tab === id ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer' }}>{text}</button>)}</div>}
+        {(tab === 'offer_builder' || tab === 'value_ramps' || tab === 'products') && !protocolId && !recipeId && <div role="tablist" aria-label="Offers" style={{ display: 'inline-flex', border: `1px solid ${line}`, marginBottom: 18 }}>{([['offer_builder', 'Offer builder'], ['value_ramps', 'Offer paths'], ['products', 'My products']] as const).map(([id, text], index) => <button type="button" role="tab" key={id} aria-selected={tab === id} onClick={() => setTab(id)} style={{ height: 36, padding: '0 16px', border: 0, borderLeft: index ? `1px solid ${line}` : 0, background: tab === id ? ink : 'transparent', color: tab === id ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer' }}>{text}</button>)}</div>}
         {tab === 'offer_builder' && <OfferBuilder profile={profile} protocols={protocols} offers={offers} recipes={recipes} librarySources={builderLibrarySources} onOpenProtocols={() => setTab('protocols')} onCreated={(offer) => setOffers((current) => [offer, ...current])} />}
+        {tab === 'products' && user && <GuardianProducts guideId={user.id} guardianSlug={profile.slug} commissionPercent={profile.commission_percent} protocols={protocols} />}
         {tab === 'leads' && !protocolId && !recipeId && user && <ReviewsPanel userId={user.id} slug={profile.slug} />}
         {tab === 'protocols' && !protocolId && protocols.length > 1 && <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}><button onClick={() => setCombining(!combining)} style={{ ...btn, background: 'transparent', color: ink }}><Combine size={14} /> Combine for a person</button></div>}
         {tab === 'protocols' && !protocolId && combining && accessToken && user && <CombineProtocols accessToken={accessToken} ownerId={user.id} protocols={protocols} leads={leads} onClose={() => setCombining(false)} onSaved={(saved) => setProtocols((current) => [saved, ...current])} onOpen={(id) => { setCombining(false); setProtocolId(id); }} />}
@@ -3747,7 +3787,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
         {tab === 'protocols' && protocolId && accessToken && user && <div style={{ background: '#F5F4EF', color: '#151515', padding: 18, minHeight: 700 }}>
           <button onClick={() => setProtocolId(null)} style={{ ...btn, marginBottom: 14, background: '#151515', color: '#FFF' }}>← Protocols</button>
           <ProtocolChildrenPanel token={accessToken} ownerId={user.id} parentId={editorProtocolId || protocolId} protocols={protocols} onChanged={refreshProtocols} onEdit={(kind, id) => { setParentContext(editorProtocolId || protocolId); setChildPlanId(id); setTab(kind); setProtocolId(null); refreshProtocols(); }} />
-          {protocols.find((protocol) => protocol.id === protocolId) && <GuardianProtocolAI accessToken={accessToken} protocol={protocols.find((protocol) => protocol.id === protocolId)!} ownerId={user.id} initialSourceUrls={builderLibrarySources.filter((source) => source.kind === 'url').map((source) => source.source_url).filter(Boolean).join('\n')} initialSourcePath={builderLibrarySources.find((source) => source.kind === 'pdf')?.file_path || null} initialRequest={builderLibrarySources.length ? `Build a practical Protocol using these Library sources:\n${builderLibrarySources.map((source) => `- ${source.title}${source.kind === 'transcript' ? `: ${source.transcript?.slice(0, 4000)}` : ''}`).join('\n')}` : undefined} onBuilt={() => setProtocolRevision((value) => value + 1)} />}
+          {protocols.find((protocol) => protocol.id === protocolId) && <GuardianProtocolAI accessToken={accessToken} protocol={protocols.find((protocol) => protocol.id === protocolId)!} ownerId={user.id} initialSourceUrls={librarySourceUrls(builderLibrarySources).join('\n')} initialSourcePath={librarySourceDocumentPath(builderLibrarySources)} initialRequest={builderLibrarySources.length ? `Build a practical Protocol using these Library sources:\n${builderLibrarySources.map((source) => librarySourcePrompt(source, 4000)).join('\n')}` : undefined} onBuilt={() => setProtocolRevision((value) => value + 1)} />}
           <ProtocolEditor key={`${protocolId}-${protocolRevision}`} accessToken={accessToken} initialProtocolId={editorProtocolId || protocolId} ownerId={user.id} onSelectedChange={setEditorProtocolId} onCustomizeRecipe={customizeRecipe} />
           <div style={{ height: 90 }} />
           <ProtocolAIBar key={editorProtocolId || protocolId} accessToken={accessToken} protocolId={editorProtocolId || protocolId} guideId={user.id} onUpdated={() => setProtocolRevision((value) => value + 1)} />
