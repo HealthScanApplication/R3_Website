@@ -75,7 +75,7 @@ export function ContentBuilder({ profile, offers, protocols, recipes }: { profil
     const b = brands.find((x) => x.id === brandId);
     if (!b) return null;
     const kit = brandKitOf(b.social_links);
-    return { name: b.name, font: kit.font, cta: ctaColours(kit).primary, logo: b.logo_url };
+    return { name: b.name, font: kit.font, cta: ctaColours(kit).primary, logo: b.logo_url, kit };
   }, [brands, brandId]);
   // The same brand's tone and visual language for video prompts (voice/visual keys are read when the brand has them).
   const videoBrand = useMemo<BrandStyle | null>(() => {

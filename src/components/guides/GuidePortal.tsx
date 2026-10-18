@@ -2485,7 +2485,7 @@ function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasPro
         <SocialUrlField label="Personal website" Icon={Globe2} value={websiteUrl} onChange={setWebsiteUrl} placeholder="https://yourwebsite.com" />
       </div>
       {/* The selected brand's look: logo, background, typeface and buttons. */}
-      <BrandKitFields userId={userId} brandName={displayName} kit={brandKit} onChange={setBrandKit} logoUrl={logoUrl} onLogo={setLogoUrl} />
+      <BrandKitFields userId={userId} brandName={displayName} kit={brandKit} onChange={setBrandKit} logoUrl={logoUrl} onLogo={setLogoUrl} accessToken={accessToken} facts={{ about: intro, tags: expertiseTags, audience: audience.join(', ') }} />
       {importedProfile?.topics.length ? <div style={{ borderTop: `1px solid ${line}`, paddingTop: 18, marginTop: 24 }}><span style={label}>Detected guidance</span><div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>{importedProfile.topics.map((topic) => <span key={topic} style={{ border: `1px solid ${acid}`, color: acid, padding: '6px 9px', fontSize: 10 }}>{topic}</span>)}</div></div> : null}
       <div style={{ border: `1px solid ${line}`, background: panel, padding: 14, marginTop: 24 }}>
         <label style={{ ...label, color: ink }}>How should clients book with you? <span style={{ color: muted }}>· optional</span></label>
@@ -3758,6 +3758,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
  */
 type SiteBrand = Omit<GuideBrand, 'id' | 'guide_id'> & { key: string };
 function SiteProfileForm({ userId, profile, onProfile }: { userId: string; profile: GuideProfile; onProfile: (p: GuideProfile) => void }) {
+  const { accessToken } = useAuth();
   const links = profile.social_links || {};
   const setLinks = (patch: Record<string, string>) => onProfile({ ...profile, social_links: { ...links, ...patch } });
   const [brands, setBrands] = useState<SiteBrand[]>([]);            // business brands
@@ -3858,7 +3859,7 @@ function SiteProfileForm({ userId, profile, onProfile }: { userId: string; profi
       <SocialUrlField label="Linktree" Icon={Link2} value={v.social.linktree || ''} onChange={(x) => set.social('linktree', x)} placeholder="https://linktr.ee/yourname" />
       <SocialUrlField label={isPersonal ? 'Personal website' : 'Website'} Icon={Globe2} value={v.social.website || ''} onChange={(x) => set.social('website', x)} placeholder="https://yourwebsite.com" />
     </div>
-    <BrandKitFields userId={userId} brandName={v.name} kit={v.kit} onChange={set.kit} logoUrl={v.logo} onLogo={set.logo} />
+    <BrandKitFields userId={userId} brandName={v.name} kit={v.kit} onChange={set.kit} logoUrl={v.logo} onLogo={set.logo} accessToken={accessToken} facts={{ about: isPersonal ? profile.bio || profile.headline : '', tags: isPersonal ? parseExpertiseTags(links.expertise_tags) : [] }} />
     {isPersonal && <>
       <div style={{ border: `1px solid ${line}`, background: panel, padding: 14, marginTop: 24 }}>
         <label style={{ ...label, color: ink }}>How should clients book with you? <span style={{ color: muted }}>· optional</span></label>

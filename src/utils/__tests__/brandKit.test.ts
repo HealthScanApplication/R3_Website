@@ -3,7 +3,7 @@ import { brandKitLinks, brandKitOf, ctaColours, defaultBrandKit, googleFontHref,
 
 describe('brand kit storage', () => {
   it('round-trips through social_links keys', () => {
-    const kit = { font: 'Fraunces', background: 'https://cdn.example/bg.mp4', backgroundType: 'video' as const, ctaMode: 'colour' as const, primary: '#2F5D50', secondary: '#F2E8D5', mono: 'black_on_white' as const };
+    const kit = { ...defaultBrandKit(), font: 'Fraunces', background: 'https://cdn.example/bg.mp4', backgroundType: 'video' as const, ctaMode: 'colour' as const, primary: '#2F5D50', secondary: '#F2E8D5', mono: 'black_on_white' as const };
     expect(brandKitOf({ instagram: 'x', ...brandKitLinks(kit) })).toEqual({ ...kit, primary: '#2F5D50', secondary: '#F2E8D5' });
   });
   it('falls back to safe defaults for missing or invalid values', () => {
