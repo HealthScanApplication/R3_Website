@@ -514,3 +514,74 @@ export async function listPersonalProtocolPeople(userId: string): Promise<Map<st
     return [row.id as string, { name: String(person.name || 'Personal'), imageUrl: person.image_url || person.avatar_url || null }];
   }));
 }
+
+/** A Guardian's own Shopify product (guide_products). Sold on the Guardian's checkout; see docs/guardian-shopify-commerce.md. */
+export interface GuideProduct {
+  id: string;
+  guide_id: string;
+  shop_domain: string;
+  myshopify_domain: string | null;
+  product_handle: string;
+  variant_id: string | null;
+  variant_title: string | null;
+  title: string;
+  description: string | null;
+  image_url: string | null;
+  price_cents: number | null;
+  currency: string;
+  discount_code: string | null;
+  commission_percent: number | null;
+  status: 'draft' | 'published';
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  /** Protocols the product is shown on. */
+  protocol_ids: string[];
+}
+
+export type GuideProductInput = Omit<GuideProduct, 'id' | 'guide_id' | 'commission_percent' | 'created_at' | 'updated_at' | 'protocol_ids'>;
+
+// A missing table answers 404 with an empty body, so keep the status for the UI's message.
+function productsError(error: any, status: number): Error & { code?: string; status?: number } {
+  return Object.assign(new Error(error?.message || (status === 404 ? 'guide_products is not available yet' : `Products request failed (${status})`)), { code: error?.code || (status === 404 ? 'PGRST205' : undefined), status });
+}
+
+function withProtocolIds(row: any): GuideProduct {
+  const { guide_product_protocols: links, ...product } = row;
+  return { ...product, protocol_ids: ((links || []) as { protocol_id: string; position: number }[]).sort((a, b) => a.position - b.position).map((link) => link.protocol_id) } as GuideProduct;
+}
+
+export async function listGuideProducts(guideId: string): Promise<GuideProduct[]> {
+  const { data, error, status } = await db().from('guide_products').select('*, guide_product_protocols(protocol_id, position)').eq('guide_id', guideId).order('sort_order').order('created_at', { ascending: false });
+  if (error) throw productsError(error, status);
+  return (data || []).map(withProtocolIds);
+}
+
+/** Published products for a Guardian's public site. RLS also requires the Guardian to be approved. */
+export async function listPublicGuideProducts(guideId: string): Promise<GuideProduct[]> {
+  const { data, error, status } = await db().from('guide_products').select('*, guide_product_protocols(protocol_id, position)').eq('guide_id', guideId).eq('status', 'published').order('sort_order').limit(60);
+  if (error) throw productsError(error, status);
+  return (data || []).map(withProtocolIds);
+}
+
+export async function saveGuideProduct(guideId: string, product: GuideProductInput & { id?: string }, protocolIds: string[]): Promise<GuideProduct> {
+  const { id, ...row } = product;
+  const query = id
+    ? db().from('guide_products').update(row).eq('id', id).eq('guide_id', guideId)
+    : db().from('guide_products').insert({ guide_id: guideId, ...row });
+  const { data, error, status } = await query.select().single();
+  if (error) throw productsError(error, status);
+  // Replace the Protocol links so their order follows the Guardian's selection.
+  const { error: clearError, status: clearStatus } = await db().from('guide_product_protocols').delete().eq('product_id', data.id);
+  if (clearError) throw productsError(clearError, clearStatus);
+  if (protocolIds.length) {
+    const { error: linkError, status: linkStatus } = await db().from('guide_product_protocols').insert(protocolIds.map((protocol_id, position) => ({ product_id: data.id, protocol_id, position })));
+    if (linkError) throw productsError(linkError, linkStatus);
+  }
+  return { ...(data as Omit<GuideProduct, 'protocol_ids'>), protocol_ids: protocolIds };
+}
+
+export async function deleteGuideProduct(id: string): Promise<void> {
+  const { error, status } = await db().from('guide_products').delete().eq('id', id);
+  if (error) throw productsError(error, status);
+}

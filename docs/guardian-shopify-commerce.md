@@ -192,3 +192,24 @@ Approve **Phase 1** as a small build on the website and mobile app:
   2. Whether Shopify Collective is available to EU stores.
 
 Nothing in Phase 1 touches Stripe or payment keys.
+
+## Phase 1 build status (2026-10-18)
+
+Built on the website (branch `claude/cool-williams-2b3520`):
+
+- **Database:** `supabase/migrations/20261018120000_guide_products.sql` adds `guide_products` and `guide_product_protocols`, with RLS:
+  - Guardians manage their own products.
+  - The public reads published products of approved Guardians.
+  - Only admins and the service role set `commission_percent`.
+  - **Not applied yet:** apply to staging first.
+- **Workspace:** Offers → **My products**. Paste a Shopify product link and **Fetch from Shopify** fills name, variants, price, currency, image and description from the store's public `/products/<handle>.js` and `/meta.json`, which are CORS-open on standard Shopify stores. Headless stores need manual entry. Products can be attached to Protocols, given a discount code, and published.
+- **Public site:** a **Shop** section on `/guardians/<slug>` (hidden when empty).
+- **Links:** `src/utils/guideProducts.ts`:
+  - With a variant: cart permalink `/cart/<variant>:1?discount=…&ref=routine3&attributes[routine3_guardian|protocol|medium]=…&utm_*`.
+  - Without a variant: the product page, through `/discount/<code>?redirect=…` when there is a code.
+- **Commission:** the rate is `coalesce(product.commission_percent, guide_profiles.commission_percent)` (default 15%). Invoicing is manual, from the Guardian's Shopify orders filtered by referral code `routine3` or the discount code.
+
+Not built yet:
+
+- **Mobile app:** the in-app Shop block, proposed as its own session in the mobile repo.
+- **Click tracking:** there are no click-tracking or order-import tables; attribution relies on Shopify's own order data.
