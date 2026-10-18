@@ -104,6 +104,6 @@ export function ContentBuilder({ profile, offers, protocols, recipes }: { profil
         </div>
       </div>
     </div>
-    <ContentStudio key={`${source}-${picked?.id || ''}`} creator={profile.display_name} audience={audience} problem={problem} siteUrl={siteUrl} offers={studioOffers} heading={picked && source !== 'none' ? `Create posts about ${picked.name}` : 'Create posts about your topic'} brand={postBrand} />
+    <ContentStudio key={`${source}-${picked?.id || ''}`} creator={profile.display_name} avatar={profile.avatar_url} audience={audience} problem={problem} siteUrl={siteUrl} offers={studioOffers} heading={picked && source !== 'none' ? `Create posts about ${picked.name}` : 'Create posts about your topic'} brand={postBrand} />
   </div>;
 }

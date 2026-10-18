@@ -2418,7 +2418,7 @@ function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasPro
           </div>}
         </div>;
       })}</div>
-      <ContentStudio creator={displayName} audience={audience.map(describeAudience).join(' · ') || rampTargetAudience} problem={rampTargetProblem} siteUrl={publishedSitePath}
+      <ContentStudio creator={displayName} avatar={avatarUrl} audience={audience.map(describeAudience).join(' · ') || rampTargetAudience} problem={rampTargetProblem} siteUrl={publishedSitePath}
         offers={[{ title: customerFacingOfferTitle(leadMagnetTitle || suggestedRoutineName), free: true, description: freeAudienceValue }, ...orderedUpsells.map((kind) => ({ title: upsellDrafts[kind].title, free: offerAccess[kind] !== 'paid', price: formatMoney(upsellDrafts[kind].price, currency), description: upsellDrafts[kind].audienceValue }))]} />
       </div> : <div style={{ padding: 22, display: 'grid', gap: 10 }}>
         {[

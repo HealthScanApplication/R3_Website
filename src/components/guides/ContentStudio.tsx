@@ -18,7 +18,7 @@ import { copyPrompt, imagePrompt } from '../../utils/brandBrief';
 export interface PostBrand { name: string; font: string; cta: ButtonColours; logo: string | null; kit?: BrandKit | null }
 
 const FIGMA_TEMPLATE = 'https://www.figma.com/design/6HS7WXK5SFoLh41AkzKzMZ/--R%C2%B3---Routine%C2%B3-%E2%80%A2-Libray?node-id=12-886';
-const FONT_HREF = 'https://fonts.googleapis.com/css2?family=Italiana&family=Inter:wght@400;600;700;800&family=Nanum+Myeongjo&family=Bebas+Neue&family=Fraunces:wght@400&display=swap';
+const FONT_HREF = 'https://fonts.googleapis.com/css2?family=Italiana&family=Inter:wght@400;600;700;800&family=Nanum+Myeongjo&family=Bebas+Neue&family=Fraunces:wght@400&family=Archivo:wght@600;700&display=swap';
 
 type FormatId = 'story' | 'post' | 'square' | 'thumb';
 const FORMATS: { id: FormatId; label: string; platforms: string; w: number; h: number }[] = [
@@ -89,7 +89,7 @@ export function qrLink(siteUrl: string): string {
  * (versions 2–6 have their one alignment pattern near a corner).
  */
 export type QrLogoSize = 'small' | 'medium' | 'large';
-export interface QrStyle { invert?: boolean; logo?: QrLogoSize }
+export interface QrStyle { invert?: boolean; logo?: QrLogoSize; size?: QrLogoSize }
 /** Share of the code's width kept clear for the R³ mark. Large switches to error correction H (30%). */
 const QR_LOGO: Record<QrLogoSize, number> = { small: 0.22, medium: 0.3, large: 0.36 };
 export function drawQr(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, size: number, style: QrStyle = {}) {
@@ -120,11 +120,14 @@ export function drawQr(ctx: CanvasRenderingContext2D, text: string, x: number, y
   }
   if (!mark) return;
   const m = logo * cell, mx = ox + lo * cell, my = oy + lo * cell;
-  // The R³ mark: white on a black tile, half a module inside the clear square so the code's edge stays crisp.
-  const inset = cell * 0.5;
-  ctx.fillStyle = '#111111'; roundRect(ctx, mx + inset, my + inset, m - inset * 2, m - inset * 2, m * 0.2); ctx.fill();
+  // The R³ mark in the app logo's style (RoutineMark): Archivo Bold, white on a black tile with a hairline outline.
+  // Half a module inside the clear square so the code's edge stays crisp.
+  const inset = cell * 0.5, t = m - inset * 2, tx = mx + inset, ty = my + inset;
+  ctx.fillStyle = '#111111'; roundRect(ctx, tx, ty, t, t, t * 0.06); ctx.fill();
+  ctx.lineWidth = Math.max(1, t * 0.035); ctx.strokeStyle = '#FFFFFF';
+  roundRect(ctx, tx + t * 0.12, ty + t * 0.12, t * 0.76, t * 0.76, t * 0.03); ctx.stroke();
   ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = `700 ${m * 0.5}px Inter`; ctx.fillText('R³', mx + m / 2, my + m / 2 + m * 0.03);
+  ctx.font = `700 ${t * 0.4}px Archivo, Inter, sans-serif`; ctx.fillText('R³', mx + m / 2, my + m / 2 + t * 0.02);
   ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
 }
 
@@ -152,7 +155,7 @@ export const TEXT_POSITIONS: { id: TextPosition; label: string }[] = [
   { id: 'bottom-left', label: 'Bottom left' }, { id: 'bottom-right', label: 'Bottom right' }, { id: 'top-left', label: 'Top left' }, { id: 'top-right', label: 'Top right' },
 ];
 
-export interface PostCopy { headline: string; subline: string; cta: string; credit: string; qr?: string; brand?: PostBrand | null; style?: TextStyleId; position?: TextPosition; qrStyle?: QrStyle }
+export interface PostCopy { headline: string; subline: string; cta: string; credit: string; qr?: string; brand?: PostBrand | null; style?: TextStyleId; position?: TextPosition; qrStyle?: QrStyle; avatar?: string | null }
 
 /**
  * Everything is loaded first (fonts, background, logo); a run that `isStale()` by then stops before touching the
@@ -167,8 +170,8 @@ export async function drawPost(canvas: HTMLCanvasElement, fmt: { id: FormatId; w
   const top = position.startsWith('top'), alignRight = position.endsWith('right');
   const headFont = brand ? `"${brand.font}"` : st.head.font, ctaFont = brand ? `"${brand.font}"` : 'Inter';
   if (brand) await ensureBrandFont(brand.font); // the @font-face must exist before document.fonts.load can find it
-  await Promise.all([document.fonts.load(`${st.head.weight} ${st.head.size}px ${headFont}`), document.fonts.load(`${st.sub.weight} ${st.sub.size}px ${st.sub.font}`), document.fonts.load(`600 28px ${ctaFont}`), document.fonts.load('600 20px Inter')]).catch(() => {});
-  const [loaded, logo] = await Promise.all([bg ? loadImage(bg) : Promise.resolve(null), brand?.logo ? loadImage(brand.logo, true) : Promise.resolve(null)]);
+  await Promise.all([document.fonts.load('700 24px Archivo'), document.fonts.load(`${st.head.weight} ${st.head.size}px ${headFont}`), document.fonts.load(`${st.sub.weight} ${st.sub.size}px ${st.sub.font}`), document.fonts.load(`600 28px ${ctaFont}`), document.fonts.load('600 20px Inter')]).catch(() => {});
+  const [loaded, logo, avatar] = await Promise.all([bg ? loadImage(bg) : Promise.resolve(null), brand?.logo ? loadImage(brand.logo, true) : Promise.resolve(null), copy.avatar ? loadImage(copy.avatar, true) : Promise.resolve(null)]);
   if (isStale()) return;
   canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext('2d')!;
@@ -210,9 +213,16 @@ export async function drawPost(canvas: HTMLCanvasElement, fmt: { id: FormatId; w
   const label = copy.cta.toUpperCase();
   const tracking = 28 * s * 0.3;
   const textW = [...label].reduce((sum, ch) => sum + ctx.measureText(ch).width + tracking, -tracking);
-  const boxW = textW + 64 * s, boxH = 95 * s;
-  // The QR sits in the corner diagonally opposite the text, so the text keeps its full width.
-  const qrSize = copy.qr ? (fmt.id === 'thumb' ? 200 : 250) * s : 0;
+  // The button leads with a ROUTINE³ segment, like the app logo's lockup, then a hairline and the call to action.
+  const PREFIX = 'ROUTINE³', prefixSize = 24 * s, prefixTrack = prefixSize * 0.13;
+  ctx.font = `700 ${prefixSize}px Archivo, Inter, sans-serif`;
+  const prefixTextW = [...PREFIX].reduce((sum, ch) => sum + ctx.measureText(ch).width + prefixTrack, -prefixTrack);
+  const prefixW = prefixTextW + 52 * s;
+  const boxW = prefixW + textW + 64 * s, boxH = 95 * s;
+  // The QR sits in the corner diagonally opposite the text, so the text keeps its full width. Small (180) is the
+  // least that still decoded with the post scaled to a phone's width (390 px); medium still reads at 270 px.
+  const qrBase = { small: 180, medium: 250, large: 320 }[copy.qrStyle?.size || 'medium'];
+  const qrSize = copy.qr ? qrBase * (fmt.id === 'thumb' ? 0.8 : 1) * s : 0;
   const maxW = (fmt.id === 'thumb' ? 640 : st.maxW) * s;
   const headFontCss = `${st.head.weight} ${st.head.size * s}px ${headFont}`, subFontCss = `${st.sub.weight} ${st.sub.size * s}px ${st.sub.font}`;
   ctx.font = headFontCss;
@@ -257,7 +267,12 @@ export async function drawPost(canvas: HTMLCanvasElement, fmt: { id: FormatId; w
   ctx.fillStyle = btn.background; ctx.fillRect(bx, y, boxW, boxH);
   ctx.lineWidth = 2 * s; ctx.strokeStyle = btn.border; ctx.strokeRect(bx, y, boxW, boxH);
   ctx.fillStyle = btn.color;
-  let cx = bx + 32 * s;
+  ctx.font = `700 ${prefixSize}px Archivo, Inter, sans-serif`;
+  let px = bx + 26 * s;
+  for (const ch of PREFIX) { ctx.fillText(ch, px, y + boxH / 2 + prefixSize * 0.36); px += ctx.measureText(ch).width + prefixTrack; }
+  ctx.fillRect(bx + prefixW - s, y, 2 * s, boxH);
+  ctx.font = `600 ${28 * s}px ${ctaFont}`;
+  let cx = bx + prefixW + 32 * s;
   for (const ch of label) { ctx.fillText(ch, cx, y + boxH / 2 + 10 * s); cx += ctx.measureText(ch).width + tracking; }
   // QR in the opposite corner; the creator credit and brand logo share the opposite edge on the text's side.
   const qrEdge = fmt.id === 'thumb' ? 50 * s : 60 * s;
@@ -267,9 +282,23 @@ export async function drawPost(canvas: HTMLCanvasElement, fmt: { id: FormatId; w
   if (copy.credit) {
     ctx.font = `600 ${20 * s}px Inter`;
     const t = copy.credit.toUpperCase();
-    const pad = 14 * s, cw = ctx.measureText(t).width + pad * 2, cx0 = alignRight ? mx - cw : mx;
+    // The creator's profile photo leads the credit as a circle inside the tag; without one, their initial.
+    const pad = 14 * s, face = 34 * s, lead = face + 10 * s;
+    const cw = ctx.measureText(t).width + pad + 5 * s + lead, cx0 = alignRight ? mx - cw : mx;
     ctx.fillStyle = 'rgba(255,255,255,0.88)'; ctx.fillRect(cx0, markTop, cw, 44 * s);
-    ctx.fillStyle = '#111111'; ctx.fillText(t, cx0 + pad, markTop + 29 * s);
+    const fx = cx0 + 5 * s, fy = markTop + 5 * s;
+    ctx.save(); ctx.beginPath(); ctx.arc(fx + face / 2, fy + face / 2, face / 2, 0, Math.PI * 2); ctx.clip();
+    if (avatar?.naturalWidth) {
+      const k = Math.max(face / avatar.naturalWidth, face / avatar.naturalHeight);
+      ctx.drawImage(avatar, fx + (face - avatar.naturalWidth * k) / 2, fy + (face - avatar.naturalHeight * k) / 2, avatar.naturalWidth * k, avatar.naturalHeight * k);
+    } else {
+      ctx.fillStyle = '#111111'; ctx.fillRect(fx, fy, face, face);
+      ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'center'; ctx.font = `700 ${17 * s}px Archivo, Inter, sans-serif`;
+      ctx.fillText((t.split(' BY ').pop() || t).trim().charAt(0), fx + face / 2, fy + face / 2 + 6 * s);
+      ctx.textAlign = 'left'; ctx.font = `600 ${20 * s}px Inter`;
+    }
+    ctx.restore();
+    ctx.fillStyle = '#111111'; ctx.fillText(t, fx + lead, markTop + 29 * s);
     mx += (alignRight ? -1 : 1) * (cw + 14 * s);
   }
   // CORS-enabled so the canvas can still be downloaded; skipped if it fails.
@@ -281,7 +310,7 @@ export async function drawPost(canvas: HTMLCanvasElement, fmt: { id: FormatId; w
   }
 }
 
-export function ContentStudio({ creator, audience, problem, offers, siteUrl, heading = 'Create posts for this offer path', brand = null }: { creator: string; audience: string; problem: string; offers: StudioOffer[]; siteUrl: string; heading?: string; brand?: PostBrand | null }) {
+export function ContentStudio({ creator, avatar = null, audience, problem, offers, siteUrl, heading = 'Create posts for this offer path', brand = null }: { creator: string; avatar?: string | null; audience: string; problem: string; offers: StudioOffer[]; siteUrl: string; heading?: string; brand?: PostBrand | null }) {
   // Template fonts load from Google Fonts; redraw once they are registered, or the first frame uses a fallback.
   const [fontsReady, setFontsReady] = useState(0);
   useEffect(() => {
@@ -303,11 +332,12 @@ export function ContentStudio({ creator, audience, problem, offers, siteUrl, hea
   const [position, setPosition] = useState<TextPosition>('bottom-left');
   const [qrInvert, setQrInvert] = useState(false);
   const [qrLogo, setQrLogo] = useState<QrLogoSize>('medium');
+  const [qrSizeId, setQrSizeId] = useState<QrLogoSize>('medium');
   const [copied, setCopied] = useState('');
   useEffect(() => {
     setHeadline(`Build a routine for ${solution}`);
     setSubline(offer.description ? offer.description.split(/(?<=[.!?])\s/)[0].replace(/\.$/, '') : `Simple daily actions for ${audience.toLowerCase()}`);
-    setCta(offer.free ? 'Unlock the free routine' : 'Start the Protocol');
+    setCta(offer.free ? 'Get routine' : 'Start the Protocol');
   }, [offerIndex, solution, audience]);
   const fmt = FORMATS.find((f) => f.id === fmtId)!;
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -317,9 +347,9 @@ export function ContentStudio({ creator, audience, problem, offers, siteUrl, hea
   const qrUrl = qrLink(siteUrl);
   useEffect(() => {
     let stale = false; // a newer run (or unmount) supersedes this one
-    if (canvasRef.current) drawPost(canvasRef.current, fmt, bgUrl(background), { headline, subline, cta, credit, qr: qrUrl, brand, style: textStyle, position, qrStyle: { invert: qrInvert, logo: qrLogo } }, () => stale);
+    if (canvasRef.current) drawPost(canvasRef.current, fmt, bgUrl(background), { headline, subline, cta, credit, qr: qrUrl, brand, style: textStyle, position, qrStyle: { invert: qrInvert, logo: qrLogo, size: qrSizeId }, avatar }, () => stale);
     return () => { stale = true; };
-  }, [fmt, background, headline, subline, cta, credit, qrUrl, fontsReady, brand, textStyle, position, qrInvert, qrLogo]);
+  }, [fmt, background, headline, subline, cta, credit, qrUrl, fontsReady, brand, textStyle, position, qrInvert, qrLogo, qrSizeId, avatar]);
   const tag = solution.replace(/\s+/g, '');
   const captions: Record<string, string> = {
     TikTok: `${problem}? Here's a simple routine for ${solution} for ${audience.toLowerCase()}. ${offer.free ? 'Free' : 'Start'} "${offer.title}" by ${creator}. Link in bio. #${tag} #routine #wellbeing`,
@@ -351,9 +381,10 @@ export function ContentStudio({ creator, audience, problem, offers, siteUrl, hea
           <span aria-hidden="true" style={{ display: 'inline-block', fontFamily: t.head.font, fontWeight: t.head.weight, fontSize: t.id === 'bold' ? 22 : 18, lineHeight: 1, padding: '2px 6px', color: t.panel || t.highlight ? '#111' : t.id === 'night' ? '#F5F2EA' : '#111', background: t.highlight || t.panel ? '#FFF' : t.id === 'night' ? '#11120F' : '#EFE6DB', border: t.id === 'night' ? `1px solid ${line}` : 0 }}>{t.head.upper ? 'AA' : 'Aa'}</span>
           <span style={{ fontSize: 9.5, color: muted }}>{t.label}</span></button>)}</div></div>
         <label><span style={lab}>Text position</span><select value={position} onChange={(e) => setPosition(e.target.value as TextPosition)} style={field}>{TEXT_POSITIONS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
           <label><span style={lab}>QR colours</span><select value={qrInvert ? 'invert' : 'normal'} onChange={(e) => setQrInvert(e.target.value === 'invert')} style={field}><option value="normal">Black on white</option><option value="invert">White on black</option></select></label>
-          <div><span style={lab}>R³ logo in QR</span><div role="group" aria-label="R³ logo size" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 4 }}>{(['small', 'medium', 'large'] as const).map((k) => <button key={k} type="button" aria-pressed={qrLogo === k} onClick={() => setQrLogo(k)} style={{ height: 38, border: `1px solid ${qrLogo === k ? acid : line}`, background: qrLogo === k ? '#20251B' : 'transparent', color: ink, fontSize: 11, cursor: 'pointer' }}>{k === 'small' ? 'S' : k === 'medium' ? 'M' : 'L'}</button>)}</div></div>
+          <div><span style={lab}>QR size</span><div role="group" aria-label="QR size" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 4 }}>{(['small', 'medium', 'large'] as const).map((k) => <button key={k} type="button" aria-pressed={qrSizeId === k} onClick={() => setQrSizeId(k)} style={{ height: 38, border: `1px solid ${qrSizeId === k ? acid : line}`, background: qrSizeId === k ? '#20251B' : 'transparent', color: ink, fontSize: 11, cursor: 'pointer' }}>{k === 'small' ? 'S' : k === 'medium' ? 'M' : 'L'}</button>)}</div></div>
+          <div><span style={lab}>R³ in QR</span><div role="group" aria-label="R³ logo size" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 4 }}>{(['small', 'medium', 'large'] as const).map((k) => <button key={k} type="button" aria-pressed={qrLogo === k} onClick={() => setQrLogo(k)} style={{ height: 38, border: `1px solid ${qrLogo === k ? acid : line}`, background: qrLogo === k ? '#20251B' : 'transparent', color: ink, fontSize: 11, cursor: 'pointer' }}>{k === 'small' ? 'S' : k === 'medium' ? 'M' : 'L'}</button>)}</div></div>
         </div>
         <label><span style={lab}>Headline</span><input value={headline} onChange={(e) => setHeadline(e.target.value)} style={field} /></label>
         <label><span style={lab}>Subline</span><input value={subline} onChange={(e) => setSubline(e.target.value)} style={field} /></label>
