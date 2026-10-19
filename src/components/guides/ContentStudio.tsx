@@ -312,6 +312,17 @@ export async function drawPost(canvas: HTMLCanvasElement, fmt: { id: FormatId; w
   }
 }
 
+/** A text-style button's preview: the actual post, drawn small in that style (no QR, so it stays light). */
+export function StyleThumb({ styleId, bg, headline, subline, cta, credit, brand, position, fontsReady }: { styleId: TextStyleId; bg: string; headline: string; subline: string; cta: string; credit: string; brand: PostBrand | null; position: TextPosition; fontsReady: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    let stale = false;
+    if (ref.current) drawPost(ref.current, { id: 'story', w: 270, h: 480 }, bg, { headline, subline, cta, credit, brand, style: styleId, position }, () => stale).catch(() => {});
+    return () => { stale = true; };
+  }, [styleId, bg, headline, subline, cta, credit, brand, position, fontsReady]);
+  return <canvas ref={ref} aria-hidden="true" style={{ width: '100%', aspectRatio: '9 / 16', display: 'block', background: '#1B1C18' }} />;
+}
+
 export function ContentStudio({ creator, avatar = null, audience, problem, offers, siteUrl, heading = 'Create posts for this offer path', brand = null }: { creator: string; avatar?: string | null; audience: string; problem: string; offers: StudioOffer[]; siteUrl: string; heading?: string; brand?: PostBrand | null }) {
   // Template fonts load from Google Fonts; redraw once they are registered, or the first frame uses a fallback.
   const [fontsReady, setFontsReady] = useState(0);
@@ -379,9 +390,9 @@ export function ContentStudio({ creator, avatar = null, audience, problem, offer
       <div style={{ display: 'grid', gap: 12, alignContent: 'start' }}>
         {offers.length > 1 && <label><span style={lab}>Offer</span><select value={offerIndex} onChange={(e) => setOfferIndex(Number(e.target.value))} style={field}>{offers.map((o, i) => <option key={i} value={i}>{String(i + 1).padStart(2, '0')} · {o.title} · {o.free ? 'Free' : o.price}</option>)}</select></label>}
         <div><span style={lab}>Format</span><div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 6 }}>{FORMATS.map((f) => <button key={f.id} type="button" aria-pressed={fmtId === f.id} onClick={() => setFmtId(f.id)} style={{ minHeight: 44, border: `1px solid ${fmtId === f.id ? acid : line}`, background: fmtId === f.id ? '#20251B' : 'transparent', color: ink, textAlign: 'left', padding: '6px 10px', cursor: 'pointer' }}><strong style={{ display: 'block', fontSize: 12 }}>{f.label}</strong><span style={{ display: 'block', color: muted, fontSize: 9.5 }}>{f.platforms}</span></button>)}</div></div>
-        <div><span style={lab}>Text style</span><div role="group" aria-label="Text style" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6 }}>{TEXT_STYLES.map((t) => <button key={t.id} type="button" aria-pressed={textStyle === t.id} onClick={() => setTextStyle(t.id)} style={{ minHeight: 52, border: `1px solid ${textStyle === t.id ? acid : line}`, background: textStyle === t.id ? '#20251B' : 'transparent', color: ink, padding: '6px 8px', cursor: 'pointer', display: 'grid', placeItems: 'center', gap: 2 }}>
-          <span aria-hidden="true" style={{ display: 'inline-block', fontFamily: t.head.font, fontWeight: t.head.weight, fontSize: t.id === 'bold' ? 22 : 18, lineHeight: 1, padding: '2px 6px', color: t.panel || t.highlight ? '#111' : t.id === 'night' ? '#F5F2EA' : '#111', background: t.highlight || t.panel ? '#FFF' : t.id === 'night' ? '#11120F' : '#EFE6DB', border: t.id === 'night' ? `1px solid ${line}` : 0 }}>{t.head.upper ? 'AA' : 'Aa'}</span>
-          <span style={{ fontSize: 9.5, color: muted }}>{t.label}</span></button>)}</div></div>
+        <div><span style={lab}>Text style</span><div role="group" aria-label="Text style" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>{TEXT_STYLES.map((t) => <button key={t.id} type="button" aria-pressed={textStyle === t.id} aria-label={`${t.label} text style`} onClick={() => setTextStyle(t.id)} style={{ border: `1px solid ${textStyle === t.id ? acid : line}`, outline: textStyle === t.id ? `1px solid ${acid}` : 'none', background: '#090A08', padding: 4, cursor: 'pointer', display: 'grid', gap: 4 }}>
+          <StyleThumb styleId={t.id} bg={bgUrl(background)} headline={headline} subline={subline} cta={cta} credit={credit} brand={brand} position={position} fontsReady={fontsReady} />
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: textStyle === t.id ? acid : muted, padding: '1px 0 2px' }}>{t.label}</span></button>)}</div></div>
         <label><span style={lab}>Text position</span><select value={position} onChange={(e) => setPosition(e.target.value as TextPosition)} style={field}>{TEXT_POSITIONS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
           <label><span style={lab}>QR colours</span><select value={qrInvert ? 'invert' : 'normal'} onChange={(e) => setQrInvert(e.target.value === 'invert')} style={field}><option value="normal">Black on white</option><option value="invert">White on black</option></select></label>

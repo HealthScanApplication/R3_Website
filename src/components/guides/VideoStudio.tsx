@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, Download, Film, ImageDown, KeyRound, Loader2, RotateCcw, Type, Unplug } from 'lucide-react';
-import { drawPost, qrLink, TEXT_POSITIONS, TEXT_STYLES, type PostBrand, type TextPosition, type TextStyleId } from './ContentStudio';
+import { StyleThumb, drawPost, qrLink, TEXT_POSITIONS, TEXT_STYLES, type PostBrand, type TextPosition, type TextStyleId } from './ContentStudio';
 import { draftVideoScript, parseScript, scriptPrompt, scriptText } from '../../utils/videoScript';
 import { OVERLAY_FORMATS, recordWithOverlay } from '../../utils/videoOverlay';
 import { buildVideoPrompt, VIDEO_ASPECTS, VIDEO_PROMPT_MAX, type VideoAspect } from '../../utils/videoPrompt';
@@ -201,9 +201,10 @@ export function VideoStudio({ creator, avatar = null, audience, problem, focusKi
       <div style={{ borderTop: `1px solid ${line}`, paddingTop: 12, display: 'grid', gap: 10 }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: ink, fontSize: 12, cursor: 'pointer' }}><input type="checkbox" checked={showText} onChange={(e) => setShowText(e.target.checked)} /><Type size={13} />Text on the video, like the image posts</label>
         {showText && <>
-          <div><span style={lab}>Text style</span><div role="group" aria-label="Video text style" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6 }}>{TEXT_STYLES.map((t) => <button key={t.id} type="button" aria-pressed={textStyle === t.id} onClick={() => setTextStyle(t.id)} style={{ minHeight: 44, border: `1px solid ${textStyle === t.id ? acid : line}`, background: textStyle === t.id ? '#20251B' : 'transparent', color: ink, padding: '5px 8px', cursor: 'pointer', display: 'grid', placeItems: 'center', gap: 2 }}>
-            <span aria-hidden="true" style={{ fontFamily: t.head.font, fontWeight: t.head.weight, fontSize: 16, lineHeight: 1, padding: '2px 6px', color: t.id === 'night' ? '#F5F2EA' : '#111', background: t.highlight || t.panel ? '#FFF' : t.id === 'night' ? '#11120F' : '#EFE6DB' }}>{t.head.upper ? 'AA' : 'Aa'}</span>
-            <span style={{ fontSize: 9.5, color: muted }}>{t.label}</span></button>)}</div></div>
+          <div><span style={lab}>Text style</span><div role="group" aria-label="Video text style" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6 }}>
+{TEXT_STYLES.map((t) => <button key={t.id} type="button" aria-pressed={textStyle === t.id} aria-label={`${t.label} text style`} onClick={() => setTextStyle(t.id)} style={{ border: `1px solid ${textStyle === t.id ? acid : line}`, outline: textStyle === t.id ? `1px solid ${acid}` : 'none', background: '#090A08', padding: 4, cursor: 'pointer', display: 'grid', gap: 4 }}>
+            <StyleThumb styleId={t.id} bg="/images/content/12-evening-reset.webp" headline={headline} subline={subline} cta={cta} credit={creator ? `Guidance by ${creator}` : ''} brand={postBrand} position={position} fontsReady={0} />
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: textStyle === t.id ? acid : muted, padding: '1px 0 2px' }}>{t.label}</span></button>)}</div></div>
           <label><span style={lab}>Text position</span><select aria-label="Video text position" value={position} onChange={(e) => setPosition(e.target.value as TextPosition)} style={field}>{TEXT_POSITIONS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
           {([['Headline', headline, setHeadline, headEdited, resetHead], ['Subline', subline, setSubline, subEdited, resetSub], ['Button', cta, setCta, ctaEdited, resetCta]] as const).map(([name, value, set, isEdited, reset]) => <div key={name}>
             <div style={{ ...lab, display: 'flex', justifyContent: 'space-between' }}><label htmlFor={`video-${name}`}>Video {name.toLowerCase()}</label>{isEdited && <button type="button" onClick={reset} style={quiet}><RotateCcw size={11} />From script</button>}</div>
