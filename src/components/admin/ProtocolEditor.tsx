@@ -1952,7 +1952,8 @@ export function ProtocolEditor({ accessToken, onOpenCatalogRecord, initialProtoc
                   <Field label="Health score"><input type="number" style={inputStyle} value={form.health_score ?? ''} onChange={(e) => setField('health_score', e.target.value === '' ? null : Number(e.target.value))} /></Field>
                   <Field label="Length">
                     <div role="radiogroup" aria-label="Length" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      {LENGTH_OPTIONS.map((o) => { const on = (form.total_days ?? DEFAULT_LENGTH) === o.days; return <button key={o.days} type="button" role="radio" aria-checked={on} onClick={() => setField('total_days', o.days)} style={{ border: '1px solid ' + (on ? C.ink : C.hair), background: on ? C.ink : 'transparent', color: on ? '#fff' : C.ink, borderRadius: 999, padding: '5px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{o.label}</button>; })}
+                      {LENGTH_OPTIONS.map((o) => { const on = form.total_days === o.days; return <button key={o.days} type="button" role="radio" aria-checked={on} onClick={() => setField('total_days', o.days)} style={{ border: '1px solid ' + (on ? C.ink : C.hair), background: on ? C.ink : 'transparent', color: on ? '#fff' : C.ink, borderRadius: 999, padding: '5px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{o.label}</button>; })}
+                      {form.total_days == null && <span style={{ color: '#B8B6AF', fontSize: 11, alignSelf: 'center' }}>Not set (every day). Suggested: {DEFAULT_LENGTH} days.</span>}
                       <input type="number" aria-label="Total days" title="Custom length in days" style={{ ...inputStyle, width: 70 }} value={form.total_days ?? ''} onChange={(e) => setField('total_days', e.target.value === '' ? null : Number(e.target.value))} />
                     </div>
                   </Field>

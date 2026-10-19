@@ -7,6 +7,9 @@
 
 export const OPENAI_BASE = 'https://api.openai.com/v1';
 export const DEFAULT_MODEL = 'gpt-image-1';
+/** The price list below is gpt-image-1's, so only that model is accepted; any other configured model falls back to it. */
+export const SUPPORTED_MODELS = ['gpt-image-1'];
+export const pickModel = (configured?: string | null) => (configured && SUPPORTED_MODELS.includes(configured) ? configured : DEFAULT_MODEL);
 export const PROMPT_MAX = 4000;
 
 export type Aspect = '9:16' | '4:5' | '1:1' | '16:9';
