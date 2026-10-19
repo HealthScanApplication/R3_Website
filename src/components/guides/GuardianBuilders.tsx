@@ -80,7 +80,7 @@ type SavedMeta = Record<string, { builder_kind: BuilderKind | null; builder_conf
 
 interface CommonProps { accessToken: string; ownerId: string; protocols: AdminProtocol[]; initialProtocolId?: string | null; onSaved: (protocol: AdminProtocol) => void; onOpen: (protocolId: string) => void }
 
-function Header({ kicker, title, copy, Icon }: { kicker: string; title: string; copy: string; Icon: typeof Users }) {
+export function Header({ kicker, title, copy, Icon }: { kicker: string; title: string; copy: string; Icon: typeof Users }) {
   return <div style={{ display: 'flex', gap: 18, alignItems: 'center', marginBottom: 26 }}>
     <div style={{ width: 64, height: 64, border: `1px solid ${line}`, display: 'grid', placeItems: 'center' }}><Icon size={26} color={acid} /></div>
     <div><div style={{ ...label, color: acid, margin: 0 }}>{kicker}</div><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 300, margin: '6px 0 4px' }}>{title}</h1><p style={{ color: muted, margin: 0, fontSize: 13, maxWidth: 640, lineHeight: 1.5 }}>{copy}</p></div>
