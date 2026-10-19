@@ -49,6 +49,7 @@ export interface HomeItem {
   description?: string | null;
   done?: boolean;                // checked off for the day
   children?: string[];           // sub-item descriptions, shown as a faded checklist (like the app)
+  indent?: boolean;              // a sub-item of the card above it, drawn indented under its parent (like the app)
 }
 
 /* ───────── time + category helpers (mirror mobile precedence) ───────── */
@@ -414,7 +415,7 @@ export function ProtocolHomeScreen({
                         const nodeH = isWake(it) || isBed(it) ? 66 : Math.max(34, Math.min(48, 34 + ((it.duration_minutes || 0) / 15) * 3));
                         const hasDetail = showDetails && (!!it.description || !!it.children?.length);
                         return (
-                          <div key={ii} style={{ position: "relative", minHeight: Math.max(48, nodeH) }}>
+                          <div key={ii} style={{ position: "relative", minHeight: Math.max(48, nodeH), paddingLeft: it.indent ? 16 : 0 }}>
                             {/* Media capsule shares the lane axis; time stays in the card metadata. */}
                             <span style={{ position: "absolute", left: MT.axisX - MT.itemOriginX - MT.railWidth / 2, top: 0, bottom: ii === band.items.length - 1 ? -12 : -6, width: MT.railWidth, background: isDone ? completedFg : ui.muted, opacity: 0.75 }} />
                             {/* Day → wake bridge: continues the selected-day column from the fixed header down
@@ -423,12 +424,12 @@ export function ProtocolHomeScreen({
                             {/* Bedtime mirrors wake: the night column continues below the capsule. */}
                             {isBed(it) && <span aria-hidden="true" style={{ position: "absolute", left: MT.axisX - MT.itemOriginX - MT.nodeWidth / 2, top: 2 + nodeH - 1, height: 100, width: MT.nodeWidth, background: `linear-gradient(180deg, ${purple} 0%, #965BD2 100%)`, WebkitMaskImage: "linear-gradient(180deg, #000 35%, transparent)", maskImage: "linear-gradient(180deg, #000 35%, transparent)", borderLeft: `1.5px solid ${purple}`, borderRight: `1.5px solid ${purple}`, boxSizing: "border-box", zIndex: 1 }} />}
                             {isWake(it) && <span aria-hidden="true" style={{ position: "absolute", left: MT.axisX - MT.itemOriginX - MT.nodeWidth / 2, top: -2000, height: 2002, width: MT.nodeWidth, background: `linear-gradient(180deg, #A96EAE 0%, #A96EAE calc(100% - 110px), #965BD2 calc(100% - 50px), ${purple} 100%)`, borderLeft: `1.5px solid ${purple}`, borderRight: `1.5px solid ${purple}`, boxSizing: "border-box", zIndex: 1 }} />}
-                            <span style={{ position: "absolute", left: MT.axisX - MT.itemOriginX - MT.nodeWidth / 2, top: 2, width: MT.nodeWidth, height: nodeH, borderRadius: isWake(it) ? `0 0 ${MT.nodeWidth / 2}px ${MT.nodeWidth / 2}px` : isBed(it) ? `${MT.nodeWidth / 2}px ${MT.nodeWidth / 2}px 0 0` : MT.nodeWidth / 2, overflow: "hidden", background: isWake(it) || isBed(it) ? purple : (isDone ? completedFg : ui.card), border: `1.5px solid ${isWake(it) || isBed(it) ? purple : (isDone ? completedFg : ui.muted)}`, borderTopWidth: isWake(it) ? 0 : 1.5, display: "inline-flex", alignItems: "center", justifyContent: "center", zIndex: 2 }}>
+                            {!it.indent && <span style={{ position: "absolute", left: MT.axisX - MT.itemOriginX - MT.nodeWidth / 2, top: 2, width: MT.nodeWidth, height: nodeH, borderRadius: isWake(it) ? `0 0 ${MT.nodeWidth / 2}px ${MT.nodeWidth / 2}px` : isBed(it) ? `${MT.nodeWidth / 2}px ${MT.nodeWidth / 2}px 0 0` : MT.nodeWidth / 2, overflow: "hidden", background: isWake(it) || isBed(it) ? purple : (isDone ? completedFg : ui.card), border: `1.5px solid ${isWake(it) || isBed(it) ? purple : (isDone ? completedFg : ui.muted)}`, borderTopWidth: isWake(it) ? 0 : 1.5, display: "inline-flex", alignItems: "center", justifyContent: "center", zIndex: 2 }}>
                               {it.image_url && !/recipe_water-|openfoodfacts/i.test(it.image_url)
                                 ? <img src={it.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: isDone ? "none" : "grayscale(1)", opacity: isDone ? 1 : 0.72 }} />
                                 : isWake(it) ? <Sun size={16} strokeWidth={1.8} color="#FFFFFF" />
                                   : <ItemIcon size={15} strokeWidth={1.8} color={isDone ? "#FFFFFF" : "#9CA3AF"} />}
-                            </span>
+                            </span>}
                             <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, minHeight: isWake(it) || isBed(it) ? 54 : 48, background: ui.card, borderRadius: dark ? 10 : MT.itemRadius, padding: "8px 9px 8px 11px", boxShadow: dark ? "none" : "0 1px 2px rgba(17,24,39,0.04)" }}>
                             <div style={{ flex: "1 1 0", minWidth: 0, overflow: "hidden" }}>
                               <div style={{ display: "flex", alignItems: "flex-start", gap: 5, minWidth: 0, overflow: "hidden" }}>

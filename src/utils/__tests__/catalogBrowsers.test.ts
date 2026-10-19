@@ -48,3 +48,12 @@ it('treats hygiene and sleep as suggested basics outside their own routines', ()
   expect(isBasicFor({ subtype: 'sleep', category: 'sleep', name: 'End Sleep' }, 'fitness')).toBe(true);
   expect(isBasicFor({ subtype: 'exercise', category: 'do', name: 'Push Day Workout' }, 'fitness')).toBe(false);
 });
+import { stepTree, smartListOfStep } from '../../components/guides/CatalogBrowsers';
+it('nests rules and sub-steps under their parent and names the smart list', () => {
+  const t = stepTree([{ id: 'm', name: 'Dinner', subtype: 'meal' }, { id: 'r', parentId: 'm', name: 'Chew slowly', kind: 'rule_do' }, { id: 'x', parentId: 'gone', name: 'Orphan' }] as any);
+  expect(t.top.map((s) => s.name)).toEqual(['Dinner', 'Orphan']);
+  expect(t.kids(t.top[0]).map((s) => s.name)).toEqual(['Chew slowly']);
+  expect(smartListOfStep({ subtype: 'supplement' } as any)).toBe('Supplements');
+  expect(smartListOfStep({ subtype: 'meal', scope: 'consume' } as any)).toBe('Meals');
+  expect(smartListOfStep({ subtype: 'exercise' } as any)).toBe('Fitness');
+});

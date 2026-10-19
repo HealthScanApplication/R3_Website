@@ -198,6 +198,22 @@ export function partsOfDay(steps: RoutineStep[]): Array<{ key: string; label: st
   for (const g of out.values()) g.steps.sort((x, y) => Number(isRule(x)) - Number(isRule(y)));
   return [...out.values()].sort((a, b) => { const [ad, ap] = a.key.split('-').map(Number), [bd, bp] = b.key.split('-').map(Number); return ad - bd || ap - bp; });
 }
+/** The app's smart list a step belongs to, used to group rules: Meals, Supplements, Fitness, Hygiene, Wellness. */
+export function smartListOfStep(s: Pick<RoutineStep, 'subtype' | 'scope' | 'category' | 'itemType'>): string {
+  const t = `${s.subtype || ''} ${s.scope || ''} ${s.category || ''} ${s.itemType || ''}`.toLowerCase();
+  if (/supplement/.test(t)) return 'Supplements';
+  if (/meal|snack|drink|consume|recipe|food/.test(t)) return 'Meals';
+  if (/exercise|fitness|workout|outside/.test(t)) return 'Fitness';
+  if (/hygiene|beauty/.test(t)) return 'Hygiene';
+  return 'Wellness';
+}
+/** Top-level steps with their sub-items and rules (by parent link); orphans of a hidden parent count as top-level. */
+export function stepTree(steps: RoutineStep[]) {
+  const ids = new Set(steps.map((s) => s.id).filter(Boolean));
+  const top = steps.filter((s) => !s.parentId || !ids.has(s.parentId));
+  const kids = (s: RoutineStep) => (s.id ? steps.filter((x) => x.parentId === s.id) : []);
+  return { top, kids };
+}
 /** Daily basics (hygiene, sleep anchors) that only belong to a hygiene, beauty or sleep routine; elsewhere they are suggestions. */
 export function isBasicFor(s: Pick<RoutineStep, 'subtype' | 'category' | 'name'>, section: string): boolean {
   const hygiene = s.subtype === 'hygiene';
@@ -228,7 +244,15 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
   // Only the routine's own steps; daily basics (hygiene, sleep) are suggested beside it, not part of it.
   const own = (steps || []).filter((s) => !isBasicFor(s, section));
   const basics = (steps || []).filter((s) => isBasicFor(s, section));
-  const dayItems = own.filter((s) => !s.day || s.day === day).map((s) => ({ display_name: s.name, item_type: s.itemType || undefined, kind: s.kind, scope: s.scope, time: s.time, duration_minutes: s.minutes, group_name: s.group, category: s.category, subtype: s.subtype }));
+  const tree = stepTree(own);
+  const isRule = (s: RoutineStep) => !!s.kind?.startsWith('rule');
+  // Like the app: a step's rules are notes on its card, its sub-steps are indented cards under it.
+  const dayItems = tree.top.filter((s) => (!s.day || s.day === day) && !isRule(s)).flatMap((s) => {
+    const base = { item_type: s.itemType || undefined, kind: s.kind, scope: s.scope, time: s.time, group_name: s.group, category: s.category, subtype: s.subtype };
+    const kids = tree.kids(s);
+    return [{ ...base, display_name: s.name, duration_minutes: s.minutes, children: kids.filter(isRule).map((k) => k.name) },
+      ...kids.filter((k) => !isRule(k)).map((k) => ({ ...base, display_name: k.name, duration_minutes: k.minutes, time: k.time || s.time, indent: true }))];
+  });
   return <div>
     <Header Icon={Icon} kicker={cfg.kicker} title={cfg.title} copy={cfg.copy} />
     <p role="status" style={{ color: error ? warn : muted, fontSize: 11 }}>{busy ? 'Loading…' : error || (items.length ? `${items.length} routines` : `No published ${cfg.kicker.toLowerCase()} routines yet. Build one in the Protocol builder, and see the ${cfg.kicker.toLowerCase()} activities below this section in the sidebar.`)}</p>
@@ -242,15 +266,16 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
           <div aria-label="As in the app" style={{ display: 'grid', justifyItems: 'center', gap: 8 }}>
             <div style={{ ...kicker, margin: 0 }}>As in the app{days > 1 ? ` · day ${day} of ${days}` : ''}</div>
             {days > 1 && <div role="group" aria-label="Day" style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center' }}>{Array.from({ length: days }, (_, i) => i + 1).map((d) => <button key={d} type="button" aria-pressed={d === day} onClick={() => setDay(d)} style={{ border: `1px solid ${d === day ? acid : line}`, background: d === day ? 'rgba(199,216,163,.14)' : 'transparent', color: d === day ? acid : ink, borderRadius: 999, padding: '3px 9px', fontSize: 10, cursor: 'pointer' }}>Day {d}</button>)}</div>}
-            {steps ? <PhoneFrame width={300} screenBg="#FFFFFF"><ProtocolHomeScreen protocolName={r.name} items={dayItems} imageUrl={r.image || undefined} profileName="ROUTINE³" grouping="smart" /></PhoneFrame> : <span style={{ color: muted, fontSize: 11 }}>Loading…</span>}
+            {steps ? <PhoneFrame width={300} screenBg="#FFFFFF"><ProtocolHomeScreen protocolName={r.name} items={dayItems} showDetails imageUrl={r.image || undefined} profileName="ROUTINE³" grouping="smart" /></PhoneFrame> : <span style={{ color: muted, fontSize: 11 }}>Loading…</span>}
           </div>
           <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 17, fontWeight: 600 }}>{r.name}</div>
           {r.description && <p style={{ color: muted, fontSize: 12, lineHeight: 1.55, maxWidth: 760 }}>{r.description}</p>}
           <div style={kicker}>Steps{steps ? ` · ${own.length}` : ''}</div>
-          {!steps ? <span style={{ color: muted, fontSize: 11 }}>Loading…</span> : <div style={{ display: 'grid', gap: 10 }}>{partsOfDay(own).map((g) => <section key={g.key} aria-label={g.label}>
+          {!steps ? <span style={{ color: muted, fontSize: 11 }}>Loading…</span> : <div style={{ display: 'grid', gap: 10 }}>{partsOfDay(tree.top).map((g) => <section key={g.key} aria-label={g.label}>
             <div style={{ ...kicker, color: g.rules ? warn : muted, margin: '0 0 4px' }}>{g.label} <span style={{ opacity: .7 }}>· {g.steps.length}</span></div>
-            <ol style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 3, fontSize: 12 }}>{g.steps.map((s, i) => <li key={i}><span style={{ color: acid }}>{s.time}</span>{s.time ? ' · ' : ''}{s.name}{[s.sets && s.reps ? `${s.sets} × ${s.reps}` : null, s.weight, s.minutes ? `${s.minutes} min` : null].filter(Boolean).map((x) => <span key={x} style={{ color: acid }}> · {x}</span>)}{s.group ? <span style={{ color: muted }}> · {s.group}</span> : null}{!g.rules && s.kind?.startsWith('rule') ? <span style={{ color: warn }}> · rule</span> : null}</li>)}</ol></section>)}
+            <ol style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 3, fontSize: 12 }}>{(g.rules ? [...g.steps].sort((a, b) => smartListOfStep(a).localeCompare(smartListOfStep(b))) : g.steps).map((s, i, arr) => <li key={i} style={g.rules && smartListOfStep(s) !== smartListOfStep(arr[i - 1] || ({} as RoutineStep)) && i ? { marginTop: 6 } : undefined}>{g.rules && <span style={{ color: muted, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', marginRight: 6 }}>{smartListOfStep(s)}</span>}<span style={{ color: acid }}>{s.time}</span>{s.time ? ' · ' : ''}{s.name}{[s.sets && s.reps ? `${s.sets} × ${s.reps}` : null, s.weight, s.minutes ? `${s.minutes} min` : null].filter(Boolean).map((x) => <span key={x} style={{ color: acid }}> · {x}</span>)}{s.group ? <span style={{ color: muted }}> · {s.group}</span> : null}{!g.rules && s.kind?.startsWith('rule') ? <span style={{ color: warn }}> · rule</span> : null}
+              {tree.kids(s).length > 0 && <ul style={{ listStyle: 'none', margin: '2px 0 2px', paddingLeft: 14, borderLeft: `1px solid ${line}`, display: 'grid', gap: 1 }}>{tree.kids(s).map((k, j) => <li key={j} style={{ color: isRule(k) ? warn : ink, fontSize: 11 }}>{isRule(k) ? (k.kind === 'rule_dont' ? 'Don’t: ' : 'Do: ') : ''}{k.name}{k.time && k.time !== s.time ? <span style={{ color: acid }}> · {k.time}</span> : null}</li>)}</ul>}</li>)}</ol></section>)}
             {basics.length > 0 && <details style={{ borderTop: `1px solid ${line}`, paddingTop: 8 }}><summary style={{ cursor: 'pointer', color: muted, fontSize: 11 }}>Suggested daily basics · {basics.length} <span style={{ opacity: .7 }}>(hygiene and sleep: not part of this routine)</span></summary>
               <ul style={{ margin: '6px 0 0', paddingLeft: 18, display: 'grid', gap: 2, fontSize: 11, color: muted }}>{basics.map((s, i) => <li key={i}>{s.time ? `${s.time} · ` : ''}{s.name}</li>)}</ul></details>}
           </div>}
