@@ -22,5 +22,29 @@ it('splits ingredients into whole/raw and processed, with how', () => {
 import { partsOfDay } from '../../components/guides/CatalogBrowsers';
 it('splits routine steps into morning, afternoon, evening and rules', () => {
   const g = partsOfDay([{ name: 'Lemon water', time: '06:30' }, { name: 'Burdock', time: '12:30' }, { name: 'Start Sleep', time: '22:00' }, { name: 'Mostly raw', kind: 'rule_do' }] as any);
-  expect(g.map((x) => `${x.label}:${x.steps.length}`)).toEqual(['Morning:1', 'Afternoon:1', 'Evening:1', 'Rules:1']);
+  expect(g.map((x) => `${x.label}:${x.steps.length}`)).toEqual(['Morning:1', 'Afternoon:1', 'Evening:1', 'Day rules:1']);
+});
+
+import { isBasicFor } from '../../components/guides/CatalogBrowsers';
+it('puts each rule in the part of the day it belongs to', () => {
+  const g = partsOfDay([
+    { name: 'Push Day Workout', time: '08:30', subtype: 'exercise', kind: 'action' },
+    { name: 'Warm up 5–10 min', subtype: 'exercise', kind: 'rule_do' },
+    { name: "Don't train the same muscle group hard two days in a row — rest ~48h", subtype: 'exercise', kind: 'rule_dont' },
+    { name: 'Sauna or steam 3x/week', kind: 'rule_do' },
+    { name: 'No screens before bed', kind: 'rule_dont' },
+    { name: 'Mostly raw plants', kind: 'rule_do' },
+  ] as any);
+  expect(Object.fromEntries(g.map((x) => [x.label, x.steps.map((s) => s.name)]))).toEqual({
+    'Week rules': ["Don't train the same muscle group hard two days in a row — rest ~48h", 'Sauna or steam 3x/week'],
+    Morning: ['Push Day Workout', 'Warm up 5–10 min'],
+    Evening: ['No screens before bed'],
+    'Day rules': ['Mostly raw plants'],
+  });
+});
+it('treats hygiene and sleep as suggested basics outside their own routines', () => {
+  expect(isBasicFor({ subtype: 'hygiene', category: 'do', name: 'Brush teeth' }, 'fitness')).toBe(true);
+  expect(isBasicFor({ subtype: 'hygiene', category: 'do', name: 'Brush teeth' }, 'hygiene')).toBe(false);
+  expect(isBasicFor({ subtype: 'sleep', category: 'sleep', name: 'End Sleep' }, 'fitness')).toBe(true);
+  expect(isBasicFor({ subtype: 'exercise', category: 'do', name: 'Push Day Workout' }, 'fitness')).toBe(false);
 });

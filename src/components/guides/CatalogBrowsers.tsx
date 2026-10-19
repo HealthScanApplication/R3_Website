@@ -167,14 +167,42 @@ export function CatalogIngredients({ accessToken }: { accessToken: string }) {
   </div>;
 }
 
-/** Steps split like the app's day: Morning (before 12:00), Afternoon (to 17:00), Evening, then untimed items and rules; per day when the routine has several. */
+const WEEK_RULE = /\b(week|weekly|\d+\s*x\s*\/\s*week|\d+x\/week|days? in a row|rest (day|~?\d+\s*h)|48\s*h|72\s*h|every other day)\b/i;
+const periodOfTime = (time: string | null) => { const m = /^(\d\d):(\d\d)/.exec(time || ''); if (!m) return null; const t = +m[1] * 60 + +m[2]; return t < 720 ? 'Morning' : t < 1020 ? 'Afternoon' : 'Evening'; };
+const periodOfText = (name: string) => (/\b(morning|on rising|on waking|breakfast|sunrise)\b/i.test(name) ? 'Morning' : /\b(lunch|midday|afternoon)\b/i.test(name) ? 'Afternoon' : /\b(evening|night|bed|dinner|sleep)\b/i.test(name) ? 'Evening' : null);
+/**
+ * Steps split like the app's day: week rules first, then Morning (before 12:00), Afternoon (to 17:00), Evening,
+ * untimed items and day rules. A rule sits in the part of the day it belongs to: its own time, its wording
+ * ("on rising", "before bed"), or the time of the step it governs (same subtype, e.g. form rules with the workout).
+ * Per day when the routine has several.
+ */
 export function partsOfDay(steps: RoutineStep[]): Array<{ key: string; label: string; rules: boolean; steps: RoutineStep[] }> {
   const multi = new Set(steps.map((s) => s.day || 1)).size > 1;
-  const part = (s: RoutineStep) => { if (s.kind?.startsWith('rule')) return 'Rules'; const m = /^(\d\d):(\d\d)/.exec(s.time || ''); if (!m) return 'Anytime'; const t = +m[1] * 60 + +m[2]; return t < 720 ? 'Morning' : t < 1020 ? 'Afternoon' : 'Evening'; };
-  const order = ['Morning', 'Afternoon', 'Evening', 'Anytime', 'Rules'];
+  const isRule = (s: RoutineStep) => !!s.kind?.startsWith('rule');
+  const actionPeriod = (s: RoutineStep) => { const a = steps.find((x) => !isRule(x) && x.time && x.subtype && x.subtype === s.subtype && (x.day || 1) === (s.day || 1)); return a ? periodOfTime(a.time) : null; };
+  const part = (s: RoutineStep) => {
+    if (!isRule(s)) return periodOfTime(s.time) || 'Anytime';
+    if (WEEK_RULE.test(s.name)) return 'Week rules';
+    return periodOfTime(s.time) || periodOfText(s.name) || actionPeriod(s) || 'Day rules';
+  };
+  const order = ['Week rules', 'Morning', 'Afternoon', 'Evening', 'Anytime', 'Day rules'];
   const out = new Map<string, { key: string; label: string; rules: boolean; steps: RoutineStep[] }>();
-  for (const s of steps) { const p = part(s); const key = `${multi ? s.day || 1 : 0}-${order.indexOf(p)}`; if (!out.has(key)) out.set(key, { key, label: multi ? `Day ${s.day || 1} · ${p}` : p, rules: p === 'Rules', steps: [] }); out.get(key)!.steps.push(s); }
+  for (const s of steps) {
+    const p = part(s);
+    const d = p === 'Week rules' || !multi ? 0 : s.day || 1;
+    const key = `${d}-${order.indexOf(p)}`;
+    if (!out.has(key)) out.set(key, { key, label: d ? `Day ${d} · ${p}` : p, rules: p.endsWith('rules'), steps: [] });
+    out.get(key)!.steps.push(s);
+  }
+  // Within a part of the day, the timed steps first and its rules after them.
+  for (const g of out.values()) g.steps.sort((x, y) => Number(isRule(x)) - Number(isRule(y)));
   return [...out.values()].sort((a, b) => { const [ad, ap] = a.key.split('-').map(Number), [bd, bp] = b.key.split('-').map(Number); return ad - bd || ap - bp; });
+}
+/** Daily basics (hygiene, sleep anchors) that only belong to a hygiene, beauty or sleep routine; elsewhere they are suggestions. */
+export function isBasicFor(s: Pick<RoutineStep, 'subtype' | 'category' | 'name'>, section: string): boolean {
+  const hygiene = s.subtype === 'hygiene';
+  const sleep = s.subtype === 'sleep' || s.category === 'sleep' || /^(start|end) sleep$/i.test(s.name);
+  return (hygiene && !['hygiene', 'beauty'].includes(section)) || (sleep && section !== 'wellness');
 }
 /** The app's fitness routines (catalogue Protocols) with their steps. */
 /** A section's published routines (catalogue Protocols in its categories), e.g. Fitness, Beauty, Wellness. */
@@ -197,7 +225,10 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
   useEffect(() => { if (!open) return; let live = true; setSteps(null); setDay(1); routineSteps(accessToken, open).then((s) => { if (live) setSteps(s); }); return () => { live = false; }; }, [accessToken, open]);
   const days = steps ? Math.max(1, ...steps.map((s) => s.day || 1)) : 1;
   // The app shows one day: every-day items (no day_number) plus that day's.
-  const dayItems = (steps || []).filter((s) => !s.day || s.day === day).map((s) => ({ display_name: s.name, item_type: s.itemType || undefined, kind: s.kind, scope: s.scope, time: s.time, duration_minutes: s.minutes, group_name: s.group, category: s.category, subtype: s.subtype }));
+  // Only the routine's own steps; daily basics (hygiene, sleep) are suggested beside it, not part of it.
+  const own = (steps || []).filter((s) => !isBasicFor(s, section));
+  const basics = (steps || []).filter((s) => isBasicFor(s, section));
+  const dayItems = own.filter((s) => !s.day || s.day === day).map((s) => ({ display_name: s.name, item_type: s.itemType || undefined, kind: s.kind, scope: s.scope, time: s.time, duration_minutes: s.minutes, group_name: s.group, category: s.category, subtype: s.subtype }));
   return <div>
     <Header Icon={Icon} kicker={cfg.kicker} title={cfg.title} copy={cfg.copy} />
     <p role="status" style={{ color: error ? warn : muted, fontSize: 11 }}>{busy ? 'Loading…' : error || (items.length ? `${items.length} routines` : `No published ${cfg.kicker.toLowerCase()} routines yet. Build one in the Protocol builder, and see the ${cfg.kicker.toLowerCase()} activities below this section in the sidebar.`)}</p>
@@ -216,10 +247,13 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
           <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 17, fontWeight: 600 }}>{r.name}</div>
           {r.description && <p style={{ color: muted, fontSize: 12, lineHeight: 1.55, maxWidth: 760 }}>{r.description}</p>}
-          <div style={kicker}>Steps{steps ? ` · ${steps.length}` : ''}</div>
-          {!steps ? <span style={{ color: muted, fontSize: 11 }}>Loading…</span> : <div style={{ display: 'grid', gap: 10 }}>{partsOfDay(steps).map((g) => <section key={g.key} aria-label={g.label}>
+          <div style={kicker}>Steps{steps ? ` · ${own.length}` : ''}</div>
+          {!steps ? <span style={{ color: muted, fontSize: 11 }}>Loading…</span> : <div style={{ display: 'grid', gap: 10 }}>{partsOfDay(own).map((g) => <section key={g.key} aria-label={g.label}>
             <div style={{ ...kicker, color: g.rules ? warn : muted, margin: '0 0 4px' }}>{g.label} <span style={{ opacity: .7 }}>· {g.steps.length}</span></div>
-            <ol style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 3, fontSize: 12 }}>{g.steps.map((s, i) => <li key={i}><span style={{ color: acid }}>{s.time}</span>{s.time ? ' · ' : ''}{s.name}{[s.sets && s.reps ? `${s.sets} × ${s.reps}` : null, s.weight, s.minutes ? `${s.minutes} min` : null].filter(Boolean).map((x) => <span key={x} style={{ color: acid }}> · {x}</span>)}{s.group ? <span style={{ color: muted }}> · {s.group}</span> : null}</li>)}</ol></section>)}</div>}
+            <ol style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 3, fontSize: 12 }}>{g.steps.map((s, i) => <li key={i}><span style={{ color: acid }}>{s.time}</span>{s.time ? ' · ' : ''}{s.name}{[s.sets && s.reps ? `${s.sets} × ${s.reps}` : null, s.weight, s.minutes ? `${s.minutes} min` : null].filter(Boolean).map((x) => <span key={x} style={{ color: acid }}> · {x}</span>)}{s.group ? <span style={{ color: muted }}> · {s.group}</span> : null}{!g.rules && s.kind?.startsWith('rule') ? <span style={{ color: warn }}> · rule</span> : null}</li>)}</ol></section>)}
+            {basics.length > 0 && <details style={{ borderTop: `1px solid ${line}`, paddingTop: 8 }}><summary style={{ cursor: 'pointer', color: muted, fontSize: 11 }}>Suggested daily basics · {basics.length} <span style={{ opacity: .7 }}>(hygiene and sleep: not part of this routine)</span></summary>
+              <ul style={{ margin: '6px 0 0', paddingLeft: 18, display: 'grid', gap: 2, fontSize: 11, color: muted }}>{basics.map((s, i) => <li key={i}>{s.time ? `${s.time} · ` : ''}{s.name}</li>)}</ul></details>}
+          </div>}
           </div>
         </div>}
       </Fragment>)}
