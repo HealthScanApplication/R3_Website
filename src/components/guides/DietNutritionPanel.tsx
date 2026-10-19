@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Atom, Beaker, Bug, ChevronRight, Citrus, CookingPot, Dna, Droplet, Droplets, Factory, FlaskConical, Flame, Gem, Hand, Leaf, Mountain, Package, Pill, Radiation, Scale, SprayCan, Sprout, Warehouse, Wheat, type LucideIcon } from 'lucide-react';
+import { Atom, Beaker, Beef, Candy, Circle, CircleDot, Cookie, Croissant, Dot, Drumstick, Layers, LayoutGrid, OctagonAlert, TriangleAlert, Waves, Wine, Bug, ChevronRight, Citrus, CookingPot, Dna, Droplet, Droplets, Factory, FlaskConical, Flame, Gem, Hand, Leaf, Mountain, Package, Pill, Radiation, Scale, SprayCan, Sprout, Warehouse, Wheat, type LucideIcon } from 'lucide-react';
 import { nutrientsForTier, type HazardLevel, type NutrientDef, type Tier } from '../../utils/recipeNutrients';
 import { FOOD_STAGES, HAZARD_FAMILIES, NUTRIENT_FAMILIES, groupBy, hazardFamily, hazardStage, nutrientFamily, type FoodStage, type HazardFamily, type NutrientFamily } from '../../utils/foodTaxonomy';
 import { TIERS, tierLabel, useEssential90, Essential90Note } from './RecipeInsights';
@@ -15,7 +15,7 @@ const acid = '#C7D8A3';
 const warn = '#E8B86A';
 const danger = '#E88A7A';
 const chip = (on: boolean, tone = acid): React.CSSProperties => ({ border: `1px solid ${on ? tone : 'rgba(245,242,234,.24)'}`, background: on ? `${tone}22` : 'transparent', color: on ? tone : ink, borderRadius: 999, padding: '4px 9px', fontSize: 11, fontWeight: 700, cursor: 'pointer' });
-const row: React.CSSProperties = { display: 'grid', gridTemplateColumns: '14px minmax(0,1fr) auto', gap: 8, alignItems: 'center', width: '100%', padding: '6px 0', border: 0, borderTop: `1px solid ${line}`, background: 'transparent', color: ink, fontSize: 12, textAlign: 'left', cursor: 'pointer' };
+const row: React.CSSProperties = { display: 'grid', gridTemplateColumns: '14px 14px minmax(0,1fr) auto', gap: 8, alignItems: 'center', width: '100%', padding: '6px 0', border: 0, borderTop: `1px solid ${line}`, background: 'transparent', color: ink, fontSize: 12, textAlign: 'left', cursor: 'pointer' };
 const sub: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 60px 80px 110px', gap: 8, fontSize: 11, padding: '3px 0' };
 
 const format = (n: number) => n.toLocaleString(undefined, { maximumSignificantDigits: 3 });
@@ -43,6 +43,12 @@ const AFFECTS: Record<string, string> = {
 const affects = (key: string) => Object.entries(AFFECTS).find(([k]) => key.toLowerCase().includes(k))?.[1];
 
 const NUTRIENT_ICON: Record<NutrientFamily, LucideIcon> = { macros: Flame, fibre: Wheat, vitamins: Citrus, minerals: Gem, fatty_acids: Droplet, amino_acids: Dna, phytonutrients: Leaf, other: Atom };
+/** Macros get their own icon; every other nutrient takes its family's icon. */
+const MACRO_ICON: Record<string, LucideIcon> = { energy_kcal: Flame, protein_g: Drumstick, carbohydrates_g: Croissant, fats_g: Droplet, fiber_g: Wheat, sugars_g: Candy, saturated_fat_g: Beef, trans_fat_g: Cookie, salt_g: Waves, alcohol_g: Wine };
+const nutrientIcon = (k: string): LucideIcon => MACRO_ICON[k] || NUTRIENT_ICON[nutrientFamily(k)];
+const TIER_ICON: Record<Tier, LucideIcon> = { 15: CircleDot, 30: Layers, 90: LayoutGrid };
+const LEVEL_ICON: Record<HazardLevel, LucideIcon> = { high: OctagonAlert, moderate: TriangleAlert, low: Circle, trace: Dot };
+const chipIcon = (Icon: LucideIcon) => <Icon size={12} strokeWidth={2} aria-hidden="true" />;
 const HAZARD_ICON: Record<HazardFamily, LucideIcon> = { heavy_metals: Mountain, radionuclides: Radiation, pesticides: SprayCan, drug_residues: Pill, plastics: Package, pollutants: Factory, water_treatment: Droplets, nitrates: FlaskConical, mycotoxins: Sprout, pathogens: Bug, process: CookingPot, natural: Leaf, additives: Beaker, limits: Scale, other: Atom };
 const STAGE_ICON: Record<FoodStage, LucideIcon> = { in_food: Leaf, soil_water: Mountain, farm: SprayCan, storage: Warehouse, handling: Hand, processing: CookingPot, water_treatment: Droplets, packaging: Package, unknown: Atom };
 const familyLabel = <T extends string>(list: Array<{ id: T; label: string }>, id: T) => list.find((f) => f.id === id)?.label || id;
@@ -110,9 +116,11 @@ function NutrientRow({ k, def, cell, totals, period, defs }: { k: string; def?: 
   const u = def?.unit || unit(k);
   const incomplete = totals.count > 0 && (cell?.partial || (cell?.known ?? 0) !== totals.count);
   const pct = cell?.amount != null && def?.dv ? Math.round(cell.amount / period / def.dv * 100) : null;
+  const Icon = nutrientIcon(k);
   return <div>
     <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} style={row}>
       <ChevronRight size={12} style={{ transform: open ? 'rotate(90deg)' : undefined, color: muted }} />
+      <Icon size={13} strokeWidth={1.8} aria-hidden="true" style={{ color: cell?.amount == null ? faint : acid }} />
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: cell?.amount == null ? faint : ink }}>{def?.label || title(k)}{def?.safety === 'Hazardous' && <span style={{ color: danger }}> · hazardous</span>}{incomplete && <span style={{ color: faint }}> · {cell?.known || 0}/{totals.count}</span>}</span>
       <span style={{ color: cell?.amount == null ? faint : ink, whiteSpace: 'nowrap' }}>{cell?.amount == null ? (totals.count ? 'unknown' : '—') : `${format(cell.amount)} ${u}`}{pct != null && <span style={{ color: muted }}> · {pct}%/day</span>}</span>
     </button>
@@ -135,9 +143,11 @@ function HazardRow({ h, totals, defs }: { h: DietTotals['hazards'][number]; tota
   const [tab, setTab] = useState<'ingredients' | 'health'>('ingredients');
   const carriers = totals.ingredients.flatMap((ing) => ing.hazards.filter((hz) => hz.key === h.key).map((hz) => ({ ing, per100: hz.per100, level: hz.level })));
   const u = unit(h.key);
+  const Icon = HAZARD_ICON[hazardFamily(h.key)];
   return <div>
     <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} style={row}>
       <ChevronRight size={12} style={{ transform: open ? 'rotate(90deg)' : undefined, color: muted }} />
+      <Icon size={13} strokeWidth={1.8} aria-hidden="true" style={{ color: tone(h.level) === muted ? acid : tone(h.level) }} />
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.label} <Badge level={h.level} /><span style={{ color: muted }}> · {carriers.length || h.sources.length} ingredients</span></span>
       <span style={{ color: h.assessed ? muted : faint, whiteSpace: 'nowrap', fontSize: 11 }}>{h.amount != null ? `${format(h.amount)} ${u} · ` : ''}{h.assessed ? 'assessed' : 'likelihood only'}</span>
     </button>
@@ -185,7 +195,7 @@ export function DietNutritionPanel({ report, loading, error }: { report: ReturnT
 
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
       <h3 style={{ fontSize: 13, margin: 0 }}>Nutrients <span style={{ color: muted, fontWeight: 400 }}>· {keys.length}</span></h3>
-      <span aria-label="Nutrient groups" style={{ display: 'flex', gap: 5 }}>{TIERS.map(t => <button type="button" key={t} aria-pressed={tier === t} onClick={() => setTier(t)} style={chip(tier === t)}>{tierLabel(t)}</button>)}</span>
+      <span aria-label="Nutrient groups" style={{ display: 'flex', gap: 5 }}>{TIERS.map(t => <button type="button" key={t} aria-pressed={tier === t} onClick={() => setTier(t)} style={{ ...chip(tier === t), display: 'inline-flex', alignItems: 'center', gap: 4 }}>{chipIcon(TIER_ICON[t])}{tierLabel(t)}</button>)}</span>
     </div>
     {tier === 90 && <Essential90Note defs={catalog} />}
     <div style={{ maxHeight: 420, overflow: 'auto', marginBottom: 16 }}>{groupBy(keys, nutrientFamily, NUTRIENT_FAMILIES).map((g) => nutrientGroup(g))}
@@ -194,7 +204,7 @@ export function DietNutritionPanel({ report, loading, error }: { report: ReturnT
 
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
       <h3 style={{ fontSize: 13, margin: 0 }}>Recorded hazards <span style={{ color: muted, fontWeight: 400 }}>· {hazards.length} of {totals.hazards.length}</span></h3>
-      <span aria-label="Hazard levels" style={{ display: 'flex', gap: 5 }}>{LEVELS.map((l) => { const on = levels.includes(l); return <button type="button" key={l} aria-pressed={on} onClick={() => setLevels(on ? levels.filter((x) => x !== l) : [...levels, l])} style={chip(on, tone(l) === muted ? acid : tone(l))}>{l} {totals.hazards.filter((h) => h.level === l).length}</button>; })}</span>
+      <span aria-label="Hazard levels" style={{ display: 'flex', gap: 5 }}>{LEVELS.map((l) => { const on = levels.includes(l); return <button type="button" key={l} aria-pressed={on} onClick={() => setLevels(on ? levels.filter((x) => x !== l) : [...levels, l])} style={{ ...chip(on, tone(l) === muted ? acid : tone(l)), display: 'inline-flex', alignItems: 'center', gap: 4 }}>{chipIcon(LEVEL_ICON[l])}{l} {totals.hazards.filter((h) => h.level === l).length}</button>; })}</span>
     </div>
     <p style={{ color: muted, fontSize: 11, margin: '0 0 4px' }}>Levels describe source records, not safe-exposure limits. No record ≠ hazard-free.{totals.unassessed ? ` ${totals.unassessed} selections incompletely analysed.` : ''}</p>
     {!totals.hazards.length && <p style={{ fontSize: 12 }}>No hazard records for these selections.</p>}
