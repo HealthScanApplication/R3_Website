@@ -121,9 +121,10 @@ function MuscleSection({ section, muscle, accessToken, selected, onPick, onApp }
   </section>;
 }
 
-export function ActivitiesLibrary({ accessToken }: { accessToken: string }) {
+/** `lockGroup` shows one category only (e.g. Hygiene activities under the Hygiene section), without the muscle view. */
+export function ActivitiesLibrary({ accessToken, lockGroup }: { accessToken: string; lockGroup?: string }) {
   const [mode, setMode] = useState<'category' | 'muscle'>('category');
-  const [groupId, setGroupId] = useState('all');
+  const [groupId, setGroupId] = useState(lockGroup || 'all');
   const [muscle, setMuscle] = useState<MuscleGroupId | null>(null);
   const [bodyMuscle, setBodyMuscle] = useState<MuscleGroupId>('legs');
   const [query, setQuery] = useState('');
@@ -135,15 +136,15 @@ export function ActivitiesLibrary({ accessToken }: { accessToken: string }) {
   const pick = (a: ActivityPick | null) => { setSelected(a); if (!a) setAppView(null); };
   const openApp = () => setAppView(selected);
   return <div>
-    <Header Icon={Activity} kicker="Fitness" title="Activities" copy="Every activity in the ROUTINE³ catalogue, by category or by muscle group. Select one to read what it is and see its variations." />
-    <div role="tablist" aria-label="Browse activities" style={{ display: 'inline-flex', border: `1px solid ${line}`, marginBottom: 14 }}>
+    <Header Icon={lockGroup ? group.Icon : Activity} kicker={lockGroup ? group.label : 'Fitness'} title={lockGroup ? `${group.label} activities` : 'Activities'} copy={lockGroup ? `Every ${group.label.toLowerCase()} activity in the ROUTINE³ catalogue. Select one to read what it is and see its variations.` : 'Every activity in the ROUTINE³ catalogue, by category or by muscle group. Select one to read what it is and see its variations.'} />
+    {!lockGroup && <div role="tablist" aria-label="Browse activities" style={{ display: 'inline-flex', border: `1px solid ${line}`, marginBottom: 14 }}>
       {([['category', 'By category'], ['muscle', 'By muscle group']] as const).map(([id, text]) => <button key={id} type="button" role="tab" aria-selected={mode === id} onClick={() => { setMode(id); pick(null); }} style={{ border: 0, background: mode === id ? ink : 'transparent', color: mode === id ? '#090A08' : ink, padding: '9px 14px', fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{text}</button>)}
-    </div>
+    </div>}
 
     {mode === 'category' ? <>
-      <div role="group" aria-label="Activity category" style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 12 }}>
+      {!lockGroup && <div role="group" aria-label="Activity category" style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 12 }}>
         {ACTIVITY_GROUPS.map((g) => <button key={g.id} type="button" aria-pressed={g.id === groupId} onClick={() => { setGroupId(g.id); pick(null); }} style={chip(g.id === groupId)}><g.Icon size={13} strokeWidth={1.8} aria-hidden="true" />{g.label}</button>)}
-      </div>
+      </div>}
       {group.muscles && <div role="group" aria-label="Muscle group" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 12 }}>
         <span style={{ ...kicker, marginRight: 4 }}>Muscle group</span>
         <button type="button" aria-pressed={!muscle} onClick={() => setMuscle(null)} style={small(!muscle)}>Any</button>

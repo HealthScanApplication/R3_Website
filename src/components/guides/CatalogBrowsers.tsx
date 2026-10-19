@@ -122,14 +122,25 @@ export function CatalogIngredients({ accessToken }: { accessToken: string }) {
 }
 
 /** The app's fitness routines (catalogue Protocols) with their steps. */
-export function FitnessRoutines({ accessToken }: { accessToken: string }) {
-  const { items, busy, error } = useLoad<FitnessRoutine>(() => listFitnessRoutines(accessToken), [accessToken]);
+/** A section's published routines (catalogue Protocols in its categories), e.g. Fitness, Beauty, Wellness. */
+export const ROUTINE_SECTIONS = {
+  fitness: { title: 'Fitness routines', kicker: 'Fitness', categories: ['fitness', 'strength', 'recovery', 'mobility', 'cardio', 'hiit'], copy: 'The fitness routines and Protocols published in the ROUTINE³ app. Open one to see its steps.' },
+  hygiene: { title: 'Hygiene protocols', kicker: 'Hygiene', categories: ['hygiene', 'oral care', 'personal care'], copy: 'Hygiene routines published in the ROUTINE³ app: morning and evening sets for teeth, skin and body.' },
+  beauty: { title: 'Beauty protocols', kicker: 'Beauty', categories: ['beauty', 'skin & face', 'skin', 'hair'], copy: 'Beauty routines published in the ROUTINE³ app: skin, face and hair.' },
+  wellness: { title: 'Wellness protocols', kicker: 'Wellness', categories: ['wellness', 'health', 'general health', 'detox', 'cleanse', 'sleep', 'mind'], copy: 'Wellness routines published in the ROUTINE³ app: sleep, stress, detox and everyday health.' },
+  longevity: { title: 'Longevity protocols', kicker: 'Longevity', categories: ['longevity', 'performance', 'supplements'], copy: 'Longevity and performance routines published in the ROUTINE³ app.' },
+} as const;
+export type RoutineSection = keyof typeof ROUTINE_SECTIONS;
+
+export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbbell }: { accessToken: string; section?: RoutineSection; Icon?: typeof Dumbbell }) {
+  const cfg = ROUTINE_SECTIONS[section];
+  const { items, busy, error } = useLoad<FitnessRoutine>(() => listFitnessRoutines(accessToken, [...cfg.categories]), [accessToken, section]);
   const [open, setOpen] = useState<string | null>(null);
   const [steps, setSteps] = useState<Array<{ name: string; time: string | null; group: string | null; day: number | null }> | null>(null);
   useEffect(() => { if (!open) return; let live = true; setSteps(null); routineSteps(accessToken, open).then((s) => { if (live) setSteps(s); }); return () => { live = false; }; }, [accessToken, open]);
   return <div>
-    <Header Icon={Dumbbell} kicker="Fitness" title="Fitness routines" copy="The fitness routines and Protocols published in the ROUTINE³ app. Open one to see its steps." />
-    <p role="status" style={{ color: error ? warn : muted, fontSize: 11 }}>{busy ? 'Loading…' : error || `${items.length} routines`}</p>
+    <Header Icon={Icon} kicker={cfg.kicker} title={cfg.title} copy={cfg.copy} />
+    <p role="status" style={{ color: error ? warn : muted, fontSize: 11 }}>{busy ? 'Loading…' : error || (items.length ? `${items.length} routines` : `No published ${cfg.kicker.toLowerCase()} routines yet. Build one in the Protocol builder, and see the ${cfg.kicker.toLowerCase()} activities below this section in the sidebar.`)}</p>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 8 }}>
       {items.map((r) => <Fragment key={r.id}>
         <button type="button" aria-pressed={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)} style={{ textAlign: 'left', border: `1px solid ${open === r.id ? acid : line}`, background: panel, color: ink, padding: 0, cursor: 'pointer', overflow: 'hidden' }}>
