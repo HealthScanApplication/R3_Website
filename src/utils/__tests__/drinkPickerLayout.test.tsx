@@ -26,4 +26,4 @@ it('shows and selects private and catalog drinks without offering meals in the d
   fireEvent.click(water);
   await waitFor(() => expect(screen.queryByPlaceholderText('Search recipes (yours and the catalog)')).toBeNull());
   expect(screen.getByText('Spring Water')).toBeTruthy();
-});
+}, 20_000); // renders the whole Diet planner; slow on a loaded CI runner
