@@ -1,11 +1,11 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ClipboardCheck, CupSoda, Croissant, Droplet, Drumstick, Eraser, Hourglass, Layers, LayoutGrid, CircleDot, ListChecks, SquarePen, UtensilsCrossed, Dumbbell, Loader2, Plus, Search, Sparkles, Trash2, Utensils, Users, X, Combine, AlertTriangle, Apple, Bean, Beef, Carrot, Egg, Fish, Grape, Leaf, MilkOff, Moon, Salad, Scale, Sun, Sunrise, WheatOff, Activity, Bike, Flame, Flower2, Footprints, HeartPulse, Medal, Mountain, PersonStanding, SignalHigh, SignalLow, SignalMedium, Smile, Snowflake, StretchHorizontal, Swords, Target, Trophy, Volleyball, Waves, Zap, type LucideIcon } from 'lucide-react';
+import { Pill, CalendarDays, ClipboardCheck, CupSoda, Croissant, Droplet, Drumstick, Eraser, Hourglass, Layers, LayoutGrid, CircleDot, ListChecks, SquarePen, UtensilsCrossed, Dumbbell, Loader2, Plus, Search, Sparkles, Trash2, Utensils, Users, X, Combine, AlertTriangle, Apple, Bean, Beef, Carrot, Egg, Fish, Grape, Leaf, MilkOff, Moon, Salad, Scale, Sun, Sunrise, WheatOff, Activity, Bike, Flame, Flower2, Footprints, HeartPulse, Medal, Mountain, PersonStanding, SignalHigh, SignalLow, SignalMedium, Smile, Snowflake, StretchHorizontal, Swords, Target, Trophy, Volleyball, Waves, Zap, type LucideIcon } from 'lucide-react';
 import { listProtocolItems, type AdminProtocol, type AdminProtocolItem } from '../../utils/protocolAdmin';
 import type { GuideLead, GuideRecipe } from '../../utils/guidePortal';
 import { smartFill, type RecipeIdea } from '../../utils/dietPlanner';
 import { nutrientsForTier, type Tier } from '../../utils/recipeNutrients';
 import { TIERS, tierLabel, useEssential90 } from './RecipeInsights';
-import { DietFastingControls, FastingDayCell, WeeklySupplementRows, addTag, fastHatch } from './DietSchedule';
+import { DietFastingControls, FastingDayCell, SupplementEditor, addTag, fastHatch } from './DietSchedule';
 import { DietNutritionPanel } from './DietNutritionPanel';
 import { DietLocationHeader } from './DietLocationHeader';
 import { SupplementPicker } from './SupplementPicker';
@@ -15,7 +15,7 @@ import { defaultHomeCity, plannerWeek, saveHomeCity, sunriseForDate, validPlanne
 import { aggregateDiet, dietSelections, loadDietAnalysis, type DietAnalysis } from '../../utils/dietNutrition';
 import {
   MUSCLE_GROUPS, dayNameFor, muscleGroupOf, type MuscleGroupId, mealDrinks, mealPickKey, selectedServings, fitsSlot, DIET_FRAMEWORKS, FITNESS_GOALS, FRAMEWORK_RULES, mealTiming, resolveTiming, sessionTiming, mealIsFasting, fastingDrinkAllowed, type Anchor, type Timing, MEAL_SLOTS, WEEK, combineProtocols, draftFitnessWeek, TRAINING_TYPES, type FitnessLikes, defaultFuel, type TrainingFuel, defaultSchedule, TRAIN_TIMES, exerciseGroup, sessionTimeFor, type FitnessSchedule, type TrainTime, findClashes, guideRecipeToPick,
-  dietSupportItems, isDrinkPick, SUPPLEMENT_PERIODS, listBuilderMeta, macroGrams, saveDietProtocol, saveFitnessProtocol, searchActivities, searchDietRecipes, sumNutrition,
+  dietSupportItems, isDrinkPick, SUPPLEMENT_PERIODS, supplementCell, type SupplementPeriod, listBuilderMeta, macroGrams, saveDietProtocol, saveFitnessProtocol, searchActivities, searchDietRecipes, sumNutrition,
   reviewCombined, reviewDiet, reviewFitness, type Conflict, type Review, type ReviewNote, type ActivityPick, type BuilderKind, type Clash, type DietConfig, type FitnessConfig, type FitnessSession, type MealPick,
 } from '../../utils/protocolBuilders';
 
@@ -37,11 +37,30 @@ const chip = (on: boolean): React.CSSProperties => ({ border: `1px solid ${on ? 
 // Leading icons for the diet framework and meal chips.
 const FRAMEWORK_ICON: Record<string, LucideIcon> = { balanced: Scale, mediterranean: Grape, vegan: Leaf, vegetarian: Carrot, pescatarian: Fish, keto: Egg, low_carb: Salad, high_protein: Beef, gluten_free: WheatOff, dairy_free: MilkOff, low_fodmap: Bean };
 const MEAL_ICON: Record<string, LucideIcon> = { breakfast: Sunrise, lunch: Sun, snack: Apple, dinner: Moon };
+/** What each diet framework means, in plain words, shown under the chips when it is selected. */
+const FRAMEWORK_ABOUT: Record<string, string> = {
+  balanced: 'An everyday whole-food diet with nothing excluded: vegetables, fruit, whole grains, protein and healthy fats in sensible portions.',
+  mediterranean: 'The traditional eating pattern of the Mediterranean coast: plenty of vegetables, legumes, whole grains, fruit, nuts and extra-virgin olive oil, fish a few times a week, and little red meat or sugar.',
+  vegan: 'Fully plant-based: no meat, fish, dairy, eggs or honey. Protein comes from legumes, soy, nuts and seeds; vitamin B12 needs a fortified food or a supplement.',
+  vegetarian: 'No meat or fish, but dairy and eggs are in. Protein comes from eggs, dairy, legumes, soy, nuts and seeds.',
+  pescatarian: 'Vegetarian plus fish and seafood: protein and omega-3 without meat.',
+  keto: 'Very low carbohydrate and high fat, so the body runs on fat (ketosis). Grains, sugar, most fruit and starchy vegetables are out.',
+  low_carb: 'Fewer carbohydrates than usual (under about a quarter of energy), with more protein and fat: less bread, pasta, rice and sugar.',
+  high_protein: 'Protein makes up about a third of energy, from lean meat, fish, eggs, dairy and legumes, to support muscle and fullness.',
+  gluten_free: 'No wheat, barley, rye or anything made from them, for coeliac disease or gluten sensitivity. Rice, potatoes, corn, quinoa and certified oats are fine.',
+  dairy_free: 'No milk, cheese, butter, yogurt or cream, for lactose intolerance or a milk allergy. Calcium comes from fortified plant milks, greens and tofu.',
+  low_fodmap: 'Limits fermentable carbohydrates (FODMAPs) that can upset sensitive guts, such as onion, garlic, wheat, beans and some fruit. Often used short-term for IBS, with a dietitian.',
+};
 const PERIOD_ICON: Record<string, LucideIcon> = { morning: Sunrise, afternoon: Sun, evening: Moon };
 const TIER_ICON: Record<number, LucideIcon> = { 15: CircleDot, 30: Layers, 90: LayoutGrid };
 const MACRO_CARD_ICON: Record<string, LucideIcon> = { energy_kcal: Flame, protein_g: Drumstick, carbohydrates_g: Croissant, fats_g: Droplet };
 const ico = (Icon: LucideIcon, size = 12) => <Icon size={size} strokeWidth={1.8} aria-hidden="true" />;
 const iconLabel: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 6 };
+// Day timeline, as in the app's Home timeline: a rail with a node per entry, tinted like the app (dark theme).
+const TL = { consume: '#6FCF77', supplements: '#4DD0E1' };
+const toMins = (hhmm: string) => { const [h, m] = hhmm.split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+const tlNode = (color: string, Icon: LucideIcon) => <span aria-hidden="true" style={{ position: 'absolute', left: -19, top: 0, width: 14, height: 14, borderRadius: 99, background: panel, border: `1.5px solid ${color}`, display: 'grid', placeItems: 'center', color }}><Icon size={8} strokeWidth={2.4} /></span>;
+const tlHead = (color: string): React.CSSProperties => ({ fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color, marginBottom: 4, lineHeight: '14px' });
 const iconChip = (on: boolean): React.CSSProperties => ({ ...chip(on), display: 'inline-flex', alignItems: 'center', gap: 6 });
 // Leading icons for the fitness goal, level, training-type and sport chips.
 const GOAL_ICON: Record<string, LucideIcon> = { weight_loss: Flame, muscle_gain: Dumbbell, endurance: Activity, mobility: StretchHorizontal, face: Smile, general: Target };
@@ -153,6 +172,7 @@ export function DietBuilder({ accessToken, ownerId, protocols, recipes, initialP
   const [protocolId, setProtocolId] = useState<string | null>(null);
   const [meta, setMeta] = useState<SavedMeta>({});
   const [picking, setPicking] = useState<string | null>(null);
+  const [suppEditing, setSuppEditing] = useState<{ day: number; period: SupplementPeriod } | null>(null);
   const [drinkIndex, setDrinkIndex] = useState<number | null>(null);
   const [analysis, setAnalysis] = useState<DietAnalysis>({});
   const [analysisBusy, setAnalysisBusy] = useState(false);
@@ -235,7 +255,10 @@ export function DietBuilder({ accessToken, ownerId, protocols, recipes, initialP
     <div style={{ ...card, marginBottom: 14 }}>
       <span style={{ ...label, ...iconLabel }}>{ico(Salad, 11)}Diet framework</span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>{DIET_FRAMEWORKS.map((f) => { const Icon = FRAMEWORK_ICON[f.id]; return <button key={f.id} type="button" onClick={() => pickFramework(f.id)} style={iconChip(f.id === cfg.framework)}>{Icon && <Icon size={13} strokeWidth={1.8} aria-hidden="true" />}{f.label}</button>; })}</div>
-      <p style={{ color: muted, fontSize: 12, margin: '10px 0 0' }}>{framework.note}</p>
+      <div style={{ borderLeft: `2px solid ${acid}`, padding: '2px 0 2px 10px', margin: '12px 0 0' }}>
+        <p style={{ color: ink, fontSize: 12, lineHeight: 1.5, margin: 0 }}><strong>{framework.label}:</strong> {FRAMEWORK_ABOUT[framework.id] || framework.note}</p>
+        <p style={{ color: muted, fontSize: 11, margin: '4px 0 0' }}>{framework.protein}% protein · {framework.carbs}% carbs · {framework.fat}% fat · Planner: {framework.note}</p>
+      </div>
     </div>
     <div style={{ ...card, marginBottom: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 12, alignItems: 'end' }}>
       <label><span style={label}>Name</span><input style={input} value={name} onChange={(e) => setName(e.target.value)} /></label>
@@ -281,29 +304,59 @@ export function DietBuilder({ accessToken, ownerId, protocols, recipes, initialP
         <div style={{...label,...iconLabel,alignSelf:'center'}}>{ico(Hourglass,11)}Fasting · 24h timeline</div>{WEEK.map(w => <FastingDayCell key={w.day} cfg={cfg} day={w.day} />)}
         {SUPPLEMENT_PERIODS.map(period=><Fragment key={period.id}>
         <h3 style={{gridColumn:'1 / -1',fontSize:13,color:acid,margin:'12px 0 2px',borderTop:`1px solid ${line}`,paddingTop:12,...iconLabel,gap:7}}>{ico(PERIOD_ICON[period.id],14)}{`${period.label} · meals, drinks & supplements`}</h3>
-        {slots.filter(s=>period.id==='morning'?s.id==='breakfast':period.id==='afternoon'?['lunch','snack'].includes(s.id):s.id==='dinner').map((s) => [<div key={s.id} style={{ ...label, margin: 0, alignSelf: 'center' }}><span style={{ ...iconLabel, gap: 5 }}>{MEAL_ICON[s.id] && ico(MEAL_ICON[s.id], 11)}{s.label}</span><div style={{ fontWeight: 400, margin: '4px 0 2px' }}><TimingField compact value={mealTiming(cfg, s.id)} onChange={(t) => setCfg({ ...cfg, timing: { ...cfg.timing, [s.id]: t } })} /></div><div style={{ fontWeight: 400, letterSpacing: 0, textTransform: 'none' }}>≈ {resolveTiming(mealTiming(cfg, s.id))}</div></div>, ...WEEK.map(({ day }) => {
-          const key = `${day}:${s.id}`; const pick = cfg.plan[key]; const fasting = mealIsFasting(cfg,day,s.id);
-          const drinks = mealDrinks(cfg,key);
-          return <div key={key} aria-label={`${key} meal slot`} style={{ ...card, background:fasting?fastHatch:panel, padding: 8, minHeight: 92, borderColor: picking === key ? acid : line, position: 'relative' }}>
-            {fasting && <div style={{fontSize:10,color:warn,marginBottom:6}}>Fasting · {pick?'existing meal conflicts':'no meal at this time'}</div>}
-            {pick ? <>
-              {pick.image && <img src={pick.image} alt="" style={{ width: '100%', height: 44, objectFit: 'cover', marginBottom: 5 }} />}
-              <button type="button" disabled={fasting} aria-label={`Change ${key} meal`} onClick={() => { setPicking(key); setDrinkIndex(null); setQuery(''); }} style={{ ...iconBtn, textAlign: 'left', color: ink, fontSize: 11, lineHeight: 1.25, paddingRight: 14 }}>{pick.name}</button>
-              <label style={{ fontSize: 10, display: 'block', marginTop: 5 }}>Servings <input aria-label={`${key} meal servings`} type="number" min="0.01" step="0.25" value={selectedServings(pick)} onChange={(e) => setPick(key,{ ...pick, servings: Math.max(.01,Number(e.target.value)||1) })} style={{ ...input, width: 55, height: 26, padding: 3 }} /></label>
-              <div style={{ color: muted, fontSize: 10, marginTop: 3 }}>{pick.nutrition ? `${Math.round(pick.nutrition.energy_kcal)} kcal · P ${Math.round(pick.nutrition.protein_g)}` : 'No nutrition data'}{pick.healthScore != null ? ` · ♥ ${pick.healthScore}` : ''}{pick.source === 'guide' ? ' · yours' : ''}</div>
-              {(analysis[mealPickKey(pick)]?.hazards || pick.hazards || pick.hazardFlags || []).slice(0, 2).map((h) => <div key={h.label} title="All hazard records are listed in the nutrition section above" style={{ fontSize: 9, marginTop: 2, color: h.level === 'high' ? '#E88A7A' : warn, display: 'flex', gap: 3, alignItems: 'center' }}><AlertTriangle size={9} /> {h.label}</div>)}
-              <button type="button" title="Remove" onClick={(e) => { e.stopPropagation(); setPick(key, null); }} style={{ ...iconBtn, position: 'absolute', top: 4, right: 4 }}><X size={12} /></button>
-            </> : <button type="button" aria-label={`Add ${key} meal`} disabled={fasting} onClick={() => { setPicking(key); setDrinkIndex(null); setQuery(''); }} style={{ ...addTag, opacity:fasting?.4:1 }}>{ico(UtensilsCrossed, 11)}Add meal</button>}
-            {drinks.map((d,i) => <div key={i} style={{ borderTop: `1px solid ${line}`, marginTop: 7, paddingTop: 5, fontSize: 10 }}>
-              {!fastingDrinkAllowed(cfg,day,s.id,d) && <div style={{color:warn}}>Existing drink conflicts with fast</div>}
-              <button type="button" onClick={() => { setPicking(key); setDrinkIndex(i); setQuery(typeof d === 'string' ? d : d.name); }} style={{ ...iconBtn, textAlign: 'left', fontSize: 10 }}>{typeof d === 'string' ? `${d} · match recipe (nutrition unknown)` : d.name}</button>
-              {typeof d !== 'string' && <label style={{ display: 'block' }}>Servings <input aria-label={`${key} drink ${i+1} servings`} type="number" min="0.01" step="0.25" value={selectedServings(d)} onChange={(e) => setDrinks(key,drinks.map((x,n) => n===i ? { ...d, servings: Math.max(.01,Number(e.target.value)||1) } : x))} style={{ ...input, width: 55, height: 26, padding: 3 }} /></label>}
-              <button type="button" aria-label={`Remove ${key} drink ${i+1}`} style={iconBtn} onClick={() => setDrinks(key,drinks.filter((_,n) => n!==i))}><X size={11} /></button>
-            </div>)}
-            <button type="button" disabled={fasting && cfg.fasting?.type==='dry'} aria-label={`Add ${key} drink`} onClick={() => { setPicking(key); setDrinkIndex(drinks.length); setQuery(fasting?'Water':''); }} style={{ ...addTag, marginTop: 7 }}>{ico(CupSoda, 11)}{fasting?'Add plain water':'Add drink'}</button>
-          </div>;
-        })])}
-        <WeeklySupplementRows cfg={cfg} setCfg={setCfg} accessToken={accessToken} periodId={period.id} />
+        {(() => {
+          const periodSlots = slots.filter(s=>period.id==='morning'?s.id==='breakfast':period.id==='afternoon'?['lunch','snack'].includes(s.id):s.id==='dinner');
+          return [<div key="labels" style={{ ...label, margin: 0, alignSelf: 'start', display: 'grid', gap: 10 }}>{periodSlots.map((s) => <div key={s.id}><span style={{ ...iconLabel, gap: 5 }}>{MEAL_ICON[s.id] && ico(MEAL_ICON[s.id], 11)}{s.label}</span><div style={{ fontWeight: 400, margin: '4px 0 2px' }}><TimingField compact value={mealTiming(cfg, s.id)} onChange={(t) => setCfg({ ...cfg, timing: { ...cfg.timing, [s.id]: t } })} /></div><div style={{ fontWeight: 400, letterSpacing: 0, textTransform: 'none' }}>≈ {resolveTiming(mealTiming(cfg, s.id))}</div></div>)}</div>,
+          ...WEEK.map(({ day, short }) => {
+            // Everything in this part of the day, in time order: each meal with its drinks, then supplements at their time.
+            const supp = supplementCell(cfg, day, period.id);
+            const entries = [
+              ...periodSlots.map((s) => {
+                const key = `${day}:${s.id}`; const pick = cfg.plan[key]; const fasting = mealIsFasting(cfg,day,s.id); const drinks = mealDrinks(cfg,key); const time = resolveTiming(mealTiming(cfg, s.id));
+                if (!pick && !drinks.length && !fasting) return null;
+                return { mins: toMins(time), node: <div key={key} style={{ position: 'relative', marginBottom: 10, background: fasting ? fastHatch : undefined }}>
+                  {tlNode(TL.consume, MEAL_ICON[s.id] || UtensilsCrossed)}
+                  <div style={tlHead(TL.consume)}>{time} · {s.label}</div>
+                  {fasting && <div style={{fontSize:10,color:warn,marginBottom:4}}>Fasting · {pick?'existing meal conflicts':'no meal at this time'}</div>}
+                  {pick && <div style={{ position: 'relative' }}>
+                    {pick.image && <img src={pick.image} alt="" style={{ width: '100%', height: 44, objectFit: 'cover', marginBottom: 5, borderRadius: 6 }} />}
+                    <button type="button" disabled={fasting} aria-label={`Change ${key} meal`} onClick={() => { setPicking(key); setDrinkIndex(null); setQuery(''); }} style={{ ...iconBtn, textAlign: 'left', color: ink, fontSize: 11, lineHeight: 1.25, paddingRight: 14 }}>{pick.name}</button>
+                    <label style={{ fontSize: 10, display: 'block', marginTop: 5 }}>Servings <input aria-label={`${key} meal servings`} type="number" min="0.01" step="0.25" value={selectedServings(pick)} onChange={(e) => setPick(key,{ ...pick, servings: Math.max(.01,Number(e.target.value)||1) })} style={{ ...input, width: 55, height: 26, padding: 3 }} /></label>
+                    <div style={{ color: muted, fontSize: 10, marginTop: 3 }}>{pick.nutrition ? `${Math.round(pick.nutrition.energy_kcal)} kcal · P ${Math.round(pick.nutrition.protein_g)}` : 'No nutrition data'}{pick.healthScore != null ? ` · ♥ ${pick.healthScore}` : ''}{pick.source === 'guide' ? ' · yours' : ''}</div>
+                    {(analysis[mealPickKey(pick)]?.hazards || pick.hazards || pick.hazardFlags || []).slice(0, 2).map((h) => <div key={h.label} title="All hazard records are listed in the nutrition section above" style={{ fontSize: 9, marginTop: 2, color: h.level === 'high' ? '#E88A7A' : warn, display: 'flex', gap: 3, alignItems: 'center' }}><AlertTriangle size={9} /> {h.label}</div>)}
+                    <button type="button" title="Remove" aria-label={`Remove ${key} meal`} onClick={(e) => { e.stopPropagation(); setPick(key, null); }} style={{ ...iconBtn, position: 'absolute', top: 0, right: 0 }}><X size={12} /></button>
+                  </div>}
+                  {drinks.map((d,i) => <div key={i} style={{ borderTop: pick || i ? `1px solid ${line}` : 0, marginTop: pick || i ? 6 : 0, paddingTop: pick || i ? 5 : 0, fontSize: 10, position: 'relative', paddingRight: 14 }}>
+                    {!fastingDrinkAllowed(cfg,day,s.id,d) && <div style={{color:warn}}>Existing drink conflicts with fast</div>}
+                    <button type="button" onClick={() => { setPicking(key); setDrinkIndex(i); setQuery(typeof d === 'string' ? d : d.name); }} style={{ ...iconBtn, textAlign: 'left', fontSize: 10, gap: 4, alignItems: 'center' }}>{ico(CupSoda, 10)}{typeof d === 'string' ? `${d} · match recipe (nutrition unknown)` : d.name}</button>
+                    {typeof d !== 'string' && <label style={{ display: 'block' }}>Servings <input aria-label={`${key} drink ${i+1} servings`} type="number" min="0.01" step="0.25" value={selectedServings(d)} onChange={(e) => setDrinks(key,drinks.map((x,n) => n===i ? { ...d, servings: Math.max(.01,Number(e.target.value)||1) } : x))} style={{ ...input, width: 55, height: 26, padding: 3 }} /></label>}
+                    <button type="button" aria-label={`Remove ${key} drink ${i+1}`} style={{ ...iconBtn, position: 'absolute', top: 0, right: 0 }} onClick={() => setDrinks(key,drinks.filter((_,n) => n!==i))}><X size={11} /></button>
+                  </div>)}
+                </div> };
+              }),
+              supp.items.length ? { mins: toMins(supp.time), node: <div key="supp" style={{ position: 'relative', marginBottom: 10 }}>
+                {tlNode(TL.supplements, Pill)}
+                <div style={tlHead(TL.supplements)}>{supp.time} · Supplements</div>
+                {supp.items.map((p, i) => <div key={i} style={{ fontSize: 11, marginBottom: 3, overflowWrap: 'anywhere' }}>{typeof p === 'string' ? p : p.name}</div>)}
+              </div> } : null,
+            ].filter(Boolean).sort((a, b) => a!.mins - b!.mins) as Array<{ mins: number; node: React.ReactNode }>;
+            const drinkSlot = periodSlots.find((s) => cfg.plan[`${day}:${s.id}`]) || periodSlots[0];
+            const drinkKey = drinkSlot ? `${day}:${drinkSlot.id}` : '';
+            const drinkFasting = drinkSlot ? mealIsFasting(cfg, day, drinkSlot.id) : false;
+            const active = !!picking && picking.startsWith(`${day}:`) && periodSlots.some((s) => picking === `${day}:${s.id}`);
+            return <div key={`${day}:${period.id}`} aria-label={`${short} ${period.label.toLowerCase()} timeline`} style={{ ...card, padding: '10px 8px 8px 26px', minHeight: 92, borderColor: active ? acid : line, position: 'relative' }}>
+              <span aria-hidden="true" style={{ position: 'absolute', left: 13, top: 12, bottom: 12, width: 2, borderRadius: 2, background: line }} />
+              {entries.length ? entries.map((e) => e.node) : <div style={{ color: muted, fontSize: 10, marginBottom: 8, lineHeight: '14px' }}>Nothing planned yet</div>}
+              {/* One row of add tags: meal (per slot), drink and supplement. */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {periodSlots.filter((s) => !cfg.plan[`${day}:${s.id}`]).map((s) => { const key = `${day}:${s.id}`; const fasting = mealIsFasting(cfg,day,s.id); return <button key={key} type="button" aria-label={`Add ${key} meal`} disabled={fasting} onClick={() => { setPicking(key); setDrinkIndex(null); setQuery(''); }} style={{ ...addTag, opacity: fasting ? .4 : 1 }}>{ico(UtensilsCrossed, 11)}{periodSlots.length > 1 ? s.label : 'Meal'}</button>; })}
+                {drinkSlot && <button type="button" disabled={drinkFasting && cfg.fasting?.type==='dry'} aria-label={`Add ${drinkKey} drink`} onClick={() => { setPicking(drinkKey); setDrinkIndex(mealDrinks(cfg,drinkKey).length); setQuery(drinkFasting?'Water':''); }} style={addTag}>{ico(CupSoda, 11)}{drinkFasting?'Water':'Drink'}</button>}
+                <button type="button" aria-label={`Edit ${short} ${period.id} supplements`} onClick={() => setSuppEditing({ day, period: period.id })} style={addTag}>{ico(Pill, 11)}Supplement</button>
+              </div>
+            </div>;
+          })];
+        })()}
+        {suppEditing?.period === period.id && <SupplementEditor cfg={cfg} setCfg={setCfg} accessToken={accessToken} day={suppEditing.day} period={suppEditing.period} onClose={() => setSuppEditing(null)} />}
         </Fragment>)}
       </div>
     </div>
