@@ -209,5 +209,5 @@ not existing there.
 8. **Not included in a redeem:** child plans attached to a master routine through `protocol_children` (Diet and Fitness plans), and
    `builder_config`. A shared master routine clones as its own items only. Say so in the prompt, or extend the function.
 9. **Payload size.** `redeem_routine_share` returns one JSON value with every column of every item (including nulls). The staging fixture
-   routine has 244 items; see the dry-run note for its size. PostgREST's row cap does not apply to a single value, but if size matters on a
+   routine has 244 items; the dry run prints its size as a NOTE line. PostgREST's row cap does not apply to a single value, but if size matters on a
    phone, `jsonb_strip_nulls` would cut it (the clone then treats a missing key as null).
