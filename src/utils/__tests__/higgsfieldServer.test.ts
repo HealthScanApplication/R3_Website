@@ -71,7 +71,7 @@ describe('higgsfield lib', () => {
 
 type Row = Record<string, any>;
 function server(opts: { live?: boolean; hf?: (url: string, init: any) => { status: number; body: any } } = {}) {
-  const tables: Record<string, Row[]> = { guide_profiles: [{ user_id: 'guardian' }], guardian_higgsfield_connections: [], guardian_video_jobs: [] };
+  const tables: Record<string, Row[]> = { guide_profiles: [{ user_id: 'guardian' }], guardian_higgsfield_connections: [], guardian_video_jobs: [], higgsfield_oauth_clients: [] };
   const uploads: string[] = [];
   const db = {
     auth: { async getUser(token: string) { return { data: { user: token === 'good' ? { id: 'guardian' } : token === 'visitor' ? { id: 'visitor' } : null } }; } },
@@ -94,7 +94,7 @@ function server(opts: { live?: boolean; hf?: (url: string, init: any) => { statu
       async function run(single: boolean) {
         const rows = tables[table];
         if (action === 'insert') { const row = { created_at: new Date().toISOString(), error: null, video_url: null, storage_path: null, ...payload }; rows.push(row); return { data: pick(row), error: null }; }
-        if (action === 'upsert') { const i = rows.findIndex((r) => r.user_id === payload.user_id); if (i >= 0) rows[i] = payload; else rows.push(payload); return { data: payload, error: null }; }
+        if (action === 'upsert') { const keyOf = (r: Row) => r.user_id ?? r.redirect_uri; const i = rows.findIndex((r) => keyOf(r) === keyOf(payload)); if (i >= 0) rows[i] = payload; else rows.push(payload); return { data: payload, error: null }; }
         const found = rows.filter((r) => filters.every((f) => f(r)));
         if (action === 'delete') { tables[table] = rows.filter((r) => !found.includes(r)); return { data: null, error: null }; }
         if (action === 'update') found.forEach((r) => Object.assign(r, payload));
@@ -108,16 +108,18 @@ function server(opts: { live?: boolean; hf?: (url: string, init: any) => { statu
     calls.push({ url, init });
     if (url.startsWith('https://cdn.test/')) return new Response(new Uint8Array([0, 0, 0, 24]), { status: 200 });
     const r = opts.hf?.(url, init) ?? { status: 200, body: {} };
+    if (typeof r.body === 'string') return new Response(r.body, { status: r.status, headers: { 'Content-Type': 'text/event-stream', 'Mcp-Session-Id': 'sess-1' } });
     return new Response(JSON.stringify(r.body), { status: r.status, headers: { 'Content-Type': 'application/json' } });
   });
   vi.stubGlobal('fetch', fetchMock);
   let handler!: (r: Request) => Promise<Response>;
   const source = readFileSync(new URL('../../../supabase/functions/higgsfield/index.ts', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '');
   const code = transformSync(source, { loader: 'ts', target: 'es2022' }).code;
-  const env: Row = { HIGGSFIELD_ENCRYPTION_KEY: ENC, ...(opts.live ? { HIGGSFIELD_LIVE: 'true' } : {}) };
+  const env: Row = { SUPABASE_URL: 'https://staging.supabase.test', HIGGSFIELD_ENCRYPTION_KEY: ENC, ...(opts.live ? { HIGGSFIELD_LIVE: 'true' } : {}) };
   new Function('createClient', 'hf', 'Deno', code)(() => db, hf, { env: { get: (k: string) => env[k] }, serve: (h: typeof handler) => { handler = h; } });
   return {
     tables, uploads, calls,
+    async get(url: string) { return handler(new Request(url, { method: 'GET' })); },
     async call(body: Row, token = 'good') {
       const res = await handler(new Request('https://staging.invalid', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }));
       return { status: res.status, body: await res.json() };
@@ -229,5 +231,94 @@ describe('higgsfield Edge Function', () => {
     const s = server();
     s.tables.guardian_video_jobs.push({ id: 'other-job', user_id: 'someone-else', status: 'queued', created_at: new Date().toISOString() });
     expect((await s.call({ action: 'poll', job_id: 'other-job' })).status).toBe(404);
+  });
+
+  describe('Log in with Higgsfield (OAuth + PKCE on the MCP server)', () => {
+    const CALLBACK = 'https://staging.supabase.test/functions/v1/higgsfield';
+    const idToken = `x.${Buffer.from(JSON.stringify({ email: 'john@example.com' })).toString('base64url')}.y`;
+    const oauthServer = (extra: (url: string, init: any) => any = () => null) => server({ live: true, hf: (url, init) => {
+      const custom = extra(url, init); if (custom) return custom;
+      if (url === hf.OAUTH.register) return { status: 201, body: { client_id: 'client-123' } };
+      if (url === hf.OAUTH.token) return { status: 200, body: { access_token: 'at-1', refresh_token: 'rt-1', expires_in: 3600, id_token: idToken } };
+      return { status: 200, body: {} };
+    } });
+    const login = async (s: ReturnType<typeof server>, returnTo = 'http://localhost:5173/guardians/workspace?tab=content') => {
+      const start = await s.call({ action: 'oauth_start', return_to: returnTo });
+      const auth = new URL(start.body.url);
+      return { start, auth, callback: await s.get(`${CALLBACK}?code=the-code&state=${encodeURIComponent(auth.searchParams.get('state')!)}`) };
+    };
+
+    it('starts a PKCE login with a sealed state, registering our client once', async () => {
+      const s = oauthServer();
+      const { auth } = await login(s);
+      expect(auth.origin + auth.pathname).toBe(hf.OAUTH.authorize);
+      expect(Object.fromEntries(['client_id', 'redirect_uri', 'code_challenge_method', 'resource', 'scope'].map((k) => [k, auth.searchParams.get(k)]))).toEqual({ client_id: 'client-123', redirect_uri: CALLBACK, code_challenge_method: 'S256', resource: hf.MCP_URL, scope: 'openid email offline_access' });
+      expect(auth.searchParams.get('state')).not.toContain('guardian'); // sealed, not readable
+      await s.call({ action: 'oauth_start', return_to: 'http://localhost:5173/' });
+      expect(s.calls.filter((c) => c.url === hf.OAUTH.register)).toHaveLength(1);
+      expect(JSON.parse(s.calls.find((c) => c.url === hf.OAUTH.register)!.init.body)).toMatchObject({ redirect_uris: [CALLBACK], token_endpoint_auth_method: 'none' });
+    });
+
+    it('swaps the code (with the PKCE verifier) for tokens, stores them encrypted and returns to the site', async () => {
+      const s = oauthServer();
+      const { auth, callback } = await login(s);
+      expect(callback.status).toBe(302);
+      expect(callback.headers.get('Location')).toBe('http://localhost:5173/guardians/workspace?tab=content&higgsfield=connected');
+      const exchange = new URLSearchParams(s.calls.find((c) => c.url === hf.OAUTH.token)!.init.body);
+      expect(exchange.get('grant_type')).toBe('authorization_code');
+      expect(exchange.get('code')).toBe('the-code');
+      expect(await hf.pkceChallenge(exchange.get('code_verifier')!)).toBe(auth.searchParams.get('code_challenge'));
+      const row = s.tables.guardian_higgsfield_connections[0];
+      expect(row).toMatchObject({ user_id: 'guardian', method: 'oauth', key_hint: 'jo…@example.com' });
+      expect(JSON.stringify(row)).not.toContain('at-1');
+      expect((await s.call({ action: 'status' })).body).toMatchObject({ connected: true, method: 'oauth', key_hint: 'jo…@example.com' });
+    });
+
+    it('refuses forged or expired state and other sites as the return address', async () => {
+      const s = oauthServer();
+      expect((await s.get(`${CALLBACK}?code=x&state=forged.state`)).status).toBe(400);
+      expect((await s.call({ action: 'oauth_start', return_to: 'https://evil.example/steal' })).status).toBe(400);
+      const expired = await hf.sealState({ user_id: 'guardian', verifier: 'v', return_to: 'http://localhost:5173/', exp: Date.now() - 1 }, ENC);
+      expect((await s.get(`${CALLBACK}?code=x&state=${encodeURIComponent(expired)}`)).status).toBe(400);
+      expect(s.tables.guardian_higgsfield_connections).toHaveLength(0);
+    });
+
+    it('sends the Guardian back with "cancelled" when they decline on Higgsfield', async () => {
+      const s = oauthServer();
+      const { auth } = await login(s);
+      s.tables.guardian_higgsfield_connections.length = 0;
+      const res = await s.get(`${CALLBACK}?error=access_denied&state=${encodeURIComponent(auth.searchParams.get('state')!)}`);
+      expect(res.headers.get('Location')).toMatch(/higgsfield=cancelled$/);
+    });
+
+    it('lists the account’s MCP tools over an SSE answer, and refreshes an expiring token first', async () => {
+      const s = oauthServer((url, init) => {
+        if (url !== hf.MCP_URL) return null;
+        const msg = JSON.parse(init.body);
+        if (msg.method === 'tools/list') return { status: 200, body: `event: message\ndata: ${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { tools: [{ name: 'generate_video', description: 'Make a video', inputSchema: { type: 'object' } }] } })}\n\n` };
+        return { status: 200, body: `data: ${JSON.stringify({ jsonrpc: '2.0', id: msg.id ?? 0, result: {} })}\n\n` };
+      });
+      await login(s);
+      // Make the stored token expire, so the next call refreshes it.
+      const sealed = await hf.encryptCredentials({ oauth: { access_token: 'old', refresh_token: 'rt-1', expires_at: Date.now() } } as any, 'guardian', ENC);
+      Object.assign(s.tables.guardian_higgsfield_connections[0], { credentials_ciphertext: sealed.ciphertext, credentials_iv: sealed.iv });
+      const res = (await s.call({ action: 'tools' })).body;
+      expect(res.tools).toEqual([{ name: 'generate_video', description: 'Make a video', input: { type: 'object' } }]);
+      const refresh = s.calls.filter((c) => c.url === hf.OAUTH.token).map((c) => new URLSearchParams(c.init.body)).find((b) => b.get('grant_type') === 'refresh_token');
+      expect(refresh?.get('refresh_token')).toBe('rt-1');
+      const mcpCalls = s.calls.filter((c) => c.url === hf.MCP_URL);
+      expect(mcpCalls.map((c) => JSON.parse(c.init.body).method)).toEqual(['initialize', 'notifications/initialized', 'tools/list']);
+      expect(mcpCalls[2].init.headers.Authorization).toBe('Bearer at-1');
+      expect(mcpCalls[2].init.headers['Mcp-Session-Id']).toBe('sess-1');
+    });
+
+    it('quotes plan credits, and doesn’t spend through the login until generation is mapped', async () => {
+      const s = oauthServer();
+      await login(s);
+      expect((await s.call({ action: 'estimate', model: 'kling-3-std', aspect_ratio: '9:16', duration: 5 })).body.estimate.source).toBe('plan');
+      const gen = await s.call({ action: 'generate', prompt: 'A calm evening wind-down at home.', aspect_ratio: '9:16' });
+      expect(gen.status).toBe(501);
+      expect(s.tables.guardian_video_jobs).toHaveLength(0);
+    });
   });
 });

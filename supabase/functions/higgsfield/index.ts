@@ -1,7 +1,12 @@
-// Guardian videos with the Guardian's OWN Higgsfield API key (signed-in Guardian only).
-//   action "status":     is this Guardian connected (key hint only), live or mock mode, which models.
+// Guardian videos on the Guardian's OWN Higgsfield account (signed-in Guardian only). Two ways to connect:
+//   API key (REST API, paid from their Higgsfield API balance), or "Log in with Higgsfield" (OAuth 2.1 + PKCE against
+//   Higgsfield's MCP server, which uses their plan credits).
+//   action "status":     is this Guardian connected (how, plus a key/email hint only), live or mock mode, which models.
 //   action "connect":    store their key ID + secret, AES-GCM encrypted (HIGGSFIELD_ENCRYPTION_KEY). Live mode checks
 //                        the key first with Higgsfield's free cost-estimate endpoint.
+//   action "oauth_start": the Higgsfield login URL (PKCE; state sealed with the same key). Higgsfield redirects back to
+//                        this function (GET ?code&state), which stores the tokens encrypted and returns to the site.
+//   action "tools":      (login only) the MCP tools the Guardian's account offers, to map generation onto them.
 //   action "disconnect": delete the stored credentials.
 //   action "generate":   start a text-to-video (or image-to-video) job on their account.
 //   action "poll":       refresh one job; a finished video is copied into the private guardian-videos bucket
@@ -17,6 +22,8 @@ const LIVE = Deno.env.get('HIGGSFIELD_LIVE') === 'true';
 const ENC = Deno.env.get('HIGGSFIELD_ENCRYPTION_KEY') || '';
 const MAX_ACTIVE = 3, MAX_PER_DAY = Number(Deno.env.get('HIGGSFIELD_DAILY_LIMIT') || 20);
 const BUCKET = 'guardian-videos';
+const SELF = `${Deno.env.get('SUPABASE_URL')}/functions/v1/higgsfield`; // OAuth redirect URI (deploy with --no-verify-jwt)
+const RETURN_ORIGINS = (Deno.env.get('HIGGSFIELD_RETURN_ORIGINS') || 'https://routine3.com,https://www.routine3.com,http://localhost:3000,http://localhost:5173').split(',').map((o) => o.trim()).filter(Boolean);
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 const fail = (error: string, status = 400) => json({ error }, status);
@@ -34,10 +41,80 @@ async function higgsfield(creds: { key: string; secret: string }, path: string, 
   return { ok: true as const, body };
 }
 
-async function credentialsFor(userId: string) {
-  const { data } = await service.from('guardian_higgsfield_connections').select('credentials_ciphertext, credentials_iv').eq('user_id', userId).maybeSingle();
+type Connection = { method: 'api_key'; creds: { key: string; secret: string } } | { method: 'oauth'; tokens: hf.OAuthTokens };
+async function connectionFor(userId: string): Promise<Connection | null> {
+  const { data } = await service.from('guardian_higgsfield_connections').select('method, credentials_ciphertext, credentials_iv').eq('user_id', userId).maybeSingle();
   if (!data) return null;
-  return hf.decryptCredentials(data, userId, ENC);
+  const sealed: any = await hf.decryptCredentials(data, userId, ENC);
+  if (data.method !== 'oauth') return { method: 'api_key', creds: sealed };
+  let tokens: hf.OAuthTokens = sealed.oauth;
+  if (hf.needsRefresh(tokens) && tokens.refresh_token) { // refresh quietly; keep the old token if it fails
+    const clientId = await oauthClientId().catch(() => null);
+    const res = clientId ? await fetch(hf.OAUTH.token, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token, client_id: clientId, resource: hf.MCP_URL }) }).catch(() => null) : null;
+    const next = res?.ok ? hf.tokensFrom(await res.json().catch(() => null), Date.now(), tokens.refresh_token) : null;
+    if (next) { tokens = next; await saveConnection(userId, 'oauth', { oauth: next }); }
+  }
+  return { method: 'oauth', tokens };
+}
+async function credentialsFor(userId: string) {
+  const c = await connectionFor(userId);
+  return c?.method === 'api_key' ? c.creds : null;
+}
+async function saveConnection(userId: string, method: 'api_key' | 'oauth', secret: unknown, hint?: string) {
+  const sealed = await hf.encryptCredentials(secret as any, userId, ENC);
+  const row: Record<string, unknown> = { user_id: userId, method, credentials_ciphertext: sealed.ciphertext, credentials_iv: sealed.iv };
+  if (hint !== undefined) { row.key_hint = hint; row.connected_at = new Date().toISOString(); }
+  return hint === undefined
+    ? service.from('guardian_higgsfield_connections').update(row).eq('user_id', userId)
+    : service.from('guardian_higgsfield_connections').upsert(row);
+}
+
+/** Our OAuth client at Higgsfield, registered once per environment (dynamic client registration) and remembered. */
+async function oauthClientId(): Promise<string> {
+  const { data } = await service.from('higgsfield_oauth_clients').select('client_id').eq('redirect_uri', SELF).maybeSingle();
+  if (data?.client_id) return data.client_id;
+  const res = await fetch(hf.OAUTH.register, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(hf.registrationBody(SELF)) });
+  const body = await res.json().catch(() => null);
+  if (!res.ok || !body?.client_id) throw new Error('Higgsfield login is not available right now.');
+  await service.from('higgsfield_oauth_clients').upsert({ redirect_uri: SELF, client_id: body.client_id });
+  return body.client_id;
+}
+
+/** One JSON-RPC call to Higgsfield's MCP server (streamable HTTP): initialize, then the call, on one session. */
+async function mcp(tokens: hf.OAuthTokens, method: string, params: unknown) {
+  const headers: Record<string, string> = { Authorization: `Bearer ${tokens.access_token}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' };
+  const post = async (id: number | null, m: string, p: unknown) => {
+    const res = await fetch(hf.MCP_URL, { method: 'POST', headers, body: JSON.stringify(id === null ? { jsonrpc: '2.0', method: m, params: p } : { jsonrpc: '2.0', id, method: m, params: p }) });
+    const session = res.headers.get('mcp-session-id'); if (session) headers['Mcp-Session-Id'] = session;
+    if (!res.ok) throw new Error(res.status === 401 ? 'Your Higgsfield login has expired. Log in again.' : `Higgsfield error (${res.status}).`);
+    return id === null ? null : hf.parseMcpResponse(await res.text(), res.headers.get('content-type') || '', id);
+  };
+  await post(1, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'ROUTINE3 Guardians', version: '1.0' } });
+  await post(null, 'notifications/initialized', {});
+  const answer = await post(2, method, params);
+  if (answer?.error) throw new Error(String(answer.error.message || 'Higgsfield refused the request.'));
+  return answer?.result;
+}
+
+/** GET from Higgsfield after login: swap the code for tokens, store them encrypted, send the Guardian back. */
+async function oauthCallback(url: URL): Promise<Response> {
+  const state = await hf.openState(url.searchParams.get('state') || '', ENC);
+  const back = (outcome: string) => {
+    const to = new URL(state?.return_to || RETURN_ORIGINS[0]); to.searchParams.set('higgsfield', outcome);
+    return new Response(null, { status: 302, headers: { Location: to.toString() } });
+  };
+  if (!state) return new Response('This login link has expired. Go back to ROUTINE³ and try again.', { status: 400 });
+  const code = url.searchParams.get('code');
+  if (!code) return back(url.searchParams.get('error') === 'access_denied' ? 'cancelled' : 'error');
+  try {
+    const clientId = await oauthClientId();
+    const res = await fetch(hf.OAUTH.token, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: SELF, client_id: clientId, code_verifier: state.verifier, resource: hf.MCP_URL }) });
+    const body = await res.json().catch(() => null);
+    const tokens = res.ok ? hf.tokensFrom(body) : null;
+    if (!tokens) { console.warn('higgsfield oauth token exchange', res.status); return back('error'); }
+    const { error } = await saveConnection(state.user_id, 'oauth', { oauth: tokens }, hf.emailHint(body?.id_token));
+    return back(error ? 'error' : 'connected');
+  } catch { return back('error'); }
 }
 
 /** Copy a finished video into our bucket; on failure keep Higgsfield's URL (valid for at least 7 days). */
@@ -59,8 +136,9 @@ async function withSignedUrl(job: any) {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
-  if (req.method !== 'POST') return fail('Method not allowed', 405);
   if (!ENC) return fail('Video generation is not configured yet.', 503);
+  if (req.method === 'GET') { const url = new URL(req.url); if (url.searchParams.has('state')) return oauthCallback(url); }
+  if (req.method !== 'POST') return fail('Method not allowed', 405);
   const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
   const { data: { user } } = await service.auth.getUser(token);
   if (!user) return fail('Sign in first.', 401);
@@ -70,8 +148,8 @@ Deno.serve(async (req) => {
   const action = String(body?.action || '');
 
   if (action === 'status') {
-    const { data } = await service.from('guardian_higgsfield_connections').select('key_hint, connected_at, last_used_at').eq('user_id', user.id).maybeSingle();
-    return json({ connected: !!data, key_hint: data?.key_hint ?? null, connected_at: data?.connected_at ?? null, live: LIVE,
+    const { data } = await service.from('guardian_higgsfield_connections').select('method, key_hint, connected_at, last_used_at').eq('user_id', user.id).maybeSingle();
+    return json({ connected: !!data, method: data?.method ?? null, key_hint: data?.key_hint ?? null, connected_at: data?.connected_at ?? null, live: LIVE,
       models: hf.MODELS.map((m) => ({ id: m.id, label: m.label, durations: m.durations, aspects: hf.ASPECTS.map((a) => ({ aspect: a, delivered: hf.deliveredAspect(m, a) })) })) });
   }
 
@@ -82,10 +160,26 @@ Deno.serve(async (req) => {
       const check = await higgsfield(creds, `estimate/${hf.MODELS[0].t2v}`, { body: { prompt: 'A calm morning routine at home.', duration: 5, aspect_ratio: '9:16' } });
       if (!check.ok && check.status === 401) return fail(check.error, 400); // other errors (e.g. low balance) don't mean a bad key
     }
-    const sealed = await hf.encryptCredentials(creds, user.id, ENC);
-    const { error } = await service.from('guardian_higgsfield_connections').upsert({ user_id: user.id, key_hint: hf.keyHint(creds.key), credentials_ciphertext: sealed.ciphertext, credentials_iv: sealed.iv, connected_at: new Date().toISOString() });
+    const { error } = await saveConnection(user.id, 'api_key', creds, hf.keyHint(creds.key));
     if (error) return fail('Could not save the connection.', 500);
-    return json({ connected: true, key_hint: hf.keyHint(creds.key), live: LIVE });
+    return json({ connected: true, method: 'api_key', key_hint: hf.keyHint(creds.key), live: LIVE });
+  }
+
+  if (action === 'oauth_start') {
+    const returnTo = hf.safeReturn(String(body.return_to || ''), RETURN_ORIGINS);
+    if (!returnTo) return fail('Logging in with Higgsfield isn’t enabled for this site address yet.');
+    try {
+      const verifier = hf.pkceVerifier();
+      const state = await hf.sealState({ user_id: user.id, verifier, return_to: returnTo, exp: Date.now() + 15 * 60 * 1000 }, ENC);
+      return json({ url: hf.authorizeUrl({ clientId: await oauthClientId(), redirectUri: SELF, state, challenge: await hf.pkceChallenge(verifier) }) });
+    } catch (e) { return fail((e as Error).message, 502); }
+  }
+
+  if (action === 'tools') {
+    const c = await connectionFor(user.id).catch(() => null);
+    if (c?.method !== 'oauth') return fail('Log in with Higgsfield first.', 409);
+    try { const r = await mcp(c.tokens, 'tools/list', {}); return json({ tools: (r?.tools || []).map((t: any) => ({ name: t.name, description: String(t.description || '').slice(0, 300), input: t.inputSchema ?? null })) }); }
+    catch (e) { return fail((e as Error).message, 502); }
   }
 
   if (action === 'disconnect') {
@@ -104,8 +198,10 @@ Deno.serve(async (req) => {
     const shaped = hf.shapeRequest({ ...body, prompt: 'A calm morning routine at home.', image_url: null });
     if (!shaped.ok) return fail(shaped.error);
     const fallback = hf.listEstimate(shaped.model, shaped.duration);
+    const conn = await connectionFor(user.id).catch(() => null);
+    if (conn?.method === 'oauth') return json({ estimate: { usd: null, credits: null, source: 'plan', per_second: null }, duration: shaped.duration, delivered_aspect: shaped.delivered });
     if (!LIVE) return json({ estimate: fallback, duration: shaped.duration, delivered_aspect: shaped.delivered });
-    const creds = await credentialsFor(user.id).catch(() => null);
+    const creds = conn?.method === 'api_key' ? conn.creds : null;
     if (!creds) return json({ estimate: fallback, duration: shaped.duration, delivered_aspect: shaped.delivered });
     const res = await higgsfield(creds, `estimate/${shaped.endpoint}`, { body: shaped.body });
     return json({ estimate: (res.ok && hf.parseEstimate(res.body)) || fallback, duration: shaped.duration, delivered_aspect: shaped.delivered });
@@ -114,8 +210,11 @@ Deno.serve(async (req) => {
   if (action === 'generate') {
     const shaped = hf.shapeRequest(body);
     if (!shaped.ok) return fail(shaped.error);
-    const creds = await credentialsFor(user.id).catch(() => null);
-    if (!creds) return fail('Connect your Higgsfield account first.', 409);
+    const conn = await connectionFor(user.id).catch(() => null);
+    if (!conn) return fail('Connect your Higgsfield account first.', 409);
+    // Video through the Higgsfield login runs on MCP tools whose names we map after the first real login ("tools").
+    if (LIVE && conn.method === 'oauth') return fail('Making videos through your Higgsfield login isn’t switched on yet. Connect with an API key for now.', 501);
+    const creds = conn.method === 'api_key' ? conn.creds : null;
     // Spend guard on the Guardian's own balance: a few at a time, and a daily ceiling.
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: recent } = await service.from('guardian_video_jobs').select('status').eq('user_id', user.id).gte('created_at', since);
@@ -124,7 +223,7 @@ Deno.serve(async (req) => {
     const id = crypto.randomUUID();
     let requestId = `mock-${id}`;
     if (LIVE) {
-      const res = await higgsfield(creds, shaped.endpoint, { body: shaped.body, idempotencyKey: id });
+      const res = await higgsfield(creds!, shaped.endpoint, { body: shaped.body, idempotencyKey: id });
       if (!res.ok) return fail(res.error, res.status === 401 ? 400 : 502);
       requestId = String(res.body?.request_id || '');
       if (!requestId) return fail('Higgsfield did not start the job.', 502);
