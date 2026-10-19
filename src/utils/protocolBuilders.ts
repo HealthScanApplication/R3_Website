@@ -393,7 +393,14 @@ export const orderedExercises = <T extends ExercisePick>(list: T[]) => [...list.
 export const exerciseGroup = (e: ExercisePick) => (e.role === 'warmup' ? 'Warm-up' : e.role === 'recovery' ? 'Recovery' : muscleGroupOf(e));
 export interface FitnessSession { day: number; time: string; anchor?: Anchor; offset?: number; rules?: string[]; title: string; minutes: number; intensity: 'low' | 'moderate' | 'high'; exercises: ExercisePick[] }
 /** What the person likes doing: training types steer each session's catalog categories, sports become sessions. */
-export interface FitnessLikes { types: string[]; sports: ActivityPick[] }
+export interface FitnessLikes { types: string[]; sports: ActivityPick[]; muscles?: MuscleGroupId[]; exercises?: ActivityPick[] }
+/** Training types that suit each goal: shown first and marked as suggested; the rest stay pickable. */
+export const GOAL_TYPES: Record<string, string[]> = {
+  weight_loss: ['strength', 'cardio', 'hiit'], muscle_gain: ['strength', 'calisthenics', 'recovery'], endurance: ['cardio', 'hiit', 'water'],
+  mobility: ['stretching', 'yoga', 'recovery'], face: [], general: ['strength', 'cardio', 'stretching'],
+};
+/** Catalog categories of the picked training types (recovery excluded: it is added after sessions, not as one). */
+export const likedCategories = (likes?: FitnessLikes) => [...new Set(TRAINING_TYPES.filter((t) => likes?.types.includes(t.id) && t.id !== 'recovery').flatMap((t) => t.categories))];
 /** Food or supplements around every training session: free text or catalog picks, like Diet supplements. */
 export type FuelItem = string | SupplementPick;
 export interface TrainingFuel { pre: FuelItem[]; post: FuelItem[]; preMinutes: number; postMinutes: number }
@@ -481,9 +488,17 @@ export function planFitnessWeek(goal: FitnessGoal, likes?: FitnessLikes, schedul
   const rest = new Set(schedule?.restDays || []);
   const chosen = new Set(TRAINING_TYPES.filter((t) => likes?.types.includes(t.id) && t.id !== 'recovery').flatMap((t) => t.categories));
   const narrow = (t: Template): Template => {
-    if (!chosen.size || !t.categories.length) return t;
+    if (!chosen.size || !t.categories.length) return focus(t);
     const kept = t.categories.filter((c) => chosen.has(c));
-    return kept.length ? { ...t, categories: kept } : t;
+    return focus({ ...t, categories: kept.length ? kept : t.categories });
+  };
+  // Muscle focus: strength days train only the picked muscles (in turn), when any of them fit that day.
+  const muscles = likes?.muscles || [];
+  const focus = (t: Template): Template => {
+    if (!muscles.length || !t.muscles?.length || t.muscles.includes('face')) return t;
+    const fit = t.muscles.filter((m) => muscles.includes(m));
+    const list = fit.length ? fit : muscles;
+    return { ...t, muscles: t.muscles.map((_, i) => list[i % list.length]) };
   };
   const sports = likes?.sports || [];
   let next = 0;
@@ -613,6 +628,13 @@ export async function draftFitnessWeek(accessToken: string, goalId: string, leve
       continue;
     }
     const exercises: ExercisePick[] = [];
+    // Exercises the person picked go first in every session whose categories they belong to.
+    for (const f of likes?.exercises || []) {
+      if (exercises.length >= dose.exercises || !t.categories.includes(f.category || '') || exercises.some((e) => e.id === f.id)) continue;
+      const timed = /cardio|sports|stretch|recovery|yoga/i.test(f.category || '');
+      exercises.push({ ...f, sets: timed ? null : dose.sets, reps: timed ? null : dose.reps, rest_seconds: timed ? null : dose.rest, minutes: timed ? Math.max(5, Math.round(minutes / dose.exercises)) : null });
+      used.add(f.id);
+    }
     const picks: Array<{ term?: string; muscle?: MuscleGroupId }> = t.muscles?.length ? t.muscles.map((muscle) => ({ muscle })) : t.terms.map((term) => ({ term }));
     for (const pick of picks) {
       if (exercises.length >= dose.exercises) break;
