@@ -338,7 +338,7 @@ export async function autoFillDiet(accessToken: string, cfg: DietConfig, guideRe
 }
 
 /* ── fitness ── */
-export interface ActivityPick { id: string; name: string; image: string | null; category: string | null; minutes: number | null; bodyParts?: string[] }
+export interface ActivityPick { id: string; name: string; image: string | null; category: string | null; minutes: number | null; bodyParts?: string[]; description?: string | null; subcategory?: string | null; parentId?: string | null }
 
 /* ── muscle groups (from catalog_activities.body_parts) ── */
 export const MUSCLE_GROUPS = [
@@ -509,7 +509,7 @@ export function planFitnessWeek(goal: FitnessGoal, likes?: FitnessLikes, schedul
 const LEVEL = { beginner: { sets: 2, reps: '10', rest: 90, exercises: 3 }, intermediate: { sets: 3, reps: '8–12', rest: 75, exercises: 4 }, advanced: { sets: 4, reps: '6–10', rest: 60, exercises: 5 } };
 
 export async function searchActivities(accessToken: string, opts: { query?: string; categories?: string[]; limit?: number; muscle?: MuscleGroupId | null }): Promise<ActivityPick[]> {
-  const params = ['select=id,name,image_url,primary_image_url,category,default_duration_min,body_parts', 'is_group=not.is.true', `limit=${opts.limit || 12}`, 'order=health_score.desc.nullslast'];
+  const params = [`select=${ACTIVITY_SELECT}`, 'is_group=not.is.true', `limit=${opts.limit || 12}`, 'order=health_score.desc.nullslast'];
   const group = opts.muscle ? MUSCLE_GROUPS.find((g) => g.id === opts.muscle) : null;
   if (group) {
     // body_parts is a jsonb array: match any of the group's parts; face also matches by name.
@@ -523,7 +523,33 @@ export async function searchActivities(accessToken: string, opts: { query?: stri
   if (q) params.push(`name=ilike.*${encodeURIComponent(q)}*`);
   const res = await fetch(`${rest()}/catalog_activities?${params.join('&')}`, { headers: headers(accessToken) });
   if (!res.ok) throw new Error(`Activity search failed (${res.status})`);
-  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, image: r.image_url || r.primary_image_url || null, category: r.category, minutes: r.default_duration_min ?? null, bodyParts: Array.isArray(r.body_parts) ? r.body_parts.map(String) : [] }));
+  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, image: r.image_url || r.primary_image_url || null, category: r.category, minutes: r.default_duration_min ?? null, bodyParts: Array.isArray(r.body_parts) ? r.body_parts.map(String) : [], ...activityExtras(r) }));
+}
+
+const ACTIVITY_SELECT = 'id,name,image_url,primary_image_url,category,default_duration_min,body_parts,description,subcategory,parent_activity_id,parent_id';
+const activityExtras = (r: any) => ({ description: typeof r.description === 'string' ? r.description : null, subcategory: r.subcategory ?? null, parentId: r.parent_activity_id || r.parent_id || null });
+const toPick = (r: any): ActivityPick => ({ id: r.id, name: r.name, image: r.image_url || r.primary_image_url || null, category: r.category, minutes: r.default_duration_min ?? null, bodyParts: Array.isArray(r.body_parts) ? r.body_parts.map(String) : [], ...activityExtras(r) });
+
+/**
+ * Sub-activities of an activity: the others under the same parent group and subcategory (Treadmill Run, Trail
+ * Running, Long Run…), most similar names first. Empty when the activity has no parent in the catalogue.
+ */
+export async function activityRelatives(accessToken: string, a: ActivityPick, limit = 24): Promise<ActivityPick[]> {
+  if (!a.parentId) return [];
+  const params = [`select=${ACTIVITY_SELECT}`, 'is_group=not.is.true', `or=(parent_activity_id.eq.${a.parentId},parent_id.eq.${a.parentId})`, `id=neq.${a.id}`, `limit=${limit * 2}`];
+  if (a.subcategory) params.push(`subcategory=eq.${encodeURIComponent(a.subcategory)}`);
+  const res = await fetch(`${rest()}/catalog_activities?${params.join('&')}`, { headers: headers(accessToken) });
+  if (!res.ok) throw new Error(`Could not load related activities (${res.status})`);
+  const words = new Set(a.name.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 2));
+  const shared = (x: ActivityPick) => x.name.toLowerCase().split(/[^a-z]+/).filter((w) => words.has(w) || [...words].some((v) => w.startsWith(v.slice(0, 4)))).length;
+  return ((await res.json()) as any[]).map(toPick).sort((x, y) => shared(y) - shared(x) || x.name.localeCompare(y.name)).slice(0, limit);
+}
+
+/** Indoor or outdoor, when the name says so (treadmill, gym, pool… / trail, road, open water…). */
+export function activitySetting(name: string): 'Indoor' | 'Outdoor' | null {
+  if (/\b(treadmill|indoor|machine|gym|studio|stationary|rower|elliptical|pool|spin|sauna|cable)\b/i.test(name)) return 'Indoor';
+  if (/\b(trail|outdoor|road|hik(e|ing)|open water|mountain|beach|track|park|forest|sea|ski|surf)\b/i.test(name)) return 'Outdoor';
+  return null;
 }
 
 /** Everything the app's activity detail shows, for one catalog activity. */
