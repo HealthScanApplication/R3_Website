@@ -16,6 +16,7 @@ import {
   type AdminProtocol, type AdminProtocolItem,
 } from './protocolAdmin';
 import type { GuideRecipe } from './guidePortal';
+import type { PralTotal, TrustedPral } from './pral';
 import type { HazardPer100, RecipeHazard } from './recipeNutrients';
 import { cloneProtocolChild, ensureGuideRecipeCatalog, syncProtocolChild } from './protocolCopies';
 import { isBedName, isWakeName } from './sleepWindow';
@@ -56,9 +57,9 @@ export function describeTiming(t: Timing): string {
 
 /* ── diet ── */
 export interface MealNutrition { energy_kcal: number; protein_g: number; carbohydrates_g: number; fats_g: number; fiber_g?: number; recorded?: string[]; nutrients?: Record<string, number> }
-export interface MealPick { source: 'catalog' | 'guide'; id: string; name: string; image: string | null; nutrition: MealNutrition | null; category?: string | null; healthScore?: number | null; hazardFlags?: Array<{ label: string; level: string }>; servings?: number; micros?: Record<string, number>; hazards?: RecipeHazard[]; analysisComplete?: boolean; partialNutrients?: string[]; unknownHazards?: string[]; ingredients?: PlanIngredient[] }
+export interface MealPick { source: 'catalog' | 'guide'; id: string; name: string; image: string | null; nutrition: MealNutrition | null; category?: string | null; healthScore?: number | null; hazardFlags?: Array<{ label: string; level: string }>; servings?: number; micros?: Record<string, number>; hazards?: RecipeHazard[]; analysisComplete?: boolean; partialNutrients?: string[]; unknownHazards?: string[]; ingredients?: PlanIngredient[]; pral?: PralTotal }
 /** Per-serving ingredient breakdown kept for the explorable nutrient/hazard readout. */
-export interface PlanIngredient { name: string; grams: number | null; per100: Record<string, number>; hazards: HazardPer100[] }
+export interface PlanIngredient { name: string; grams: number | null; per100: Record<string, number>; hazards: HazardPer100[]; pral?: TrustedPral; pralRule?: boolean }
 export const isDrinkPick = (pick: MealPick) => ['drink', 'beverage'].includes(pick.category?.trim().toLowerCase() || '');
 export const selectedServings = (pick: MealPick) => typeof pick.servings === 'number' && Number.isFinite(pick.servings) && pick.servings > 0 ? pick.servings : 1;
 export const mealPickKey = (pick: Pick<MealPick, 'source' | 'id'>) => `${pick.source}:${pick.id}`;
