@@ -7,8 +7,8 @@
  *   FitnessRoutines    the app's published fitness Protocols and their steps (Fitness section).
  */
 import { Fragment, useEffect, useRef, useState, type CSSProperties } from 'react';
-import { AlertTriangle, Dumbbell, Heart, Loader2, Search, Wheat, X } from 'lucide-react';
-import { RECIPE_DIETS, browseIngredients, browseRecipes, listFitnessRoutines, listMyDietPlans, mealSlotOf, protocolDiet, recipeIngredientNames, routinePeriod, routineSteps, type CatalogFood, type FitnessRoutine, type RoutineStep } from '../../utils/protocolBuilders';
+import { AlertTriangle, Dumbbell, Heart, Loader2, Search, Utensils, Wheat, X } from 'lucide-react';
+import { RECIPE_DIETS, browseIngredients, browseRecipes, listFitnessRoutines, listMyDietPlans, mealSlotOf, protocolDiet, recipeIngredientNames, routinePeriod, routineSteps, stepMedia, getActivityDetail, type ActivityDetail, type CatalogFood, type FitnessRoutine, type RoutineStep } from '../../utils/protocolBuilders';
 import { ProtocolHomeScreen } from '../mockups/ProtocolHomeScreen';
 import { PhoneFrame } from '../mockups/PhoneFrame';
 import { NUTRIENTS } from '../../utils/recipeNutrients';
@@ -245,18 +245,62 @@ export function smartListBlocks(steps: RoutineStep[], kids: (s: RoutineStep) => 
 /** A meal step with no dish of its own: "Breakfast", "Light lunch", "Afternoon snack", "Dinner meal". */
 export const GENERIC_MEAL = /^((light|healthy|balanced|big|small|pre-[a-z]+|post-[a-z]+|morning|afternoon|evening|late) )?(breakfast|lunch|dinner|supper|snack|meal)( meal)?$/i;
 /** A suggested recipe under a meal slot: image, name and health score; opens its details and ingredients. */
-function MealSuggestion({ accessToken, food }: { accessToken: string; food: CatalogFood }) {
-  const [openDetail, setOpenDetail] = useState(false);
-  return <div style={{ margin: '4px 0 2px' }}>
-    <button type="button" aria-expanded={openDetail} onClick={() => setOpenDetail(!openDetail)} style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${line}`, background: panel, color: ink, padding: 4, paddingRight: 10, cursor: 'pointer', textAlign: 'left', maxWidth: 360 }}>
-      <span style={{ width: 44, height: 44, flex: '0 0 auto', background: food.image ? `url(${food.image}) center/cover` : '#1B1C18' }} />
-      <span style={{ minWidth: 0 }}><span style={{ display: 'block', color: muted, fontSize: 9, textTransform: 'uppercase', letterSpacing: '.08em' }}>Suggested</span><span style={{ fontSize: 12, fontWeight: 600 }}>{food.name}</span>{food.healthScore != null && <span style={{ color: acid, fontSize: 11 }}> · ♥ {Math.round(food.healthScore)}</span>}</span>
-    </button>
-    {openDetail && <div style={{ border: `1px solid ${line}`, borderTop: 0, padding: 10, maxWidth: 520, fontSize: 11 }}>
-      {food.description && <p style={{ color: muted, margin: '0 0 6px', lineHeight: 1.5 }}>{food.description}</p>}
-      {food.diets.length > 0 && <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>{food.diets.map((d) => <span key={d} style={tag}>{d}</span>)}</div>}
-      <Ingredients accessToken={accessToken} id={food.id} />
-    </div>}
+/** The catalogue item a step opens (its own link, else the suggested recipe of a generic meal slot) and its image. */
+export function stepTarget(s: RoutineStep, _list: string, media: Record<string, { name: string; image: string | null }>, suggestions: Record<string, CatalogFood>): { target: StepTarget | null; image: string | null } {
+  if (s.activityId) return { target: { kind: 'activity', id: s.activityId, name: media[`a:${s.activityId}`]?.name || s.name }, image: media[`a:${s.activityId}`]?.image || null };
+  if (s.recipeId) return { target: { kind: 'recipe', id: s.recipeId, name: media[`r:${s.recipeId}`]?.name || s.name }, image: media[`r:${s.recipeId}`]?.image || null };
+  const sug = s.id ? suggestions[s.id] : undefined;
+  return sug ? { target: { kind: 'recipe', id: sug.id, name: sug.name }, image: sug.image } : { target: null, image: null };
+}
+/** What a step opens: a catalogue activity or recipe. */
+type StepTarget = { kind: 'activity' | 'recipe'; id: string; name: string };
+/** Round image (or icon) in front of an activity or meal step; a button that opens its modal when the step links to the catalogue. */
+export function StepPrefix({ target, image, list, onOpen }: { target: StepTarget | null; image: string | null; list: string; onOpen: (t: StepTarget) => void }) {
+  const Icon = list === 'Meals' ? Utensils : Dumbbell;
+  const box: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: '50%', marginRight: 8, verticalAlign: 'middle', flex: '0 0 auto', overflow: 'hidden', border: `1px solid ${line}`, background: image ? `url(${image}) center/cover` : '#1B1C18', color: muted, padding: 0 };
+  if (target) return <button type="button" onClick={() => onOpen(target)} aria-label={`Open ${target.name}`} title={`Open ${target.name}`} style={{ ...box, cursor: 'pointer', borderColor: acid }}>{!image && <Icon size={12} aria-hidden="true" />}</button>;
+  if (list === 'Meals' || list === 'Fitness') return <span aria-hidden="true" style={{ ...box, opacity: 0.5 }}><Icon size={12} /></span>;
+  return <span aria-hidden="true" style={{ display: 'inline-block', width: 26, marginRight: 8, verticalAlign: 'middle' }} />;
+}
+/** Detail modal for a catalogue activity (steps, benefits, rules) or recipe (nutrients, hazards, ingredients). */
+export function StepModal({ accessToken, target, onClose }: { accessToken: string; target: StepTarget; onClose: () => void }) {
+  const [activity, setActivity] = useState<ActivityDetail | null | undefined>(undefined);
+  const [food, setFood] = useState<CatalogFood | null | undefined>(undefined);
+  useEffect(() => {
+    let live = true; setActivity(undefined); setFood(undefined);
+    if (target.kind === 'activity') getActivityDetail(accessToken, target.id).then((d) => { if (live) setActivity(d); }).catch(() => { if (live) setActivity(null); });
+    else browseRecipes(accessToken, { ids: [target.id], limit: 1 }).then((r) => { if (live) setFood(r[0] || null); }).catch(() => { if (live) setFood(null); });
+    return () => { live = false; };
+  }, [accessToken, target.kind, target.id]);
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, [onClose]);
+  const loading = target.kind === 'activity' ? activity === undefined : food === undefined;
+  const missing = target.kind === 'activity' ? activity === null : food === null;
+  const img = target.kind === 'activity' ? activity?.image : food?.image;
+  const list = (items: string[]) => <ul style={{ margin: '0 0 6px', paddingLeft: 18, display: 'grid', gap: 2, fontSize: 12 }}>{items.map((x, i) => <li key={i}>{x}</li>)}</ul>;
+  return <div role="presentation" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+    <div role="dialog" aria-modal="true" aria-label={target.name} onClick={(e) => e.stopPropagation()} style={{ width: 'min(580px,100%)', maxHeight: '88vh', overflowY: 'auto', background: '#141611', border: `1px solid ${acid}`, color: ink, position: 'relative' }}>
+      <button type="button" autoFocus aria-label="Close" onClick={onClose} style={{ position: 'absolute', top: 8, right: 8, zIndex: 1, border: 0, background: 'rgba(9,10,8,.7)', color: ink, borderRadius: 999, width: 28, height: 28, cursor: 'pointer' }}><X size={14} /></button>
+      {img && <div style={{ aspectRatio: '16 / 9', background: `url(${img}) center/cover` }} />}
+      <div style={{ padding: 16 }}>
+        <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 6, paddingRight: 24 }}>{target.name}</div>
+        {loading && <span style={{ color: muted, fontSize: 12, display: 'inline-flex', gap: 6, alignItems: 'center' }}><Loader2 size={12} className="animate-spin" />Loading…</span>}
+        {missing && <span style={{ color: muted, fontSize: 12 }}>This item is not in the catalogue any more.</span>}
+        {activity && <>
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 8 }}>{[activity.category, activity.minutes ? `${activity.minutes} min` : null, activity.intensity, activity.caloriesPerHour ? `${activity.caloriesPerHour} kcal/h` : null, ...activity.bodyParts].filter(Boolean).map((t, i) => <span key={i} style={tag}>{t}</span>)}</div>
+          {activity.description && <p style={{ color: muted, fontSize: 12, lineHeight: 1.55, margin: '0 0 8px' }}>{activity.description}</p>}
+          {activity.steps.length > 0 && <><div style={kicker}>How to</div><ol style={{ margin: '0 0 6px', paddingLeft: 18, display: 'grid', gap: 3, fontSize: 12 }}>{activity.steps.map((x, i) => <li key={i}>{x}</li>)}</ol></>}
+          {activity.benefits.length > 0 && <><div style={kicker}>Benefits</div>{list(activity.benefits)}</>}
+          {activity.rules.length > 0 && <><div style={kicker}>Rules</div>{list(activity.rules)}</>}
+          {activity.tips && <><div style={kicker}>Tips</div><p style={{ fontSize: 12, margin: 0 }}>{activity.tips}</p></>}
+        </>}
+        {food && <>
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 8 }}>{food.healthScore != null && <span style={{ ...tag, color: acid, borderColor: acid }}>Health score {Math.round(food.healthScore)}</span>}{food.meta.filter(([, v]) => v).map(([k, v]) => <span key={k} style={tag}>{k}: {v}</span>)}{food.diets.map((d) => <span key={d} style={tag}>{d}</span>)}</div>
+          {food.description && <p style={{ color: muted, fontSize: 12, lineHeight: 1.55, margin: '0 0 8px' }}>{food.description}</p>}
+          <Ingredients accessToken={accessToken} id={food.id} />
+          <FoodFacts f={food} />
+        </>}
+      </div>
+    </div>
   </div>;
 }
 /** Top-level steps with their sub-items and rules (by parent link); orphans of a hidden parent count as top-level. */
@@ -354,6 +398,16 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
   // A generic meal slot ("Breakfast", "Lunch") gets a suggested catalogue recipe that follows this Protocol's diet rules.
   const [suggestions, setSuggestions] = useState<Record<string, CatalogFood>>({});
   const openRoutine = items.find((x) => x.id === open);
+  // Images for the steps that link to a catalogue activity or recipe, and the one whose modal is open.
+  const [media, setMedia] = useState<Record<string, { name: string; image: string | null }>>({});
+  const [modal, setModal] = useState<StepTarget | null>(null);
+  useEffect(() => {
+    setMedia({}); setModal(null);
+    if (!steps?.length) return;
+    let live = true;
+    Promise.all([stepMedia(accessToken, 'activity', steps.map((x) => x.activityId || '')), stepMedia(accessToken, 'recipe', steps.map((x) => x.recipeId || ''))]).then(([a, r]) => { if (live) setMedia({ ...a, ...r }); });
+    return () => { live = false; };
+  }, [steps]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     setSuggestions({});
     if (!steps?.length || !openRoutine) return;
@@ -417,9 +471,9 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
             {smartListBlocks(g.steps, tree.kids).map(([list, acts, rules]) => <div key={list} style={{ marginLeft: 12, borderLeft: `2px solid ${line}`, paddingLeft: 10, marginBottom: 8 }}>
               <div style={{ color: muted, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', margin: '0 0 4px' }}>{list}</div>
               <div style={{ display: 'grid', gridTemplateColumns: acts.length && rules.length ? 'minmax(0,3fr) minmax(0,2fr)' : 'minmax(0,1fr)', gap: 14, alignItems: 'start' }}>
-                {acts.length > 0 && <ol style={{ margin: '0 0 0 4px', paddingLeft: 12, borderLeft: `1px solid ${line}`, listStyle: 'none', display: 'grid', gap: 4, fontSize: 12 }}>{acts.map((s, i) => <li key={i}><span style={{ color: acid }}>{s.time}</span>{s.time ? ' · ' : ''}{s.name}{[s.sets && s.reps ? `${s.sets} × ${s.reps}` : null, s.weight, s.minutes ? `${s.minutes} min` : null].filter(Boolean).map((x) => <span key={x} style={{ color: acid }}> · {x}</span>)}{s.group ? <span style={{ color: muted }}> · {s.group}</span> : null}
+                {acts.length > 0 && <ol style={{ margin: '0 0 0 4px', paddingLeft: 12, borderLeft: `1px solid ${line}`, listStyle: 'none', display: 'grid', gap: 4, fontSize: 12 }}>{acts.map((s, i) => <li key={i}><StepPrefix {...stepTarget(s, list, media, suggestions)} list={list} onOpen={setModal} /><span style={{ color: acid }}>{s.time}</span>{s.time ? ' · ' : ''}{s.name}{[s.sets && s.reps ? `${s.sets} × ${s.reps}` : null, s.weight, s.minutes ? `${s.minutes} min` : null].filter(Boolean).map((x) => <span key={x} style={{ color: acid }}> · {x}</span>)}{s.group ? <span style={{ color: muted }}> · {s.group}</span> : null}
                   {tree.kids(s).filter((k) => !isRule(k)).length > 0 && <ul style={{ listStyle: 'none', margin: '2px 0', paddingLeft: 14, borderLeft: `1px solid ${line}`, display: 'grid', gap: 1 }}>{tree.kids(s).filter((k) => !isRule(k)).map((k, j) => <li key={j} style={{ fontSize: 11 }}>{k.name}{k.time && k.time !== s.time ? <span style={{ color: acid }}> · {k.time}</span> : null}</li>)}</ul>}
-                  {s.id && suggestions[s.id] && <MealSuggestion accessToken={accessToken} food={suggestions[s.id]} />}</li>)}</ol>}
+                  {s.id && suggestions[s.id] && <button type="button" onClick={() => setModal({ kind: 'recipe', id: suggestions[s.id!].id, name: suggestions[s.id!].name })} style={{ display: 'block', border: 0, background: 'transparent', color: acid, fontSize: 11, padding: '2px 0 0 34px', cursor: 'pointer', textAlign: 'left' }}>Suggested: {suggestions[s.id].name}{suggestions[s.id].healthScore != null ? ` · ♥ ${Math.round(suggestions[s.id].healthScore!)}` : ''}</button>}</li>)}</ol>}
                 {rules.length > 0 && <ul aria-label={`${list} rules`} style={{ listStyle: 'none', margin: 0, padding: acts.length ? '0 0 0 10px' : 0, borderLeft: acts.length ? `1px dashed ${line}` : 0, display: 'grid', gap: 3, fontSize: 11 }}>{rules.map((x, k) => <li key={k} style={{ color: warn }}>{x.dont ? 'Don’t: ' : 'Do: '}<span style={{ color: ink }}>{x.name}</span>{x.on.length ? <span style={{ color: muted }}> · {x.on.join(', ')}</span> : null}</li>)}</ul>}
               </div>
             </div>)}</section>)}
@@ -430,5 +484,6 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
         </div>}
       </Fragment>)}
     </div></section>)}
+    {modal && accessToken && <StepModal accessToken={accessToken} target={modal} onClose={() => setModal(null)} />}
   </div>;
 }
