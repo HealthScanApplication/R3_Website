@@ -35,6 +35,14 @@ describe('postCopy', () => {
       expect(`${c.headline} ${c.subline}`).not.toMatch(/simple routine|early result|cure|guarante/i);
     }
   });
+  it('matches topics on whole words', () => {
+    expect(postCopy({ audience: 'Everyone', problem: 'Shortness of breath' }).headline).toBe('Shortness of breath, handled');
+    expect(postCopy({ audience: 'Everyone', problem: 'Eating habits' }).headline).toBe('Eat well, every day');
+  });
+  it('treats only known life stages as stages', () => {
+    expect(parseAudience('Women 18–65 · Athletes')).toEqual({ group: 'women', stage: null });
+    expect(postCopy({ audience: 'Women 18–65 · Athletes', problem: 'Sleep' }).headline).toBe('Better sleep for women');
+  });
   it('parses audiences and lengths', () => {
     expect(parseAudience('Women 45–64 · Menopause')).toEqual({ group: 'women', stage: 'menopause' });
     expect(parseAudience('Everyone')).toEqual({ group: null, stage: null });
