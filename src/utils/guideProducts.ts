@@ -44,6 +44,26 @@ export interface BuyLinkContext {
   medium: 'web' | 'app';
 }
 
+/** The parts of Shopify's public /products/<handle>.js and /meta.json we read. Every field is unchecked input. */
+interface ShopifyProductJson {
+  title?: unknown;
+  handle?: unknown;
+  description?: unknown;
+  featured_image?: unknown;
+  images?: unknown[];
+  variants?: unknown;
+}
+interface ShopifyVariantJson {
+  id?: unknown;
+  title?: unknown;
+  price?: unknown;
+  available?: unknown;
+}
+interface ShopifyMetaJson {
+  currency?: unknown;
+  myshopify_domain?: unknown;
+}
+
 const DOMAIN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
 const HANDLE = /^[a-z0-9][a-z0-9_-]*$/;
 
@@ -91,19 +111,20 @@ export async function importShopifyProduct(productUrl: string, fetchImpl: typeof
   try { response = await fetchImpl(`${base}/products/${encodeURIComponent(ref.handle)}.js`, { headers: { Accept: 'application/json' } }); }
   catch { throw new Error('Could not reach that store. Check the link, or fill in the details by hand.'); }
   if (!response.ok) throw new Error(response.status === 404 ? 'That store did not return this product. It may be unpublished or on a custom storefront, so fill in the details by hand.' : `The store answered ${response.status}. Fill in the details by hand.`);
-  const product: any = await response.json().catch(() => null);
+  const product = (await response.json().catch(() => null)) as ShopifyProductJson | null;
   if (!product || typeof product.title !== 'string' || !Array.isArray(product.variants)) throw new Error('That page is not a Shopify product. Fill in the details by hand.');
-  const meta: any = await fetchImpl(`${base}/meta.json`).then((res) => (res.ok ? res.json() : null)).catch(() => null);
-  const variants: ImportedShopifyVariant[] = product.variants
-    .filter((variant: any) => variant && /^\d{1,20}$/.test(String(variant.id)))
-    .map((variant: any) => ({ id: String(variant.id), title: String(variant.title || 'Default'), priceCents: Number.isFinite(variant.price) ? Math.round(variant.price) : 0, available: variant.available !== false }));
+  const title = product.title;
+  const meta = (await fetchImpl(`${base}/meta.json`).then((res) => (res.ok ? res.json() : null)).catch(() => null)) as ShopifyMetaJson | null;
+  const variants: ImportedShopifyVariant[] = (product.variants as (ShopifyVariantJson | null)[])
+    .filter((variant): variant is ShopifyVariantJson => !!variant && /^\d{1,20}$/.test(String(variant.id)))
+    .map((variant) => ({ id: String(variant.id), title: String(variant.title || 'Default'), priceCents: typeof variant.price === 'number' && Number.isFinite(variant.price) ? Math.round(variant.price) : 0, available: variant.available !== false }));
   const chosen = ref.variantId && variants.some((variant) => variant.id === ref.variantId) ? ref.variantId : (variants.find((variant) => variant.available) || variants[0])?.id || null;
   const myshopify = typeof meta?.myshopify_domain === 'string' ? normalizeShopDomain(meta.myshopify_domain) : null;
   return {
     shopDomain: ref.shopDomain,
     handle: typeof product.handle === 'string' && HANDLE.test(product.handle) ? product.handle : ref.handle,
     variantId: chosen,
-    title: product.title.trim().slice(0, 180),
+    title: title.trim().slice(0, 180),
     description: plainText(product.description),
     imageUrl: shopifyImage(product.featured_image) || shopifyImage(product.images?.[0]),
     currency: typeof meta?.currency === 'string' && /^[A-Z]{3}$/.test(meta.currency) ? meta.currency : null,
