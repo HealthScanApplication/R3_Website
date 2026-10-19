@@ -133,3 +133,8 @@ it('keeps a long display name readable as a tooltip when it is truncated', ()=>{
   expect(screen.getByText('Dr Maximiliana Featherstonehaugh-Worthington').getAttribute('title')).toBe('Dr Maximiliana Featherstonehaugh-Worthington');
   expect(screen.getByRole('button',{name:'Sign out'})).toBeTruthy();
 });
+
+import { GUARDIAN_BUILDERS_ORDER } from '../../components/guides/GuidePortal';
+it('lists the Site builder before the Content builder, which is last', () => {
+  expect(GUARDIAN_BUILDERS_ORDER.slice(-2)).toEqual(['Site builder', 'Content builder']);
+});

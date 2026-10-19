@@ -405,9 +405,12 @@ const GUARDIAN_BUILDERS: GuardianBuilder[] = [
   { label: 'Diet planner', tab: 'diet', Icon: Utensils, sub: [{ label: 'Diet planner', tab: 'diet' }, { label: 'Recipes', tab: 'recipes' }, { label: 'Ingredients', tab: 'ingredients' }, { label: 'Cooking techniques', tab: 'cooking' }, { label: 'Cooking equipment', tab: 'equipment' }] },
   { label: 'Fitness planner', tab: 'fitness', Icon: Dumbbell, sub: [{ label: 'Fitness planner', tab: 'fitness' }, { label: 'Fitness routines', tab: 'routines' }, { label: 'Activities', tab: 'activities' }] },
   { label: 'Offer builder', tab: 'offer_builder', Icon: PencilRuler, sub: [{ label: 'Offer builder', tab: 'offer_builder' }, { label: 'Offer paths', tab: 'value_ramps' }, { label: 'Leads', tab: 'leads' }] },
-  { label: 'Content builder', tab: 'content', Icon: Clapperboard, sub: [{ label: 'Content builder', tab: 'content' }] },
   { label: 'Site builder', tab: 'profile', Icon: Blocks, sub: [{ label: 'Overview', tab: 'home' }, { label: 'Profile', tab: 'profile' }] },
+  { label: 'Content builder', tab: 'content', Icon: Clapperboard, sub: [{ label: 'Content builder', tab: 'content' }] },
 ];
+
+/** The builders in header order (Content builder last), for tests. */
+export const GUARDIAN_BUILDERS_ORDER = GUARDIAN_BUILDERS.map((b) => b.label);
 
 /**
  * One header shared by the public Guardian landing and the signed-in workspace, so both
@@ -3763,8 +3766,8 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
     <GuardianHeader isSignedIn activeTab={tab} displayName={profile.display_name} onNavigate={(next) => { setTab(next); setProtocolId(null); setRecipeId(null); setChildPlanId(null); setParentContext(null); }} onSignOut={signOut} />
     {/* Profile → Site setup steps, kept as workspace context under the shared header. */}
     <div aria-label="Guardian setup steps" style={{ padding: '0 clamp(20px,6vw,90px)', borderBottom: `1px solid ${line}` }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(5,1fr)' }}>
-        {GUARDIAN_STEP_LABELS.map((stepLabel, index) => <a key={stepLabel} href={`/guardians/workspace?step=${index + 1}`} style={{ height: 50, display: 'grid', placeItems: 'center', borderRight: index < 4 ? `1px solid ${line}` : 0, color: muted, textDecoration: 'none', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{String(index + 1).padStart(2, '0')} · {stepLabel}</a>)}
+      <div style={{ maxWidth: 1100, margin: '0 auto', display: 'grid', gridTemplateColumns: `repeat(${GUARDIAN_STEP_LABELS.length},1fr)` }}>
+        {GUARDIAN_STEP_LABELS.map((stepLabel, index) => <a key={stepLabel} href={guardianStepHref(stepLabel, index)} style={{ height: 50, display: 'grid', placeItems: 'center', borderRight: index < GUARDIAN_STEP_LABELS.length - 1 ? `1px solid ${line}` : 0, color: muted, textDecoration: 'none', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{String(index + 1).padStart(2, '0')} · {stepLabel}</a>)}
       </div>
     </div>
     <div style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr)', minHeight: 'calc(100vh - 63px)' }}>
@@ -4019,7 +4022,9 @@ function SiteProfileForm({ userId, profile, onProfile }: { userId: string; profi
   </div>;
 }
 
-const GUARDIAN_STEP_LABELS = ['Profile', 'Guidance', 'Audience', 'Offers', 'Site'];
+const GUARDIAN_STEP_LABELS = ['Profile', 'Guidance', 'Audience', 'Offers', 'Site', 'Content'];
+/** Steps 1–5 are the setup flow; 06 opens the Content builder. */
+const guardianStepHref = (label: string, index: number) => (label === 'Content' ? '/guardians/workspace?tab=content' : `/guardians/workspace?step=${index + 1}`);
 
 function Row({ title, meta, action, onClick, image }: { title: string; meta: string; action?: string; onClick?: () => void; image?: string | null }) { const content = <><div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 0 }}><span aria-hidden="true" style={{ position: 'relative', width: 56, height: 56, flex: '0 0 56px', display: 'grid', placeItems: 'center', overflow: 'hidden', border: `1px solid ${line}`, background: '#171812', color: muted, fontFamily: serif, fontSize: 22 }}>{title.replace(/^R3 Protocol\s*>\s*/i, '').trim().charAt(0)}{image && <img src={image} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = 'none'; }} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}</span><div style={{ minWidth: 0 }}><div style={{ fontFamily: serif, fontSize: 22 }}>{title}</div><div style={{ color: muted, fontSize: 11, marginTop: 5 }}>{meta}</div></div></div><span style={{ display: 'flex', alignItems: 'center', gap: 8, color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase' }}>{action}<ChevronRight size={16} /></span></>; return onClick ? <button type="button" onClick={onClick} style={{ width: '100%', border: 0, borderTop: `1px solid ${line}`, padding: '18px 4px', background: 'transparent', color: ink, display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'left', cursor: 'pointer' }}>{content}</button> : <div style={{ borderTop: `1px solid ${line}`, padding: '18px 4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>{content}</div>; }
 
