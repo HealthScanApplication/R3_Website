@@ -19,6 +19,10 @@ const recipes = load('q3.json'), activities = load('q4.json');
 
 const q = (s: string) => `'${s.replace(/'/g, "''")}'`;
 const lit = (v: unknown) => q(JSON.stringify(v));
+// The multi-week session's 22, matched with punctuation ignored ("Lemon, Maple Syrup…" = "Lemon Maple Syrup…").
+const MULTIWEEK = ['Matthew Walker Sleep Protocol','Golden Era Workout','Wolverine Prep Protocol','Prenatal Wellness','7-Day Apple Juice and Olive Oil Protocol','Candida Cleanse Protocol','Gut Healing','Marathon Training Protocol','28-Day Herbal Protocol','Half Marathon Training','3-Week Herbal Tea Protocol','Lemon Maple Syrup and Cayenne Fast','Seasonal Herbal Reset','21-Day Dry Brushing Rebounding and Herbs Protocol','7-Day Whole-Foods Plan','Whole30 Elimination Protocol','Functional-Medicine Daily Routine','The Rock Iron Paradise Workout','Weekly Gut Health Reset','Intermittent Fasting + Protein Pacing','Monthly Blood Panel Prep','Postnatal Recovery'];
+const loose = (n: string) => n.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+for (const p of protocols) if (MULTIWEEK.map(loose).includes(loose(p.name))) p.in_multiweek = true;
 // Over a month: an authored programme (40 / 90 days) — length kept, no generated days (listed in the report).
 const long = protocols.filter((p) => !p.in_multiweek && (p.total_days || 0) > 28);
 const targets = protocols.filter((p) => !p.in_multiweek && !long.includes(p));
