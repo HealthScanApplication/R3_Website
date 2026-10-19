@@ -341,7 +341,7 @@ function guardianHeadlineSuggestions(topics: string[], audiences: string[]) {
 }
 const SECTION_ICON = { hygiene: Bath, beauty: Sparkle, wellness: HeartHandshake, longevity: Hourglass } as const;
 /** Sidebar sub-pages and the family they sit under. */
-const NAV_PARENT: Partial<Record<string, Tab>> = { recipes: 'diet', ingredients: 'diet', cooking: 'diet', equipment: 'diet', routines: 'fitness', activities: 'fitness', hygiene_protocols: 'hygiene', hygiene_activities: 'hygiene', beauty_protocols: 'beauty', beauty_activities: 'beauty', wellness_protocols: 'wellness', wellness_activities: 'wellness', longevity_protocols: 'longevity' };
+const NAV_PARENT: Partial<Record<string, Tab>> = { diet: 'protocols', fitness: 'protocols', hygiene: 'protocols', beauty: 'protocols', wellness: 'protocols', longevity: 'protocols', recipes: 'diet', ingredients: 'diet', cooking: 'diet', equipment: 'diet', routines: 'fitness', activities: 'fitness', hygiene_protocols: 'hygiene', hygiene_activities: 'hygiene', beauty_protocols: 'beauty', beauty_activities: 'beauty', wellness_protocols: 'wellness', wellness_activities: 'wellness', longevity_protocols: 'longevity' };
 const nav: { id: Tab; label: string; Icon: typeof Users }[] = [
   { id: 'home', label: 'Overview', Icon: Sparkles },
   { id: 'library', label: 'Library', Icon: FolderOpen },
@@ -3742,14 +3742,19 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
         <aside className="g-rail" aria-label="Guardian sections"><a href="/guardians/workspace" title="Dashboard" style={{ display: 'flex', alignItems: 'center', gap: 12, height: 42, padding: '0 20px', marginBottom: 10, borderBottom: `1px solid ${line}`, color: ink, textDecoration: 'none', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}><LayoutDashboard size={16} style={{ flex: '0 0 auto' }} /><span className="g-rlabel">Dashboard</span></a>{navItems.map(({ id, label: n, Icon }) => {
           // Sub-pages sit under their family (Diet: Recipes, Cooking techniques, Cooking equipment; Fitness: Activities) as
           // smaller child rows on a tree line; the parent stays lit while one of its children is open.
-          const parent = NAV_PARENT[id];
+          // Tree: Protocols > Diet / Fitness / Hygiene / Beauty / Wellness / Longevity > their pages. Each level indents
+          // 10px (the collapsed rail is 64px wide); ancestor lines run on through the rows below them.
+          const chain = (x: string): string[] => { const p = NAV_PARENT[x]; return p ? [...chain(p), p] : []; };
+          const ancestors = chain(id), depth = ancestors.length, parent = ancestors[depth - 1];
           const on = tab === id || (id === 'offer_builder' && tab === 'value_ramps');
-          const family = !parent && Object.entries(NAV_PARENT).some(([child, p]) => p === id && tab === child);
-          const lastChild = parent && NAV_PARENT[navItems[navItems.findIndex((x) => x.id === id) + 1]?.id] !== parent;
-          return <button key={id} onClick={() => { setTab(id); setProtocolId(null); setRecipeId(null); setChildPlanId(null); setParentContext(null); }} title={n} aria-current={on ? 'page' : undefined} style={{ position: 'relative', width: '100%', height: parent ? 34 : 42, border: 0, background: on ? '#1C1E19' : 'transparent', color: on ? ink : family ? ink : muted, display: 'flex', alignItems: 'center', gap: parent ? 10 : 12, padding: parent ? '0 20px 0 22px' : '0 20px', cursor: 'pointer', fontFamily: sans, fontSize: parent ? 10 : 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-            {parent && <span aria-hidden="true" style={{ position: 'absolute', left: 31, top: 0, bottom: lastChild ? '50%' : 0, borderLeft: `1px solid ${line}` }} />}
-            {parent && <span aria-hidden="true" style={{ position: 'absolute', left: 31, top: '50%', width: 6, borderTop: `1px solid ${line}` }} />}
-            <Icon size={parent ? 13 : 16} style={{ flex: '0 0 auto', marginLeft: parent ? 16 : 0, color: on ? acid : undefined }} /><span className="g-rlabel">{n}</span></button>; })}</aside>
+          const family = chain(tab).includes(id);
+          const siblingsAfter = (x: string) => { const i = navItems.findIndex((y) => y.id === x); return navItems.slice(i + 1).some((y) => NAV_PARENT[y.id] === NAV_PARENT[x]); };
+          const lineX = (level: number) => 31 + (level - 1) * 10;
+          return <button key={id} onClick={() => { setTab(id); setProtocolId(null); setRecipeId(null); setChildPlanId(null); setParentContext(null); }} title={n} aria-current={on ? 'page' : undefined} style={{ position: 'relative', width: '100%', height: depth ? 34 : 42, border: 0, background: on ? '#1C1E19' : 'transparent', color: on || family ? ink : muted, display: 'flex', alignItems: 'center', gap: depth ? 10 : 12, padding: depth ? '0 20px 0 22px' : '0 20px', cursor: 'pointer', fontFamily: sans, fontSize: depth ? 10 : 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+            {ancestors.slice(1).map((a, k) => siblingsAfter(a) && <span key={a} aria-hidden="true" style={{ position: 'absolute', left: lineX(k + 1), top: 0, bottom: 0, borderLeft: `1px solid ${line}` }} />)}
+            {parent && <span aria-hidden="true" style={{ position: 'absolute', left: lineX(depth), top: 0, bottom: siblingsAfter(id) ? 0 : '50%', borderLeft: `1px solid ${line}` }} />}
+            {parent && <span aria-hidden="true" style={{ position: 'absolute', left: lineX(depth), top: '50%', width: 6, borderTop: `1px solid ${line}` }} />}
+            <Icon size={depth ? 13 : 16} style={{ flex: '0 0 auto', marginLeft: depth ? 6 + depth * 10 : 0, color: on ? acid : undefined }} /><span className="g-rlabel">{n}</span></button>; })}</aside>
       </div>
       {/* overflow-x clip, not hidden: hidden makes main a scroll container and breaks sticky columns inside (Diet planner). */}
       <main style={{ padding: 'clamp(26px,5vw,68px)', overflowX: 'clip' }}>
