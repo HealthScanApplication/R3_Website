@@ -49,6 +49,9 @@ export interface HomeItem {
   description?: string | null;
   done?: boolean;                // checked off for the day
   children?: string[];           // sub-item descriptions, shown as a faded checklist (like the app)
+  /** Time used to group and sort the item (an indented child takes its parent's); `time` stays what is shown. */
+  slotTime?: string | null;
+  indent?: boolean;              // a sub-item of the card above it, drawn indented under its parent (like the app)
 }
 
 /* ───────── time + category helpers (mirror mobile precedence) ───────── */
@@ -100,7 +103,16 @@ function isBed(it: HomeItem): boolean {
 function orderKey(it: HomeItem): number {
   if (isWake(it)) return -1;
   if (isBed(it)) return 1e9;
-  return parseHM(it.time)?.mins ?? 5e8;
+  return parseHM(it.slotTime ?? it.time)?.mins ?? 5e8;
+}
+// An indented sub-item stays with the item above it: it takes that parent's time, slot and list, so grouping by part
+// of the day and sorting by time never separate the two (the stable sorts then keep it right under its parent).
+function inheritParentSlot(items: HomeItem[]): HomeItem[] {
+  let parent: HomeItem | undefined;
+  return items.map((it) => {
+    if (!it.indent) { parent = it; return it; }
+    return parent ? { ...it, slotTime: parent.slotTime ?? parent.time, group_name: parent.group_name, category: parent.category, subtype: parent.subtype } : it;
+  });
 }
 // Book-end any day with grey Sleep anchors when the protocol doesn't supply them.
 // The WAKE default links to the protocol's own first timed step (so a 7am routine
@@ -121,7 +133,7 @@ function withSleepAnchors(items: HomeItem[]): HomeItem[] {
 
 type Tod = SimpleTod;
 const todForItem = (it: HomeItem, wakeHour: number): Tod =>
-  getItemTod({ group_name: it.group_name, scheduled_time: it.time, display_name: it.display_name, category: it.category }, wakeHour);
+  getItemTod({ group_name: it.group_name, scheduled_time: it.slotTime ?? it.time, display_name: it.display_name, category: it.category }, wakeHour);
 
 interface Band { cat: CatKey; slot: string | null; firstMin: number | null; order: number; time?: string | null; label: string; items: HomeItem[] }
 function buildBands(list: HomeItem[]): Band[] {
@@ -130,7 +142,7 @@ function buildBands(list: HomeItem[]): Band[] {
   for (const it of sorted) {
     const cat = categorizeFull(it);
     const slot = mealSlot(it.group_name);
-    const m = parseHM(it.time)?.mins ?? null;
+    const m = parseHM(it.slotTime ?? it.time)?.mins ?? null;
     const last = bands[bands.length - 1];
     const canMerge = !!last && !last.slot && !slot && last.cat === cat &&
       m != null && last.firstMin != null && m - last.firstMin <= 60;
@@ -178,7 +190,7 @@ function buildSmartBands(list: HomeItem[], tod: string): Band[] {
     const items = byCat.get(c);
     if (!items?.length) continue;
     const sorted = sortItems(items);
-    bands.push({ cat: SMART_TINT[c], slot: "smart", firstMin: parseHM(sorted[0].time)?.mins ?? null, order: orderKey(sorted[0]), time: sorted[0].time, label: `${tod} ${SMART_TITLE[c]}`.toUpperCase(), items: sorted });
+    bands.push({ cat: SMART_TINT[c], slot: "smart", firstMin: parseHM(sorted[0].slotTime ?? sorted[0].time)?.mins ?? null, order: orderKey(sorted[0]), time: sorted[0].slotTime ?? sorted[0].time, label: `${tod} ${SMART_TITLE[c]}`.toUpperCase(), items: sorted });
   }
   // Wake leads the morning; every other sleep band (bedtime, "Sleep in complete darkness") closes
   // the day. Smart groups sit between, in category order.
@@ -237,7 +249,7 @@ export function ProtocolHomeScreen({
   // In-frame toggle for per-step descriptions + child do/don't lines (mirrors the app's showDetails).
   const [showDetails, setShowDetails] = useState(showDetailsProp);
   // book-end the day with grey Sleep anchors (End Sleep / Start Sleep), like the app
-  const allItems = anchors ? withSleepAnchors(items) : items;
+  const allItems = anchors ? withSleepAnchors(inheritParentSlot(items)) : inheritParentSlot(items);
   // sleep window (hours slept = bedtime → wake) — shown on the anchor cards
   const sleepWin = computeSleepWindow(allItems.map((i) => ({
     display_name: i.display_name,
@@ -414,7 +426,7 @@ export function ProtocolHomeScreen({
                         const nodeH = isWake(it) || isBed(it) ? 66 : Math.max(34, Math.min(48, 34 + ((it.duration_minutes || 0) / 15) * 3));
                         const hasDetail = showDetails && (!!it.description || !!it.children?.length);
                         return (
-                          <div key={ii} style={{ position: "relative", minHeight: Math.max(48, nodeH) }}>
+                          <div key={ii} style={{ position: "relative", minHeight: Math.max(48, nodeH), paddingLeft: it.indent ? 16 : 0 }}>
                             {/* Media capsule shares the lane axis; time stays in the card metadata. */}
                             <span style={{ position: "absolute", left: MT.axisX - MT.itemOriginX - MT.railWidth / 2, top: 0, bottom: ii === band.items.length - 1 ? -12 : -6, width: MT.railWidth, background: isDone ? completedFg : ui.muted, opacity: 0.75 }} />
                             {/* Day → wake bridge: continues the selected-day column from the fixed header down
@@ -423,12 +435,12 @@ export function ProtocolHomeScreen({
                             {/* Bedtime mirrors wake: the night column continues below the capsule. */}
                             {isBed(it) && <span aria-hidden="true" style={{ position: "absolute", left: MT.axisX - MT.itemOriginX - MT.nodeWidth / 2, top: 2 + nodeH - 1, height: 100, width: MT.nodeWidth, background: `linear-gradient(180deg, ${purple} 0%, #965BD2 100%)`, WebkitMaskImage: "linear-gradient(180deg, #000 35%, transparent)", maskImage: "linear-gradient(180deg, #000 35%, transparent)", borderLeft: `1.5px solid ${purple}`, borderRight: `1.5px solid ${purple}`, boxSizing: "border-box", zIndex: 1 }} />}
                             {isWake(it) && <span aria-hidden="true" style={{ position: "absolute", left: MT.axisX - MT.itemOriginX - MT.nodeWidth / 2, top: -2000, height: 2002, width: MT.nodeWidth, background: `linear-gradient(180deg, #A96EAE 0%, #A96EAE calc(100% - 110px), #965BD2 calc(100% - 50px), ${purple} 100%)`, borderLeft: `1.5px solid ${purple}`, borderRight: `1.5px solid ${purple}`, boxSizing: "border-box", zIndex: 1 }} />}
-                            <span style={{ position: "absolute", left: MT.axisX - MT.itemOriginX - MT.nodeWidth / 2, top: 2, width: MT.nodeWidth, height: nodeH, borderRadius: isWake(it) ? `0 0 ${MT.nodeWidth / 2}px ${MT.nodeWidth / 2}px` : isBed(it) ? `${MT.nodeWidth / 2}px ${MT.nodeWidth / 2}px 0 0` : MT.nodeWidth / 2, overflow: "hidden", background: isWake(it) || isBed(it) ? purple : (isDone ? completedFg : ui.card), border: `1.5px solid ${isWake(it) || isBed(it) ? purple : (isDone ? completedFg : ui.muted)}`, borderTopWidth: isWake(it) ? 0 : 1.5, display: "inline-flex", alignItems: "center", justifyContent: "center", zIndex: 2 }}>
+                            {!it.indent && <span style={{ position: "absolute", left: MT.axisX - MT.itemOriginX - MT.nodeWidth / 2, top: 2, width: MT.nodeWidth, height: nodeH, borderRadius: isWake(it) ? `0 0 ${MT.nodeWidth / 2}px ${MT.nodeWidth / 2}px` : isBed(it) ? `${MT.nodeWidth / 2}px ${MT.nodeWidth / 2}px 0 0` : MT.nodeWidth / 2, overflow: "hidden", background: isWake(it) || isBed(it) ? purple : (isDone ? completedFg : ui.card), border: `1.5px solid ${isWake(it) || isBed(it) ? purple : (isDone ? completedFg : ui.muted)}`, borderTopWidth: isWake(it) ? 0 : 1.5, display: "inline-flex", alignItems: "center", justifyContent: "center", zIndex: 2 }}>
                               {it.image_url && !/recipe_water-|openfoodfacts/i.test(it.image_url)
                                 ? <img src={it.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: isDone ? "none" : "grayscale(1)", opacity: isDone ? 1 : 0.72 }} />
                                 : isWake(it) ? <Sun size={16} strokeWidth={1.8} color="#FFFFFF" />
                                   : <ItemIcon size={15} strokeWidth={1.8} color={isDone ? "#FFFFFF" : "#9CA3AF"} />}
-                            </span>
+                            </span>}
                             <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, minHeight: isWake(it) || isBed(it) ? 54 : 48, background: ui.card, borderRadius: dark ? 10 : MT.itemRadius, padding: "8px 9px 8px 11px", boxShadow: dark ? "none" : "0 1px 2px rgba(17,24,39,0.04)" }}>
                             <div style={{ flex: "1 1 0", minWidth: 0, overflow: "hidden" }}>
                               <div style={{ display: "flex", alignItems: "flex-start", gap: 5, minWidth: 0, overflow: "hidden" }}>

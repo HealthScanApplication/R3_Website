@@ -70,7 +70,7 @@ describe('higgsfield lib', () => {
 });
 
 type Row = Record<string, any>;
-function server(opts: { live?: boolean; hf?: (url: string, init: any) => { status: number; body: any } } = {}) {
+function server(opts: { live?: boolean; deny?: string[]; hf?: (url: string, init: any) => { status: number; body: any } } = {}) {
   const tables: Record<string, Row[]> = { guide_profiles: [{ user_id: 'guardian' }], guardian_higgsfield_connections: [], guardian_video_jobs: [], higgsfield_oauth_clients: [] };
   const uploads: string[] = [];
   const db = {
@@ -92,6 +92,7 @@ function server(opts: { live?: boolean; hf?: (url: string, init: any) => { statu
         single() { return run(true); }, maybeSingle() { return run(true); }, then(ok: any, no: any) { return run(false).then(ok, no); },
       };
       async function run(single: boolean) {
+        if (opts.deny?.includes(table)) return { data: null, error: { message: `permission denied for table ${table}` } }; // a table the service role has no grant on
         const rows = tables[table];
         if (action === 'insert') { const row = { created_at: new Date().toISOString(), error: null, video_url: null, storage_path: null, ...payload }; rows.push(row); return { data: pick(row), error: null }; }
         if (action === 'upsert') { const keyOf = (r: Row) => r.user_id ?? r.redirect_uri; const i = rows.findIndex((r) => keyOf(r) === keyOf(payload)); if (i >= 0) rows[i] = payload; else rows.push(payload); return { data: payload, error: null }; }
@@ -272,6 +273,19 @@ describe('higgsfield Edge Function', () => {
       expect(row).toMatchObject({ user_id: 'guardian', method: 'oauth', key_hint: 'jo…@example.com' });
       expect(JSON.stringify(row)).not.toContain('at-1');
       expect((await s.call({ action: 'status' })).body).toMatchObject({ connected: true, method: 'oauth', key_hint: 'jo…@example.com' });
+    });
+
+    it('completes the login with the client it started with even when the client table cannot be read or written', async () => {
+      let registrations = 0;
+      const s = server({ live: true, deny: ['higgsfield_oauth_clients'], hf: (url, init) => {
+        if (url === hf.OAUTH.register) return { status: 201, body: { client_id: `client-${++registrations}` } };
+        if (url === hf.OAUTH.token) return new URLSearchParams(init.body).get('client_id') === 'client-1' ? { status: 200, body: { access_token: 'at-1', refresh_token: 'rt-1', expires_in: 3600, id_token: idToken } } : { status: 400, body: { error: 'invalid_client' } };
+        return { status: 200, body: {} };
+      } });
+      const { callback } = await login(s);
+      expect(callback.headers.get('Location')).toContain('higgsfield=connected');
+      expect(registrations).toBe(1); // the callback did not register a second client
+      expect(s.tables.guardian_higgsfield_connections).toHaveLength(1);
     });
 
     it('refuses forged or expired state and other sites as the return address', async () => {

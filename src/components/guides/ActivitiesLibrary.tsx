@@ -12,6 +12,7 @@ import { Activity, Bath, Bike, Brain, Dumbbell, HeartPulse, LayoutGrid, Loader2,
 import { MUSCLE_GROUPS, activityRelatives, activitySetting, muscleGroupOf, searchActivities, type ActivityPick, type MuscleGroupId } from '../../utils/protocolBuilders';
 import { ActivityDetailPreview } from './ActivityDetailPreview';
 import { Header } from './GuardianBuilders';
+import { PAGE, Pager } from './CatalogBrowsers';
 
 const ink = '#F5F2EA', muted = '#B8B6AF', line = 'rgba(245,242,234,0.24)', acid = '#C7D8A3', panel = '#11120F';
 
@@ -94,7 +95,7 @@ function Grid({ items, selected, onPick, accessToken, onApp }: { items: Activity
   </div>;
 }
 
-function useActivities(accessToken: string, opts: { query?: string; categories: string[]; muscle: MuscleGroupId | null; limit: number }, delay = 0) {
+function useActivities(accessToken: string, opts: { query?: string; categories: string[]; excludeCategories?: string[]; muscle: MuscleGroupId | null; limit: number; offset?: number }, delay = 0) {
   const [state, setState] = useState<{ items: ActivityPick[]; busy: boolean; error: string }>({ items: [], busy: true, error: '' });
   const key = JSON.stringify(opts);
   useEffect(() => {
@@ -132,7 +133,11 @@ export function ActivitiesLibrary({ accessToken, lockGroup }: { accessToken: str
   const [appView, setAppView] = useState<ActivityPick | null>(null);
   const group = ACTIVITY_GROUPS.find((g) => g.id === groupId) || ACTIVITY_GROUPS[0];
   const activeMuscle = group.muscles ? muscle : null;
-  const { items, busy, error } = useActivities(accessToken, { query, categories: group.categories, excludeCategories: NOT_ACTIVITIES, muscle: activeMuscle, limit: 80 }, query ? 250 : 0);
+  const [page, setPage] = useState(0);
+  useEffect(() => { setPage(0); }, [query, groupId, muscle]);
+  // One extra row says whether there is a next page.
+  const { items: got, busy, error } = useActivities(accessToken, { query, categories: group.categories, excludeCategories: NOT_ACTIVITIES, muscle: activeMuscle, limit: PAGE + 1, offset: page * PAGE }, query ? 250 : 0);
+  const items = got.slice(0, PAGE);
   const pick = (a: ActivityPick | null) => { setSelected(a); if (!a) setAppView(null); };
   const openApp = () => setAppView(selected);
   return <div>
@@ -161,11 +166,12 @@ export function ActivitiesLibrary({ accessToken, lockGroup }: { accessToken: str
     <div className="g-fit-split">
       <div style={{ minWidth: 0 }}>
         {mode === 'category' ? <>
-          <p role="status" style={{ color: muted, fontSize: 11, margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: 6 }}>{busy ? <><Loader2 size={12} className="animate-spin" />Loading…</> : error ? <span style={{ color: '#E8B07A' }}>{error}</span> : `${items.length}${items.length === 80 ? '+' : ''} activities · ${group.label}${activeMuscle ? ` · ${MUSCLE_GROUPS.find((m) => m.id === activeMuscle)?.label}` : ''}`}</p>
+          <p role="status" style={{ color: muted, fontSize: 11, margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: 6 }}>{busy ? <><Loader2 size={12} className="animate-spin" />Loading…</> : error ? <span style={{ color: '#E8B07A' }}>{error}</span> : `${items.length ? `${page * PAGE + 1}–${page * PAGE + items.length}` : 0} activities · highest health score first · ${group.label}${activeMuscle ? ` · ${MUSCLE_GROUPS.find((m) => m.id === activeMuscle)?.label}` : ''}`}</p>
           {!busy && bySubcategory(items).map((sub) => <section key={sub.label} aria-label={sub.label} style={{ marginBottom: 18 }}>
             <h3 style={{ ...kicker, color: acid, margin: '0 0 8px' }}>{sub.label} <span style={{ color: muted }}>· {sub.items.length}</span></h3>
             <Grid items={sub.items} selected={selected} onPick={pick} accessToken={accessToken} onApp={openApp} />
           </section>)}
+          {!busy && <Pager page={page} more={got.length > PAGE} onPage={setPage} />}
           {!busy && !error && !items.length && <p style={{ color: muted, fontSize: 12 }}>No activities match. Try another category or muscle group.</p>}
         </> : MUSCLE_SECTIONS.map((section) => <MuscleSection key={`${bodyMuscle}:${section.id}`} section={section} muscle={bodyMuscle} accessToken={accessToken} selected={selected} onPick={pick} onApp={openApp} />)}
       </div>

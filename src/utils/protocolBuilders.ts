@@ -393,7 +393,14 @@ export const orderedExercises = <T extends ExercisePick>(list: T[]) => [...list.
 export const exerciseGroup = (e: ExercisePick) => (e.role === 'warmup' ? 'Warm-up' : e.role === 'recovery' ? 'Recovery' : muscleGroupOf(e));
 export interface FitnessSession { day: number; time: string; anchor?: Anchor; offset?: number; rules?: string[]; title: string; minutes: number; intensity: 'low' | 'moderate' | 'high'; exercises: ExercisePick[] }
 /** What the person likes doing: training types steer each session's catalog categories, sports become sessions. */
-export interface FitnessLikes { types: string[]; sports: ActivityPick[] }
+export interface FitnessLikes { types: string[]; sports: ActivityPick[]; muscles?: MuscleGroupId[]; exercises?: ActivityPick[] }
+/** Training types that suit each goal: shown first and marked as suggested; the rest stay pickable. */
+export const GOAL_TYPES: Record<string, string[]> = {
+  weight_loss: ['strength', 'cardio', 'hiit'], muscle_gain: ['strength', 'calisthenics', 'recovery'], endurance: ['cardio', 'hiit', 'water'],
+  mobility: ['stretching', 'yoga', 'recovery'], face: [], general: ['strength', 'cardio', 'stretching'],
+};
+/** Catalog categories of the picked training types (recovery excluded: it is added after sessions, not as one). */
+export const likedCategories = (likes?: FitnessLikes) => [...new Set(TRAINING_TYPES.filter((t) => likes?.types.includes(t.id) && t.id !== 'recovery').flatMap((t) => t.categories))];
 /** Food or supplements around every training session: free text or catalog picks, like Diet supplements. */
 export type FuelItem = string | SupplementPick;
 export interface TrainingFuel { pre: FuelItem[]; post: FuelItem[]; preMinutes: number; postMinutes: number }
@@ -481,9 +488,17 @@ export function planFitnessWeek(goal: FitnessGoal, likes?: FitnessLikes, schedul
   const rest = new Set(schedule?.restDays || []);
   const chosen = new Set(TRAINING_TYPES.filter((t) => likes?.types.includes(t.id) && t.id !== 'recovery').flatMap((t) => t.categories));
   const narrow = (t: Template): Template => {
-    if (!chosen.size || !t.categories.length) return t;
+    if (!chosen.size || !t.categories.length) return focus(t);
     const kept = t.categories.filter((c) => chosen.has(c));
-    return kept.length ? { ...t, categories: kept } : t;
+    return focus({ ...t, categories: kept.length ? kept : t.categories });
+  };
+  // Muscle focus: strength days train only the picked muscles (in turn), when any of them fit that day.
+  const muscles = likes?.muscles || [];
+  const focus = (t: Template): Template => {
+    if (!muscles.length || !t.muscles?.length || t.muscles.includes('face')) return t;
+    const fit = t.muscles.filter((m) => muscles.includes(m));
+    const list = fit.length ? fit : muscles;
+    return { ...t, muscles: t.muscles.map((_, i) => list[i % list.length]) };
   };
   const sports = likes?.sports || [];
   let next = 0;
@@ -509,8 +524,8 @@ export function planFitnessWeek(goal: FitnessGoal, likes?: FitnessLikes, schedul
 
 const LEVEL = { beginner: { sets: 2, reps: '10', rest: 90, exercises: 3 }, intermediate: { sets: 3, reps: '8–12', rest: 75, exercises: 4 }, advanced: { sets: 4, reps: '6–10', rest: 60, exercises: 5 } };
 
-export async function searchActivities(accessToken: string, opts: { query?: string; categories?: string[]; excludeCategories?: string[]; limit?: number; muscle?: MuscleGroupId | null }): Promise<ActivityPick[]> {
-  const params = [`select=${ACTIVITY_SELECT}`, 'is_group=not.is.true', `limit=${opts.limit || 12}`, 'order=health_score.desc.nullslast'];
+export async function searchActivities(accessToken: string, opts: { query?: string; categories?: string[]; excludeCategories?: string[]; limit?: number; offset?: number; muscle?: MuscleGroupId | null }): Promise<ActivityPick[]> {
+  const params = [`select=${ACTIVITY_SELECT}`, 'is_group=not.is.true', `limit=${opts.limit || 12}`, `offset=${opts.offset || 0}`, 'order=health_score.desc.nullslast,name.asc,id.asc'];
   const group = opts.muscle ? MUSCLE_GROUPS.find((g) => g.id === opts.muscle) : null;
   if (group) {
     // body_parts is a jsonb array: match any of the group's parts; face also matches by name.
@@ -613,6 +628,17 @@ export async function draftFitnessWeek(accessToken: string, goalId: string, leve
       continue;
     }
     const exercises: ExercisePick[] = [];
+    // Exercises the person picked go first in every session whose categories they belong to.
+    for (const f of likes?.exercises || []) {
+      // A pick fits a session when its category is one the session uses, or belongs to the same training type (Strength = Strength, Gym, Fitness).
+      const sameType = (a: string, b: string) => a === b || TRAINING_TYPES.some((ty) => ty.categories.includes(a) && ty.categories.includes(b));
+      if (exercises.length >= dose.exercises || !t.categories.some((c) => sameType(c, f.category || '')) || exercises.some((e) => e.id === f.id)) continue;
+      // On a muscle day only exercises for that day's muscles: a chest pick stays out of a leg day.
+      if (t.muscles?.length) { const parts = new Set(MUSCLE_GROUPS.filter((g) => t.muscles!.includes(g.id)).flatMap((g) => g.parts as readonly string[])); if (!(f.bodyParts || []).some((b) => parts.has(b))) continue; }
+      const timed = /cardio|sports|stretch|recovery|yoga/i.test(f.category || '');
+      exercises.push({ ...f, sets: timed ? null : dose.sets, reps: timed ? null : dose.reps, rest_seconds: timed ? null : dose.rest, minutes: timed ? Math.max(5, Math.round(minutes / dose.exercises)) : null });
+      used.add(f.id);
+    }
     const picks: Array<{ term?: string; muscle?: MuscleGroupId }> = t.muscles?.length ? t.muscles.map((muscle) => ({ muscle })) : t.terms.map((term) => ({ term }));
     for (const pick of picks) {
       if (exercises.length >= dose.exercises) break;
@@ -1040,7 +1066,7 @@ export async function listKitchenEquipment(accessToken: string): Promise<Kitchen
 
 /* ── catalogue browsing: ROUTINE³ recipes, ingredients, fitness routines ── */
 export interface CatalogHazard { key: string; level: string }
-export interface CatalogFood { id: string; name: string; image: string | null; category: string | null; description: string | null; healthScore: number | null; per100: Record<string, number>; hazards: CatalogHazard[]; meta: Array<[string, string | null]>; diets: string[] }
+export interface CatalogFood { form?: 'raw' | 'processed' | null; processing?: string | null; id: string; name: string; image: string | null; category: string | null; description: string | null; healthScore: number | null; per100: Record<string, number>; hazards: CatalogHazard[]; meta: Array<[string, string | null]>; diets: string[] }
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 /** Flat numeric keys of a nutrition_per_100g record (provenance keys starting with "_" are skipped). */
 export function per100Of(v: unknown): Record<string, number> {
@@ -1058,8 +1084,38 @@ export const RECIPE_DIETS = DIET_FLAGS;
 const dietsOf = (d: unknown) => (d && typeof d === 'object' ? DIET_FLAGS.filter(([k]) => (d as any)[k] === true).map(([, l]) => l) : []);
 const q = (s: string) => encodeURIComponent(s.replace(/[%,()*]/g, ' ').trim());
 
-export async function browseRecipes(accessToken: string, f: { query?: string; cuisine?: string; meal?: string; diet?: string; limit?: number }): Promise<CatalogFood[]> {
-  const p = ['select=id,name_common,image_primary_url,image_url,meal_slot,cuisine,description_simple,description,health_score,prep_time,cook_time,servings,nutrition_per_100g,elements_hazardous,dietary_info', 'is_published=is.true', 'order=health_score.desc.nullslast', `limit=${f.limit || 60}`];
+/**
+ * The diet a Protocol's own rules and description ask for, to pick meals that follow it: a dietary_info flag
+ * (vegan, keto…) and name words to leave out ("no added sugar" → no cakes or cookies, "no fried" → no fries).
+ */
+export function protocolDiet(rules: string[], description = ''): { diet: string | null; avoid: RegExp | null } {
+  const t = `${rules.join(' · ')} · ${description}`.toLowerCase();
+  const diet = /\bvegan\b|plant foods only|whole plant foods|no meat, fish, dairy or eggs/.test(t) ? 'vegan'
+    : /\bvegetarian\b|no meat\b/.test(t) ? 'vegetarian'
+    : /\bketo|ketogenic/.test(t) ? 'keto'
+    : /low[- ]carb/.test(t) ? 'low_carb'
+    : /gluten[- ]free|no gluten/.test(t) ? 'gluten_free'
+    : /dairy[- ]free|no dairy/.test(t) ? 'dairy_free' : null;
+  const words: string[] = [];
+  if (/no (added )?sugar|no sweet|sugar[- ]free|low sugar/.test(t)) words.push('cake', 'cookie', 'donut', 'doughnut', 'brownie', 'muffin', 'candy', 'chocolate', 'syrup', 'pancake', 'sundae', 'ice cream', 'milkshake', 'pie');
+  if (/no (deep[- ])?fried|no processed|ultra-processed|whole foods?/.test(t)) words.push('fried', 'fries', 'nugget', 'burger', 'pizza', 'hot dog', 'crisps', 'chips');
+  if (/no alcohol/.test(t)) words.push('wine', 'beer', 'cocktail');
+  if (/yeast|leavened/.test(t)) words.push('bread', 'bun', 'bagel', 'toast', 'sandwich', 'pizza');
+  return { diet, avoid: words.length ? new RegExp(`\\b(${words.join('|')})`, 'i') : null };
+}
+/** A meal step's slot for recipe suggestions, from its title, group or time. */
+export function mealSlotOf(name: string, group: string | null, time: string | null): 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack' | null {
+  const t = `${name} ${group || ''}`;
+  if (/breakfast/i.test(t)) return 'Breakfast';
+  if (/lunch/i.test(t)) return 'Lunch';
+  if (/dinner|supper/i.test(t)) return 'Dinner';
+  if (/snack/i.test(t)) return 'Snack';
+  const m = /^(\d\d):/.exec(time || ''); if (!m) return null;
+  const h = +m[1]; return h < 11 ? 'Breakfast' : h < 15 ? 'Lunch' : h < 17 ? 'Snack' : 'Dinner';
+}
+export async function browseRecipes(accessToken: string, f: { ids?: string[]; offset?: number; query?: string; cuisine?: string; meal?: string; diet?: string; limit?: number }): Promise<CatalogFood[]> {
+  const p = ['select=id,name_common,image_primary_url,image_url,meal_slot,cuisine,description_simple,description,health_score,prep_time,cook_time,servings,nutrition_per_100g,elements_hazardous,dietary_info', 'is_published=is.true', 'order=health_score.desc.nullslast,name_common.asc,id.asc', `limit=${f.limit || 60}`, `offset=${f.offset || 0}`];
+  if (f.ids?.length) p.push(`id=in.(${f.ids.map((i) => `"${i.replace(/"/g, '')}"`).join(',')})`);
   if (f.query?.trim()) p.push(`name_common=ilike.*${q(f.query)}*`);
   if (f.cuisine) p.push(`cuisine=eq.${encodeURIComponent(f.cuisine)}`);
   if (f.meal) p.push(`meal_slot=ilike.${encodeURIComponent(f.meal)}`);
@@ -1074,27 +1130,92 @@ export async function recipeIngredientNames(accessToken: string, recipeId: strin
   if (!res.ok) return [];
   return ((await res.json()) as any[]).map((r) => ({ name: String(r.ingredient_name || ''), grams: num(r.amount_g) })).filter((r) => r.name);
 }
-export async function browseIngredients(accessToken: string, f: { query?: string; category?: string; limit?: number }): Promise<CatalogFood[]> {
-  const p = ['select=id,name_common,image_primary_url,image_url,category,category_sub,description_simple,description,health_score,nutrition_per_100g,elements_hazardous,season,origin_region', 'is_published=is.true', 'is_group=not.is.true', 'order=health_score.desc.nullslast', `limit=${f.limit || 60}`];
+/** Whole/raw or processed, and how: from the name and sub-category (juice, powder, oil…), else processed-by-nature categories. */
+const PROCESS_WORDS: Array<[RegExp, string]> = [[/\bjuice\b/i, 'Juice'], [/\bpowder(ed)?\b/i, 'Powder'], [/\boil\b/i, 'Oil'], [/\bflour\b/i, 'Flour'], [/\b(dried|dehydrated)\b/i, 'Dried'], [/\b(ground|milled)\b/i, 'Ground'], [/\b(extract|concentrate)\b/i, 'Extract'], [/\b(paste|puree|purée)(?![\p{L}\d_])/iu, 'Paste'], [/\b(bread|pasta|noodles?|crackers?|biscuits?|cakes?|cereal|granola|tortillas?|bagels?|muffins?|pastry|wafers?)\b/i, 'Baked'], [/\b(canned|tinned)\b/i, 'Canned'], [/\bsmoked\b/i, 'Smoked'], [/\b(cured)\b/i, 'Cured'], [/\bpickled\b/i, 'Pickled'], [/\bfermented\b/i, 'Fermented'], [/\b(cooked|boiled|roasted|fried)\b/i, 'Cooked'], [/\bfrozen\b/i, 'Frozen'], [/\b(refined|processed)\b/i, 'Refined']];
+const PROCESSED_CATEGORIES: Record<string, string> = { 'Additives': 'Additive', 'Oils & fats': 'Oil', 'Condiments & sauces': 'Condiment', 'Sweeteners': 'Sweetener', 'Confectionery & snacks': 'Snack', 'Prepared foods': 'Prepared', 'Supplements & other': 'Supplement' };
+/** Categories whose items are whole foods unless their name says otherwise. */
+const WHOLE_CATEGORIES = new Set(['Vegetables', 'Fruit', 'Meat', 'Fish & seafood', 'Legumes, nuts & seeds', 'Herbs & spices', 'Dairy & eggs']);
+/** form null = not known: neither filter shows it as raw or processed. */
+export function ingredientForm(name: string, sub: string | null, category: string | null): { form: 'raw' | 'processed' | null; processing: string | null } {
+  const text = `${name} ${sub || ''}`;
+  if (/\b(raw|fresh)\b/i.test(text) && !PROCESS_WORDS.some(([re]) => re.test(text))) return { form: 'raw', processing: null };
+  const hit = PROCESS_WORDS.find(([re]) => re.test(text));
+  if (hit) return { form: 'processed', processing: hit[1] };
+  if (category && PROCESSED_CATEGORIES[category]) return { form: 'processed', processing: PROCESSED_CATEGORIES[category] };
+  if (category && WHOLE_CATEGORIES.has(category)) return { form: 'raw', processing: null };
+  return { form: null, processing: null };
+}
+export async function browseIngredients(accessToken: string, f: { offset?: number; query?: string; category?: string; limit?: number }): Promise<CatalogFood[]> {
+  const p = ['select=id,name_common,image_primary_url,image_url,category,category_sub,description_simple,description,health_score,nutrition_per_100g,elements_hazardous,season,origin_region', 'is_published=is.true', 'is_group=not.is.true', 'order=health_score.desc.nullslast,name_common.asc,id.asc', `limit=${f.limit || 60}`, `offset=${f.offset || 0}`];
   if (f.query?.trim()) p.push(`name_common=ilike.*${q(f.query)}*`);
   if (f.category) p.push(`category=eq.${encodeURIComponent(f.category)}`);
   const res = await fetch(`${rest()}/catalog_ingredients?${p.join('&')}`, { headers: headers(accessToken) });
   if (!res.ok) throw new Error(`Could not load ingredients (${res.status})`);
-  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name_common, image: r.image_primary_url || r.image_url || null, category: r.category || null, description: txt(r.description_simple) || txt(r.description), healthScore: num(r.health_score), per100: per100Of(r.nutrition_per_100g), hazards: hazardsOf(r.elements_hazardous), diets: [],
+  return ((await res.json()) as any[]).map((r) => ({ ...ingredientForm(String(r.name_common || ''), txt(r.category_sub), r.category || null), id: r.id, name: r.name_common, image: r.image_primary_url || r.image_url || null, category: r.category || null, description: txt(r.description_simple) || txt(r.description), healthScore: num(r.health_score), per100: per100Of(r.nutrition_per_100g), hazards: hazardsOf(r.elements_hazardous), diets: [],
     meta: [['Type', txt(r.category_sub)], ['Season', Array.isArray(r.season) ? r.season.join(', ') : txt(r.season)], ['Origin', Array.isArray(r.origin_region) ? r.origin_region.join(', ') : txt(r.origin_region)]] }));
 }
 
-export interface FitnessRoutine { id: string; name: string; description: string | null; image: string | null; category: string | null; tags: string[] }
-/** The app's published fitness routines: catalogue Protocols in fitness categories. */
-export async function listFitnessRoutines(accessToken: string, categories: string[] = ['fitness', 'strength', 'recovery', 'mobility', 'cardio', 'hiit']): Promise<FitnessRoutine[]> {
-  // Catalogue categories are not consistently cased ("Beauty", "wellness"), so match case-insensitively.
-  const or = categories.map((c) => `category.ilike.${encodeURIComponent(c)}`).join(',');
-  const res = await fetch(`${rest()}/protocols?select=id,name,description,image_url,category,tags&user_id=is.null&is_public=not.is.false&is_active=not.is.false&or=(${or})&order=name`, { headers: headers(accessToken) });
-  if (!res.ok) throw new Error(`Could not load fitness routines (${res.status})`);
-  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, description: txt(r.description), image: txt(r.image_url), category: r.category, tags: Array.isArray(r.tags) ? r.tags.map(String) : [] }));
+export interface FitnessRoutine { id: string; name: string; description: string | null; image: string | null; category: string | null; tags: string[]; totalDays?: number | null }
+/**
+ * What span a routine covers, for its card tag: a part of the day (Morning, Midday, Evening, Night), a whole Day,
+ * or a Week / N weeks / Month / N days programme. From total_days, then the name, description and tags.
+ */
+/** Names and images of the catalogue activities / recipes a routine's steps link to, keyed "a:<id>" / "r:<id>". */
+export async function stepMedia(accessToken: string, kind: 'activity' | 'recipe', ids: string[]): Promise<Record<string, { name: string; image: string | null }>> {
+  const out: Record<string, { name: string; image: string | null }> = {};
+  const clean = [...new Set(ids)].filter(Boolean);
+  for (let i = 0; i < clean.length; i += 60) {
+    const list = clean.slice(i, i + 60).map((x) => `"${x.replace(/"/g, '')}"`).join(',');
+    const sel = kind === 'activity' ? 'id,name,image_url,primary_image_url' : 'id,name_common,image_primary_url,image_url';
+    const res = await fetch(`${rest()}/${kind === 'activity' ? 'catalog_activities' : 'catalog_recipes'}?select=${sel}&id=in.(${encodeURIComponent(list)})`, { headers: headers(accessToken) }).catch(() => null);
+    if (!res?.ok) continue;
+    for (const r of (await res.json()) as any[]) out[`${kind === 'activity' ? 'a' : 'r'}:${r.id}`] = { name: String(r.name || r.name_common || ''), image: (kind === 'activity' ? r.image_url || r.primary_image_url : r.image_primary_url || r.image_url) || null };
+  }
+  return out;
 }
-export async function routineSteps(accessToken: string, protocolId: string): Promise<Array<{ name: string; time: string | null; group: string | null; day: number | null }>> {
-  const res = await fetch(`${rest()}/protocol_items?select=display_name,scheduled_time,group_name,day_number,sort_order&protocol_id=eq.${protocolId}&order=day_number.asc.nullsfirst,scheduled_time.asc.nullslast,sort_order.asc&limit=200`, { headers: headers(accessToken) });
+/** The signed-in Guardian's own saved diet plans (Diet planner → Protocols), newest first. */
+export async function listMyDietPlans(accessToken: string): Promise<FitnessRoutine[]> {
+  let uid = '';
+  try { uid = JSON.parse(atob(accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub || ''; } catch { return []; }
+  if (!uid) return [];
+  const res = await fetch(`${rest()}/protocols?select=id,name,description,image_url,category,tags,total_days&user_id=eq.${uid}&builder_kind=eq.diet&order=updated_at.desc.nullslast`, { headers: headers(accessToken) });
   if (!res.ok) return [];
-  return ((await res.json()) as any[]).map((r) => ({ name: String(r.display_name || ''), time: r.scheduled_time ? String(r.scheduled_time).slice(0, 5) : null, group: r.group_name || null, day: num(r.day_number) })).filter((r) => r.name);
+  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, description: txt(r.description), image: txt(r.image_url), category: r.category || 'Diet', tags: Array.isArray(r.tags) ? r.tags.map(String) : [], totalDays: num(r.total_days) }));
+}
+export function routinePeriod(r: Pick<FitnessRoutine, 'name' | 'description' | 'tags' | 'totalDays'>): string {
+  const name = r.name || '', all = `${name} ${(r.tags || []).join(' ')} ${r.description || ''}`;
+  if (/\b(morning|am routine|wake|sunrise)\b/i.test(name)) return 'Morning';
+  if (/\b(midday|lunch|afternoon)\b/i.test(name)) return 'Midday';
+  if (/\b(evening|pm routine|wind[- ]down)\b/i.test(name)) return 'Evening';
+  if (/\b(night|bedtime|sleep)\b/i.test(name) && !/\bprotocol\b/i.test(name)) return 'Night';
+  const n = r.totalDays && r.totalDays > 1 ? r.totalDays : null;
+  const span = (days: number) => (days % 30 === 0 || days === 28 || days === 31 ? (days <= 31 ? 'Month' : `${Math.round(days / 30)} months`) : days % 7 === 0 ? (days === 7 ? 'Week' : `${days / 7} weeks`) : `${days} days`);
+  const m = /(\d+)[- ](day|week|month)s?\b/i.exec(all);
+  if (m) { const k = +m[1], u = m[2].toLowerCase(); return u === 'month' ? (k === 1 ? 'Month' : `${k} months`) : u === 'week' ? (k === 1 ? 'Week' : `${k} weeks`) : k === 1 ? 'Day' : span(k); }
+  if (n) return span(n);
+  if (/\b(weekly|week)\b/i.test(name)) return 'Week';
+  if (/\b(monthly|month)\b/i.test(name)) return 'Month';
+  return 'Day';
+}
+/** The app's published fitness routines: catalogue Protocols in fitness categories. */
+export async function listFitnessRoutines(accessToken: string, categories: string[] = ['fitness', 'strength', 'recovery', 'mobility', 'cardio', 'hiit'], nameTerms: string[] = []): Promise<FitnessRoutine[]> {
+  // Catalogue categories are not consistently cased ("Beauty", "wellness"), so match case-insensitively; a section may also match by name at the start of a word ("fast" finds Fasting, not Breakfast).
+  const or = [...categories.map((c) => `category.ilike.${encodeURIComponent(c)}`), ...nameTerms.map((t) => `name.imatch.%5Cm${encodeURIComponent(t.replace(/[^\w ]/g, ''))}`)].join(',');
+  const res = await fetch(`${rest()}/protocols?select=id,name,description,image_url,category,tags,total_days&user_id=is.null&is_public=not.is.false&is_active=not.is.false&or=(${or})&order=name`, { headers: headers(accessToken) });
+  if (!res.ok) throw new Error(`Could not load fitness routines (${res.status})`);
+  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, description: txt(r.description), image: txt(r.image_url), category: r.category, tags: Array.isArray(r.tags) ? r.tags.map(String) : [], totalDays: num(r.total_days) }));
+}
+export interface RoutineStep { id?: string; parentId?: string | null; recipeId?: string | null; activityId?: string | null; dows?: number[] | null; name: string; time: string | null; group: string | null; day: number | null; kind: string | null; itemType: string | null; scope: string | null; recurrenceType?: string | null; category: string | null; subtype: string | null; minutes: number | null; sets: number | null; reps: number | null; weight: string | null }
+/** Every step of a Protocol, read in pages (a routine with a day-by-day cycle has hundreds of rows; one response is capped). */
+export async function routineSteps(accessToken: string, protocolId: string): Promise<RoutineStep[]> {
+  const PAGE_ROWS = 1000;
+  const rows: any[] = [];
+  for (let offset = 0; ; offset += PAGE_ROWS) {
+    const res = await fetch(`${rest()}/protocol_items?select=id,parent_protocol_item_id,catalog_recipe_id,catalog_activity_id,display_name,scheduled_time,group_name,day_number,sort_order,kind,item_type,scope,recurrence_type,recurrence_days_of_week,category,subtype,duration_minutes,sets,reps,weight_display,hidden&hidden=not.is.true&protocol_id=eq.${protocolId}&order=day_number.asc.nullsfirst,scheduled_time.asc.nullslast,sort_order.asc,id.asc&limit=${PAGE_ROWS}&offset=${offset}`, { headers: headers(accessToken) });
+    if (!res.ok) { if (offset === 0) return []; break; }
+    const page = (await res.json()) as any[];
+    rows.push(...page);
+    if (page.length < PAGE_ROWS) break;
+  }
+  return rows.map((r) => ({ id: String(r.id), parentId: r.parent_protocol_item_id || null, recipeId: r.catalog_recipe_id || null, activityId: r.catalog_activity_id || null, name: String(r.display_name || ''), time: r.scheduled_time ? String(r.scheduled_time).slice(0, 5) : null, group: r.group_name || null, day: num(r.day_number), kind: r.kind || null, itemType: r.item_type || null, scope: r.scope || null, recurrenceType: r.recurrence_type || null, dows: Array.isArray(r.recurrence_days_of_week) ? r.recurrence_days_of_week.map(Number) : null, category: r.category || null, subtype: r.subtype || null, minutes: num(r.duration_minutes), sets: num(r.sets), reps: num(r.reps), weight: txt(r.weight_display) })).filter((r) => r.name);
 }

@@ -78,8 +78,12 @@ export type RuleGroup = 'drinks' | 'consume' | 'supplements' | 'general';
 const DRINK_SUBJECT = /\b(caffeine|coffee|espresso|tea|matcha|alcohol|wine|beer|spirits|soda|fizzy|soft drinks?|juice|energy drinks?|drinks?|water)\b/i;
 const FOOD_SUBJECT = /\b(food|foods|sugar|salt|sodium|meat|pork|dairy|gluten|wheat|soy|cheese|fried|processed|snacks?|carbs?|bread|diet|meals?|eat|eating|tyramine|spicy|pickled|canned|vinegar|chocolate)\b/i;
 /** Which smart list a category rule belongs to. Drink subjects (caffeine, alcohol, tea…) → Drinks; food → Consume. */
+/** Rules about taking a product (a binder, capsules, the label's dose) belong with the supplements. */
+const SUPPLEMENT_SUBJECT = /\b(supplements?|binders?|capsules?|tablets?|pills?|softgels?|doses?|dosage|charcoal|supplies)\b/i;
+/** "Follow every label" is about a product; "Check food labels for added sugar" is about food, so it goes to its food group. */
+const PRODUCT_LABEL = /\blabels?\b/i;
 export function ruleGroupFor(text: string, group?: string): RuleGroup {
-  if (group === 'supplements' || /\bsupplements?\b/i.test(text)) return 'supplements';
+  if (group === 'supplements' || SUPPLEMENT_SUBJECT.test(text) || (PRODUCT_LABEL.test(text) && !FOOD_SUBJECT.test(text) && !DRINK_SUBJECT.test(text))) return 'supplements';
   const drink = DRINK_SUBJECT.test(text), food = FOOD_SUBJECT.test(text);
   if (drink && !food) return 'drinks';
   if (food) return 'consume';

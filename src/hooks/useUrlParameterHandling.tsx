@@ -16,7 +16,8 @@ export function useUrlParameterHandling({ setCurrentPage }: UseUrlParameterHandl
   useEffect(() => {
     let path = window.location.pathname.replace(/\/+$/, '');
     // Short Guardian link from post QR codes: /g/<slug>, often upper-cased (QR alphanumeric mode) → /guardians/<slug>.
-    const short = path.match(/^\/g\/([a-z0-9-]+)$/i);
+    // Short Guardian links: /g/<slug> from post QR codes, and the TikTok-style /@<slug> handle.
+    const short = path.match(/^\/(?:g\/|@)([a-z0-9-]+)$/i);
     if (short) {
       path = `/guardians/${short[1].toLowerCase()}`;
       window.history.replaceState({}, document.title, path + window.location.search);

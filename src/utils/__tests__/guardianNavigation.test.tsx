@@ -46,6 +46,9 @@ it('does not carry an open lead form or its values into another section',async()
 });
 it('closes the active recipe editor when history returns to another tool',async()=>{
   workspace();
+  // Recipes sits under Protocols > Diet, folded until both are open.
+  fireEvent.click(screen.getByRole('button',{name:'Protocols',exact:true}));
+  fireEvent.click(screen.getByRole('button',{name:'Diet',exact:true}));
   fireEvent.click(screen.getByRole('button',{name:'Recipes',exact:true}));
   fireEvent.click(await screen.findByRole('link',{name:'Open builder',exact:true}));
   expect(screen.getByRole('button',{name:'← Recipes',exact:true})).toBeTruthy();

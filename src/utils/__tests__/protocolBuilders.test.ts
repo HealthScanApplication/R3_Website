@@ -211,3 +211,15 @@ describe('fitness schedule and warm-ups', () => {
     expect(exerciseGroup(list[0])).toBe('Recovery');
   });
 });
+
+import { planFitnessWeek as planWeek, FITNESS_GOALS as GOALS, likedCategories } from '../protocolBuilders';
+describe('linked fitness choices', () => {
+  const gain = GOALS.find((g) => g.id === 'muscle_gain')!;
+  it('trains only the picked muscles on strength days', () => {
+    const plan = planWeek(gain, { types: ['strength'], sports: [], muscles: ['chest', 'arms'] });
+    for (const p of plan) for (const m of p.template.muscles || []) expect(['chest', 'arms']).toContain(m);
+  });
+  it('maps picked types to catalog categories, without recovery', () => {
+    expect(likedCategories({ types: ['hiit', 'recovery'], sports: [] })).toEqual(['Hiit']);
+  });
+});

@@ -15,7 +15,7 @@ import { defaultHomeCity, plannerWeek, saveHomeCity, sunriseForDate, validPlanne
 import { aggregateDiet, dietSelections, loadDietAnalysis, type DietAnalysis } from '../../utils/dietNutrition';
 import { PRAL_DISPLAY } from '../../utils/pral';
 import {
-  MUSCLE_GROUPS, dayNameFor, muscleGroupOf, type MuscleGroupId, mealDrinks, mealPickKey, selectedServings, fitsSlot, DIET_FRAMEWORKS, FITNESS_GOALS, FRAMEWORK_RULES, mealTiming, resolveTiming, sessionTiming, mealIsFasting, fastingDrinkAllowed, type Anchor, type Timing, MEAL_SLOTS, WEEK, combineProtocols, draftFitnessWeek, TRAINING_TYPES, type FitnessLikes, defaultFuel, type TrainingFuel, defaultSchedule, TRAIN_TIMES, exerciseGroup, sessionTimeFor, type FitnessSchedule, type TrainTime, findClashes, guideRecipeToPick,
+  MUSCLE_GROUPS, dayNameFor, muscleGroupOf, type MuscleGroupId, mealDrinks, mealPickKey, selectedServings, fitsSlot, DIET_FRAMEWORKS, FITNESS_GOALS, FRAMEWORK_RULES, mealTiming, resolveTiming, sessionTiming, mealIsFasting, fastingDrinkAllowed, type Anchor, type Timing, MEAL_SLOTS, WEEK, combineProtocols, draftFitnessWeek, TRAINING_TYPES, GOAL_TYPES, likedCategories, planFitnessWeek, type FitnessLikes, defaultFuel, type TrainingFuel, defaultSchedule, TRAIN_TIMES, exerciseGroup, sessionTimeFor, type FitnessSchedule, type TrainTime, findClashes, guideRecipeToPick,
   dietSupportItems, isDrinkPick, SUPPLEMENT_PERIODS, supplementCell, type SupplementPeriod, listBuilderMeta, macroGrams, saveDietProtocol, saveFitnessProtocol, searchActivities, searchDietRecipes, sumNutrition,
   reviewCombined, reviewDiet, reviewFitness, type Conflict, type Review, type ReviewNote, type ActivityPick, type BuilderKind, type Clash, type DietConfig, type FitnessConfig, type FitnessSession, type MealPick,
 } from '../../utils/protocolBuilders';
@@ -418,6 +418,19 @@ export function FitnessBuilder({ accessToken, ownerId, protocols, initialProtoco
   const [sportFilter, setSportFilter] = useState('');
   const likes: FitnessLikes = cfg.likes || { types: [], sports: [] };
   const setLikes = (next: FitnessLikes) => setCfg((c) => ({ ...c, likes: next }));
+  // Exercises for the picked training types (and muscle focus): the next layer of choice under the types.
+  const [typeExercises, setTypeExercises] = useState<ActivityPick[] | null>(null);
+  const likedCats = likedCategories(likes);
+  const focusMuscle = (likes.muscles || [])[0] || null;
+  useEffect(() => {
+    if (!likedCats.length) { setTypeExercises(null); return; }
+    let live = true; setTypeExercises(null);
+    // One fetch per category (so one category can't fill the list), muscle focus only where it applies.
+    const MUSCLE_CATS = ['Strength', 'Gym', 'Fitness', 'Calisthenics'];
+    Promise.all(likedCats.flatMap((c) => (MUSCLE_CATS.includes(c) && likes.muscles?.length ? likes.muscles : [null]).map((m) => searchActivities(accessToken, { categories: [c], muscle: m, limit: 12 }).catch(() => []))))
+      .then((lists) => { if (live) setTypeExercises([...new Map(lists.flat().map((a) => [a.id, a])).values()]); });
+    return () => { live = false; };
+  }, [accessToken, likedCats.join(), (likes.muscles || []).join()]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { searchActivities(accessToken, { categories: ['Sports'], limit: 120 }).then((list) => setSportsList([...list].sort((a, b) => a.name.localeCompare(b.name)))).catch(() => setSportsList([])); }, [accessToken]);
 
   useEffect(() => { listBuilderMeta(accessToken, ownerId).then(setMeta).catch(() => {}); }, [accessToken, ownerId]);
@@ -434,7 +447,7 @@ export function FitnessBuilder({ accessToken, ownerId, protocols, initialProtoco
   }, [adding, query, muscle, accessToken]);
 
   const run = async (label: string, work: () => Promise<void>) => { setBusy(true); setMessage(label); try { await work(); } catch (e) { const failedId = (e as { protocolId?: string }).protocolId; if (failedId) setProtocolId(failedId); setMessage(`Failed: ${(e as Error).message}`); setBusy(false); return; } setBusy(false); };
-  const draft = () => run('Building the week from catalog activities…', async () => { const sessions = await draftFitnessWeek(accessToken, cfg.goal, cfg.level, cfg.minutes, likes, cfg.schedule); setCfg((c) => ({ ...c, sessions })); setMessage('Week drafted. Edit sessions, sets and reps below.'); });
+  const draft = () => run('Building the week from catalog activities…', async () => { const sessions = await draftFitnessWeek(accessToken, cfg.goal, cfg.level, cfg.minutes, cfg.goal === 'face' ? undefined : likes, cfg.schedule); setCfg((c) => ({ ...c, sessions })); setMessage('Week drafted. Edit sessions, sets and reps below.'); });
   const save = () => run('Saving to Protocols…', async () => {
     const { protocol, metaSaved } = await saveFitnessProtocol(accessToken, ownerId, protocolId, name.trim() || `${goal.label} week`, cfg);
     setProtocolId(protocol.id); setMeta((m) => ({ ...m, [protocol.id]: { builder_kind: 'fitness', builder_config: cfg } })); onSaved(protocol);
@@ -454,7 +467,19 @@ export function FitnessBuilder({ accessToken, ownerId, protocols, initialProtoco
     </div>
     <div style={{ ...card, marginBottom: 14 }}>
       <span style={label}>What they like to do</span>
-      <div role="group" aria-label="Training types" style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>{TRAINING_TYPES.map((t) => { const on = likes.types.includes(t.id); return <button key={t.id} type="button" aria-pressed={on} onClick={() => setLikes({ ...likes, types: on ? likes.types.filter((x) => x !== t.id) : [...likes.types, t.id] })} style={iconChip(on)}><IconLabel Icon={TYPE_ICON[t.id]}>{t.label}</IconLabel></button>; })}</div>
+      {goal.id === 'face' ? <p style={{ color: muted, fontSize: 12, margin: 0 }}>Face training is its own routine: sessions use face and jaw exercises, so training types and sports don't apply.</p> : <>
+      <div role="group" aria-label="Training types" style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>{[...TRAINING_TYPES].sort((a, b) => Number((GOAL_TYPES[goal.id] || []).includes(b.id)) - Number((GOAL_TYPES[goal.id] || []).includes(a.id))).map((t) => { const on = likes.types.includes(t.id); const suits = (GOAL_TYPES[goal.id] || []).includes(t.id); return <button key={t.id} type="button" aria-pressed={on} title={suits ? `Suits ${goal.label.toLowerCase()}` : undefined} onClick={() => setLikes({ ...likes, types: on ? likes.types.filter((x) => x !== t.id) : [...likes.types, t.id], exercises: on ? (likes.exercises || []).filter((e) => !TRAINING_TYPES.find((x) => x.id === t.id)!.categories.includes(e.category || '')) : likes.exercises })} style={{ ...iconChip(on), opacity: on || suits || !(GOAL_TYPES[goal.id] || []).length ? 1 : 0.62 }}><IconLabel Icon={TYPE_ICON[t.id]}>{t.label}{suits && !on ? <span style={{ color: acid, marginLeft: 4 }}>•</span> : null}</IconLabel></button>; })}</div>
+      {(GOAL_TYPES[goal.id] || []).length > 0 && <p style={{ color: muted, fontSize: 11, margin: '6px 0 0' }}><span style={{ color: acid }}>•</span> suits {goal.label.toLowerCase()}</p>}
+      {likedCats.length > 0 && <div style={{ borderLeft: `2px solid ${acid}`, padding: '4px 0 4px 12px', margin: '14px 0 0' }}>
+        {likedCats.some((c) => ['Strength', 'Gym', 'Fitness', 'Calisthenics'].includes(c)) && <><span style={{ ...label, margin: '0 0 6px' }}>Muscle focus{likes.muscles?.length ? ` · ${likes.muscles.length}` : ' · whole body'}</span>
+          <div role="group" aria-label="Muscle focus" style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>{MUSCLE_GROUPS.filter((m) => m.id !== 'face').map((m) => { const on = (likes.muscles || []).includes(m.id); return <button key={m.id} type="button" aria-pressed={on} onClick={() => setLikes({ ...likes, muscles: on ? (likes.muscles || []).filter((x) => x !== m.id) : [...(likes.muscles || []), m.id] })} style={{ ...chip(on), padding: '4px 9px', fontSize: 10 }}>{m.label}</button>; })}</div></>}
+        <span style={{ ...label, margin: '0 0 6px' }}>{TRAINING_TYPES.filter((t) => likes.types.includes(t.id) && t.id !== 'recovery').map((t) => t.label).join(' + ')} exercises{focusMuscle ? ` · ${(likes.muscles || []).map((m) => MUSCLE_GROUPS.find((x) => x.id === m)?.label).join(', ')}` : ''}{likes.exercises?.length ? ` · ${likes.exercises.length} picked` : ''}</span>
+        <div role="group" aria-label="Exercises for the picked types" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 132, overflowY: 'auto' }}>
+          {!typeExercises ? <span style={{ color: muted, fontSize: 12 }}>Loading exercises…</span> : !typeExercises.length ? <span style={{ color: muted, fontSize: 12 }}>No catalog exercises for this mix yet.</span>
+            : [...new Map([...(likes.exercises || []), ...typeExercises].map((a) => [a.id, a])).values()].map((a) => { const on = (likes.exercises || []).some((x) => x.id === a.id); return <button key={a.id} type="button" aria-pressed={on} onClick={() => setLikes({ ...likes, exercises: on ? (likes.exercises || []).filter((x) => x.id !== a.id) : [...(likes.exercises || []), a] })} style={{ ...iconChip(on), padding: '5px 10px', fontSize: 10 }}>{a.name}</button>; })}
+        </div>
+        <p style={{ color: muted, fontSize: 11, margin: '6px 0 0' }}>Picked exercises go first in every session they fit; the rest are filled from the catalog.</p>
+      </div>}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', margin: '16px 0 8px' }}>
         <span style={{ ...label, margin: 0 }}>Sports{likes.sports.length ? ` · ${likes.sports.length} picked` : ''}</span>
         <div style={{ position: 'relative', width: 200 }}><Search size={12} color={muted} style={{ position: 'absolute', left: 9, top: 10 }} /><input aria-label="Filter sports" placeholder="Filter sports" value={sportFilter} onChange={(e) => setSportFilter(e.target.value)} style={{ ...input, height: 32, fontSize: 12, paddingLeft: 27 }} /></div>
@@ -469,6 +494,11 @@ export function FitnessBuilder({ accessToken, ownerId, protocols, initialProtoco
         likes.sports.length && (goal.pattern.some((p) => p.categories.includes('Cardio') && !p.categories.includes('Hiit')) ? 'Picked sports take over the cardio days.' : 'A sports day is added to the week.'),
         likes.types.includes('recovery') && 'Harder sessions end with a recovery activity such as an ice bath or sauna.',
       ].filter(Boolean).join(' ') || 'Pick training types and sports, then draft the week to build from them.'}</p>
+      </>}
+      {/* The week as it stands: every choice above adds, removes or reshapes these sessions. */}
+      <div style={{ marginTop: 14 }}><span style={{ ...label, margin: '0 0 6px' }}>Your week so far</span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>{planFitnessWeek(goal, goal.id === 'face' ? undefined : likes, cfg.schedule).map((p, i) => <span key={i} style={{ border: `1px solid ${line}`, padding: '5px 9px', fontSize: 11 }}><span style={{ color: acid }}>{WEEK.find((w) => w.day === p.day)?.short}</span> · {p.sport ? p.sport.name : p.template.title}{!p.sport && p.template.categories.length ? <span style={{ color: muted }}> · {p.template.categories.join(', ')}</span> : null}{p.template.muscles?.length && goal.id !== 'face' && likes.muscles?.length ? <span style={{ color: muted }}> · {[...new Set(p.template.muscles)].map((m) => MUSCLE_GROUPS.find((x) => x.id === m)?.label).join(', ')}</span> : null}</span>)}</div>
+      </div>
     </div>
     {(() => {
       // Training fuel: the same food/supplement catalog as the Diet planner, timed around every session.

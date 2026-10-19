@@ -375,3 +375,16 @@ describe('paste-text planner (ceremony example)', () => {
     expect(plan.items.find((i) => /^Pack/.test(i.title))?.subtasks).toEqual(expect.arrayContaining(['white clothes', 'mat', 'blanket']));
   });
 });
+
+describe('basics only for their own routines', () => {
+  it('adds no sleep anchors or hygiene sets to a fitness routine', () => {
+    const rows = [{ id: 'w', display_name: 'Push Day Workout', kind: 'action', category: 'do', subtype: 'exercise', scheduled_time: '08:30:00' }] as Row[];
+    const c = standardiseProtocol(rows, 'new', 'Strength');
+    expect(c.some((x) => x.insert && /sleep|hygiene/i.test(String(x.insert.display_name)))).toBe(false);
+    expect(c.some((x) => /End Sleep|Start Sleep|hygiene set/i.test(x.reason))).toBe(false);
+  });
+  it('still adds them to a hygiene routine', () => {
+    const c = standardiseProtocol([] as Row[], 'new', 'Hygiene');
+    expect(c.some((x) => x.insert?.display_name === 'Morning hygiene')).toBe(true);
+  });
+});

@@ -17,3 +17,9 @@ describe('post QR link', () => {
     expect(version('https://routine3.com/guardians/john-ferreira')).toBe(4);
   });
 });
+import { guardianHandle } from '../../components/guides/ContentStudio';
+it('gives a Guardian page a TikTok-style @handle', () => {
+  expect(guardianHandle('/guardians/john-ferreira')).toBe('@john-ferreira');
+  expect(guardianHandle('https://routine3.com/guardians/calm-co')).toBe('@calm-co');
+  expect(guardianHandle('/guardians/x/value-ramp/y')).toBeNull();
+});

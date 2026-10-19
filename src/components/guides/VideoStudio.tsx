@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, Download, Film, ImageDown, KeyRound, LogIn, Loader2, RotateCcw, Type, Unplug } from 'lucide-react';
-import { StyleThumb, drawPost, qrLink, TEXT_POSITIONS, TEXT_STYLES, type PostBrand, type TextPosition, type TextStyleId } from './ContentStudio';
+import { RatioGlyph, StyleThumb, drawPost, guardianHandle, qrLink, TEXT_POSITIONS, TEXT_STYLES, type PostBrand, type TextPosition, type TextStyleId } from './ContentStudio';
 import { draftVideoScript, parseScript, scriptPrompt, scriptText } from '../../utils/videoScript';
 import { OVERLAY_FORMATS, recordWithOverlay } from '../../utils/videoOverlay';
 import { buildVideoPrompt, VIDEO_ASPECTS, VIDEO_PROMPT_MAX, type VideoAspect } from '../../utils/videoPrompt';
@@ -103,7 +103,7 @@ export function VideoStudio({ creator, avatar = null, audience, problem, focusKi
   const qr = siteUrl ? qrLink(siteUrl) : undefined;
   useEffect(() => {
     let stale = false;
-    if (overlayRef.current && showText) drawPost(overlayRef.current, fmt, '', { headline, subline, cta, credit: creator ? `Guidance by ${creator}` : '', qr, brand: postBrand, style: textStyle, position, avatar }, () => stale).catch(() => {}); // a font or logo that fails to load just leaves the layer as is
+    if (overlayRef.current && showText) drawPost(overlayRef.current, fmt, '', { headline, subline, cta, credit: creator ? `Guidance by ${creator}${guardianHandle(siteUrl) ? ` · ${guardianHandle(siteUrl)}` : ''}` : '', qr, brand: postBrand, style: textStyle, position, avatar }, () => stale).catch(() => {}); // a font or logo that fails to load just leaves the layer as is
     return () => { stale = true; };
   }, [fmt, headline, subline, cta, creator, qr, postBrand, textStyle, position, showText, status?.connected, avatar]);
   const copyText = (key: string, text: string) => { navigator.clipboard?.writeText(text).then(() => { setCopied(key); window.setTimeout(() => setCopied(''), 1600); }); };
@@ -201,7 +201,7 @@ export function VideoStudio({ creator, avatar = null, audience, problem, focusKi
   const progress = job ? progressOf(job) : null;
   return shell(<div className="g-split">
     <div style={{ display: 'grid', gap: 12, alignContent: 'start' }}>
-      <div><span style={lab}>Format</span><div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 6 }}>{VIDEO_ASPECTS.map((f) => <button key={f.id} type="button" aria-pressed={aspect === f.id} onClick={() => setAspect(f.id)} style={{ minHeight: 44, border: `1px solid ${aspect === f.id ? acid : line}`, background: aspect === f.id ? '#20251B' : 'transparent', color: ink, textAlign: 'left', padding: '6px 10px', cursor: 'pointer' }}><strong style={{ display: 'block', fontSize: 12 }}>{f.id}</strong><span style={{ display: 'block', color: muted, fontSize: 9.5 }}>{f.platforms}</span></button>)}</div>
+      <div><span style={lab}>Format</span><div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 6 }}>{VIDEO_ASPECTS.map((f) => <button key={f.id} type="button" aria-pressed={aspect === f.id} onClick={() => setAspect(f.id)} style={{ minHeight: 44, border: `1px solid ${aspect === f.id ? acid : line}`, background: aspect === f.id ? '#20251B' : 'transparent', color: ink, textAlign: 'left', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}><RatioGlyph ratio={f.id} on={aspect === f.id} /><span><strong style={{ display: 'block', fontSize: 12 }}>{f.id}</strong><span style={{ display: 'block', color: muted, fontSize: 9.5 }}>{f.platforms}</span></span></button>)}</div>
         {delivered !== aspect && <span style={{ display: 'block', color: muted, fontSize: 10, marginTop: 5 }}>Higgsfield has no {aspect} video, so this renders at {delivered}; Instagram’s feed shows it as {aspect}.</span>}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px', gap: 8 }}>
@@ -227,7 +227,7 @@ export function VideoStudio({ creator, avatar = null, audience, problem, focusKi
         {showText && <>
           <div><span style={lab}>Text style</span><div role="group" aria-label="Video text style" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6 }}>
 {TEXT_STYLES.map((t) => <button key={t.id} type="button" aria-pressed={textStyle === t.id} aria-label={`${t.label} text style`} onClick={() => setTextStyle(t.id)} style={{ border: `1px solid ${textStyle === t.id ? acid : line}`, outline: textStyle === t.id ? `1px solid ${acid}` : 'none', background: '#090A08', padding: 4, cursor: 'pointer', display: 'grid', gap: 4 }}>
-            <StyleThumb styleId={t.id} bg="/images/content/12-evening-reset.webp" headline={headline} subline={subline} cta={cta} credit={creator ? `Guidance by ${creator}` : ''} brand={postBrand} position={position} fontsReady={0} />
+            <StyleThumb styleId={t.id} bg="/images/content/12-evening-reset.webp" headline={headline} subline={subline} cta={cta} credit={creator ? `Guidance by ${creator}${guardianHandle(siteUrl) ? ` · ${guardianHandle(siteUrl)}` : ''}` : ''} brand={postBrand} position={position} fontsReady={0} />
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: textStyle === t.id ? acid : muted, padding: '1px 0 2px' }}>{t.label}</span></button>)}</div></div>
           <label><span style={lab}>Text position</span><select aria-label="Video text position" value={position} onChange={(e) => setPosition(e.target.value as TextPosition)} style={field}>{TEXT_POSITIONS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
           {([['Headline', headline, setHeadline, headEdited, resetHead], ['Subline', subline, setSubline, subEdited, resetSub], ['Button', cta, setCta, ctaEdited, resetCta]] as const).map(([name, value, set, isEdited, reset]) => <div key={name}>
