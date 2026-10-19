@@ -6,13 +6,14 @@
  *   CatalogIngredients ingredients by category, with nutrients and hazards (Diet section).
  *   FitnessRoutines    the app's published fitness Protocols and their steps (Fitness section).
  */
-import { Fragment, useEffect, useState, type CSSProperties } from 'react';
+import { Fragment, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { AlertTriangle, Dumbbell, Heart, Loader2, Search, Wheat, X } from 'lucide-react';
 import { RECIPE_DIETS, browseIngredients, browseRecipes, listFitnessRoutines, recipeIngredientNames, routinePeriod, routineSteps, type CatalogFood, type FitnessRoutine, type RoutineStep } from '../../utils/protocolBuilders';
 import { ProtocolHomeScreen } from '../mockups/ProtocolHomeScreen';
 import { PhoneFrame } from '../mockups/PhoneFrame';
 import { NUTRIENTS } from '../../utils/recipeNutrients';
 import { Header } from './GuardianBuilders';
+import { ruleGroupFor } from '../../utils/protocolRules';
 
 const ink = '#F5F2EA', muted = '#B8B6AF', line = 'rgba(245,242,234,0.24)', acid = '#C7D8A3', panel = '#11120F', warn = '#E8B07A', danger = '#E88A7A';
 const field: React.CSSProperties = { height: 40, border: `1px solid ${line}`, background: '#090A08', color: ink, padding: '0 10px', fontSize: 13 };
@@ -176,7 +177,7 @@ const periodOfText = (name: string) => (/\b(morning|on rising|on waking|breakfas
  * ("on rising", "before bed"), or the time of the step it governs (same subtype, e.g. form rules with the workout).
  * Per day when the routine has several.
  */
-export function partsOfDay(steps: RoutineStep[]): Array<{ key: string; label: string; rules: boolean; steps: RoutineStep[] }> {
+export function partsOfDay(steps: RoutineStep[]): Array<{ key: string; label: string; rules: boolean; day: number; steps: RoutineStep[] }> {
   const multi = new Set(steps.map((s) => s.day || 1)).size > 1;
   const isRule = (s: RoutineStep) => !!s.kind?.startsWith('rule');
   const actionPeriod = (s: RoutineStep) => { const a = steps.find((x) => !isRule(x) && x.time && x.subtype && x.subtype === s.subtype && (x.day || 1) === (s.day || 1)); return a ? periodOfTime(a.time) : null; };
@@ -186,13 +187,13 @@ export function partsOfDay(steps: RoutineStep[]): Array<{ key: string; label: st
     return periodOfTime(s.time) || periodOfText(s.name) || actionPeriod(s) || 'Day rules';
   };
   const order = ['Week rules', 'Morning', 'Afternoon', 'Evening', 'Anytime', 'Day rules'];
-  const out = new Map<string, { key: string; label: string; rules: boolean; steps: RoutineStep[] }>();
+  const out = new Map<string, { key: string; label: string; rules: boolean; day: number; steps: RoutineStep[] }>();
   for (const s of steps) {
     const p = part(s);
     // In a multi-day routine an item without a day runs every day: its own "Every day" groups, listed first.
     const d = p === 'Week rules' || !multi ? 0 : s.day || -1;
     const key = `${d}|${order.indexOf(p)}`;
-    if (!out.has(key)) out.set(key, { key, label: d > 0 ? `Day ${d} · ${p}` : d < 0 ? `Every day · ${p}` : p, rules: p.endsWith('rules'), steps: [] });
+    if (!out.has(key)) out.set(key, { key, label: d > 0 ? `Day ${d} · ${p}` : d < 0 ? `Every day · ${p}` : p, rules: p.endsWith('rules'), day: d, steps: [] });
     out.get(key)!.steps.push(s);
   }
   // Within a part of the day, the timed steps first and its rules after them.
@@ -202,7 +203,9 @@ export function partsOfDay(steps: RoutineStep[]): Array<{ key: string; label: st
   return [...out.values()].sort((a, b) => { const [ad, ap] = rank(a.key), [bd, bp] = rank(b.key); return ad - bd || ap - bp; });
 }
 /** The app's smart list a step belongs to, used to group rules: Meals, Supplements, Fitness, Hygiene, Wellness. */
-export function smartListOfStep(s: Pick<RoutineStep, 'subtype' | 'scope' | 'category' | 'itemType'>): string {
+export function smartListOfStep(s: Pick<RoutineStep, 'subtype' | 'scope' | 'category' | 'itemType'> & { name?: string; kind?: string | null }): string {
+  // A rule goes by what it is about ("Binder 2 h from everything" → Supplements), via the shared rule grouping.
+  if (s.kind?.startsWith('rule') && s.name) { const g = ruleGroupFor(s.name, s.subtype || undefined); if (g === 'supplements') return 'Supplements'; if (g === 'consume' || g === 'drinks') return 'Meals'; }
   const t = `${s.subtype || ''} ${s.scope || ''} ${s.category || ''} ${s.itemType || ''}`.toLowerCase();
   if (/supplement/.test(t)) return 'Supplements';
   if (/meal|snack|drink|consume|recipe|food/.test(t)) return 'Meals';
@@ -248,6 +251,13 @@ export function byPeriod<T extends FitnessRoutine>(items: T[]): Array<[string, T
   const days = (p: string) => { const m = /^(\d+) (day|week|month)s$/.exec(p); const parts = ['Morning', 'Midday', 'Evening', 'Night']; return parts.includes(p) ? parts.indexOf(p) - 10 : p === 'Day' ? 1 : p === 'Week' ? 7 : p === 'Month' ? 30 : m ? +m[1] * ({ day: 1, week: 7, month: 30 } as Record<string, number>)[m[2]] : 999; };
   return [...groups.entries()].sort((a, b) => days(a[0]) - days(b[0]));
 }
+/** Named phases from a description ("Days 1–20, Heavy Metal Detox: …", "Days 25–30, full Para Cleanse"), by day range. */
+export function routinePhases(description: string | null): Array<{ from: number; to: number; name: string }> {
+  const out: Array<{ from: number; to: number; name: string }> = [];
+  for (const m of (description || '').matchAll(/\bDays?\s+(\d+)\s*(?:[–-]\s*(\d+))?\s*,\s*([^:.•;]{3,60})/gi)) out.push({ from: +m[1], to: +(m[2] || m[1]), name: m[3].trim() });
+  return out;
+}
+export const phaseOf = (phases: ReturnType<typeof routinePhases>, day: number) => phases.find((p) => day >= p.from && day <= p.to)?.name || null;
 /** Description text stored as light markdown ("### The steps …", "**bold**"): paragraphs at each heading, markers removed. */
 export const descriptionParagraphs = (text: string) => text.split(/\s*#{2,}\s*/).map((p) => p.replace(/\*\*(.+?)\*\*/g, '$1').trim()).filter(Boolean);
 
@@ -257,6 +267,9 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
   const [open, setOpen] = useState<string | null>(null);
   const [steps, setSteps] = useState<RoutineStep[] | null>(null);
   const [day, setDay] = useState(1);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  // Picking a day on the phone scrolls the step list to that day.
+  const pickDay = (d: number) => { setDay(d); const el = listRef.current?.querySelector<HTMLElement>(`[data-day="${d}"]`); if (el && listRef.current) listRef.current.scrollTo({ top: el.offsetTop - listRef.current.offsetTop - 4, behavior: 'smooth' }); };
   useEffect(() => { if (!open) return; let live = true; setSteps(null); setDay(1); routineSteps(accessToken, open).then((s) => { if (live) setSteps(s); }); return () => { live = false; }; }, [accessToken, open]);
   const days = steps ? Math.max(1, ...steps.map((s) => s.day || 1)) : 1;
   // The app shows one day: every-day items (no day_number) plus that day's.
@@ -287,15 +300,24 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
         </button>
         {open === r.id && <div role="region" aria-label={`${r.name} steps`} style={{ gridColumn: '1 / -1', border: `1px solid ${acid}`, background: '#141611', padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 20, alignItems: 'start' }}>
           <div aria-label="As in the app" style={{ display: 'grid', justifyItems: 'center', gap: 8 }}>
-            <div style={{ ...kicker, margin: 0 }}>As in the app{days > 1 ? ` · day ${day} of ${days}` : ''}</div>
-            {days > 1 && <div role="group" aria-label="Day" style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center' }}>{Array.from({ length: days }, (_, i) => i + 1).map((d) => <button key={d} type="button" aria-pressed={d === day} onClick={() => setDay(d)} style={{ border: `1px solid ${d === day ? acid : line}`, background: d === day ? 'rgba(199,216,163,.14)' : 'transparent', color: d === day ? acid : ink, borderRadius: 999, padding: '3px 9px', fontSize: 10, cursor: 'pointer' }}>Day {d}</button>)}</div>}
+            <div style={{ ...kicker, margin: 0 }}>As in the app{days > 1 ? ` · day ${day} of ${days}${days > 7 ? ` · week ${Math.ceil(day / 7)}` : ''}` : ''}</div>
+            {days > 1 && (() => {
+              const phases = routinePhases(r.description);
+              const chip = (d: number) => <button key={d} type="button" aria-pressed={d === day} title={phaseOf(phases, d) || undefined} onClick={() => pickDay(d)} style={{ border: `1px solid ${d === day ? acid : line}`, background: d === day ? 'rgba(199,216,163,.14)' : 'transparent', color: d === day ? acid : ink, borderRadius: 999, padding: '3px 8px', fontSize: 10, cursor: 'pointer', minWidth: 30 }}>{days > 7 ? d : `Day ${d}`}</button>;
+              // Over a week: one row per week (Week 1: days 1–7…), so a 40-day plan reads as six weeks.
+              const weeks = days > 7 ? Array.from({ length: Math.ceil(days / 7) }, (_, w) => Array.from({ length: Math.min(7, days - w * 7) }, (_, k) => w * 7 + k + 1)) : [Array.from({ length: days }, (_, k) => k + 1)];
+              return <div role="group" aria-label="Day" style={{ display: 'grid', gap: 4, justifyItems: 'center' }}>
+                {weeks.map((ds, w) => <div key={w} style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>{days > 7 && <span style={{ color: muted, fontSize: 10, width: 46, textAlign: 'right' }}>Week {w + 1}</span>}{ds.map(chip)}</div>)}
+                {phaseOf(phases, day) && <div style={{ color: acid, fontSize: 11 }}>Day {day} · {phaseOf(phases, day)}</div>}
+              </div>;
+            })()}
             {steps ? <PhoneFrame width={300} screenBg="#FFFFFF"><ProtocolHomeScreen protocolName={r.name} items={dayItems} showDetails imageUrl={r.image || undefined} profileName="ROUTINE³" grouping="smart" /></PhoneFrame> : <span style={{ color: muted, fontSize: 11 }}>Loading…</span>}
           </div>
           <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 17, fontWeight: 600 }}>{r.name}</div>
           {r.description && descriptionParagraphs(r.description).map((t, k) => <p key={k} style={{ color: muted, fontSize: 12, lineHeight: 1.55, maxWidth: 760, margin: '0 0 8px' }}>{t}</p>)}
           <div style={kicker}>Steps{steps ? ` · ${own.length}` : ''}</div>
-          {!steps ? <span style={{ color: muted, fontSize: 11 }}>Loading…</span> : <div style={{ display: 'grid', gap: 10 }}>{partsOfDay(tree.top).map((g) => <section key={g.key} aria-label={g.label}>
+          {!steps ? <span style={{ color: muted, fontSize: 11 }}>Loading…</span> : <div ref={listRef} style={{ display: 'grid', gap: 10, ...(days > 1 ? { maxHeight: '78vh', overflowY: 'auto', paddingRight: 6, position: 'relative' } : {}) }}>{partsOfDay(tree.top).map((g, gi, all) => <section key={g.key} aria-label={g.label} data-day={g.day > 0 && all[gi - 1]?.day !== g.day ? g.day : undefined} style={g.day > 0 && all[gi - 1]?.day !== g.day ? { borderTop: `1px solid ${g.day === day ? acid : line}`, paddingTop: 10 } : undefined}>{g.day > 0 && all[gi - 1]?.day !== g.day && <div style={{ fontSize: 13, fontWeight: 700, color: g.day === day ? acid : ink, margin: '0 0 6px' }}>{days > 7 ? `Week ${Math.ceil(g.day / 7)} · ` : ''}Day {g.day}{phaseOf(routinePhases(r.description), g.day) ? <span style={{ color: muted, fontWeight: 400 }}> · {phaseOf(routinePhases(r.description), g.day)}</span> : null}</div>}
             <div style={{ ...kicker, color: g.rules ? warn : muted, margin: '0 0 4px' }}>{g.label} <span style={{ opacity: .7 }}>· {g.steps.length}</span></div>
             <ol style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 3, fontSize: 12 }}>{(g.rules ? [...g.steps].sort((a, b) => smartListOfStep(a).localeCompare(smartListOfStep(b))) : g.steps).map((s, i, arr) => <li key={i} style={g.rules && smartListOfStep(s) !== smartListOfStep(arr[i - 1] || ({} as RoutineStep)) && i ? { marginTop: 6 } : undefined}>{g.rules && <span style={{ color: muted, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', marginRight: 6 }}>{smartListOfStep(s)}</span>}<span style={{ color: acid }}>{s.time}</span>{s.time ? ' · ' : ''}{s.name}{[s.sets && s.reps ? `${s.sets} × ${s.reps}` : null, s.weight, s.minutes ? `${s.minutes} min` : null].filter(Boolean).map((x) => <span key={x} style={{ color: acid }}> · {x}</span>)}{s.group ? <span style={{ color: muted }}> · {s.group}</span> : null}{!g.rules && s.kind?.startsWith('rule') ? <span style={{ color: warn }}> · rule</span> : null}
               {tree.kids(s).length > 0 && <ul style={{ listStyle: 'none', margin: '2px 0 2px', paddingLeft: 14, borderLeft: `1px solid ${line}`, display: 'grid', gap: 1 }}>{tree.kids(s).map((k, j) => <li key={j} style={{ color: isRule(k) ? warn : ink, fontSize: 11 }}>{isRule(k) ? (k.kind === 'rule_dont' ? 'Don’t: ' : 'Do: ') : ''}{k.name}{k.time && k.time !== s.time ? <span style={{ color: acid }}> · {k.time}</span> : null}</li>)}</ul>}</li>)}</ol></section>)}

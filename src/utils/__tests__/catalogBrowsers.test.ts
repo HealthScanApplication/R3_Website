@@ -84,3 +84,12 @@ it('groups routines by span in day order', () => {
   const r = (name: string) => ({ id: name, name, description: null, image: null, category: null, tags: [] });
   expect(byPeriod([r('Weekly Reset'), r('K-Beauty • Evening'), r('Leg Day Workout'), r('28-Day Herbal'), r('3-Week Tea'), r('Morning Glow')]).map(([p]) => p)).toEqual(['Morning', 'Evening', 'Day', 'Week', '3 weeks', 'Month']);
 });
+import { routinePhases, phaseOf } from '../../components/guides/CatalogBrowsers';
+it('reads named phases from a description and files binder rules under supplements', () => {
+  const ph = routinePhases('Phases • Days 1–20, Heavy Metal Detox: 1 capsule. • Days 21–22, Para Cleanse introduction: 1 capsule. • Days 25–30, full Para Cleanse: 1 before.');
+  expect(ph.map((p) => [p.from, p.to, p.name])).toEqual([[1, 20, 'Heavy Metal Detox'], [21, 22, 'Para Cleanse introduction'], [25, 30, 'full Para Cleanse']]);
+  expect(phaseOf(ph, 23)).toBeNull();
+  expect(phaseOf(ph, 26)).toBe('full Para Cleanse');
+  expect(smartListOfStep({ name: 'Binder 2 h from everything', kind: 'rule_do' } as any)).toBe('Supplements');
+  expect(smartListOfStep({ name: 'Follow every label', kind: 'rule_do' } as any)).toBe('Supplements');
+});
