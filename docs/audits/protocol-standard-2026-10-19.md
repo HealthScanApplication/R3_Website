@@ -166,3 +166,23 @@ Read-only. Checked every published catalogue Protocol (user_id null, public, act
 | Women's Daily Wellness Routine | wellness | 25 | 0 | 0 | 2 |  |
 | Elite Daily | Fitness | 23 | 0 | 0 | 2 |  |
 | Longevity • Weekly | Health | 49 | 0 | 0 | 1 |  |
+
+## After the fix (applied on staging 2026-10-19)
+
+Migration `supabase/migrations/20261019120000_protocols_routine_standard_fixes.sql` (dry-run first, then applied) added 1,487 items:
+- 119 End Sleep and 98 Start Sleep anchors (linked to the Wake Up / Sleep activities);
+- 254 morning and evening hygiene sets with 1,016 default steps.
+
+Every new item has a time. 979 of them link to a catalogue activity. It also parsed 2 rounds from titles, and stripped raw codes from group names wherever that would not duplicate an item (246 coded group names remain because of that).
+
+Re-audit: flags fell from 552 to 81:
+- 70 steps have no duration or set info;
+- 10 custom group names;
+- 1 duplicate wake.
+
+Unlinked items rose to 590, made up of:
+- 254 set headers ("Morning hygiene" / "Evening hygiene", which are groups, not tasks);
+- 254 "Floss teeth" steps (no matching catalogue activity yet: add one, then link them);
+- the original 82 unlinked steps.
+
+Still for a decision: the 82 unlinked steps, 26 untimed steps, the 246 coded group names that would collide, and the 10 custom groups. Production is untouched.
