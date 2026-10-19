@@ -1,5 +1,5 @@
--- Multi-week catalogue routines: weekly patterns for training plans, day phases for staged cleanses.
--- STAGING FIRST (mofhvoudjxinvpplsytd). Not applied. Report: docs/audits/multi-week-routines-2026-10-19.md
+-- Multi-week catalogue routines: weekly patterns for training plans, day phases for staged cleanses. Copies get their own task_key and re-running it is safe.
+-- Applied on staging (mofhvoudjxinvpplsytd) 2026-10-19. Report: docs/audits/multi-week-routines-2026-10-19.md
 -- App model (mobile useActiveProtocol): an item with day_number shows only on cycle day
 -- ((days since activation) % protocols.total_days) + 1; weekly items use recurrence_days_of_week (0 = Sun) with day_number NULL.
 begin;
@@ -62,14 +62,14 @@ update protocol_items set recurrence_type='weekly', recurrence_days_of_week=arra
   where id = any(array['bef443ed-d9b9-4563-b88a-05411dcc5d75'::uuid]) or parent_protocol_item_id = any(array['bef443ed-d9b9-4563-b88a-05411dcc5d75'::uuid]);
 -- new: Easy Run [4, 6]
 insert into protocol_items select (jsonb_populate_record(null::protocol_items, to_jsonb(i) || jsonb_build_object(
-  'id', gen_random_uuid(), 'display_name', 'Easy Run', 'group_name', 'Easy Run', 'notes', 'Zone 2, conversational pace. 6-8 km.', 'scheduled_time', '06:30:00',
+  'id', gen_random_uuid(), 'task_key', case when i.task_key is null then null else i.task_key || ':easy-run' end, 'display_name', 'Easy Run', 'group_name', 'Easy Run', 'notes', 'Zone 2, conversational pace. 6-8 km.', 'scheduled_time', '06:30:00',
   'duration_minutes', 40, 'recurrence_type', 'weekly', 'recurrence_days_of_week', '[4, 6]'::jsonb, 'day_number', null, 'sort_order', i.sort_order + 100))).*
-  from protocol_items i where i.id = 'b65008a9-3119-4ff5-add7-83c47bab4ebc';
+  from protocol_items i where i.id = 'b65008a9-3119-4ff5-add7-83c47bab4ebc' and not exists (select 1 from protocol_items x where x.protocol_id = i.protocol_id and x.display_name = 'Easy Run' and x.recurrence_type = 'weekly');
 -- new: Long Run [0]
 insert into protocol_items select (jsonb_populate_record(null::protocol_items, to_jsonb(i) || jsonb_build_object(
-  'id', gen_random_uuid(), 'display_name', 'Long Run', 'group_name', 'Long Run', 'notes', 'Weekly long run at easy pace. Build from 10 km towards 18-20 km over the plan.', 'scheduled_time', '07:00:00',
+  'id', gen_random_uuid(), 'task_key', case when i.task_key is null then null else i.task_key || ':long-run' end, 'display_name', 'Long Run', 'group_name', 'Long Run', 'notes', 'Weekly long run at easy pace. Build from 10 km towards 18-20 km over the plan.', 'scheduled_time', '07:00:00',
   'duration_minutes', 90, 'recurrence_type', 'weekly', 'recurrence_days_of_week', '[0]'::jsonb, 'day_number', null, 'sort_order', i.sort_order + 100))).*
-  from protocol_items i where i.id = 'b65008a9-3119-4ff5-add7-83c47bab4ebc';
+  from protocol_items i where i.id = 'b65008a9-3119-4ff5-add7-83c47bab4ebc' and not exists (select 1 from protocol_items x where x.protocol_id = i.protocol_id and x.display_name = 'Long Run' and x.recurrence_type = 'weekly');
 -- The Rock Iron Paradise: fasted cardio Mon-Sat, legs block Mon/Thu (push/pull days have no items yet: see report), cheat meal Sunday
 -- Fasted cardio Mon-Sat: weekly [1, 2, 3, 4, 5, 6]
 update protocol_items set recurrence_type='weekly', recurrence_days_of_week=array[1, 2, 3, 4, 5, 6]::int[], day_number=null
@@ -91,29 +91,29 @@ update protocol_items set day_number=7 where id = any(array['30c492a9-8384-4dff-
 -- Biofilm disruptors: days 1-42 (original row = day 1, copies for 2-42)
 update protocol_items set day_number=1, recurrence_type='daily', recurrence_days_of_week=null where id = any(array['d27b8d8e-f686-4dbb-a5bb-740c78fe3253'::uuid,'83637bc5-3fda-4280-b67c-91ab434f5220'::uuid,'66ea3f23-6000-4c69-a69d-0ae3a431c370'::uuid]);
 insert into protocol_items select (jsonb_populate_record(null::protocol_items,
-  to_jsonb(i) || jsonb_build_object('id', gen_random_uuid(), 'day_number', d))).*
-  from protocol_items i cross join generate_series(2,42) d where i.id = any(array['d27b8d8e-f686-4dbb-a5bb-740c78fe3253'::uuid,'83637bc5-3fda-4280-b67c-91ab434f5220'::uuid,'66ea3f23-6000-4c69-a69d-0ae3a431c370'::uuid]);
+  to_jsonb(i) || jsonb_build_object('id', gen_random_uuid(), 'day_number', d, 'task_key', case when i.task_key is null then null else i.task_key || ':d' || d end))).*
+  from protocol_items i cross join generate_series(2,42) d where i.id = any(array['d27b8d8e-f686-4dbb-a5bb-740c78fe3253'::uuid,'83637bc5-3fda-4280-b67c-91ab434f5220'::uuid,'66ea3f23-6000-4c69-a69d-0ae3a431c370'::uuid]) and not exists (select 1 from protocol_items x where x.protocol_id = i.protocol_id and x.display_name = i.display_name and x.day_number = d and x.parent_protocol_item_id is not distinct from i.parent_protocol_item_id);
 -- Antifungals: days 15-42 (original row = day 15, copies for 16-42)
 update protocol_items set day_number=15, recurrence_type='daily', recurrence_days_of_week=null where id = any(array['355e45dd-745b-460d-a053-129941bd3d70'::uuid,'120f5dcc-3a25-45ae-bd04-76f29ffe290d'::uuid,'1a8a25da-9b02-41e9-a433-6587bd3ffd9e'::uuid]);
 insert into protocol_items select (jsonb_populate_record(null::protocol_items,
-  to_jsonb(i) || jsonb_build_object('id', gen_random_uuid(), 'day_number', d))).*
-  from protocol_items i cross join generate_series(16,42) d where i.id = any(array['355e45dd-745b-460d-a053-129941bd3d70'::uuid,'120f5dcc-3a25-45ae-bd04-76f29ffe290d'::uuid,'1a8a25da-9b02-41e9-a433-6587bd3ffd9e'::uuid]);
+  to_jsonb(i) || jsonb_build_object('id', gen_random_uuid(), 'day_number', d, 'task_key', case when i.task_key is null then null else i.task_key || ':d' || d end))).*
+  from protocol_items i cross join generate_series(16,42) d where i.id = any(array['355e45dd-745b-460d-a053-129941bd3d70'::uuid,'120f5dcc-3a25-45ae-bd04-76f29ffe290d'::uuid,'1a8a25da-9b02-41e9-a433-6587bd3ffd9e'::uuid]) and not exists (select 1 from protocol_items x where x.protocol_id = i.protocol_id and x.display_name = i.display_name and x.day_number = d and x.parent_protocol_item_id is not distinct from i.parent_protocol_item_id);
 -- Die-off note: days 15-42 (original row = day 15, copies for 16-42)
 update protocol_items set day_number=15, recurrence_type='daily', recurrence_days_of_week=null where id = any(array['9eec1253-c3fa-4d86-b5d2-8160e25f07ef'::uuid]);
 insert into protocol_items select (jsonb_populate_record(null::protocol_items,
-  to_jsonb(i) || jsonb_build_object('id', gen_random_uuid(), 'day_number', d))).*
-  from protocol_items i cross join generate_series(16,42) d where i.id = any(array['9eec1253-c3fa-4d86-b5d2-8160e25f07ef'::uuid]);
+  to_jsonb(i) || jsonb_build_object('id', gen_random_uuid(), 'day_number', d, 'task_key', case when i.task_key is null then null else i.task_key || ':d' || d end))).*
+  from protocol_items i cross join generate_series(16,42) d where i.id = any(array['9eec1253-c3fa-4d86-b5d2-8160e25f07ef'::uuid]) and not exists (select 1 from protocol_items x where x.protocol_id = i.protocol_id and x.display_name = i.display_name and x.day_number = d and x.parent_protocol_item_id is not distinct from i.parent_protocol_item_id);
 -- Probiotics: days 43-56 (original row = day 43, copies for 44-56)
 update protocol_items set day_number=43, recurrence_type='daily', recurrence_days_of_week=null where id = any(array['d5bc8ed8-de4e-4cbd-96e7-eabf09d68c28'::uuid,'ffe981c8-5607-480d-9a4b-df5e210b6090'::uuid]);
 insert into protocol_items select (jsonb_populate_record(null::protocol_items,
-  to_jsonb(i) || jsonb_build_object('id', gen_random_uuid(), 'day_number', d))).*
-  from protocol_items i cross join generate_series(44,56) d where i.id = any(array['d5bc8ed8-de4e-4cbd-96e7-eabf09d68c28'::uuid,'ffe981c8-5607-480d-9a4b-df5e210b6090'::uuid]);
+  to_jsonb(i) || jsonb_build_object('id', gen_random_uuid(), 'day_number', d, 'task_key', case when i.task_key is null then null else i.task_key || ':d' || d end))).*
+  from protocol_items i cross join generate_series(44,56) d where i.id = any(array['d5bc8ed8-de4e-4cbd-96e7-eabf09d68c28'::uuid,'ffe981c8-5607-480d-9a4b-df5e210b6090'::uuid]) and not exists (select 1 from protocol_items x where x.protocol_id = i.protocol_id and x.display_name = i.display_name and x.day_number = d and x.parent_protocol_item_id is not distinct from i.parent_protocol_item_id);
 -- Whole30 (40 days): 'Reintroduce one food' only in the reintroduction days 31-40
 -- Reintroduction: days 31-40 (original row = day 31, copies for 32-40)
 update protocol_items set day_number=31, recurrence_type='daily', recurrence_days_of_week=null where id = any(array['c83b71ce-5e79-49c5-900f-724f9f67cadd'::uuid]);
 insert into protocol_items select (jsonb_populate_record(null::protocol_items,
-  to_jsonb(i) || jsonb_build_object('id', gen_random_uuid(), 'day_number', d))).*
-  from protocol_items i cross join generate_series(32,40) d where i.id = any(array['c83b71ce-5e79-49c5-900f-724f9f67cadd'::uuid]);
+  to_jsonb(i) || jsonb_build_object('id', gen_random_uuid(), 'day_number', d, 'task_key', case when i.task_key is null then null else i.task_key || ':d' || d end))).*
+  from protocol_items i cross join generate_series(32,40) d where i.id = any(array['c83b71ce-5e79-49c5-900f-724f9f67cadd'::uuid]) and not exists (select 1 from protocol_items x where x.protocol_id = i.protocol_id and x.display_name = i.display_name and x.day_number = d and x.parent_protocol_item_id is not distinct from i.parent_protocol_item_id);
 
 -- ===== (a) cleanup: stray day_number=1 on protocols without total_days (would hide items if total_days is ever set) =====
 update protocol_items set day_number=null where protocol_id = 'b0000000-0000-0000-0000-000000000005' and day_number=1;
