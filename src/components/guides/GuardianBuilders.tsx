@@ -13,6 +13,7 @@ import { LinkedDiet, LinkedTraining } from './LinkedRoutine';
 import { ActivityDetailPreview } from './ActivityDetailPreview';
 import { defaultHomeCity, plannerWeek, saveHomeCity, sunriseForDate, validPlannerLocation } from '../../utils/plannerSunrise';
 import { aggregateDiet, dietSelections, loadDietAnalysis, type DietAnalysis } from '../../utils/dietNutrition';
+import { PRAL_DISPLAY } from '../../utils/pral';
 import {
   MUSCLE_GROUPS, dayNameFor, muscleGroupOf, type MuscleGroupId, mealDrinks, mealPickKey, selectedServings, fitsSlot, DIET_FRAMEWORKS, FITNESS_GOALS, FRAMEWORK_RULES, mealTiming, resolveTiming, sessionTiming, mealIsFasting, fastingDrinkAllowed, type Anchor, type Timing, MEAL_SLOTS, WEEK, combineProtocols, draftFitnessWeek, TRAINING_TYPES, type FitnessLikes, defaultFuel, type TrainingFuel, defaultSchedule, TRAIN_TIMES, exerciseGroup, sessionTimeFor, type FitnessSchedule, type TrainTime, findClashes, guideRecipeToPick,
   dietSupportItems, isDrinkPick, SUPPLEMENT_PERIODS, supplementCell, type SupplementPeriod, listBuilderMeta, macroGrams, saveDietProtocol, saveFitnessProtocol, searchActivities, searchDietRecipes, sumNutrition,
@@ -194,7 +195,7 @@ export function DietBuilder({ accessToken, ownerId, protocols, recipes, initialP
   useEffect(() => {
     const controller = new AbortController(); let live = true;
     setAnalysis({}); setAnalysisError(''); setAnalysisBusy(selections.length > 0);
-    loadDietAnalysis(accessToken, selections, recipes, controller.signal).then((next) => { if (live) setAnalysis(next); })
+    loadDietAnalysis(accessToken, selections, recipes, controller.signal, PRAL_DISPLAY).then((next) => { if (live) setAnalysis(next); })
       .catch((e) => { if (live) setAnalysisError(e.message); }).finally(() => { if (live) setAnalysisBusy(false); });
     return () => { live = false; controller.abort(); };
   }, [selectedIds, accessToken, recipes]); // Refresh IDs, not serving quantity edits.

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Atom, Beaker, Beef, Candy, Circle, CircleDot, Cookie, Croissant, Dot, Drumstick, Layers, LayoutGrid, OctagonAlert, TriangleAlert, Waves, Wine, Bug, ChevronRight, Citrus, CookingPot, Dna, Droplet, Droplets, Factory, FlaskConical, Flame, Gem, Hand, Leaf, Mountain, Package, Pill, Radiation, Scale, SprayCan, Sprout, Warehouse, Wheat, type LucideIcon } from 'lucide-react';
 import { nutrientsForTier, type HazardLevel, type NutrientDef, type Tier } from '../../utils/recipeNutrients';
 import { FOOD_STAGES, HAZARD_FAMILIES, NUTRIENT_FAMILIES, groupBy, hazardFamily, hazardStage, nutrientFamily, type FoodStage, type HazardFamily, type NutrientFamily } from '../../utils/foodTaxonomy';
+import { DietPralSummary } from './DietPralSummary';
 import { TIERS, tierLabel, useEssential90, Essential90Note } from './RecipeInsights';
 import { WEEK, type PlanIngredient } from '../../utils/protocolBuilders';
 import type { aggregateDiet, DietTotals } from '../../utils/dietNutrition';
@@ -201,6 +202,7 @@ export function DietNutritionPanel({ report, loading, error }: { report: ReturnT
     <div style={{ maxHeight: 420, overflow: 'auto', marginBottom: 16 }}>{groupBy(keys, nutrientFamily, NUTRIENT_FAMILIES).map((g) => nutrientGroup(g))}
       {other.length > 0 && <div style={{ color: muted, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', padding: '16px 0 0', borderTop: `1px solid ${line}`, marginTop: 8 }}>Other measured, outside {tierLabel(tier)} · {other.length}</div>}
       {groupBy(other, nutrientFamily, NUTRIENT_FAMILIES).map((g) => nutrientGroup(g, 'other-'))}</div>
+    <DietPralSummary totals={totals} />
 
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
       <h3 style={{ fontSize: 13, margin: 0 }}>Recorded hazards <span style={{ color: muted, fontWeight: 400 }}>· {hazards.length} of {totals.hazards.length}</span></h3>
