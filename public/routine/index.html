@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>A routine for you · Routine³</title>
+<meta name="description" content="Someone shared a routine with you. Open it in the R³ app to add your own copy.">
+<!-- Smart App Banner: "Get" without R³, "Open" with it (Safari on iOS only). -->
+<meta name="apple-itunes-app" content="app-id=6740406583">
+<meta name="robots" content="noindex, nofollow">
+<!-- The share token is in this page's URL and is the permission to read the routine. Nothing on this page may carry it
+     anywhere: no third-party requests, no referrer, no analytics, no storage. -->
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<style>
+  :root { --bg:#FAF8F4; --surface:#FFFFFF; --ink:#1A1A1A; --muted:#5C5C5C; --faint:#8A8A8A; --line:#E8E5DD; --button:#1A1A1A; --button-ink:#FFFFFF; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111111; --surface:#1C1C1C; --ink:#F4F2EE; --muted:#B5B2AC; --faint:#85827D; --line:#2E2E2E; --button:#F4F2EE; --button-ink:#111111; }
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { background:var(--bg); color:var(--ink); font-family:system-ui, -apple-system, 'Segoe UI', sans-serif; line-height:1.5; }
+  main { max-width:480px; margin:0 auto; padding:max(40px, env(safe-area-inset-top)) 16px 48px; }
+  .mark { display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; border-radius:12px; background:var(--button); color:var(--button-ink); font-weight:700; font-size:18px; letter-spacing:-.02em; }
+  .mark sup { font-size:10px; margin-left:1px; }
+  .eyebrow { margin-top:32px; font-size:13px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); }
+  h1 { margin-top:6px; font-size:clamp(28px, 8vw, 36px); font-weight:700; line-height:1.15; letter-spacing:-.02em; overflow-wrap:anywhere; }
+  .about { margin-top:16px; font-size:16px; color:var(--muted); }
+  .actions { margin-top:32px; display:grid; gap:12px; }
+  .button { display:block; text-align:center; padding:16px 20px; min-height:52px; border-radius:14px; font-weight:600; font-size:16px; text-decoration:none; }
+  .primary { background:var(--button); color:var(--button-ink); }
+  .secondary { background:var(--surface); color:var(--ink); border:1px solid var(--line); }
+  .note { margin-top:16px; font-size:13px; color:var(--faint); }
+  .fine { margin-top:32px; padding-top:16px; border-top:1px solid var(--line); font-size:12px; color:var(--faint); }
+  .fine a { color:var(--muted); }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <span class="mark" aria-label="Routine³">R<sup>3</sup></span>
+
+  <p class="eyebrow" id="eyebrow">A routine for you</p>
+  <h1 id="title">Open this routine in R³</h1>
+  <p class="about" id="about">Open it in the R³ app to add your own copy. Yours to change; the original stays with whoever shared it.</p>
+
+  <div class="actions">
+    <a class="button primary" id="store" href="https://apps.apple.com/app/id6740406583">Get R³ on the App Store</a>
+    <a class="button secondary" id="open" href="healthscan://" hidden>I have R³: open this routine</a>
+  </div>
+  <p class="note" id="note">R³ is on iPhone. Install it, then open this link again to add the routine.</p>
+
+  <p class="fine">Routine³ · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
+</main>
+
+<script>
+/*
+ * Fallback for https://routine3.com/routine/<token> when R³ is not installed (with it, iOS hands the link to the app).
+ * The routine is not published, so the only thing this page can learn is what routine_share_preview() returns for the
+ * token: the routine's name. Everything it prints comes from that answer through textContent, never from the URL, so
+ * nobody can put their own words on this domain by editing a link. The token is sent to the Supabase project that
+ * minted it and nowhere else; a token that matches nothing leaves the page generic.
+ *
+ * Staging first (Guardians publish there), then production. Both keys are the public anon keys already shipped in
+ * src/utils/supabase/environments.ts; scripts/check-routes.mjs fails the build if they drift.
+ */
+(function () {
+  var SOURCES = [
+    { url: 'https://mofhvoudjxinvpplsytd.supabase.co', key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1vZmh2b3VkanhpbnZwcGxzeXRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA0NDM5MjAsImV4cCI6MjA1NjAxOTkyMH0.zZWhLMur9uKko-3PSQp3aRoMvOt0Ig-GzBsMblelAp0' },
+    { url: 'https://ermbkttsyvpenjjxaxcf.supabase.co', key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVybWJrdHRzeXZwZW5qanhheGNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQxNTc5NTcsImV4cCI6MjA3OTczMzk1N30.PuA1AXHx7TrCMYUaP00O1eYZRAjYY_UzRQztfCnkUA0' },
+  ];
+  var TOKEN_RE = /^[0-9a-f]{32}$/;
+
+  var match = location.pathname.match(/^\/routine\/([^/]+)\/?$/);
+  var token = match ? match[1].toLowerCase() : '';
+  var $ = function (id) { return document.getElementById(id); };
+
+  if (!TOKEN_RE.test(token)) {
+    $('eyebrow').textContent = 'Routine³';
+    $('title').textContent = 'This link does not point at a routine';
+    $('about').textContent = 'Ask whoever shared it for a fresh link, or get R³ and browse the routines there.';
+    $('note').textContent = '';
+    return;
+  }
+
+  // The same link through the app scheme: for an in-app browser, or Safari after the banner's "Open", where iOS does
+  // not hand an https link to the app itself.
+  var open = $('open');
+  open.href = 'healthscan://routine/' + token;
+  open.hidden = false;
+
+  function show(row) {
+    if (!row || typeof row.name !== 'string' || !row.name) return false;
+    document.title = row.name + ' · Routine³';
+    $('eyebrow').textContent = 'A routine shared with you';
+    $('title').textContent = row.name;
+    return true;
+  }
+
+  function read(i) {
+    var source = SOURCES[i];
+    if (!source) return;
+    fetch(source.url + '/rest/v1/rpc/routine_share_preview', {
+      method: 'POST',
+      headers: { apikey: source.key, Authorization: 'Bearer ' + source.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_token: token }),
+      referrerPolicy: 'no-referrer',
+      credentials: 'omit',
+    })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (row) { if (!show(row)) read(i + 1); })
+      .catch(function () { read(i + 1); });
+  }
+  read(0);
+})();
+</script>
+</body>
+</html>

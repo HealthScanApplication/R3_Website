@@ -13,6 +13,7 @@ import { Copy, Download, ExternalLink } from 'lucide-react';
 import QRCode from 'qrcode';
 import { ensureBrandFont, type BrandKit, type ButtonColours } from '../../utils/brandKit';
 import { copyPrompt, imagePrompt } from '../../utils/brandBrief';
+import { parseRoutineShareLink, routineShareUrl } from '../../utils/routineShare';
 import { AS_IS, compositionBrief, legacyPlacement, placeBackground, type Placement } from '../../utils/postLayout';
 import { connectOpenAI, disconnectOpenAI, generateImage, imageStatus, priceLabel, type ImageQuality, type ImageSource, type ImageStatus } from '../../utils/guardianImages';
 
@@ -87,7 +88,11 @@ export function guardianHandle(siteUrl: string): string | null {
 export function qrLink(siteUrl: string): string {
   const slug = siteUrl.match(/^(?:https:\/\/routine3\.com)?\/guardians\/([a-z0-9-]+)$/)?.[1];
   if (slug) return `HTTPS://ROUTINE3.COM/G/${slug.toUpperCase()}`;
-  return siteUrl.startsWith('http') ? siteUrl : `https://routine3.com${siteUrl}`;
+  const absolute = siteUrl.startsWith('http') ? siteUrl : `https://routine3.com${siteUrl}`;
+  // A routine share link (/routine/<token>, utils/routineShare.ts) is encoded as the canonical lower-case https link:
+  // it opens in R³ as a universal link, whose path match is case-sensitive, so it is not upper-cased like /g/<slug>.
+  const routine = parseRoutineShareLink(absolute);
+  return routine ? routineShareUrl(routine) : absolute;
 }
 
 /**
@@ -341,7 +346,7 @@ export function StyleThumb({ styleId, bg, headline, subline, cta, credit, brand,
   return <canvas ref={ref} aria-hidden="true" style={{ width: '100%', aspectRatio: '9 / 16', display: 'block', background: '#1B1C18' }} />;
 }
 
-export function ContentStudio({ creator, avatar = null, audience, problem, offers, siteUrl, heading = 'Create posts for this offer path', brand = null }: { creator: string; avatar?: string | null; audience: string; problem: string; offers: StudioOffer[]; siteUrl: string; heading?: string; brand?: PostBrand | null }) {
+export function ContentStudio({ creator, avatar = null, audience, problem, offers, siteUrl, pageUrl, heading = 'Create posts for this offer path', brand = null }: { creator: string; avatar?: string | null; audience: string; problem: string; offers: StudioOffer[]; siteUrl: string; /** The Guardian's page, when siteUrl points elsewhere (a routine link): keeps the @handle on the post. */ pageUrl?: string; heading?: string; brand?: PostBrand | null }) {
   // Template fonts load from Google Fonts; redraw once they are registered, or the first frame uses a fallback.
   const [fontsReady, setFontsReady] = useState(0);
   useEffect(() => {
@@ -376,7 +381,7 @@ export function ContentStudio({ creator, avatar = null, audience, problem, offer
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const background = bg || autoBg;
   // TikTok-style handle: routine3.com/@<slug> opens the Guardian's page.
-  const handle = guardianHandle(siteUrl);
+  const handle = guardianHandle(pageUrl ?? siteUrl);
   const credit = creator ? `Guidance by ${creator}${handle ? ` · ${handle}` : ''}` : '';
   const isGenerated = background === GENERATED && !!generated;
   const bgSrc = isGenerated ? generated!.url : bgUrl(background === GENERATED ? autoBg : background);

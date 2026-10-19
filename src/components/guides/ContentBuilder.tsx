@@ -7,6 +7,7 @@ import { listGuideBrands, type GuideBrand, type GuideOffer, type GuideProfile, t
 import { brandKitOf, ctaColours } from '../../utils/brandKit';
 import { TargetPicker } from './TargetPicker';
 import { defaultAudience, describeAudience, solutionScore, type Audience, type Focus } from '../../utils/audienceTaxonomy';
+import { createRoutineShareLink, getRoutineShareLink, listOfferRoutines, postLinkTarget, routineMayBeLinked } from '../../utils/routineShare';
 
 // Guardian dark tokens (same values as GuidePortal.tsx).
 const ink = '#F5F2EA';
@@ -58,7 +59,34 @@ export function ContentBuilder({ profile, offers, protocols, recipes }: { profil
     return [{ title: `${problem} with ${profile.display_name}`, free: true }];
   }, [source, picked?.id, offers, protocols, recipes, problem, profile.display_name]);
 
-  const siteUrl = `/guardians/${profile.slug}`;
+  const pageUrl = `/guardians/${profile.slug}`;
+  // The routine the posts are about: the picked Protocol, or the Protocol the picked offer delivers (Offers > Share routine link).
+  const [offerRoutines, setOfferRoutines] = useState<Record<string, string>>({});
+  useEffect(() => { listOfferRoutines(profile.user_id).then(setOfferRoutines).catch(() => setOfferRoutines({})); }, [profile.user_id, offers.length]);
+  const pickedOffer = source === 'offer' ? offers.find((o) => o.id === picked?.id) : undefined;
+  const routineId = source === 'protocol' ? picked?.id : pickedOffer ? offerRoutines[pickedOffer.id] : undefined;
+  const routineName = protocols.find((p) => p.id === routineId)?.name;
+  const mayLinkRoutine = routineMayBeLinked(pickedOffer);
+  const [routineToken, setRoutineToken] = useState<string | null>(null);
+  const [useRoutine, setUseRoutine] = useState(false);
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [linkError, setLinkError] = useState('');
+  // A routine that already has a link uses it by default. Nothing is created until the Guardian asks for it.
+  useEffect(() => {
+    let live = true;
+    setRoutineToken(null); setUseRoutine(false); setLinkError('');
+    if (routineId && mayLinkRoutine) getRoutineShareLink(routineId).then((token) => { if (live) { setRoutineToken(token); setUseRoutine(!!token); } }).catch(() => undefined);
+    return () => { live = false; };
+  }, [routineId, mayLinkRoutine]);
+  async function chooseRoutineLink() {
+    if (!routineId) return;
+    setLinkBusy(true); setLinkError('');
+    try { const token = routineToken || await createRoutineShareLink(routineId); setRoutineToken(token); setUseRoutine(true); }
+    catch (error: any) { setLinkError(error?.message || 'Could not create the routine link.'); }
+    finally { setLinkBusy(false); }
+  }
+  const routineLinked = useRoutine && mayLinkRoutine && !!routineToken;
+  const siteUrl = postLinkTarget({ guardianSlug: profile.slug, routineToken, useRoutine: routineLinked });
   // Brand look: the R³ template, or any saved brand that has a brand kit (defaults to the primary brand's kit).
   const [brands, setBrands] = useState<GuideBrand[]>([]);
   const [brandId, setBrandId] = useState<string | null>(null);
@@ -108,9 +136,18 @@ export function ContentBuilder({ profile, offers, protocols, recipes }: { profil
             {brands.map((b) => <option key={b.id} value={b.id}>{b.name} · {brandKitOf(b.social_links).font}</option>)}
           </select>{!brands.length && <span style={{ display: 'block', color: muted, fontSize: 10, marginTop: 5 }}>Add a brand kit in the Site builder to use your font, colours and logo.</span>}</label>
         </div>
+        {routineId && <div style={{ marginTop: 14 }}>
+          <span style={label}>QR and link go to</span>
+          <div role="group" aria-label="QR and link go to" style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+            <button type="button" aria-pressed={!routineLinked} onClick={() => setUseRoutine(false)} style={chip(!routineLinked)}>Your page</button>
+            <button type="button" aria-pressed={routineLinked} disabled={!mayLinkRoutine || linkBusy} onClick={chooseRoutineLink} style={{ ...chip(routineLinked), opacity: mayLinkRoutine ? 1 : 0.5, cursor: mayLinkRoutine ? 'pointer' : 'not-allowed' }}>{linkBusy ? 'Creating link…' : routineToken ? 'Routine in the app' : 'Routine in the app · create link'}</button>
+          </div>
+          <span style={{ display: 'block', color: muted, fontSize: 10, marginTop: 5 }}>{mayLinkRoutine ? `Opens ${routineName ? `“${routineName}”` : 'the routine'} in R³ so the visitor can add it, even though it is not published.` : 'A paid offer keeps your page as the link, so the routine is not given away. Send the routine link from Offers to people who bought.'}</span>
+          {linkError && <span role="alert" style={{ display: 'block', color: '#E8B86A', fontSize: 11, marginTop: 5 }}>{linkError}</span>}
+        </div>}
       </div>
     </div>
-    <ContentStudio key={`${source}-${picked?.id || ''}`} creator={profile.display_name} avatar={profile.avatar_url} audience={audience} problem={problem} siteUrl={siteUrl} offers={studioOffers} heading={picked && source !== 'none' ? `Create posts about ${picked.name}` : 'Create posts about your topic'} brand={postBrand} />
-    <VideoStudio creator={profile.display_name} avatar={profile.avatar_url} audience={audience} problem={problem} focusKind={focus?.kind} offer={source !== 'none' ? studioOffers[0]?.title : undefined} free={studioOffers[0]?.free} siteUrl={siteUrl} brandName={videoBrand?.name} kit={videoBrand?.kit} brandId={brandId} postBrand={postBrand} />
+    <ContentStudio key={`${source}-${picked?.id || ''}`} creator={profile.display_name} avatar={profile.avatar_url} audience={audience} problem={problem} siteUrl={siteUrl} pageUrl={pageUrl} offers={studioOffers} heading={picked && source !== 'none' ? `Create posts about ${picked.name}` : 'Create posts about your topic'} brand={postBrand} />
+    <VideoStudio creator={profile.display_name} avatar={profile.avatar_url} audience={audience} problem={problem} focusKind={focus?.kind} offer={source !== 'none' ? studioOffers[0]?.title : undefined} free={studioOffers[0]?.free} siteUrl={siteUrl} pageUrl={pageUrl} brandName={videoBrand?.name} kit={videoBrand?.kit} brandId={brandId} postBrand={postBrand} />
   </div>;
 }

@@ -32,8 +32,8 @@ function useDraft(suggested: string): [string, (v: string) => void, boolean, () 
 }
 const saveBlob = (blob: Blob, name: string) => { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); window.setTimeout(() => URL.revokeObjectURL(url), 10000); };
 
-export function VideoStudio({ creator, avatar = null, audience, problem, focusKind, offer, free, siteUrl = '', brandName, kit = null, brandId = null, postBrand = null }: {
-  creator: string; avatar?: string | null; audience: string; problem: string; focusKind?: 'problem' | 'goal'; offer?: string; free?: boolean; siteUrl?: string;
+export function VideoStudio({ creator, avatar = null, audience, problem, focusKind, offer, free, siteUrl = '', pageUrl, brandName, kit = null, brandId = null, postBrand = null }: {
+  creator: string; avatar?: string | null; audience: string; problem: string; focusKind?: 'problem' | 'goal'; offer?: string; free?: boolean; siteUrl?: string; /** The Guardian's page when siteUrl is a routine link: keeps the @handle. */ pageUrl?: string;
   brandName?: string; kit?: BrandKit | null; brandId?: string | null; postBrand?: PostBrand | null;
 }) {
   const [status, setStatus] = useState<HiggsfieldStatus | null>(null);
@@ -103,7 +103,7 @@ export function VideoStudio({ creator, avatar = null, audience, problem, focusKi
   const qr = siteUrl ? qrLink(siteUrl) : undefined;
   useEffect(() => {
     let stale = false;
-    if (overlayRef.current && showText) drawPost(overlayRef.current, fmt, '', { headline, subline, cta, credit: creator ? `Guidance by ${creator}${guardianHandle(siteUrl) ? ` · ${guardianHandle(siteUrl)}` : ''}` : '', qr, brand: postBrand, style: textStyle, position, avatar }, () => stale).catch(() => {}); // a font or logo that fails to load just leaves the layer as is
+    if (overlayRef.current && showText) drawPost(overlayRef.current, fmt, '', { headline, subline, cta, credit: creator ? `Guidance by ${creator}${guardianHandle(pageUrl ?? siteUrl) ? ` · ${guardianHandle(pageUrl ?? siteUrl)}` : ''}` : '', qr, brand: postBrand, style: textStyle, position, avatar }, () => stale).catch(() => {}); // a font or logo that fails to load just leaves the layer as is
     return () => { stale = true; };
   }, [fmt, headline, subline, cta, creator, qr, postBrand, textStyle, position, showText, status?.connected, avatar]);
   const copyText = (key: string, text: string) => { navigator.clipboard?.writeText(text).then(() => { setCopied(key); window.setTimeout(() => setCopied(''), 1600); }); };
@@ -227,7 +227,7 @@ export function VideoStudio({ creator, avatar = null, audience, problem, focusKi
         {showText && <>
           <div><span style={lab}>Text style</span><div role="group" aria-label="Video text style" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6 }}>
 {TEXT_STYLES.map((t) => <button key={t.id} type="button" aria-pressed={textStyle === t.id} aria-label={`${t.label} text style`} onClick={() => setTextStyle(t.id)} style={{ border: `1px solid ${textStyle === t.id ? acid : line}`, outline: textStyle === t.id ? `1px solid ${acid}` : 'none', background: '#090A08', padding: 4, cursor: 'pointer', display: 'grid', gap: 4 }}>
-            <StyleThumb styleId={t.id} bg="/images/content/12-evening-reset.webp" headline={headline} subline={subline} cta={cta} credit={creator ? `Guidance by ${creator}${guardianHandle(siteUrl) ? ` · ${guardianHandle(siteUrl)}` : ''}` : ''} brand={postBrand} position={position} fontsReady={0} />
+            <StyleThumb styleId={t.id} bg="/images/content/12-evening-reset.webp" headline={headline} subline={subline} cta={cta} credit={creator ? `Guidance by ${creator}${guardianHandle(pageUrl ?? siteUrl) ? ` · ${guardianHandle(pageUrl ?? siteUrl)}` : ''}` : ''} brand={postBrand} position={position} fontsReady={0} />
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: textStyle === t.id ? acid : muted, padding: '1px 0 2px' }}>{t.label}</span></button>)}</div></div>
           <label><span style={lab}>Text position</span><select aria-label="Video text position" value={position} onChange={(e) => setPosition(e.target.value as TextPosition)} style={field}>{TEXT_POSITIONS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
           {([['Headline', headline, setHeadline, headEdited, resetHead], ['Subline', subline, setSubline, subEdited, resetSub], ['Button', cta, setCta, ctaEdited, resetCta]] as const).map(([name, value, set, isEdited, reset]) => <div key={name}>

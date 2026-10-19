@@ -67,6 +67,14 @@
   status = 200
   force = true
 
+# A Guardian's shared routine (routine share links): the token is the permission. The page shows the routine's name
+# and offers the app; with R³ installed iOS hands the link to the app (the association file claims /routine/*).
+[[redirects]]
+  from = "/routine/*"
+  to = "/routine/index.html"
+  status = 200
+  force = true
+
 # Legal pages. They live on Notion (same URLs the app and App Store Connect use,
 # mobile repo src/config/links.ts). 302 on purpose: the destination will move to
 # an owned page later and a 301 would be cached by browsers and crawlers.
@@ -160,6 +168,17 @@
     Referrer-Policy = "no-referrer"
     X-Robots-Tag = "noindex, nofollow"
     Cache-Control = "no-store"
+
+# The routine share token is in this page's URL: keep it out of referrers, caches and search indexes, and let the page
+# talk to nothing but the two Supabase projects that can mint a token. script-src carries the hash of the single inline
+# script; scripts/check-routes.mjs fails the build if the two ever drift (a stale hash blocks the script silently).
+[[headers]]
+  for = "/routine/*"
+  [headers.values]
+    Referrer-Policy = "no-referrer"
+    X-Robots-Tag = "noindex, nofollow"
+    Cache-Control = "no-store"
+    Content-Security-Policy = "default-src 'none'; script-src 'sha256-dAqR4wTJsOCFBCDbv2A6OV/xPf7MY0k1Q3WpMjECTdo='; style-src 'unsafe-inline'; connect-src https://mofhvoudjxinvpplsytd.supabase.co https://ermbkttsyvpenjjxaxcf.supabase.co; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 # The unsubscribe token is in this page's URL: keep it out of referrers, caches
 # and search indexes, and let the page talk to nothing but the one API host.
