@@ -13,6 +13,8 @@ import { Copy, Download, ExternalLink } from 'lucide-react';
 import QRCode from 'qrcode';
 import { ensureBrandFont, type BrandKit, type ButtonColours } from '../../utils/brandKit';
 import { copyPrompt, imagePrompt } from '../../utils/brandBrief';
+import { AS_IS, compositionBrief, legacyPlacement, placeBackground, type Placement } from '../../utils/postLayout';
+import { connectOpenAI, disconnectOpenAI, generateImage, imageStatus, priceLabel, type ImageQuality, type ImageSource, type ImageStatus } from '../../utils/guardianImages';
 
 /** A Guardian brand's look on posts: its typeface for headline and button, CTA colours and logo. */
 export interface PostBrand { name: string; font: string; cta: ButtonColours; logo: string | null; kit?: BrandKit | null }
@@ -50,6 +52,9 @@ const BACKGROUNDS: { file: string; label: string; match: RegExp }[] = [
   { file: '20-body-mind-soul', label: 'Body · mind · soul', match: /.*/ },
 ];
 const bgUrl = (file: string) => `/images/content/${file}.webp`;
+/** The background picker's value for the generated image (held in state as a data URL, not a library file). */
+const GENERATED = '__generated';
+const FIT_COLOUR = { good: '#7FB069', ok: '#E0B354', poor: '#D9695F' } as const;
 
 export interface StudioOffer { title: string; free: boolean; price?: string; description?: string }
 
@@ -161,7 +166,7 @@ export const TEXT_POSITIONS: { id: TextPosition; label: string }[] = [
   { id: 'bottom-left', label: 'Bottom left' }, { id: 'bottom-right', label: 'Bottom right' }, { id: 'top-left', label: 'Top left' }, { id: 'top-right', label: 'Top right' },
 ];
 
-export interface PostCopy { headline: string; subline: string; cta: string; credit: string; qr?: string; brand?: PostBrand | null; style?: TextStyleId; position?: TextPosition; qrStyle?: QrStyle; avatar?: string | null }
+export interface PostCopy { headline: string; subline: string; cta: string; credit: string; qr?: string; brand?: PostBrand | null; style?: TextStyleId; position?: TextPosition; qrStyle?: QrStyle; avatar?: string | null; placement?: Placement }
 
 /**
  * Everything is loaded first (fonts, background, logo); a run that `isStale()` by then stops before touching the
@@ -183,17 +188,18 @@ export async function drawPost(canvas: HTMLCanvasElement, fmt: { id: FormatId; w
   const ctx = canvas.getContext('2d')!;
   ctx.clearRect(0, 0, w, h);
   if (bg) { ctx.fillStyle = '#EFE6DB'; ctx.fillRect(0, 0, w, h); }
-  // The library photos put the subject in the top ~60% and fade to cream below. Bottom text uses them as they are.
-  // Top text moves the photo down under a band of the style's colour; right-hand text mirrors it, so the subject
-  // sits away from the text either way.
+  // The library photos put the subject in the top ~60% and fade to cream below. `placement` (postLayout.placeBackground,
+  // from each photo's safe-zone metadata) mirrors the photo and/or moves it down under a band of the style's colour
+  // so the subject sits clear of the text; without one, the old rules (mirror for right text, move down for top).
+  const place = copy.placement || legacyPlacement(fmt.id, position);
   const band = `rgb(${st.fade || '239,230,219'})`;
-  const shift = loaded?.naturalWidth && top && fmt.id !== 'thumb' ? h * (fmt.id === 'story' ? 0.38 : 0.3) : 0;
+  const shift = loaded?.naturalWidth ? h * place.shift : 0;
   if (loaded?.naturalWidth) {
     const scale = Math.max(w / loaded.naturalWidth, h / loaded.naturalHeight);
     const dw = loaded.naturalWidth * scale, dh = loaded.naturalHeight * scale;
     ctx.save();
-    if (alignRight) { ctx.translate(w, 0); ctx.scale(-1, 1); }
-    ctx.drawImage(loaded, (w - dw) / 2, shift || (fmt.id === 'story' ? 0 : -dh * 0.06), dw, dh);
+    if (place.mirror) { ctx.translate(w, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(loaded, (w - dw) / 2, shift || (place.nudge ? -dh * 0.06 : 0), dw, dh);
     ctx.restore();
     if (shift) {
       ctx.fillStyle = band; ctx.fillRect(0, 0, w, shift);
@@ -325,13 +331,13 @@ export function RatioGlyph({ ratio, on }: { ratio: string; on: boolean }) {
 }
 
 /** A text-style button's preview: the actual post, drawn small in that style (no QR, so it stays light). */
-export function StyleThumb({ styleId, bg, headline, subline, cta, credit, brand, position, fontsReady }: { styleId: TextStyleId; bg: string; headline: string; subline: string; cta: string; credit: string; brand: PostBrand | null; position: TextPosition; fontsReady: number }) {
+export function StyleThumb({ styleId, bg, headline, subline, cta, credit, brand, position, fontsReady, placement }: { styleId: TextStyleId; bg: string; headline: string; subline: string; cta: string; credit: string; brand: PostBrand | null; position: TextPosition; fontsReady: number; placement?: Placement }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     let stale = false;
-    if (ref.current) drawPost(ref.current, { id: 'story', w: 270, h: 480 }, bg, { headline, subline, cta, credit, brand, style: styleId, position }, () => stale).catch(() => {});
+    if (ref.current) drawPost(ref.current, { id: 'story', w: 270, h: 480 }, bg, { headline, subline, cta, credit, brand, style: styleId, position, placement }, () => stale).catch(() => {});
     return () => { stale = true; };
-  }, [styleId, bg, headline, subline, cta, credit, brand, position, fontsReady]);
+  }, [styleId, bg, headline, subline, cta, credit, brand, position, fontsReady, placement]);
   return <canvas ref={ref} aria-hidden="true" style={{ width: '100%', aspectRatio: '9 / 16', display: 'block', background: '#1B1C18' }} />;
 }
 
@@ -359,6 +365,8 @@ export function ContentStudio({ creator, avatar = null, audience, problem, offer
   const [qrLogo, setQrLogo] = useState<QrLogoSize>('large');
   const [qrSizeId, setQrSizeId] = useState<QrLogoSize>('small');
   const [copied, setCopied] = useState('');
+  const [generated, setGenerated] = useState<{ url: string; fmt: FormatId; position: TextPosition; mock: boolean } | null>(null);
+  const [genOpen, setGenOpen] = useState(false);
   useEffect(() => {
     setHeadline(`Build a routine for ${solution}`);
     setSubline(offer.description ? offer.description.split(/(?<=[.!?])\s/)[0].replace(/\.$/, '') : `Simple daily actions for ${audience.toLowerCase()}`);
@@ -370,13 +378,18 @@ export function ContentStudio({ creator, avatar = null, audience, problem, offer
   // TikTok-style handle: routine3.com/@<slug> opens the Guardian's page.
   const handle = guardianHandle(siteUrl);
   const credit = creator ? `Guidance by ${creator}${handle ? ` · ${handle}` : ''}` : '';
+  const isGenerated = background === GENERATED && !!generated;
+  const bgSrc = isGenerated ? generated!.url : bgUrl(background === GENERATED ? autoBg : background);
+  // Library photos are mirrored / moved by their safe-zone metadata; a generated image was composed for its layout.
+  const placement = useMemo(() => isGenerated ? AS_IS : placeBackground(background === GENERATED ? autoBg : background, fmtId, position), [isGenerated, background, autoBg, fmtId, position]);
+  const storyPlacement = useMemo(() => isGenerated ? AS_IS : placeBackground(background === GENERATED ? autoBg : background, 'story', position), [isGenerated, background, autoBg, position]);
   const fullUrl = siteUrl.startsWith('http') ? siteUrl : `https://routine3.com${siteUrl}`;
   const qrUrl = qrLink(siteUrl);
   useEffect(() => {
     let stale = false; // a newer run (or unmount) supersedes this one
-    if (canvasRef.current) drawPost(canvasRef.current, fmt, bgUrl(background), { headline, subline, cta, credit, qr: qrUrl, brand, style: textStyle, position, qrStyle: { invert: qrInvert, logo: qrLogo, size: qrSizeId }, avatar }, () => stale);
+    if (canvasRef.current) drawPost(canvasRef.current, fmt, bgSrc, { headline, subline, cta, credit, qr: qrUrl, brand, style: textStyle, position, qrStyle: { invert: qrInvert, logo: qrLogo, size: qrSizeId }, avatar, placement }, () => stale);
     return () => { stale = true; };
-  }, [fmt, background, headline, subline, cta, credit, qrUrl, fontsReady, brand, textStyle, position, qrInvert, qrLogo, qrSizeId, avatar]);
+  }, [fmt, bgSrc, placement, headline, subline, cta, credit, qrUrl, fontsReady, brand, textStyle, position, qrInvert, qrLogo, qrSizeId, avatar]);
   const tag = solution.replace(/\s+/g, '');
   const captions: Record<string, string> = {
     TikTok: `${problem}? Here's a simple routine for ${solution} for ${audience.toLowerCase()}. ${offer.free ? 'Free' : 'Start'} "${offer.title}" by ${creator}. Link in bio. #${tag} #routine #wellbeing`,
@@ -385,7 +398,7 @@ export function ContentStudio({ creator, avatar = null, audience, problem, offer
   };
   const download = () => { const url = canvasRef.current?.toDataURL('image/png'); if (!url) return; const a = document.createElement('a'); a.href = url; a.download = `${tag}-${fmt.id}-${fmt.w}x${fmt.h}.png`; a.click(); };
   // Ready-to-paste prompts for image/video and copy tools, in the selected brand's voice and visual language.
-  const promptCtx = { brandName: brand?.name || creator, kit: brand?.kit || null, audience, focus: problem, offer: offer.title, format: `${fmt.label} (${fmt.platforms.split(' · ')[0]})`, headline, cta };
+  const promptCtx = { brandName: brand?.name || creator, kit: brand?.kit || null, audience, focus: problem, offer: offer.title, format: `${fmt.label} (${fmt.platforms.split(' · ')[0]})`, headline, cta, layout: compositionBrief(fmt.id, position) };
   const prompts: Record<string, string> = { 'Image & video': imagePrompt(promptCtx), Copy: copyPrompt(promptCtx) };
   const copy = (key: string) => { navigator.clipboard?.writeText(({ ...captions, ...prompts })[key]).then(() => { setCopied(key); window.setTimeout(() => setCopied(''), 1600); }); };
   const ink = '#F5F2EA', muted = '#B8B6AF', line = 'rgba(245,242,234,0.24)', acid = '#C7D8A3';
@@ -405,7 +418,7 @@ export function ContentStudio({ creator, avatar = null, audience, problem, offer
         {offers.length > 1 && <label><span style={lab}>Offer</span><select value={offerIndex} onChange={(e) => setOfferIndex(Number(e.target.value))} style={field}>{offers.map((o, i) => <option key={i} value={i}>{String(i + 1).padStart(2, '0')} · {o.title} · {o.free ? 'Free' : o.price}</option>)}</select></label>}
         <div><span style={lab}>Format</span><div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 6 }}>{FORMATS.map((f) => <button key={f.id} type="button" aria-pressed={fmtId === f.id} onClick={() => setFmtId(f.id)} style={{ minHeight: 44, border: `1px solid ${fmtId === f.id ? acid : line}`, background: fmtId === f.id ? '#20251B' : 'transparent', color: ink, textAlign: 'left', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}><RatioGlyph ratio={f.label} on={fmtId === f.id} /><span><strong style={{ display: 'block', fontSize: 12 }}>{f.label}</strong><span style={{ display: 'block', color: muted, fontSize: 9.5 }}>{f.platforms}</span></span></button>)}</div></div>
         <div><span style={lab}>Text style</span><div role="group" aria-label="Text style" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>{TEXT_STYLES.map((t) => <button key={t.id} type="button" aria-pressed={textStyle === t.id} aria-label={`${t.label} text style`} onClick={() => setTextStyle(t.id)} style={{ border: `1px solid ${textStyle === t.id ? acid : line}`, outline: textStyle === t.id ? `1px solid ${acid}` : 'none', background: '#090A08', padding: 4, cursor: 'pointer', display: 'grid', gap: 4 }}>
-          <StyleThumb styleId={t.id} bg={bgUrl(background)} headline={headline} subline={subline} cta={cta} credit={credit} brand={brand} position={position} fontsReady={fontsReady} />
+          <StyleThumb styleId={t.id} bg={bgSrc} headline={headline} subline={subline} cta={cta} credit={credit} brand={brand} position={position} fontsReady={fontsReady} placement={storyPlacement} />
           <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: textStyle === t.id ? acid : muted, padding: '1px 0 2px' }}>{t.label}</span></button>)}</div></div>
         <label><span style={lab}>Text position</span><select value={position} onChange={(e) => setPosition(e.target.value as TextPosition)} style={field}>{TEXT_POSITIONS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
@@ -416,11 +429,20 @@ export function ContentStudio({ creator, avatar = null, audience, problem, offer
         <label><span style={lab}>Headline</span><input value={headline} onChange={(e) => setHeadline(e.target.value)} style={field} /></label>
         <label><span style={lab}>Subline</span><input value={subline} onChange={(e) => setSubline(e.target.value)} style={field} /></label>
         <label><span style={lab}>Button</span><input value={cta} onChange={(e) => setCta(e.target.value)} style={field} /></label>
-        <div><span style={lab}>Background {bg ? '' : '· auto'}</span><div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 5 }}>{BACKGROUNDS.map((b) => <button key={b.file} type="button" title={b.label} aria-pressed={background === b.file} onClick={() => setBg(b.file)} style={{ position: 'relative', overflow: 'hidden', aspectRatio: '9 / 16', padding: 0, border: `2px solid ${background === b.file ? acid : 'transparent'}`, background: '#EFE6DB', cursor: 'pointer' }}>
-          {/* Previewed as it will be placed for the chosen text position (moved down for top text, mirrored for right). */}
-          <span aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, top: position.startsWith('top') ? '38%' : 0, height: '100%', background: `url(${bgUrl(b.file)}) top/cover`, transform: position.endsWith('right') ? 'scaleX(-1)' : undefined }} />
-          {position.startsWith('top') && <span aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, top: 0, height: '54%', background: 'linear-gradient(#EFE6DB 70%, rgba(239,230,219,0))' }} />}
-        </button>)}</div></div>
+        <div><span style={lab}>Background {bg ? '' : '· auto'}<span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400, marginLeft: 6 }}>· dot = how clear the subject sits of the text</span></span><div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 5 }}>{BACKGROUNDS.map((b) => {
+          // Previewed as it will be placed for the chosen format and text position (mirrored and/or moved down).
+          const p = placeBackground(b.file, fmtId, position);
+          return <button key={b.file} type="button" title={`${b.label} · ${p.fit} fit for ${position.replace('-', ' ')} text`} aria-pressed={background === b.file} onClick={() => setBg(b.file)} style={{ position: 'relative', overflow: 'hidden', aspectRatio: '9 / 16', padding: 0, border: `2px solid ${background === b.file ? acid : 'transparent'}`, background: '#EFE6DB', cursor: 'pointer' }}>
+            <span aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, top: `${p.shift * 100}%`, height: '100%', background: `url(${bgUrl(b.file)}) top/cover`, transform: p.mirror ? 'scaleX(-1)' : undefined }} />
+            {p.shift > 0 && <span aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, top: 0, height: `${p.shift * 140}%`, background: 'linear-gradient(#EFE6DB 70%, rgba(239,230,219,0))' }} />}
+            <span aria-label={`${p.fit} fit`} style={{ position: 'absolute', right: 3, bottom: 3, width: 7, height: 7, borderRadius: 4, background: FIT_COLOUR[p.fit], boxShadow: '0 0 0 1px rgba(0,0,0,.35)' }} />
+          </button>;
+        })}
+          <button type="button" aria-pressed={background === GENERATED} aria-expanded={genOpen} onClick={() => { setGenOpen((o) => !o); if (generated) setBg(GENERATED); }} title="Generate an image composed for this layout" style={{ position: 'relative', overflow: 'hidden', aspectRatio: '9 / 16', padding: 2, border: `2px solid ${background === GENERATED ? acid : line}`, background: generated ? `url(${generated.url}) center/cover` : '#20251B', color: ink, fontSize: 9, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', cursor: 'pointer', display: 'grid', placeItems: 'center' }}>{generated ? '' : <span>+ Generate image</span>}</button>
+        </div></div>
+        {genOpen && <ImageGenerator ink={ink} muted={muted} line={line} acid={acid} field={field} lab={lab} aspect={fmt.label as '9:16' | '4:5' | '1:1' | '16:9'} defaultPrompt={imagePrompt(promptCtx)}
+          madeFor={generated && (generated.fmt !== fmtId || generated.position !== position) ? `${FORMATS.find((f) => f.id === generated.fmt)!.label}, ${generated.position.replace('-', ' ')} text` : null}
+          onImage={(url, mock) => { setGenerated({ url, fmt: fmtId, position, mock }); setBg(GENERATED); }} />}
         <button type="button" onClick={download} style={{ height: 42, border: `1px solid ${ink}`, background: ink, color: '#090A08', fontSize: 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}><Download size={14} /> Download {fmt.w}×{fmt.h} PNG</button>
         <div style={{ display: 'grid', gap: 8 }}>{Object.keys(captions).map((k) => <div key={k} style={{ border: `1px solid ${line}`, padding: 10 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}><span style={{ ...lab, margin: 0, color: acid }}>{k} caption</span><button type="button" onClick={() => copy(k)} style={{ border: 0, background: 'transparent', color: muted, fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}><Copy size={12} />{copied === k ? 'Copied' : 'Copy'}</button></div>
@@ -439,4 +461,60 @@ export function ContentStudio({ creator, avatar = null, audience, problem, offer
       </div>
     </div>
   </section>;
+}
+
+/**
+ * "Generate image" in the Background picker: a background composed for this post's layout (the prompt carries the
+ * text and QR zones from postLayout.compositionBrief). Paid either by R³ (a daily allowance) or by the Guardian's own
+ * OpenAI key. Nothing is spent until the button showing the price is pressed; test mode costs nothing.
+ */
+function ImageGenerator({ aspect, defaultPrompt, madeFor, onImage, ink, muted, line, acid, field, lab }: { aspect: '9:16' | '4:5' | '1:1' | '16:9'; defaultPrompt: string; madeFor: string | null; onImage: (url: string, mock: boolean) => void; ink: string; muted: string; line: string; acid: string; field: React.CSSProperties; lab: React.CSSProperties }) {
+  const [status, setStatus] = useState<ImageStatus | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [source, setSource] = useState<ImageSource>('house');
+  const [quality, setQuality] = useState<ImageQuality>('medium');
+  const [key, setKey] = useState('');
+  const [edited, setEdited] = useState<string | null>(null); // null = follow the layout as it changes
+  const prompt = edited ?? defaultPrompt;
+  useEffect(() => { imageStatus().then((s) => { setStatus(s); if (!s.house && s.own.connected) setSource('own'); }).catch((e) => setError(e.message)); }, []);
+  const run = async (fn: () => Promise<void>) => { setBusy(true); setError(''); try { await fn(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } };
+  const connect = () => run(async () => { const r = await connectOpenAI(key); setKey(''); setStatus((s) => s && { ...s, own: { ...s.own, connected: true, key_hint: r.key_hint } }); setSource('own'); });
+  const disconnect = () => run(async () => { await disconnectOpenAI(); setStatus((s) => s && { ...s, own: { ...s.own, connected: false, key_hint: null } }); setSource('house'); });
+  const generate = () => run(async () => {
+    const r = await generateImage(prompt, aspect, quality, source);
+    onImage(r.image, r.mock);
+    if (source === 'house' && !r.mock) setStatus((s) => s && { ...s, house_left: Math.max(0, s.house_left - 1) });
+  });
+  const ready = source === 'own' ? !!status?.own.connected : !!status?.house && (status.house_left > 0 || !status.live);
+  const price = priceLabel(status?.prices, aspect, quality);
+  const small: React.CSSProperties = { border: 0, background: 'transparent', color: muted, fontSize: 10, textDecoration: 'underline', cursor: 'pointer', padding: 0 };
+  return <div aria-label="Generate image" style={{ border: `1px dashed ${line}`, padding: 10, display: 'grid', gap: 8 }}>
+    <span style={{ ...lab, margin: 0, color: acid }}>Generate image · {aspect}{status && !status.live ? ' · test mode (free placeholder)' : ''}</span>
+    {madeFor && <span style={{ color: muted, fontSize: 10.5 }}>The current image was made for {madeFor}; generate again to fit this layout.</span>}
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+      <label><span style={lab}>Made with</span><select value={source} onChange={(e) => setSource(e.target.value as ImageSource)} style={field}>
+        <option value="house" disabled={status ? !status.house : false}>R³ images{status?.house ? ` · ${status.live ? status.house_left : status.house_per_day} left today` : ''}</option>
+        <option value="own">My OpenAI account{status?.own.key_hint ? ` · ${status.own.key_hint}` : ''}</option>
+      </select></label>
+      <label><span style={lab}>Quality</span><select value={quality} onChange={(e) => setQuality(e.target.value as ImageQuality)} style={field}>
+        {(['low', 'medium', 'high'] as const).map((q) => <option key={q} value={q}>{q[0].toUpperCase() + q.slice(1)} {priceLabel(status?.prices, aspect, q)}</option>)}
+      </select></label>
+    </div>
+    {source === 'own' && (status?.own.connected
+      ? <span style={{ color: muted, fontSize: 10.5 }}>Billed to your OpenAI account ({status.own.key_hint}). <button type="button" onClick={disconnect} disabled={busy} style={small}>Disconnect</button></span>
+      : status?.own.available === false ? <span style={{ color: muted, fontSize: 10.5 }}>Connecting your own key isn’t switched on yet.</span>
+      : <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 6 }}>
+          <input type="password" autoComplete="off" placeholder="OpenAI API key (sk-…)" value={key} onChange={(e) => setKey(e.target.value)} style={field} aria-label="OpenAI API key" />
+          <button type="button" onClick={connect} disabled={busy || !key.trim()} style={{ ...field, width: 'auto', cursor: 'pointer' }}>Connect</button>
+          <span style={{ gridColumn: '1 / -1', color: muted, fontSize: 10 }}>OpenAI doesn’t offer sign-in for other apps, so use an API key from platform.openai.com → API keys. It’s stored encrypted and only used for your images.</span>
+        </div>)}
+    <label><span style={lab}>Prompt · keeps the text and QR areas clear{edited !== null ? <> · <button type="button" onClick={() => setEdited(null)} style={small}>reset to layout</button></> : ''}</span>
+      <textarea value={prompt} onChange={(e) => setEdited(e.target.value)} rows={6} style={{ ...field, height: 'auto', padding: 8, fontSize: 11, lineHeight: 1.45, resize: 'vertical' }} /></label>
+    <button type="button" onClick={generate} disabled={busy || !ready || !status} style={{ height: 40, border: `1px solid ${acid}`, background: ready ? acid : 'transparent', color: ready ? '#090A08' : muted, fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', cursor: ready && !busy ? 'pointer' : 'default' }}>
+      {busy ? 'Working…' : !status ? 'Loading…' : !status.live ? 'Generate test image · free' : `Generate image · ${price}${source === 'own' ? ' on your OpenAI account' : ''}`}
+    </button>
+    {error && <span role="alert" style={{ color: '#E8A39B', fontSize: 11 }}>{error}</span>}
+    <span style={{ color: ink, opacity: 0.5, fontSize: 9.5 }}>Prices are OpenAI’s published per-image figures for {status?.model || 'gpt-image-1'}.</span>
+  </div>;
 }
