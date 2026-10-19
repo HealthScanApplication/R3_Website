@@ -19,3 +19,8 @@ it('splits ingredients into whole/raw and processed, with how', () => {
   expect(ingredientForm('Bread', null, 'Grains & bakery')).toEqual({ form: 'processed', processing: 'Baked' });
   expect(ingredientForm('Quinoa', null, 'Grains & bakery')).toEqual({ form: null, processing: null });
 });
+import { partsOfDay } from '../../components/guides/CatalogBrowsers';
+it('splits routine steps into morning, afternoon, evening and rules', () => {
+  const g = partsOfDay([{ name: 'Lemon water', time: '06:30' }, { name: 'Burdock', time: '12:30' }, { name: 'Start Sleep', time: '22:00' }, { name: 'Mostly raw', kind: 'rule_do' }] as any);
+  expect(g.map((x) => `${x.label}:${x.steps.length}`)).toEqual(['Morning:1', 'Afternoon:1', 'Evening:1', 'Rules:1']);
+});

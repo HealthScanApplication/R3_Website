@@ -167,6 +167,15 @@ export function CatalogIngredients({ accessToken }: { accessToken: string }) {
   </div>;
 }
 
+/** Steps split like the app's day: Morning (before 12:00), Afternoon (to 17:00), Evening, then untimed items and rules; per day when the routine has several. */
+export function partsOfDay(steps: RoutineStep[]): Array<{ key: string; label: string; rules: boolean; steps: RoutineStep[] }> {
+  const multi = new Set(steps.map((s) => s.day || 1)).size > 1;
+  const part = (s: RoutineStep) => { if (s.kind?.startsWith('rule')) return 'Rules'; const m = /^(\d\d):(\d\d)/.exec(s.time || ''); if (!m) return 'Anytime'; const t = +m[1] * 60 + +m[2]; return t < 720 ? 'Morning' : t < 1020 ? 'Afternoon' : 'Evening'; };
+  const order = ['Morning', 'Afternoon', 'Evening', 'Anytime', 'Rules'];
+  const out = new Map<string, { key: string; label: string; rules: boolean; steps: RoutineStep[] }>();
+  for (const s of steps) { const p = part(s); const key = `${multi ? s.day || 1 : 0}-${order.indexOf(p)}`; if (!out.has(key)) out.set(key, { key, label: multi ? `Day ${s.day || 1} · ${p}` : p, rules: p === 'Rules', steps: [] }); out.get(key)!.steps.push(s); }
+  return [...out.values()].sort((a, b) => { const [ad, ap] = a.key.split('-').map(Number), [bd, bp] = b.key.split('-').map(Number); return ad - bd || ap - bp; });
+}
 /** The app's fitness routines (catalogue Protocols) with their steps. */
 /** A section's published routines (catalogue Protocols in its categories), e.g. Fitness, Beauty, Wellness. */
 export const ROUTINE_SECTIONS = {
@@ -208,7 +217,9 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
           <div style={{ fontSize: 17, fontWeight: 600 }}>{r.name}</div>
           {r.description && <p style={{ color: muted, fontSize: 12, lineHeight: 1.55, maxWidth: 760 }}>{r.description}</p>}
           <div style={kicker}>Steps{steps ? ` · ${steps.length}` : ''}</div>
-          {!steps ? <span style={{ color: muted, fontSize: 11 }}>Loading…</span> : <ol style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 3, fontSize: 12 }}>{steps.map((s, i) => <li key={i}><span style={{ color: acid }}>{[s.day ? `Day ${s.day}` : null, s.time].filter(Boolean).join(' · ')}</span>{s.day || s.time ? ' · ' : ''}{s.name}{[s.sets && s.reps ? `${s.sets} × ${s.reps}` : null, s.weight, s.minutes ? `${s.minutes} min` : null].filter(Boolean).map((x) => <span key={x} style={{ color: acid }}> · {x}</span>)}{s.group ? <span style={{ color: muted }}> · {s.group}</span> : null}{s.kind?.startsWith('rule') ? <span style={{ color: warn }}> · rule</span> : null}</li>)}</ol>}
+          {!steps ? <span style={{ color: muted, fontSize: 11 }}>Loading…</span> : <div style={{ display: 'grid', gap: 10 }}>{partsOfDay(steps).map((g) => <section key={g.key} aria-label={g.label}>
+            <div style={{ ...kicker, color: g.rules ? warn : muted, margin: '0 0 4px' }}>{g.label} <span style={{ opacity: .7 }}>· {g.steps.length}</span></div>
+            <ol style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 3, fontSize: 12 }}>{g.steps.map((s, i) => <li key={i}><span style={{ color: acid }}>{s.time}</span>{s.time ? ' · ' : ''}{s.name}{[s.sets && s.reps ? `${s.sets} × ${s.reps}` : null, s.weight, s.minutes ? `${s.minutes} min` : null].filter(Boolean).map((x) => <span key={x} style={{ color: acid }}> · {x}</span>)}{s.group ? <span style={{ color: muted }}> · {s.group}</span> : null}</li>)}</ol></section>)}</div>}
           </div>
         </div>}
       </Fragment>)}
