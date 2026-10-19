@@ -239,7 +239,7 @@ export function DietBuilder({ accessToken, ownerId, protocols, recipes, initialP
       <div><span style={label}>Meals</span><div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{MEAL_SLOTS.map((s) => <button key={s.id} type="button" onClick={() => setCfg({ ...cfg, slots: cfg.slots.includes(s.id) ? cfg.slots.filter((x) => x !== s.id) : [...cfg.slots, s.id] })} style={{ ...iconChip(cfg.slots.includes(s.id)), padding: '5px 9px', fontSize: 10, gap: 5 }}>{(() => { const Icon = MEAL_ICON[s.id]; return Icon && <Icon size={12} strokeWidth={1.8} aria-hidden="true" />; })()}{s.label}</button>)}</div></div>
     </div>
     <LinkedTraining accessToken={accessToken} protocolId={protocolId} diet={cfg} meta={meta} protocols={protocols} onOpen={onOpen} />
-    {/* Wide screens: planner on the left, macros + nutrients + hazards in one sticky column on the right. Stacked below 1500px. */}
+    {/* Wide screens: planner on the left, macros + nutrients + hazards in one sticky column on the right. Stacked below 1200px. */}
     <div className="g-diet-split">
     <aside className="g-diet-side" aria-label="Macros, nutrients and hazards">
     <div className="g-macro-strip" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', borderTop: `1px solid ${line}`, borderBottom: `1px solid ${line}`, marginBottom: 18 }}>

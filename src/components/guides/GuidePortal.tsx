@@ -3942,9 +3942,10 @@ export function GuidePortal() {
        them scroll containers and stops the sticky header. clip keeps sideways overflow hidden without that;
        !important is needed to beat main's inline style, and :has() keeps it to Guardian pages. */
     body:has(.guardian-ui),#main-content:has(.guardian-ui){overflow-x:clip!important;overflow-y:visible!important}
-    /* Diet planner: stacked by default; from 1500px the macros/nutrients/hazards become one sticky column beside the planner. */
+    /* Diet planner: stacked by default; from 1200px the macros/nutrients/hazards become one sticky column beside the
+       planner (the week grid scrolls sideways inside its column when it needs more room). */
     .g-diet-split{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;align-items:start}
-    @media (min-width:1500px){.g-diet-split{grid-template-columns:minmax(0,1fr) 380px;grid-template-areas:"plan side"}.g-diet-split>.g-diet-plan{grid-area:plan}.g-diet-split>.g-diet-side{grid-area:side;position:sticky;top:80px;max-height:calc(100vh - 96px);overflow-y:auto;overscroll-behavior:contain}.g-diet-side .g-macro-strip{grid-template-columns:1fr!important}.g-diet-side .g-macro-strip>div{border-right:0!important;border-bottom:1px solid rgba(245,242,234,0.24)}}
+    @media (min-width:1200px){.g-diet-split{grid-template-columns:minmax(0,1fr) clamp(320px,28vw,380px);grid-template-areas:"plan side"}.g-diet-split>.g-diet-plan{grid-area:plan}.g-diet-split>.g-diet-side{grid-area:side;position:sticky;top:80px;max-height:calc(100vh - 96px);overflow-y:auto;overscroll-behavior:contain}.g-diet-side .g-macro-strip{grid-template-columns:1fr!important}.g-diet-side .g-macro-strip>div{border-right:0!important;border-bottom:1px solid rgba(245,242,234,0.24)}}
     /* Fitness planner: an opened exercise shows beside the week as in the app (stacked under 1200px). */
     .g-fit-split{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start}
     @media (min-width:1200px){.g-fit-split.has-detail{grid-template-columns:minmax(0,1fr) 340px}.g-fit-split.has-detail>.g-fit-detail{position:sticky;top:80px}}
