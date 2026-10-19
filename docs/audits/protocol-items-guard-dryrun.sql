@@ -5,7 +5,7 @@
 --     R2 blank display_name · R3 day_number outside 1..total_days · R4a self-parent · R4b parent in another
 --     protocol · R4c nested deeper than one level
 --   SOFT (log only): the app falls back, so legacy data is logged to protocol_item_guard_log instead.
---     R1 unknown item_type · R5 top-level action without a time · R6 catalogue link missing for its item_type
+--     R1 unknown item_type · R5 top-level action without a time · R6 catalogue link missing for its item_type (set headers exempt)
 -- Dry run: run the file with the final COMMIT replaced by the DO block at the bottom (it raises with counts).
 begin;
 
@@ -42,7 +42,9 @@ begin
   end if;
   if r.kind = 'action' and r.parent_protocol_item_id is null and r.scheduled_time is null then
     return query select 'R5', false, 'top-level action without a time'; end if;
-  if r.kind = 'action' and ((r.item_type = 'activity' and r.catalog_activity_id is null)
+  -- set headers (rows with children) are groups, not catalogue tasks
+  if r.kind = 'action' and not exists (select 1 from public.protocol_items c where c.parent_protocol_item_id = r.id and c.id <> r.id)
+     and ((r.item_type = 'activity' and r.catalog_activity_id is null)
      or (r.item_type = 'recipe' and r.catalog_recipe_id is null) or (r.item_type = 'product' and r.catalog_product_id is null)
      or (r.item_type = 'ingredient' and r.catalog_ingredient_id is null)) then
     return query select 'R6', false, r.item_type || ' without catalogue link'; end if;
@@ -69,7 +71,12 @@ drop trigger if exists protocol_items_guard on public.protocol_items;
 create trigger protocol_items_guard before insert or update on public.protocol_items
   for each row execute function public.protocol_items_guard();
 
-commit;
+-- dry run: always rolls back
+do $$ declare s text; begin
+  select string_agg(rule || '=' || n, ', ' order by rule) into s from (
+    select v.rule, count(*) n from public.protocol_items i, public.protocol_item_guard_violations(i) v group by v.rule) t;
+  raise exception 'DRY RUN, rolled back. Existing rows per rule: %', coalesce(s, 'none');
+end $$;
 
 -- DRY RUN (replace the COMMIT above with this block; it always rolls back):
 -- do $$ declare s text; begin

@@ -7,6 +7,6 @@ union all select 'R4a self-parent', count(*) from pi where parent_protocol_item_
 union all select 'R4b parent in another protocol', count(*) from pi c join public.protocol_items par on par.id = c.parent_protocol_item_id where par.protocol_id <> c.protocol_id
 union all select 'R4c grandchild (nested >1, never rendered)', count(*) from pi c join public.protocol_items par on par.id = c.parent_protocol_item_id where par.parent_protocol_item_id is not null and par.parent_protocol_item_id <> par.id
 union all select 'R5 top-level action without time', count(*) from pi where kind = 'action' and parent_protocol_item_id is null and scheduled_time is null
-union all select 'R6 catalogue link missing for item_type', count(*) from pi where kind = 'action' and (
+union all select 'R6 catalogue link missing for item_type', count(*) from pi where kind = 'action' and not exists (select 1 from public.protocol_items c where c.parent_protocol_item_id = pi.id and c.id <> pi.id) and (
   (item_type = 'activity' and catalog_activity_id is null) or (item_type = 'recipe' and catalog_recipe_id is null)
   or (item_type = 'product' and catalog_product_id is null) or (item_type = 'ingredient' and catalog_ingredient_id is null));
