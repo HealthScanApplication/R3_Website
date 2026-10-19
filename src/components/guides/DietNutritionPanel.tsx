@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { nutrientsForTier, type HazardLevel, type NutrientDef, type Tier } from '../../utils/recipeNutrients';
+import { DietPralSummary } from './DietPralSummary';
 import { TIERS, tierLabel, useEssential90, Essential90Note } from './RecipeInsights';
 import { WEEK, type PlanIngredient } from '../../utils/protocolBuilders';
 import type { aggregateDiet, DietTotals } from '../../utils/dietNutrition';
@@ -171,6 +172,7 @@ export function DietNutritionPanel({ report, loading, error }: { report: ReturnT
     <div style={{ maxHeight: 420, overflow: 'auto', marginBottom: 16 }}>{keys.map((k) => <NutrientRow key={k} k={k} def={allDefs.find((d) => d.key === k)} cell={totals.nutrients[k]} totals={totals} period={period} defs={allDefs} />)}
       {other.length > 0 && <div style={{ color: muted, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', padding: '10px 0 2px' }}>Other measured · {other.length}</div>}
       {other.map((k) => <NutrientRow key={k} k={k} def={allDefs.find((d) => d.key === k)} cell={totals.nutrients[k]} totals={totals} period={period} defs={allDefs} />)}</div>
+    <DietPralSummary totals={totals} />
 
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
       <h3 style={{ fontSize: 13, margin: 0 }}>Recorded hazards <span style={{ color: muted, fontWeight: 400 }}>· {hazards.length} of {totals.hazards.length}</span></h3>
