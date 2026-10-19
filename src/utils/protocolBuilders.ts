@@ -1036,3 +1036,62 @@ export async function listKitchenEquipment(accessToken: string): Promise<Kitchen
   if (!res.ok) throw new Error(`Could not load cooking equipment (${res.status})`);
   return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, category: txt(r.category), description: txt(r.description), image: txt(r.image_url), useCase: txt(r.use_case), material: txt(r.material), methodsUsedWith: arr(r.cooking_methods_used_with) }));
 }
+
+/* ── catalogue browsing: ROUTINE³ recipes, ingredients, fitness routines ── */
+export interface CatalogHazard { key: string; level: string }
+export interface CatalogFood { id: string; name: string; image: string | null; category: string | null; description: string | null; healthScore: number | null; per100: Record<string, number>; hazards: CatalogHazard[]; meta: Array<[string, string | null]>; diets: string[] }
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+/** Flat numeric keys of a nutrition_per_100g record (provenance keys starting with "_" are skipped). */
+export function per100Of(v: unknown): Record<string, number> {
+  if (!v || typeof v !== 'object') return {};
+  return Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([k, x]) => !k.startsWith('_') && num(x) !== null) as Array<[string, number]>);
+}
+/** elements_hazardous is keyed by hazard ({ lead: { level } }); highest level first. */
+export function hazardsOf(v: unknown): CatalogHazard[] {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return [];
+  const rank: Record<string, number> = { high: 0, moderate: 1, medium: 1, low: 2, trace: 3 };
+  return Object.entries(v as Record<string, any>).map(([key, x]) => ({ key, level: String(x?.level || 'trace') })).sort((a, b) => (rank[a.level] ?? 4) - (rank[b.level] ?? 4) || a.key.localeCompare(b.key));
+}
+const DIET_FLAGS: Array<[string, string]> = [['vegan', 'Vegan'], ['vegetarian', 'Vegetarian'], ['pescatarian', 'Pescatarian'], ['keto', 'Keto'], ['low_carb', 'Low-carb'], ['gluten_free', 'Gluten-free'], ['dairy_free', 'Dairy-free'], ['nut_free', 'Nut-free'], ['egg_free', 'Egg-free']];
+export const RECIPE_DIETS = DIET_FLAGS;
+const dietsOf = (d: unknown) => (d && typeof d === 'object' ? DIET_FLAGS.filter(([k]) => (d as any)[k] === true).map(([, l]) => l) : []);
+const q = (s: string) => encodeURIComponent(s.replace(/[%,()*]/g, ' ').trim());
+
+export async function browseRecipes(accessToken: string, f: { query?: string; cuisine?: string; meal?: string; diet?: string; limit?: number }): Promise<CatalogFood[]> {
+  const p = ['select=id,name_common,image_primary_url,image_url,meal_slot,cuisine,description_simple,description,health_score,prep_time,cook_time,servings,nutrition_per_100g,elements_hazardous,dietary_info', 'is_published=is.true', 'order=health_score.desc.nullslast', `limit=${f.limit || 60}`];
+  if (f.query?.trim()) p.push(`name_common=ilike.*${q(f.query)}*`);
+  if (f.cuisine) p.push(`cuisine=eq.${encodeURIComponent(f.cuisine)}`);
+  if (f.meal) p.push(`meal_slot=ilike.${encodeURIComponent(f.meal)}`);
+  if (f.diet) p.push(`dietary_info->>${f.diet}=eq.true`);
+  const res = await fetch(`${rest()}/catalog_recipes?${p.join('&')}`, { headers: headers(accessToken) });
+  if (!res.ok) throw new Error(`Could not load recipes (${res.status})`);
+  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name_common, image: r.image_primary_url || r.image_url || null, category: r.meal_slot || null, description: txt(r.description_simple) || txt(r.description), healthScore: num(r.health_score), per100: per100Of(r.nutrition_per_100g), hazards: hazardsOf(r.elements_hazardous), diets: dietsOf(r.dietary_info),
+    meta: [['Cuisine', txt(r.cuisine)], ['Meal', txt(r.meal_slot)], ['Prep', r.prep_time ? `${r.prep_time} min` : null], ['Cook', r.cook_time ? `${r.cook_time} min` : null], ['Serves', r.servings ? String(r.servings) : null]] }));
+}
+export async function recipeIngredientNames(accessToken: string, recipeId: string): Promise<Array<{ name: string; grams: number | null }>> {
+  const res = await fetch(`${rest()}/catalog_recipe_ingredients?select=ingredient_name,amount_g,sort_order&recipe_id=eq.${recipeId}&order=sort_order.asc.nullslast`, { headers: headers(accessToken) });
+  if (!res.ok) return [];
+  return ((await res.json()) as any[]).map((r) => ({ name: String(r.ingredient_name || ''), grams: num(r.amount_g) })).filter((r) => r.name);
+}
+export async function browseIngredients(accessToken: string, f: { query?: string; category?: string; limit?: number }): Promise<CatalogFood[]> {
+  const p = ['select=id,name_common,image_primary_url,image_url,category,category_sub,description_simple,description,health_score,nutrition_per_100g,elements_hazardous,season,origin_region', 'is_published=is.true', 'is_group=not.is.true', 'order=health_score.desc.nullslast', `limit=${f.limit || 60}`];
+  if (f.query?.trim()) p.push(`name_common=ilike.*${q(f.query)}*`);
+  if (f.category) p.push(`category=eq.${encodeURIComponent(f.category)}`);
+  const res = await fetch(`${rest()}/catalog_ingredients?${p.join('&')}`, { headers: headers(accessToken) });
+  if (!res.ok) throw new Error(`Could not load ingredients (${res.status})`);
+  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name_common, image: r.image_primary_url || r.image_url || null, category: r.category || null, description: txt(r.description_simple) || txt(r.description), healthScore: num(r.health_score), per100: per100Of(r.nutrition_per_100g), hazards: hazardsOf(r.elements_hazardous), diets: [],
+    meta: [['Type', txt(r.category_sub)], ['Season', Array.isArray(r.season) ? r.season.join(', ') : txt(r.season)], ['Origin', Array.isArray(r.origin_region) ? r.origin_region.join(', ') : txt(r.origin_region)]] }));
+}
+
+export interface FitnessRoutine { id: string; name: string; description: string | null; image: string | null; category: string | null; tags: string[] }
+/** The app's published fitness routines: catalogue Protocols in fitness categories. */
+export async function listFitnessRoutines(accessToken: string): Promise<FitnessRoutine[]> {
+  const res = await fetch(`${rest()}/protocols?select=id,name,description,image_url,category,tags&user_id=is.null&is_public=not.is.false&is_active=not.is.false&category=in.(Fitness,Strength,Recovery,Mobility,Cardio)&order=name`, { headers: headers(accessToken) });
+  if (!res.ok) throw new Error(`Could not load fitness routines (${res.status})`);
+  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, description: txt(r.description), image: txt(r.image_url), category: r.category, tags: Array.isArray(r.tags) ? r.tags.map(String) : [] }));
+}
+export async function routineSteps(accessToken: string, protocolId: string): Promise<Array<{ name: string; time: string | null; group: string | null; day: number | null }>> {
+  const res = await fetch(`${rest()}/protocol_items?select=display_name,scheduled_time,group_name,day_number,sort_order&protocol_id=eq.${protocolId}&order=day_number.asc.nullsfirst,scheduled_time.asc.nullslast,sort_order.asc&limit=200`, { headers: headers(accessToken) });
+  if (!res.ok) return [];
+  return ((await res.json()) as any[]).map((r) => ({ name: String(r.display_name || ''), time: r.scheduled_time ? String(r.scheduled_time).slice(0, 5) : null, group: r.group_name || null, day: num(r.day_number) })).filter((r) => r.name);
+}
