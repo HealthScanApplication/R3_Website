@@ -15,4 +15,7 @@ it('splits ingredients into whole/raw and processed, with how', () => {
   expect(ingredientForm('Brown Meagre', 'fish, raw', 'Fish & seafood')).toEqual({ form: 'raw', processing: null });
   expect(ingredientForm('Apple', null, 'Fruit')).toEqual({ form: 'raw', processing: null });
   expect(ingredientForm('Xanthan gum', null, 'Additives')).toEqual({ form: 'processed', processing: 'Additive' });
+  expect(ingredientForm('Apple purée', null, 'Fruit')).toEqual({ form: 'processed', processing: 'Paste' });
+  expect(ingredientForm('Bread', null, 'Grains & bakery')).toEqual({ form: 'processed', processing: 'Baked' });
+  expect(ingredientForm('Quinoa', null, 'Grains & bakery')).toEqual({ form: null, processing: null });
 });

@@ -115,8 +115,10 @@ export function CatalogRecipes({ accessToken }: { accessToken: string }) {
 const INGREDIENT_CATEGORIES = ['Vegetables', 'Fruit', 'Grains & bakery', 'Legumes, nuts & seeds', 'Meat', 'Fish & seafood', 'Dairy & eggs', 'Herbs & spices', 'Oils & fats', 'Drinks', 'Condiments & sauces', 'Sweeteners', 'Additives', 'Supplements & other', 'Confectionery & snacks', 'Prepared foods'];
 export function CatalogIngredients({ accessToken }: { accessToken: string }) {
   const [query, setQuery] = useState(''), [category, setCategory] = useState(''), [form, setForm] = useState<'' | 'raw' | 'processed'>(''), [processing, setProcessing] = useState('');
-  // Form is derived from the name, so filter a wider page client-side.
-  const { items: all, busy, error } = useLoad(() => browseIngredients(accessToken, { query, category, limit: form ? 400 : 60 }), [accessToken, query, category, form], query ? 250 : 0);
+  // Form is derived from the name, so with a form filter on, read the whole published list (about 1,400 rows) and filter it here.
+  const { items: all, busy, error } = useLoad(() => browseIngredients(accessToken, { query, category, limit: form ? 2000 : 60 }), [accessToken, query, category, form], query ? 250 : 0);
+  // A processing choice from earlier results must not hide everything after the search or category changes.
+  useEffect(() => { setProcessing(''); }, [query, category]);
   const kinds = [...new Set(all.filter((f) => f.form === 'processed' && f.processing).map((f) => f.processing!))].sort();
   const items = all.filter((f) => (!form || f.form === form) && (!processing || f.processing === processing)).slice(0, 60);
   return <div>

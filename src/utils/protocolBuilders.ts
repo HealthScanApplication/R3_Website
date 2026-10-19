@@ -1040,7 +1040,7 @@ export async function listKitchenEquipment(accessToken: string): Promise<Kitchen
 
 /* ── catalogue browsing: ROUTINE³ recipes, ingredients, fitness routines ── */
 export interface CatalogHazard { key: string; level: string }
-export interface CatalogFood { form?: 'raw' | 'processed'; processing?: string | null; id: string; name: string; image: string | null; category: string | null; description: string | null; healthScore: number | null; per100: Record<string, number>; hazards: CatalogHazard[]; meta: Array<[string, string | null]>; diets: string[] }
+export interface CatalogFood { form?: 'raw' | 'processed' | null; processing?: string | null; id: string; name: string; image: string | null; category: string | null; description: string | null; healthScore: number | null; per100: Record<string, number>; hazards: CatalogHazard[]; meta: Array<[string, string | null]>; diets: string[] }
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 /** Flat numeric keys of a nutrition_per_100g record (provenance keys starting with "_" are skipped). */
 export function per100Of(v: unknown): Record<string, number> {
@@ -1075,15 +1075,19 @@ export async function recipeIngredientNames(accessToken: string, recipeId: strin
   return ((await res.json()) as any[]).map((r) => ({ name: String(r.ingredient_name || ''), grams: num(r.amount_g) })).filter((r) => r.name);
 }
 /** Whole/raw or processed, and how: from the name and sub-category (juice, powder, oil…), else processed-by-nature categories. */
-const PROCESS_WORDS: Array<[RegExp, string]> = [[/\bjuice\b/i, 'Juice'], [/\bpowder(ed)?\b/i, 'Powder'], [/\boil\b/i, 'Oil'], [/\bflour\b/i, 'Flour'], [/\b(dried|dehydrated)\b/i, 'Dried'], [/\b(ground|milled)\b/i, 'Ground'], [/\b(extract|concentrate)\b/i, 'Extract'], [/\b(paste|puree|purée)\b/i, 'Paste'], [/\b(canned|tinned)\b/i, 'Canned'], [/\bsmoked\b/i, 'Smoked'], [/\b(cured)\b/i, 'Cured'], [/\bpickled\b/i, 'Pickled'], [/\bfermented\b/i, 'Fermented'], [/\b(cooked|boiled|roasted|fried)\b/i, 'Cooked'], [/\bfrozen\b/i, 'Frozen'], [/\b(refined|processed)\b/i, 'Refined']];
+const PROCESS_WORDS: Array<[RegExp, string]> = [[/\bjuice\b/i, 'Juice'], [/\bpowder(ed)?\b/i, 'Powder'], [/\boil\b/i, 'Oil'], [/\bflour\b/i, 'Flour'], [/\b(dried|dehydrated)\b/i, 'Dried'], [/\b(ground|milled)\b/i, 'Ground'], [/\b(extract|concentrate)\b/i, 'Extract'], [/\b(paste|puree|purée)(?![\p{L}\d_])/iu, 'Paste'], [/\b(bread|pasta|noodles?|crackers?|biscuits?|cakes?|cereal|granola|tortillas?|bagels?|muffins?|pastry|wafers?)\b/i, 'Baked'], [/\b(canned|tinned)\b/i, 'Canned'], [/\bsmoked\b/i, 'Smoked'], [/\b(cured)\b/i, 'Cured'], [/\bpickled\b/i, 'Pickled'], [/\bfermented\b/i, 'Fermented'], [/\b(cooked|boiled|roasted|fried)\b/i, 'Cooked'], [/\bfrozen\b/i, 'Frozen'], [/\b(refined|processed)\b/i, 'Refined']];
 const PROCESSED_CATEGORIES: Record<string, string> = { 'Additives': 'Additive', 'Oils & fats': 'Oil', 'Condiments & sauces': 'Condiment', 'Sweeteners': 'Sweetener', 'Confectionery & snacks': 'Snack', 'Prepared foods': 'Prepared', 'Supplements & other': 'Supplement' };
-export function ingredientForm(name: string, sub: string | null, category: string | null): { form: 'raw' | 'processed'; processing: string | null } {
+/** Categories whose items are whole foods unless their name says otherwise. */
+const WHOLE_CATEGORIES = new Set(['Vegetables', 'Fruit', 'Meat', 'Fish & seafood', 'Legumes, nuts & seeds', 'Herbs & spices', 'Dairy & eggs']);
+/** form null = not known: neither filter shows it as raw or processed. */
+export function ingredientForm(name: string, sub: string | null, category: string | null): { form: 'raw' | 'processed' | null; processing: string | null } {
   const text = `${name} ${sub || ''}`;
   if (/\b(raw|fresh)\b/i.test(text) && !PROCESS_WORDS.some(([re]) => re.test(text))) return { form: 'raw', processing: null };
   const hit = PROCESS_WORDS.find(([re]) => re.test(text));
   if (hit) return { form: 'processed', processing: hit[1] };
   if (category && PROCESSED_CATEGORIES[category]) return { form: 'processed', processing: PROCESSED_CATEGORIES[category] };
-  return { form: 'raw', processing: null };
+  if (category && WHOLE_CATEGORIES.has(category)) return { form: 'raw', processing: null };
+  return { form: null, processing: null };
 }
 export async function browseIngredients(accessToken: string, f: { query?: string; category?: string; limit?: number }): Promise<CatalogFood[]> {
   const p = ['select=id,name_common,image_primary_url,image_url,category,category_sub,description_simple,description,health_score,nutrition_per_100g,elements_hazardous,season,origin_region', 'is_published=is.true', 'is_group=not.is.true', 'order=health_score.desc.nullslast', `limit=${f.limit || 60}`];
