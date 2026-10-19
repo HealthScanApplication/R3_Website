@@ -241,6 +241,13 @@ export function routineCategoryLabel(category: string | null): string | null {
   const hit = (Object.values(ROUTINE_SECTIONS) as Array<{ kicker: string; categories: readonly string[] }>).find((x) => x.categories.includes(c));
   return hit ? hit.kicker : c.replace(/\b\w/g, (m) => m.toUpperCase());
 }
+/** Routines grouped by the span they cover, in day order: Morning … Night, Day, N days, Week, N weeks, Month, N months. */
+export function byPeriod<T extends FitnessRoutine>(items: T[]): Array<[string, T[]]> {
+  const groups = new Map<string, T[]>();
+  for (const r of items) { const p = routinePeriod(r); groups.set(p, [...(groups.get(p) || []), r]); }
+  const days = (p: string) => { const m = /^(\d+) (day|week|month)s$/.exec(p); const parts = ['Morning', 'Midday', 'Evening', 'Night']; return parts.includes(p) ? parts.indexOf(p) - 10 : p === 'Day' ? 1 : p === 'Week' ? 7 : p === 'Month' ? 30 : m ? +m[1] * ({ day: 1, week: 7, month: 30 } as Record<string, number>)[m[2]] : 999; };
+  return [...groups.entries()].sort((a, b) => days(a[0]) - days(b[0]));
+}
 /** Description text stored as light markdown ("### The steps …", "**bold**"): paragraphs at each heading, markers removed. */
 export const descriptionParagraphs = (text: string) => text.split(/\s*#{2,}\s*/).map((p) => p.replace(/\*\*(.+?)\*\*/g, '$1').trim()).filter(Boolean);
 
@@ -268,8 +275,10 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
   return <div>
     <Header Icon={Icon} kicker={cfg.kicker} title={cfg.title} copy={cfg.copy} />
     <p role="status" style={{ color: error ? warn : muted, fontSize: 11 }}>{busy ? 'Loading…' : error || (items.length ? `${items.length} routines` : `No published ${cfg.kicker.toLowerCase()} routines yet. Build one in the Protocol builder, and see the ${cfg.kicker.toLowerCase()} activities below this section in the sidebar.`)}</p>
+    {byPeriod(items).map(([period, group]) => <section key={period} aria-label={period} style={{ marginBottom: 22 }}>
+    <h3 style={{ ...kicker, color: acid, margin: '0 0 8px' }}>{period} <span style={{ color: muted }}>· {group.length}</span></h3>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 8 }}>
-      {items.map((r) => <Fragment key={r.id}>
+      {group.map((r) => <Fragment key={r.id}>
         <button type="button" aria-pressed={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)} style={{ textAlign: 'left', border: `1px solid ${open === r.id ? acid : line}`, background: panel, color: ink, padding: 0, cursor: 'pointer', overflow: 'hidden' }}>
           <div style={{ position: 'relative', aspectRatio: '16 / 9', background: r.image ? `url(${r.image}) center/cover` : '#1B1C18' }}>
             <span style={{ position: 'absolute', top: 6, right: 6, display: 'flex', gap: 4 }}>{([[routineCategoryLabel(r.category), false], [routinePeriod(r), true]] as const).filter(([t]) => t).map(([t, period]) => <span key={String(period)} style={{ background: 'rgba(9,10,8,.82)', color: period ? acid : ink, border: `1px solid ${period ? acid : line}`, borderRadius: 999, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>{t}</span>)}</span>
@@ -296,6 +305,6 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
           </div>
         </div>}
       </Fragment>)}
-    </div>
+    </div></section>)}
   </div>;
 }

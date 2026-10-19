@@ -79,3 +79,8 @@ it('tags each routine with the span it covers and its section', () => {
   expect(routineCategoryLabel('Strength')).toBe('Fitness');
   expect(descriptionParagraphs('A reset. ### The steps A mist. **Morning SPF wears off.** Done')).toEqual(['A reset.', 'The steps A mist. Morning SPF wears off. Done']);
 });
+import { byPeriod } from '../../components/guides/CatalogBrowsers';
+it('groups routines by span in day order', () => {
+  const r = (name: string) => ({ id: name, name, description: null, image: null, category: null, tags: [] });
+  expect(byPeriod([r('Weekly Reset'), r('K-Beauty • Evening'), r('Leg Day Workout'), r('28-Day Herbal'), r('3-Week Tea'), r('Morning Glow')]).map(([p]) => p)).toEqual(['Morning', 'Evening', 'Day', 'Week', '3 weeks', 'Month']);
+});
