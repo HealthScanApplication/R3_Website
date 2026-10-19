@@ -99,7 +99,8 @@ export function aggregateDiet(cfg: DietConfig, analysis: DietAnalysis = {}) {
 
 /** Refresh exact selected IDs, not a framework-limited or top-600 search cache.
  * Owner-private recipes remain behind the caller's token/RLS; nothing is published. */
-export async function loadDietAnalysis(token: string, picks: MealPick[], recipes: GuideRecipe[], signal?: AbortSignal): Promise<DietAnalysis> {
+/** includePral: read the pral_* columns too (default). The planner passes PRAL_DISPLAY, so a dark launch makes no PRAL request. */
+export async function loadDietAnalysis(token: string, picks: MealPick[], recipes: GuideRecipe[], signal?: AbortSignal, includePral = true): Promise<DietAnalysis> {
   const result: DietAnalysis = {};
   const read = async (table: string, select: string, field: string, ids: string[], pral = false) => {
     const rows: any[] = [];
@@ -119,7 +120,7 @@ export async function loadDietAnalysis(token: string, picks: MealPick[], recipes
   const ids = [...new Set(picks.filter((p) => p.source === 'catalog').map((p) => p.id))];
   const rows = await read('catalog_recipes','id,nutrition_per_serving,servings','id',ids);
   const links = await read('catalog_recipe_ingredients','id,recipe_id,ingredient_id,amount_g,retention_factor','recipe_id',rows.map((r) => r.id));
-  const ingredients = new Map((await read('catalog_ingredients','id,name_common,nutrition_per_100g,elements_beneficial,elements_hazardous','id',[...new Set(links.map((j) => j.ingredient_id).filter(Boolean))] as string[],true)).map((r) => [r.id,r]));
+  const ingredients = new Map((await read('catalog_ingredients','id,name_common,nutrition_per_100g,elements_beneficial,elements_hazardous','id',[...new Set(links.map((j) => j.ingredient_id).filter(Boolean))] as string[],includePral)).map((r) => [r.id,r]));
   for (const pick of picks) {
     if (result[mealPickKey(pick)]) continue;
     const row = pick.source === 'guide' ? recipes.find((r) => r.id === pick.id) : rows.find((r) => r.id === pick.id);

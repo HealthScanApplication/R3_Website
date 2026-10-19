@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { DietPralSummary } from '../../components/guides/DietPralSummary';
 import { DietNutritionPanel } from '../../components/guides/DietNutritionPanel';
 import { aggregateDiet, type DietTotals } from '../dietNutrition';
@@ -38,8 +38,11 @@ it('rule, not applicable and missing ingredients each get their own wording', ()
   expect(out).toContain('-2.5 mEq per 100 g');
   expect(out).toContain('1 not applicable to this food type.');
 });
-it('flag off renders nothing new, including inside the planner panel', () => {
-  expect(renderToStaticMarkup(<DietPralSummary totals={base({ total: 1, withValue: 1, count: 1, notApplicable: 0, rule: 0 })} />)).toBe('');
+it('flag off renders nothing new, including inside the planner panel (whatever the env says)', async () => {
+  expect(renderToStaticMarkup(<DietPralSummary enabled={false} totals={base({ total: 1, withValue: 1, count: 1, notApplicable: 0, rule: 0 })} />)).toBe('');
+  vi.resetModules(); vi.stubEnv('VITE_PRAL_DISPLAY', 'false');
+  const { DietNutritionPanel: Panel } = await import('../../components/guides/DietNutritionPanel');
   const cfg: DietConfig = { framework: 'balanced', kcal: 2000, protein: 20, carbs: 50, fat: 30, slots: ['breakfast'], plan: {}, drinks: { breakfast: [] } };
-  expect(renderToStaticMarkup(<DietNutritionPanel report={aggregateDiet(cfg)} loading={false} error="" />)).not.toContain('PRAL');
+  expect(renderToStaticMarkup(<Panel report={aggregateDiet(cfg)} loading={false} error="" />)).not.toContain('PRAL');
+  vi.unstubAllEnvs(); vi.resetModules();
 });

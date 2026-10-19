@@ -3,7 +3,14 @@ import { combinePral, PRAL_DISPLAY, sumPral, trustedPral } from '../pral';
 import { aggregateDiet, loadDietAnalysis } from '../dietNutrition';
 import type { DietConfig, MealPick } from '../protocolBuilders';
 
-it('ships dark: the display flag is off by default', () => { expect(PRAL_DISPLAY).toBe(false); });
+it('ships dark: the display flag is off unless VITE_PRAL_DISPLAY is "true"', async () => {
+  for (const [value, want] of [[undefined, false], ['false', false], ['true', true]] as const) {
+    vi.resetModules(); vi.unstubAllEnvs(); if (value !== undefined) vi.stubEnv('VITE_PRAL_DISPLAY', value); else vi.stubEnv('VITE_PRAL_DISPLAY', '');
+    expect((await import('../pral')).PRAL_DISPLAY).toBe(want);
+  }
+  vi.unstubAllEnvs(); vi.resetModules();
+  expect(typeof PRAL_DISPLAY).toBe('boolean');
+});
 
 it('trusts only sourced/rule numbers; not_applicable wins; unknown is null, never 0', () => {
   expect(trustedPral({ pral_status: 'sourced', pral_meq_per_100g: '-3.5' })).toBe(-3.5);
