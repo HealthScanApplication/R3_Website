@@ -13,7 +13,7 @@ import { Copy, Download, ExternalLink } from 'lucide-react';
 import QRCode from 'qrcode';
 import { ensureBrandFont, type BrandKit, type ButtonColours } from '../../utils/brandKit';
 import { copyPrompt, imagePrompt } from '../../utils/brandBrief';
-import { parseRoutineShareLink, routineShareUrl } from '../../utils/routineShare';
+import { parseRoutineShareParams, routineShareUrl } from '../../utils/routineShare';
 import { postCopy, type CopyKind } from '../../utils/postCopy';
 import { AS_IS, compositionBrief, legacyPlacement, placeBackground, type Placement } from '../../utils/postLayout';
 import { connectOpenAI, disconnectOpenAI, generateImage, imageStatus, priceLabel, type ImageQuality, type ImageSource, type ImageStatus } from '../../utils/guardianImages';
@@ -93,8 +93,10 @@ export function qrLink(siteUrl: string): string {
   const absolute = siteUrl.startsWith('http') ? siteUrl : `https://routine3.com${siteUrl}`;
   // A routine share link (/routine/<token>, utils/routineShare.ts) is encoded as the canonical lower-case https link:
   // it opens in R³ as a universal link, whose path match is case-sensitive, so it is not upper-cased like /g/<slug>.
-  const routine = parseRoutineShareLink(absolute);
-  return routine ? routineShareUrl(routine) : absolute;
+  // The QR says where an open came from (utm_medium=qr) and keeps the campaign; the source is left out to keep the code
+  // coarse, and the database fills in guardian-<slug> from the token.
+  const routine = parseRoutineShareParams(absolute);
+  return routine ? routineShareUrl(routine.token, { medium: 'qr', campaign: routine.campaign }) : absolute;
 }
 
 /**
@@ -109,14 +111,22 @@ export type QrLogoSize = 'small' | 'medium' | 'large';
 export interface QrStyle { invert?: boolean; logo?: QrLogoSize; size?: QrLogoSize }
 /** Share of the code's width kept clear for the R³ mark. Large switches to error correction H (30%). */
 const QR_LOGO: Record<QrLogoSize, number> = { small: 0.22, medium: 0.3, large: 0.36 };
+/**
+ * The code to draw for a link and a chosen mark size. A link long enough to push the H code (the large mark) to version 7 or
+ * more, such as a routine share link with its utm_medium, could not carry the mark at all; it gets the medium mark on Q instead.
+ */
+export function qrPlan(text: string, logo: QrLogoSize = 'large') {
+  let size: QrLogoSize = logo;
+  let qr = QRCode.create(text, { errorCorrectionLevel: size === 'large' ? 'H' : 'Q' });
+  if (size === 'large' && qr.version >= 7) { size = 'medium'; qr = QRCode.create(text, { errorCorrectionLevel: 'Q' }); }
+  return { logo: size, qr, mark: qr.version < 7 };
+}
 export function drawQr(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, size: number, style: QrStyle = {}) {
-  const logoSize = style.logo || 'large';
   const invert = style.invert ?? true;
   const fg = invert ? '#FFFFFF' : '#111111', paper = invert ? '#111111' : '#FFFFFF';
-  const qr = QRCode.create(text, { errorCorrectionLevel: logoSize === 'large' ? 'H' : 'Q' });
+  const { logo: logoSize, qr, mark } = qrPlan(text, style.logo);
   const n = qr.modules.size;
   const cell = size / (n + 8), pad = cell * 4;
-  const mark = qr.version < 7;
   ctx.save();
   ctx.shadowColor = 'rgba(17,17,17,0.18)'; ctx.shadowBlur = size * 0.06; ctx.shadowOffsetY = size * 0.015;
   ctx.fillStyle = paper; roundRect(ctx, x, y, size, size, size * 0.12); ctx.fill();
@@ -418,7 +428,7 @@ export function ContentStudio({ creator, avatar = null, audience, problem, offer
     </div>
     {/* The brief every post is built from. */}
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
-      {[['Creator', creator], ['Audience', audience], ['Problem', problem], ['Offer', offer.title], ['Solution', `A routine for ${solution}`], ['CTA', fullUrl.replace(/^https?:\/\//, '')]].map(([k, v]) => <span key={k} style={{ border: `1px solid ${line}`, padding: '6px 9px', color: ink, fontSize: 10 }}><strong style={{ color: acid, fontSize: 8, letterSpacing: '.1em', textTransform: 'uppercase', marginRight: 6 }}>{k}</strong>{v}</span>)}
+      {[['Creator', creator], ['Audience', audience], ['Problem', problem], ['Offer', offer.title], ['Solution', `A routine for ${solution}`], ['CTA', fullUrl.replace(/^https?:\/\//, '').replace(/\?.*$/, '')]].map(([k, v]) => <span key={k} style={{ border: `1px solid ${line}`, padding: '6px 9px', color: ink, fontSize: 10 }}><strong style={{ color: acid, fontSize: 8, letterSpacing: '.1em', textTransform: 'uppercase', marginRight: 6 }}>{k}</strong>{v}</span>)}
     </div>
     <div className="g-split">
       <div style={{ display: 'grid', gap: 12, alignContent: 'start' }}>

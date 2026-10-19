@@ -9,9 +9,11 @@ const share = vi.hoisted(() => ({
   revokeRoutineShareLink: vi.fn(),
   listOfferRoutines: vi.fn(),
   setOfferRoutine: vi.fn(),
+  getRoutineShareStats: vi.fn(),
 }));
+const qr = vi.hoisted(() => ({ toDataURL: vi.fn(async () => 'data:image/png;base64,QR') }));
 vi.mock('../routineShare', async (importOriginal) => ({ ...(await importOriginal<typeof import('../routineShare')>()), ...share }));
-vi.mock('qrcode', () => ({ default: { toDataURL: vi.fn(async () => 'data:image/png;base64,QR') } }));
+vi.mock('qrcode', () => ({ default: qr }));
 vi.mock('../guidePortal', async (importOriginal) => ({ ...(await importOriginal<typeof import('../guidePortal')>()), listGuideBrands: vi.fn(async () => []) }));
 // The studios draw on a canvas; only the props the Content builder hands them matter here.
 vi.mock('../../components/guides/ContentStudio', () => ({ ContentStudio: (props: any) => <div data-testid="post-studio" data-site-url={props.siteUrl} data-page-url={props.pageUrl} /> }));
@@ -30,6 +32,8 @@ beforeEach(() => {
   share.revokeRoutineShareLink.mockReset().mockResolvedValue(true);
   share.listOfferRoutines.mockReset().mockResolvedValue({});
   share.setOfferRoutine.mockReset().mockResolvedValue(undefined);
+  share.getRoutineShareStats.mockReset().mockRejectedValue(new Error('Routine links need the latest database update.'));
+  qr.toDataURL.mockClear();
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -39,7 +43,7 @@ describe('Share routine link', () => {
     await settle();
     expect(share.createRoutineShareLink).not.toHaveBeenCalled(); // opening the panel mints nothing
     fireEvent.click(screen.getByRole('button', { name: /share routine link/i }));
-    await waitFor(() => expect((screen.getByLabelText('Routine link', { selector: 'input' }) as HTMLInputElement).value).toBe(`https://routine3.com/routine/${TOKEN}`));
+    await waitFor(() => expect((screen.getByLabelText('Routine link', { selector: 'input' }) as HTMLInputElement).value).toBe(`https://routine3.com/routine/${TOKEN}?utm_medium=link`));
     expect(share.createRoutineShareLink).toHaveBeenCalledWith('p1');
     expect(screen.getByRole('button', { name: /copy/i })).toBeTruthy();
     await waitFor(() => expect((screen.getByAltText('QR code for the routine link') as HTMLImageElement).src).toContain('data:image/png'));
@@ -52,7 +56,45 @@ describe('Share routine link', () => {
     render(<RoutineShareLink protocolId="p1" />);
     await waitFor(() => screen.getByRole('button', { name: /copy/i }));
     fireEvent.click(screen.getByRole('button', { name: /copy/i }));
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`https://routine3.com/routine/${TOKEN}`));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`https://routine3.com/routine/${TOKEN}?utm_medium=link`));
+  });
+
+  it('names the Guardian and the campaign on the link to send, and says qr on the QR', async () => {
+    share.getRoutineShareLink.mockResolvedValue(TOKEN);
+    render(<RoutineShareLink protocolId="p1" guardianSlug="john-ferreira" />);
+    const input = () => screen.getByLabelText('Routine link', { selector: 'input' }) as HTMLInputElement;
+    await waitFor(() => expect(input().value).toBe(`https://routine3.com/routine/${TOKEN}?utm_source=guardian-john-ferreira&utm_medium=link`));
+    await waitFor(() => expect(qr.toDataURL).toHaveBeenCalledWith(`https://routine3.com/routine/${TOKEN}?utm_medium=qr`, expect.anything()));
+    fireEvent.change(screen.getByLabelText('Campaign'), { target: { value: 'Spring Sleep!' } });
+    await waitFor(() => expect(input().value).toBe(`https://routine3.com/routine/${TOKEN}?utm_source=guardian-john-ferreira&utm_medium=link&utm_campaign=spring-sleep`));
+    await waitFor(() => expect(qr.toDataURL).toHaveBeenLastCalledWith(`https://routine3.com/routine/${TOKEN}?utm_medium=qr&utm_campaign=spring-sleep`, expect.anything()));
+  });
+
+  it('never puts an email address typed as a campaign into the link', async () => {
+    share.getRoutineShareLink.mockResolvedValue(TOKEN);
+    render(<RoutineShareLink protocolId="p1" guardianSlug="john-ferreira" />);
+    await waitFor(() => screen.getByLabelText('Campaign'));
+    fireEvent.change(screen.getByLabelText('Campaign'), { target: { value: 'jane@example.com' } });
+    const value = (screen.getByLabelText('Routine link', { selector: 'input' }) as HTMLInputElement).value;
+    expect(value).not.toMatch(/jane|@|utm_campaign/);
+  });
+
+  it('shows the Guardian how the link is doing: opens, adds and new people', async () => {
+    share.getRoutineShareLink.mockResolvedValue(TOKEN);
+    share.getRoutineShareStats.mockResolvedValue({ opens: 12, opens_7d: 4, last_open_at: null, adds: 3, adds_7d: 1, credited: 2, by_medium: [{ medium: 'qr', opens: 9, adds: 2 }, { medium: 'link', opens: 3, adds: 1 }] });
+    render(<RoutineShareLink protocolId="p1" guardianSlug="john-ferreira" />);
+    const results = await screen.findByLabelText('Link results');
+    expect(results.textContent).toBe('Opened 12 (4 this week) · Added to R³ 3 · New to R³ 2 · qr 9, link 3');
+    expect(share.getRoutineShareStats).toHaveBeenCalledWith('p1');
+  });
+
+  it('stays quiet about the counts when they cannot be read', async () => {
+    share.getRoutineShareLink.mockResolvedValue(TOKEN);
+    render(<RoutineShareLink protocolId="p1" />);
+    await waitFor(() => screen.getByRole('button', { name: /copy/i }));
+    await settle();
+    expect(screen.queryByLabelText('Link results')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('opens on an existing link without creating another, and tells the parent', async () => {
@@ -134,9 +176,9 @@ describe('Content builder: QR and link', () => {
     share.listOfferRoutines.mockResolvedValue({ o1: 'p1' });
     share.getRoutineShareLink.mockResolvedValue(TOKEN);
     render(<ContentBuilder profile={profile} offers={[offerOf({})]} protocols={protocols} recipes={[]} />);
-    await waitFor(() => expect(studio().getAttribute('data-site-url')).toBe(`/routine/${TOKEN}`));
+    await waitFor(() => expect(studio().getAttribute('data-site-url')).toBe(`/routine/${TOKEN}?utm_source=guardian-john-ferreira&utm_medium=post`));
     expect(studio().getAttribute('data-page-url')).toBe('/guardians/john-ferreira'); // the @handle keeps coming from the page
-    expect(screen.getByTestId('video-studio').getAttribute('data-site-url')).toBe(`/routine/${TOKEN}`);
+    expect(screen.getByTestId('video-studio').getAttribute('data-site-url')).toBe(`/routine/${TOKEN}?utm_source=guardian-john-ferreira&utm_medium=post`);
     expect(screen.getByRole('button', { name: 'Routine in the app' }).getAttribute('aria-pressed')).toBe('true');
     expect(share.createRoutineShareLink).not.toHaveBeenCalled();
   });
@@ -148,7 +190,7 @@ describe('Content builder: QR and link', () => {
     expect(studio().getAttribute('data-site-url')).toBe('/guardians/john-ferreira');
     expect(share.createRoutineShareLink).not.toHaveBeenCalled();
     fireEvent.click(create);
-    await waitFor(() => expect(studio().getAttribute('data-site-url')).toBe(`/routine/${TOKEN}`));
+    await waitFor(() => expect(studio().getAttribute('data-site-url')).toBe(`/routine/${TOKEN}?utm_source=guardian-john-ferreira&utm_medium=post`));
     expect(share.createRoutineShareLink).toHaveBeenCalledWith('p1');
     fireEvent.click(screen.getByRole('button', { name: 'Your page' }));
     await waitFor(() => expect(studio().getAttribute('data-site-url')).toBe('/guardians/john-ferreira'));

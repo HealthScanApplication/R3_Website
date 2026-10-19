@@ -25,7 +25,7 @@ export function suggestOfferRoutine(offerTitle: string, protocols: AdminProtocol
   return hits.length === 1 ? hits[0] : null;
 }
 
-export function OfferRoutineLink({ offer, protocols, guideId, linkedProtocolId, onChange }: { offer: GuideOffer; protocols: AdminProtocol[]; guideId: string; linkedProtocolId?: string; onChange: (offerId: string, protocolId: string | null) => void }) {
+export function OfferRoutineLink({ offer, protocols, guideId, guardianSlug, linkedProtocolId, onChange }: { offer: GuideOffer; protocols: AdminProtocol[]; guideId: string; guardianSlug?: string; linkedProtocolId?: string; onChange: (offerId: string, protocolId: string | null) => void }) {
   const mine = protocols.filter((p) => !p.user_id || p.user_id === guideId);
   const linked = linkedProtocolId ? protocols.find((p) => p.id === linkedProtocolId) : undefined;
   const suggestion = suggestOfferRoutine(offer.title, protocols, guideId);
@@ -50,7 +50,7 @@ export function OfferRoutineLink({ offer, protocols, guideId, linkedProtocolId, 
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Link2 size={12} color={acid} aria-hidden="true" />Delivers <strong style={{ color: ink, fontWeight: 600 }}>{linked.name}</strong></span>
         <button type="button" onClick={() => { setChoice(linked.id); setChanging(true); }} style={{ ...small, minHeight: 32, padding: '0 10px' }}>Change</button>
       </div>
-      <RoutineShareLink protocolId={linked.id} protocolName={linked.name} paid={offer.access_model === 'paid'} />
+      <RoutineShareLink protocolId={linked.id} protocolName={linked.name} guardianSlug={guardianSlug} paid={offer.access_model === 'paid'} />
     </>}
     {(!linked || changing) && <div style={{ border: `1px solid ${line}`, padding: 12 }}>
       <label style={{ display: 'block', color: muted, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>Routine this offer delivers</label>

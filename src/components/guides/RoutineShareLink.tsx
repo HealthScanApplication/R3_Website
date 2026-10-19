@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { Check, Copy, Link2, QrCode } from 'lucide-react';
 import QRCode from 'qrcode';
-import { createRoutineShareLink, getRoutineShareLink, revokeRoutineShareLink, routineShareUrl } from '../../utils/routineShare';
+import { createRoutineShareLink, getRoutineShareLink, getRoutineShareStats, guardianUtmSource, revokeRoutineShareLink, routineShareUrl, utmValue, type RoutineShareStats } from '../../utils/routineShare';
 
 const sans = '"EuclidCircularA", "DM Sans", "Helvetica Neue", Arial, sans-serif';
 const TONES = {
@@ -17,6 +17,8 @@ const TONES = {
 export interface RoutineShareLinkProps {
   protocolId: string;
   protocolName?: string;
+  /** The Guardian's page slug: names the Guardian as utm_source (guardian-<slug>) on the link. */
+  guardianSlug?: string;
   tone?: keyof typeof TONES;
   /** The routine comes with a paid offer: say so, because the link gives the routine to anyone who holds it. */
   paid?: boolean;
@@ -24,7 +26,7 @@ export interface RoutineShareLinkProps {
   onToken?: (token: string | null) => void;
 }
 
-export function RoutineShareLink({ protocolId, protocolName, tone = 'dark', paid = false, onToken }: RoutineShareLinkProps) {
+export function RoutineShareLink({ protocolId, protocolName, guardianSlug, tone = 'dark', paid = false, onToken }: RoutineShareLinkProps) {
   const c = TONES[tone];
   const [token, setToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -32,6 +34,8 @@ export function RoutineShareLink({ protocolId, protocolName, tone = 'dark', paid
   const [copied, setCopied] = useState(false);
   const [confirmStop, setConfirmStop] = useState(false);
   const [qr, setQr] = useState('');
+  const [campaign, setCampaign] = useState('');
+  const [stats, setStats] = useState<RoutineShareStats | null>(null);
 
   // Open on an existing link without minting one. A failure here (e.g. the migration is not applied yet) stays quiet
   // until the Guardian asks for a link.
@@ -44,13 +48,26 @@ export function RoutineShareLink({ protocolId, protocolName, tone = 'dark', paid
 
   useEffect(() => { onToken?.(token); }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const url = token ? routineShareUrl(token) : '';
+  // The link to send says where an open came from (utm_medium=link, plus the Guardian and an optional campaign); the QR says qr.
+  // Credit never depends on these: the token already names the Guardian.
+  const source = guardianSlug ? guardianUtmSource(guardianSlug) : null;
+  const campaignValue = utmValue(campaign);
+  const url = token ? routineShareUrl(token, { source, medium: 'link', campaign: campaignValue }) : '';
+  const qrUrl = token ? routineShareUrl(token, { medium: 'qr', campaign: campaignValue }) : '';
   useEffect(() => {
     let live = true;
     setQr('');
-    if (url) QRCode.toDataURL(url, { errorCorrectionLevel: 'Q', margin: 2, width: 240 }).then((data) => { if (live) setQr(data); }).catch(() => undefined);
+    if (qrUrl) QRCode.toDataURL(qrUrl, { errorCorrectionLevel: 'Q', margin: 2, width: 240 }).then((data) => { if (live) setQr(data); }).catch(() => undefined);
     return () => { live = false; };
-  }, [url]);
+  }, [qrUrl]);
+
+  // The counts, once there is a link. Quiet when the database update is not applied yet.
+  useEffect(() => {
+    let live = true;
+    setStats(null);
+    if (token) getRoutineShareStats(protocolId).then((found) => { if (live) setStats(found); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [token, protocolId]);
 
   async function create() {
     setBusy(true); setMessage('');
@@ -89,7 +106,10 @@ export function RoutineShareLink({ protocolId, protocolName, tone = 'dark', paid
             <input readOnly aria-label="Routine link" value={url} onFocus={(event) => event.currentTarget.select()} style={{ flex: '1 1 220px', minWidth: 0, height: 44, boxSizing: 'border-box', border: `1px solid ${c.line}`, background: c.field, color: c.ink, borderRadius: 2, padding: '0 11px', fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 }} />
             <button type="button" onClick={copy} style={button}>{copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}{copied ? 'Copied' : 'Copy'}</button>
           </div>
-          <p style={{ color: c.muted, fontSize: 12, lineHeight: 1.5, margin: '10px 0 0' }}>Anyone who opens this link in R³ can add a copy of the routine. They cannot change yours. Switch it off any time; a new link will be a different one.</p>
+          <label style={{ display: 'block', color: c.muted, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', margin: '12px 0 6px' }}>Campaign (optional)</label>
+          <input aria-label="Campaign" value={campaign} maxLength={64} placeholder="e.g. spring-sleep" onChange={(event) => setCampaign(event.target.value)} style={{ width: '100%', maxWidth: 260, height: 40, boxSizing: 'border-box', border: `1px solid ${c.line}`, background: c.field, color: c.ink, borderRadius: 2, padding: '0 11px', fontFamily: sans, fontSize: 12 }} />
+          <p style={{ color: c.muted, fontSize: 12, lineHeight: 1.5, margin: '10px 0 0' }}>Anyone who opens this link in R³ can add a copy of the routine. They cannot change yours. Switch it off any time; a new link will be a different one. You are credited when someone new to R³ adds it.</p>
+          {stats && <p aria-label="Link results" style={{ color: c.ink, fontSize: 12, lineHeight: 1.5, margin: '8px 0 0' }}>Opened <strong>{stats.opens}</strong>{stats.opens_7d ? ` (${stats.opens_7d} this week)` : ''} · Added to R³ <strong>{stats.adds}</strong> · New to R³ <strong>{stats.credited}</strong>{stats.by_medium.length > 0 && <span style={{ color: c.muted }}> · {stats.by_medium.map((m) => `${m.medium} ${m.opens}`).join(', ')}</span>}</p>}
           {paid && <p role="note" style={{ color: c.warn, fontSize: 12, lineHeight: 1.5, margin: '8px 0 0' }}>This routine comes with a paid offer. Anyone holding this link gets it without paying, so send it only to people who bought.</p>}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
             <a href={qr || undefined} download="routine-link-qr.png" aria-disabled={!qr} style={{ ...quiet, textDecoration: 'none', opacity: qr ? 1 : 0.5, pointerEvents: qr ? 'auto' : 'none' }}><QrCode size={14} aria-hidden="true" />Download QR</a>

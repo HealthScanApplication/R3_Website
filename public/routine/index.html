@@ -60,6 +60,12 @@
  * nobody can put their own words on this domain by editing a link. The token is sent to the Supabase project that
  * minted it and nowhere else; a token that matches nothing leaves the page generic.
  *
+ * Attribution: once the token is known to a project, the page records the open there (record_routine_share_click), with
+ * the utm_* values the link carried, and gets back the Guardian's referral code and the id of the recorded open. Those
+ * go into the "open in R³" link (healthscan://routine/<token>?ref=..&click=..&utm_..) so the app can credit the Guardian
+ * when the routine is added. Every value is checked here the way the database checks it (lower case, a-z 0-9 . _ ~ -,
+ * at most 64), nothing personal is read or sent (the server sees the IP and truncates it), and the page stores nothing.
+ *
  * Staging first (Guardians publish there), then production. Both keys are the public anon keys already shipped in
  * src/utils/supabase/environments.ts; scripts/check-routes.mjs fails the build if they drift.
  */
@@ -69,6 +75,10 @@
     { url: 'https://ermbkttsyvpenjjxaxcf.supabase.co', key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVybWJrdHRzeXZwZW5qanhheGNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQxNTc5NTcsImV4cCI6MjA3OTczMzk1N30.PuA1AXHx7TrCMYUaP00O1eYZRAjYY_UzRQztfCnkUA0' },
   ];
   var TOKEN_RE = /^[0-9a-f]{32}$/;
+  var UTM_RE = /^[a-z0-9][a-z0-9._~-]{0,63}$/;
+  var REF_RE = /^[A-Za-z0-9]{4,16}$/;
+  var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  var UTM_KEYS = ['source', 'medium', 'campaign', 'content'];
 
   var match = location.pathname.match(/^\/routine\/([^/]+)\/?$/);
   var token = match ? match[1].toLowerCase() : '';
@@ -82,10 +92,26 @@
     return;
   }
 
+  // Where this visit came from, as the link says: only values the database would accept.
+  var query = new URLSearchParams(location.search || '');
+  var utm = {};
+  UTM_KEYS.forEach(function (key) {
+    var value = String(query.get('utm_' + key) || '').trim().toLowerCase();
+    if (UTM_RE.test(value)) utm[key] = value;
+  });
+
   // The same link through the app scheme: for an in-app browser, or Safari after the banner's "Open", where iOS does
-  // not hand an https link to the app itself.
+  // not hand an https link to the app itself. Once the open is recorded it also carries ref (the Guardian's referral
+  // code), click (the recorded open) and the utm values.
+  function handoff(ref, click) {
+    var parts = [];
+    if (REF_RE.test(String(ref || ''))) parts.push('ref=' + encodeURIComponent(ref));
+    if (UUID_RE.test(String(click || ''))) parts.push('click=' + String(click).toLowerCase());
+    UTM_KEYS.forEach(function (key) { if (utm[key]) parts.push('utm_' + key + '=' + encodeURIComponent(utm[key])); });
+    return 'healthscan://routine/' + token + (parts.length ? '?' + parts.join('&') : '');
+  }
   var open = $('open');
-  open.href = 'healthscan://routine/' + token;
+  open.href = handoff();
   open.hidden = false;
 
   function show(row) {
@@ -96,18 +122,32 @@
     return true;
   }
 
+  function call(source, fn, body) {
+    return fetch(source.url + '/rest/v1/rpc/' + fn, {
+      method: 'POST',
+      headers: { apikey: source.key, Authorization: 'Bearer ' + source.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      referrerPolicy: 'no-referrer',
+      credentials: 'omit',
+    }).then(function (res) { return res.ok ? res.json() : null; });
+  }
+
+  // Record the open on the project that knows the token, then put what it returns into the app link. A failure here
+  // changes nothing the visitor sees: the plain link still works.
+  function record(source) {
+    call(source, 'record_routine_share_click', {
+      p_token: token, p_utm_source: utm.source || null, p_utm_medium: utm.medium || null,
+      p_utm_campaign: utm.campaign || null, p_utm_content: utm.content || null,
+    })
+      .then(function (row) { if (row) open.href = handoff(row.ref, row.click_id); })
+      .catch(function () {});
+  }
+
   function read(i) {
     var source = SOURCES[i];
     if (!source) return;
-    fetch(source.url + '/rest/v1/rpc/routine_share_preview', {
-      method: 'POST',
-      headers: { apikey: source.key, Authorization: 'Bearer ' + source.key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_token: token }),
-      referrerPolicy: 'no-referrer',
-      credentials: 'omit',
-    })
-      .then(function (res) { return res.ok ? res.json() : null; })
-      .then(function (row) { if (!show(row)) read(i + 1); })
+    call(source, 'routine_share_preview', { p_token: token })
+      .then(function (row) { if (show(row)) record(source); else read(i + 1); })
       .catch(function () { read(i + 1); });
   }
   read(0);

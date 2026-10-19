@@ -5,10 +5,10 @@ const client = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }));
 vi.mock('../supabase/client', () => ({ getSupabaseClient: () => client }));
 
 import {
-  createRoutineShareLink, getRoutineShareLink, isShareToken, listOfferRoutines, parseRoutineShareLink, postLinkTarget, revokeRoutineShareLink,
-  routineMayBeLinked, routineShareAppUrl, routineSharePath, routineShareUrl, routineShareErrorMessage, setOfferRoutine,
+  createRoutineShareLink, getRoutineShareLink, getRoutineShareStats, guardianUtmSource, isShareToken, listOfferRoutines, parseRoutineShareLink, parseRoutineShareParams,
+  postLinkTarget, referralCode, revokeRoutineShareLink, routineMayBeLinked, routineShareAppUrl, routineSharePath, routineShareUrl, routineShareErrorMessage, setOfferRoutine, utmValue,
 } from '../routineShare';
-import { qrLink } from '../../components/guides/ContentStudio';
+import { qrLink, qrPlan } from '../../components/guides/ContentStudio';
 
 const TOKEN = '0123456789abcdef0123456789abcdef';
 
@@ -50,7 +50,8 @@ describe('routine share link builder', () => {
 
   it('points a post at the routine only when the Guardian chose it and the link exists', () => {
     const base = { guardianSlug: 'john-ferreira' };
-    expect(postLinkTarget({ ...base, routineToken: TOKEN, useRoutine: true })).toBe(`/routine/${TOKEN}`);
+    expect(postLinkTarget({ ...base, routineToken: TOKEN, useRoutine: true })).toBe(`/routine/${TOKEN}?utm_source=guardian-john-ferreira&utm_medium=post`);
+    expect(postLinkTarget({ ...base, routineToken: TOKEN, useRoutine: true, campaign: 'Spring Sleep' })).toBe(`/routine/${TOKEN}?utm_source=guardian-john-ferreira&utm_medium=post&utm_campaign=spring-sleep`);
     expect(postLinkTarget({ ...base, routineToken: TOKEN, useRoutine: false })).toBe('/guardians/john-ferreira');
     expect(postLinkTarget({ ...base, routineToken: null, useRoutine: true })).toBe('/guardians/john-ferreira');
     expect(postLinkTarget({ ...base, routineToken: 'not-a-token', useRoutine: true })).toBe('/guardians/john-ferreira');
@@ -64,10 +65,14 @@ describe('routine share link builder', () => {
 });
 
 describe('qrLink with a routine share link', () => {
-  it('encodes the canonical lower-case https link, not the upper-case /G/ form', () => {
-    expect(qrLink(`/routine/${TOKEN}`)).toBe(`https://routine3.com/routine/${TOKEN}`);
-    expect(qrLink(`https://routine3.com/routine/${TOKEN}`)).toBe(`https://routine3.com/routine/${TOKEN}`);
-    expect(qrLink(`https://routine3.com/routine/${TOKEN.toUpperCase()}?utm=qr`)).toBe(`https://routine3.com/routine/${TOKEN}`);
+  it('encodes the canonical lower-case https link with utm_medium=qr, not the upper-case /G/ form', () => {
+    expect(qrLink(`/routine/${TOKEN}`)).toBe(`https://routine3.com/routine/${TOKEN}?utm_medium=qr`);
+    expect(qrLink(`https://routine3.com/routine/${TOKEN}`)).toBe(`https://routine3.com/routine/${TOKEN}?utm_medium=qr`);
+    expect(qrLink(`https://routine3.com/routine/${TOKEN.toUpperCase()}?utm=qr`)).toBe(`https://routine3.com/routine/${TOKEN}?utm_medium=qr`);
+  });
+
+  it('turns a post link into a QR link: medium becomes qr, the campaign stays, the source is left to the database', () => {
+    expect(qrLink(`/routine/${TOKEN}?utm_source=guardian-john-ferreira&utm_medium=post&utm_campaign=Spring-Sleep`)).toBe(`https://routine3.com/routine/${TOKEN}?utm_medium=qr&utm_campaign=spring-sleep`);
   });
 
   it('still shortens a Guardian page and leaves other links alone', () => {
@@ -76,9 +81,81 @@ describe('qrLink with a routine share link', () => {
     expect(qrLink('https://example.com/Page')).toBe('https://example.com/Page');
   });
 
-  it('fits a QR the post can still draw its logo on (below version 7)', () => {
-    expect(QRCode.create(qrLink(`/routine/${TOKEN}`), { errorCorrectionLevel: 'Q' }).version).toBeLessThan(7);
-    expect(QRCode.create(qrLink(`/routine/${TOKEN}`), { errorCorrectionLevel: 'H' }).version).toBeLessThan(7);
+  it('keeps the R³ mark on the code: version 6 on Q, and the large mark falls back to the medium one on Q', () => {
+    const link = qrLink(`/routine/${TOKEN}`);
+    expect(QRCode.create(link, { errorCorrectionLevel: 'Q' }).version).toBeLessThan(7);
+    // At H this link is version 8, where the mark cannot be drawn; the plan switches to the medium mark on Q instead.
+    expect(QRCode.create(link, { errorCorrectionLevel: 'H' }).version).toBeGreaterThanOrEqual(7);
+    expect(qrPlan(link, 'large')).toMatchObject({ logo: 'medium', mark: true });
+    expect(qrPlan(link, 'small')).toMatchObject({ logo: 'small', mark: true });
+    expect(qrPlan(link, 'medium')).toMatchObject({ logo: 'medium', mark: true });
+  });
+
+  it('leaves a link that already fits the large mark as it was', () => {
+    expect(qrPlan('HTTPS://ROUTINE3.COM/G/JOHN-FERREIRA', 'large')).toMatchObject({ logo: 'large', mark: true });
+  });
+});
+
+describe('tracking in a routine share link', () => {
+  it('normalises each value the way the database accepts it', () => {
+    expect(utmValue('Guardian-John Ferreira')).toBe('guardian-john-ferreira');
+    expect(utmValue('Spring Sleep!')).toBe('spring-sleep');
+    expect(utmValue('  QR ')).toBe('qr');
+    expect(utmValue('crème brûlée')).toBe('creme-brulee');
+    expect(utmValue('a&b=c?d#e')).toBe('a-b-c-d-e');
+    expect(utmValue('<script>alert(1)</script>')).toBe('script-alert-1-script');
+    expect(utmValue('x'.repeat(80))).toBe('x'.repeat(64));
+    expect(utmValue('')).toBeNull();
+    expect(utmValue('---')).toBeNull();
+    expect(utmValue(null)).toBeNull();
+    expect(utmValue(7)).toBeNull();
+    for (const v of ['spring-sleep', 'a.b_c~d', '9lives']) expect(utmValue(v)).toBe(v);
+  });
+
+  it('never lets an email address, or anything with an @, into a link', () => {
+    for (const personal of ['jane@example.com', 'john.ferreira@gmail.com', '@john', 'x@y']) expect(utmValue(personal)).toBeNull();
+    const url = routineShareUrl(TOKEN, { source: 'jane@example.com', medium: 'john@x.com', campaign: 'a@b.c', content: '@z' });
+    expect(url).toBe(`https://routine3.com/routine/${TOKEN}`);
+    expect(routineShareAppUrl(TOKEN, { source: 'jane@example.com', ref: 'jane@example.com' })).toBe(`healthscan://routine/${TOKEN}`);
+    expect(url).not.toMatch(/[@%]/);
+  });
+
+  it('builds the tracked link in a fixed order and escapes what it carries', () => {
+    expect(routineShareUrl(TOKEN, { source: 'Guardian-John Ferreira', medium: 'QR', campaign: 'Spring Sleep', content: 'Story 1' }))
+      .toBe(`https://routine3.com/routine/${TOKEN}?utm_source=guardian-john-ferreira&utm_medium=qr&utm_campaign=spring-sleep&utm_content=story-1`);
+    expect(routineSharePath(TOKEN, { medium: 'post' })).toBe(`/routine/${TOKEN}?utm_medium=post`);
+    expect(routineShareUrl(TOKEN, {})).toBe(`https://routine3.com/routine/${TOKEN}`);
+    expect(routineShareUrl(TOKEN, { medium: 'a&utm_medium=evil' })).toBe(`https://routine3.com/routine/${TOKEN}?utm_medium=a-utm_medium-evil`);
+  });
+
+  it('names the Guardian as the source: guardian-<slug>', () => {
+    expect(guardianUtmSource('john-ferreira')).toBe('guardian-john-ferreira');
+    expect(guardianUtmSource('x'.repeat(80))).toBe(`guardian-${'x'.repeat(55)}`);
+  });
+
+  it('hands the app the referral code, the recorded open and the tracking, and drops what is malformed', () => {
+    const click = '3f9a1c7e-5b2d-4a60-8c1e-9b7d2f4a6c80';
+    expect(routineShareAppUrl(TOKEN, { ref: 'D1A1ABB4', click, source: 'guardian-john-ferreira', medium: 'qr' }))
+      .toBe(`healthscan://routine/${TOKEN}?ref=D1A1ABB4&click=${click}&utm_source=guardian-john-ferreira&utm_medium=qr`);
+    expect(routineShareAppUrl(TOKEN, { ref: 'no spaces', click: 'not-a-uuid' })).toBe(`healthscan://routine/${TOKEN}`);
+    expect(routineShareAppUrl(TOKEN)).toBe(`healthscan://routine/${TOKEN}`);
+    expect(referralCode('D1A1ABB4')).toBe('D1A1ABB4');
+    for (const bad of ['abc', 'a'.repeat(17), 'D1A1 ABB4', 'D1A1&ABB4', '', null, 4]) expect(referralCode(bad)).toBeNull();
+  });
+
+  it('reads the token and the tracking back out of a link, ignoring what is not well formed', () => {
+    const click = '3f9a1c7e-5b2d-4a60-8c1e-9b7d2f4a6c80';
+    expect(parseRoutineShareParams(routineShareAppUrl(TOKEN, { ref: 'D1A1ABB4', click, source: 'guardian-x', medium: 'qr', campaign: 'spring' })))
+      .toEqual({ token: TOKEN, ref: 'D1A1ABB4', click, source: 'guardian-x', medium: 'qr', campaign: 'spring', content: null });
+    expect(parseRoutineShareParams(`https://routine3.com/routine/${TOKEN}?utm_medium=<b>&ref=a@b.c&click=1#x`))
+      .toEqual({ token: TOKEN, ref: null, click: null, source: null, medium: null, campaign: null, content: null });
+    expect(parseRoutineShareParams('https://evil.example/routine/' + TOKEN)).toBeNull();
+    expect(parseRoutineShareParams(null)).toBeNull();
+  });
+
+  it('still reads the token from a tracked link (the query is not part of the path)', () => {
+    expect(parseRoutineShareLink(routineShareUrl(TOKEN, { source: 'guardian-x', medium: 'qr' }))).toBe(TOKEN);
+    expect(parseRoutineShareLink(routineShareAppUrl(TOKEN, { ref: 'D1A1ABB4' }))).toBe(TOKEN);
   });
 });
 
@@ -115,6 +192,15 @@ describe('routine share calls', () => {
     expect(routineShareErrorMessage({ message: 'boom' })).toBe('boom');
     client.rpc.mockResolvedValueOnce({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.create_routine_share_link' } });
     await expect(createRoutineShareLink('p1')).rejects.toThrow(/latest database update/);
+  });
+
+  it('reads the Guardian\'s counts for a routine', async () => {
+    const stats = { opens: 12, opens_7d: 4, last_open_at: null, adds: 3, adds_7d: 1, credited: 2, by_medium: [{ medium: 'qr', opens: 9, adds: 2 }] };
+    client.rpc.mockResolvedValueOnce({ data: stats, error: null });
+    await expect(getRoutineShareStats('p1')).resolves.toEqual(stats);
+    expect(client.rpc).toHaveBeenLastCalledWith('routine_share_stats', { p_protocol_id: 'p1' });
+    client.rpc.mockResolvedValueOnce({ data: null, error: { code: 'P0002', message: 'routine not found' } });
+    await expect(getRoutineShareStats('p1')).rejects.toThrow(/owns a routine/);
   });
 
   it('lists and sets the routine an offer delivers', async () => {

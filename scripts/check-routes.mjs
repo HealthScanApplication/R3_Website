@@ -163,7 +163,8 @@ if (existsSync(abs('public/routine/index.html'))) {
   const jwts = page.match(/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g) || [];
   check(jwts.length === 2, `/routine: expected exactly two JWTs (the two anon keys), found ${jwts.length}`);
   check(!/service_role|sb_secret|RESEND_API/i.test(page), '/routine: names a secret');
-  check(page.includes('/rest/v1/rpc/routine_share_preview'), '/routine: must read the routine through routine_share_preview, never a table');
+  const rpcs = [...page.matchAll(/call\(source, '([a-z_]+)'/g)].map((m) => m[1]).sort();
+  check(page.includes("'/rest/v1/rpc/'") && JSON.stringify(rpcs) === JSON.stringify(['record_routine_share_click', 'routine_share_preview']), `/routine: must call exactly routine_share_preview and record_routine_share_click, never a table (found: ${rpcs.join(', ') || 'none'})`);
   check(!/\/rest\/v1\/(?!rpc\/)/.test(page), '/routine: must not query a table directly');
   check(!/innerHTML|document\.write|eval\(|insertAdjacentHTML/.test(page), '/routine: must not write markup (the routine name is untrusted input)');
   check(!/localStorage|sessionStorage|document\.cookie/.test(page), '/routine: must not store the token');

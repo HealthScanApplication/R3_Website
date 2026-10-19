@@ -178,7 +178,7 @@
     Referrer-Policy = "no-referrer"
     X-Robots-Tag = "noindex, nofollow"
     Cache-Control = "no-store"
-    Content-Security-Policy = "default-src 'none'; script-src 'sha256-dAqR4wTJsOCFBCDbv2A6OV/xPf7MY0k1Q3WpMjECTdo='; style-src 'unsafe-inline'; connect-src https://mofhvoudjxinvpplsytd.supabase.co https://ermbkttsyvpenjjxaxcf.supabase.co; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    Content-Security-Policy = "default-src 'none'; script-src 'sha256-gFH7CUdUOz44/29l0AMB8uGOSlKv8ggictxjv1baqX0='; style-src 'unsafe-inline'; connect-src https://mofhvoudjxinvpplsytd.supabase.co https://ermbkttsyvpenjjxaxcf.supabase.co; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 # The unsubscribe token is in this page's URL: keep it out of referrers, caches
 # and search indexes, and let the page talk to nothing but the one API host.
