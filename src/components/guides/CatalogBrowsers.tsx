@@ -387,7 +387,8 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
   // Picking a day on the phone scrolls the step list to that day.
   const pickDay = (d: number) => { setDay(d); const el = listRef.current?.querySelector<HTMLElement>(`[data-day="${d}"]`); if (el && listRef.current) listRef.current.scrollTo({ top: Math.max(0, el.offsetTop - 4), behavior: 'smooth' }); };
   useEffect(() => { if (!open) return; let live = true; setSteps(null); setDay(1); routineSteps(accessToken, open).then((s) => { if (live) setSteps(s); }); return () => { live = false; }; }, [accessToken, open]);
-  const days = steps ? Math.max(1, ...steps.map((s) => s.day || 1)) : 1;
+  // The cycle length is the routine's Length (total_days: Day / Week / 2 weeks / Month), or its last numbered day.
+  const days = steps ? Math.max(1, items.find((r) => r.id === open)?.totalDays || 1, ...steps.map((s) => s.day || 1)) : 1;
   // The app shows one day: every-day items (no day_number) plus that day's.
   // Only the routine's own steps; daily basics (hygiene, sleep) are suggested beside it, not part of it.
   const basics = (steps || []).filter((s) => isBasicFor(s, section));

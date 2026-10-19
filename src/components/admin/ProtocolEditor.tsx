@@ -31,6 +31,7 @@ import { computeSleepWindow, isWakeName, isBedName } from '../../utils/sleepWind
 import { descriptiveMealSlot } from '../../protocolDomain/mealSlot';
 import { smartListOf, slotFromGroupName, mealSlotFor, SLOT_TITLE, type Row as StandardRow } from '../../utils/routineStandard';
 import { checkProtocolItem, onGateWarnings, type GateWarning } from '../../utils/protocolGate';
+import { LENGTH_OPTIONS, DEFAULT_LENGTH } from '../../utils/protocolVariety';
 import {
   listProtocols, listProtocolItems, updateProtocol,
   createProtocolItem, updateProtocolItem, deleteProtocolItem, uploadProtocolImage,
@@ -1949,7 +1950,12 @@ export function ProtocolEditor({ accessToken, onOpenCatalogRecord, initialProtoc
                   <Field label="Creator"><input style={inputStyle} value={form.creator || ''} onChange={(e) => setField('creator', e.target.value)} /></Field>
                   <Field label="Source"><input style={inputStyle} value={form.source || ''} onChange={(e) => setField('source', e.target.value)} /></Field>
                   <Field label="Health score"><input type="number" style={inputStyle} value={form.health_score ?? ''} onChange={(e) => setField('health_score', e.target.value === '' ? null : Number(e.target.value))} /></Field>
-                  <Field label="Total days"><input type="number" style={inputStyle} value={form.total_days ?? ''} onChange={(e) => setField('total_days', e.target.value === '' ? null : Number(e.target.value))} /></Field>
+                  <Field label="Length">
+                    <div role="radiogroup" aria-label="Length" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {LENGTH_OPTIONS.map((o) => { const on = (form.total_days ?? DEFAULT_LENGTH) === o.days; return <button key={o.days} type="button" role="radio" aria-checked={on} onClick={() => setField('total_days', o.days)} style={{ border: '1px solid ' + (on ? C.ink : C.hair), background: on ? C.ink : 'transparent', color: on ? '#fff' : C.ink, borderRadius: 999, padding: '5px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{o.label}</button>; })}
+                      <input type="number" aria-label="Total days" title="Custom length in days" style={{ ...inputStyle, width: 70 }} value={form.total_days ?? ''} onChange={(e) => setField('total_days', e.target.value === '' ? null : Number(e.target.value))} />
+                    </div>
+                  </Field>
                   <div style={{ gridColumn: '1 / -1' }}>
                     {!form.image_url && routineCoverImage && <div style={{ display: 'flex', alignItems: 'center', gap: 12, border: '1px solid ' + C.goodBorder, background: C.goodBg, padding: 10, borderRadius: 10, marginBottom: 10 }}><img src={routineCoverImage} alt="Routine database cover suggestion" style={{ width: 62, height: 62, borderRadius: 9, objectFit: 'cover' }} /><span style={{ flex: 1 }}><strong style={{ display: 'block', color: C.ink, fontSize: 12 }}>Cover from linked Routine content</strong><span style={{ display: 'block', color: C.sub, fontSize: 11, marginTop: 3 }}>This image is already attached to one of this Protocol’s database records.</span></span><button type="button" onClick={() => setField('image_url', routineCoverImage)} style={{ border: '1px solid ' + C.good, background: C.good, color: '#fff', borderRadius: 8, padding: '7px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Use as cover</button></div>}
                     <MediaUploadField

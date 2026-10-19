@@ -336,7 +336,7 @@ export async function createProtocol(
     headers: headers(accessToken, { Prefer: 'return=representation' }),
     body: JSON.stringify({
       description: '', category: 'Health', type: 'daily', target_gender: 'all',
-      total_days: 30, is_suggested: false, is_public: false, is_active: true,
+      total_days: 14, is_suggested: false, is_public: false, is_active: true,
       ...protocol,
     }),
   });
