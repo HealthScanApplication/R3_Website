@@ -1,9 +1,10 @@
 import { expect, it } from 'vitest';
-import { ACTIVITY_GROUPS } from '../../components/guides/ActivitiesLibrary';
+import { ACTIVITY_GROUPS, NOT_ACTIVITIES } from '../../components/guides/ActivitiesLibrary';
 
-it('folds every catalogue category into exactly one activity group', () => {
+it('folds every catalogue category into one activity group, or leaves it to the Diet section', () => {
   const cats = ['Strength', 'Stretch', 'Sports', 'Wellness', 'Recovery', 'Cardio', 'Beauty', 'Gym', 'Mindfulness', 'Calisthenics', 'Fitness', 'Supplement', 'Nutrition', 'Hygiene', 'Hiit', 'Meditation', 'Consume', 'Health', 'Breathwork', 'Water Sports', 'Martial Arts', 'Yoga', 'Dance'];
-  for (const c of cats) expect(ACTIVITY_GROUPS.filter((g) => g.categories.includes(c))).toHaveLength(1);
+  for (const c of cats) expect(ACTIVITY_GROUPS.filter((g) => g.categories.includes(c)).length + (NOT_ACTIVITIES.includes(c) ? 1 : 0)).toBe(1);
+  expect(NOT_ACTIVITIES).toEqual(expect.arrayContaining(['Nutrition', 'Consume', 'Supplement']));
 });
 it('offers the muscle filter only for training groups', () => {
   expect(ACTIVITY_GROUPS.filter((g) => g.muscles).map((g) => g.id)).toEqual(['all', 'strength', 'cardio', 'stretch', 'sports', 'recovery']);
@@ -23,4 +24,10 @@ it('tags indoor and outdoor only when the name says so', () => {
 });
 it('splits a muscle group into exercises, stretches and sports', () => {
   expect(MUSCLE_SECTIONS.map((s) => s.id)).toEqual(['exercise', 'stretch', 'sports']);
+});
+import { nutrientEffectText } from '../protocolBuilders';
+it('shows a cooking method nutrient effect as a sentence, not JSON', () => {
+  expect(nutrientEffectText('{"hazardous_element_ids":["heterocyclic_amines"],"elements_hazardous":[{"name":"Heterocyclic Amines","likelihood":"high","source":"cooking_method"}]}')).toBe('Can form: heterocyclic amines (high)');
+  expect(nutrientEffectText('Retains water-soluble vitamins')).toBe('Retains water-soluble vitamins');
+  expect(nutrientEffectText('{"bad json')).toBeNull();
 });

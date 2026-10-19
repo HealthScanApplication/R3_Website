@@ -508,7 +508,7 @@ export function planFitnessWeek(goal: FitnessGoal, likes?: FitnessLikes, schedul
 
 const LEVEL = { beginner: { sets: 2, reps: '10', rest: 90, exercises: 3 }, intermediate: { sets: 3, reps: '8–12', rest: 75, exercises: 4 }, advanced: { sets: 4, reps: '6–10', rest: 60, exercises: 5 } };
 
-export async function searchActivities(accessToken: string, opts: { query?: string; categories?: string[]; limit?: number; muscle?: MuscleGroupId | null }): Promise<ActivityPick[]> {
+export async function searchActivities(accessToken: string, opts: { query?: string; categories?: string[]; excludeCategories?: string[]; limit?: number; muscle?: MuscleGroupId | null }): Promise<ActivityPick[]> {
   const params = [`select=${ACTIVITY_SELECT}`, 'is_group=not.is.true', `limit=${opts.limit || 12}`, 'order=health_score.desc.nullslast'];
   const group = opts.muscle ? MUSCLE_GROUPS.find((g) => g.id === opts.muscle) : null;
   if (group) {
@@ -519,6 +519,7 @@ export async function searchActivities(accessToken: string, opts: { query?: stri
     params.push('category=not.in.(Beauty,Hygiene,Supplement,Consume)'); // muscle work only, not face mists or flossing
   }
   if (opts.categories?.length) params.push(`category=in.(${opts.categories.map((c) => `"${c}"`).join(',')})`);
+  else if (opts.excludeCategories?.length && !group) params.push(`category=not.in.(${opts.excludeCategories.map((c) => `"${c}"`).join(',')})`);
   const q = opts.query?.replace(/[%,()*]/g, ' ').trim();
   if (q) params.push(`name=ilike.*${encodeURIComponent(q)}*`);
   const res = await fetch(`${rest()}/catalog_activities?${params.join('&')}`, { headers: headers(accessToken) });
@@ -1004,4 +1005,34 @@ export async function listBuilderMeta(accessToken: string, ownerId: string): Pro
   const res = await fetch(`${rest()}/protocols?user_id=eq.${ownerId}&builder_kind=not.is.null&select=id,builder_kind,builder_config,source_protocol_ids`, { headers: headers(accessToken) });
   if (!res.ok) return {};
   return Object.fromEntries(((await res.json()) as any[]).map((r) => [r.id, { builder_kind: r.builder_kind, builder_config: r.builder_config, source_protocol_ids: r.source_protocol_ids }]));
+}
+
+/* ── cooking methods and kitchen equipment (Diet section) ── */
+export interface CookingMethod { id: string; name: string; category: string | null; description: string | null; temperature: string | null; medium: string | null; typicalTime: string | null; nutrientEffect: string | null; bestFor: string | null; image: string | null; equipmentIds: string[] }
+export interface KitchenEquipment { id: string; name: string; category: string | null; description: string | null; image: string | null; useCase: string | null; material: string | null; methodsUsedWith: string[] }
+/** Equipment categories that belong in a kitchen (the table also holds gym kit). */
+export const KITCHEN_EQUIPMENT_CATEGORIES = ['Cookware', 'Appliances', 'Prep', 'Utensils', 'Cutting', 'Baking', 'Measuring'];
+const txt = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+const arr = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
+/** nutrient_effect is plain text or a JSON record of hazards formed / nutrients affected; show it as a sentence. */
+export function nutrientEffectText(v: unknown): string | null {
+  const raw = txt(v); if (!raw) return null;
+  if (!raw.startsWith('{')) return raw;
+  try {
+    const j = JSON.parse(raw) as { elements_hazardous?: Array<{ name?: string; likelihood?: string }>; elements_beneficial?: Array<{ name?: string; effect?: string }> };
+    const list = (xs?: Array<{ name?: string; likelihood?: string; effect?: string }>) => (xs || []).filter((x) => x.name).map((x) => `${x.name!.toLowerCase()}${x.likelihood || x.effect ? ` (${x.likelihood || x.effect})` : ''}`).join(', ');
+    const parts = [list(j.elements_hazardous) && `Can form: ${list(j.elements_hazardous)}`, list(j.elements_beneficial) && `Can raise: ${list(j.elements_beneficial)}`].filter(Boolean);
+    return parts.length ? parts.join('. ') : null;
+  } catch { return null; }
+}
+export async function listCookingMethods(accessToken: string): Promise<CookingMethod[]> {
+  const res = await fetch(`${rest()}/catalog_cooking_methods?select=id,name,category,description,temperature,medium,typical_time,nutrient_effect,best_for,image_url,equipment_ids&order=name`, { headers: headers(accessToken) });
+  if (!res.ok) throw new Error(`Could not load cooking techniques (${res.status})`);
+  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, category: txt(r.category), description: txt(r.description), temperature: txt(r.temperature), medium: txt(r.medium), typicalTime: txt(r.typical_time), nutrientEffect: nutrientEffectText(r.nutrient_effect), bestFor: txt(r.best_for), image: txt(r.image_url), equipmentIds: arr(r.equipment_ids) }));
+}
+export async function listKitchenEquipment(accessToken: string): Promise<KitchenEquipment[]> {
+  const cats = KITCHEN_EQUIPMENT_CATEGORIES.map((c) => `"${c}"`).join(',');
+  const res = await fetch(`${rest()}/catalog_equipment?select=id,name,category,description,image_url,use_case,material,cooking_methods_used_with&category=in.(${cats})&order=name`, { headers: headers(accessToken) });
+  if (!res.ok) throw new Error(`Could not load cooking equipment (${res.status})`);
+  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, category: txt(r.category), description: txt(r.description), image: txt(r.image_url), useCase: txt(r.use_case), material: txt(r.material), methodsUsedWith: arr(r.cooking_methods_used_with) }));
 }

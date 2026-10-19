@@ -8,7 +8,7 @@
  * Read-only: plans are built in the Fitness and Protocol builders.
  */
 import { Fragment, useEffect, useState } from 'react';
-import { Activity, Bath, Bike, Brain, Dumbbell, HeartPulse, LayoutGrid, Loader2, Search, Smartphone, Sparkles, StretchHorizontal, Trophy, Utensils, Waves, X, type LucideIcon } from 'lucide-react';
+import { Activity, Bath, Bike, Brain, Dumbbell, HeartPulse, LayoutGrid, Loader2, Search, Smartphone, Sparkles, StretchHorizontal, Trophy, Waves, X, type LucideIcon } from 'lucide-react';
 import { MUSCLE_GROUPS, activityRelatives, activitySetting, muscleGroupOf, searchActivities, type ActivityPick, type MuscleGroupId } from '../../utils/protocolBuilders';
 import { ActivityDetailPreview } from './ActivityDetailPreview';
 import { Header } from './GuardianBuilders';
@@ -27,8 +27,10 @@ export const ACTIVITY_GROUPS: { id: string; label: string; Icon: LucideIcon; cat
   { id: 'mind', label: 'Mind', Icon: Brain, categories: ['Mindfulness', 'Meditation', 'Breathwork'], muscles: false },
   { id: 'hygiene', label: 'Hygiene', Icon: Bath, categories: ['Hygiene'], muscles: false },
   { id: 'beauty', label: 'Beauty', Icon: Sparkles, categories: ['Beauty'], muscles: false },
-  { id: 'nutrition', label: 'Nutrition', Icon: Utensils, categories: ['Nutrition', 'Consume', 'Supplement'], muscles: false },
 ];
+
+/** Not activities: food, supplements and cooking live in the Diet section (recipes, supplements, cooking techniques). */
+export const NOT_ACTIVITIES = ['Nutrition', 'Consume', 'Supplement', 'Detox', 'Muscle Group', 'Training Type'];
 
 /** What a muscle group shows in the muscle view: training, stretching and sports for it. */
 export const MUSCLE_SECTIONS: { id: string; label: string; Icon: LucideIcon; categories: string[] }[] = [
@@ -129,7 +131,7 @@ export function ActivitiesLibrary({ accessToken }: { accessToken: string }) {
   const [appView, setAppView] = useState<ActivityPick | null>(null);
   const group = ACTIVITY_GROUPS.find((g) => g.id === groupId) || ACTIVITY_GROUPS[0];
   const activeMuscle = group.muscles ? muscle : null;
-  const { items, busy, error } = useActivities(accessToken, { query, categories: group.categories, muscle: activeMuscle, limit: 80 }, query ? 250 : 0);
+  const { items, busy, error } = useActivities(accessToken, { query, categories: group.categories, excludeCategories: NOT_ACTIVITIES, muscle: activeMuscle, limit: 80 }, query ? 250 : 0);
   const pick = (a: ActivityPick | null) => { setSelected(a); if (!a) setAppView(null); };
   const openApp = () => setAppView(selected);
   return <div>

@@ -3,7 +3,7 @@ import {
   ArrowRight, ChevronRight, FileText, HeartPulse, LogOut,
   Mail, Package, Plus, Salad, Sparkles, Users, Globe2, Loader2,
   Upload, Check, Instagram, Youtube, Link2, AtSign, Route, CalendarDays, Download,
-  MoreHorizontal, Activity, FolderOpen, Trash2, ExternalLink, Hammer, PencilRuler, Blocks, LayoutDashboard, Play, Clock, ShieldCheck, Utensils, Dumbbell, Combine, Clapperboard, BookOpen, Podcast, GraduationCap, AudioLines } from 'lucide-react';
+  MoreHorizontal, Activity, ChefHat, CookingPot, FolderOpen, Trash2, ExternalLink, Hammer, PencilRuler, Blocks, LayoutDashboard, Play, Clock, ShieldCheck, Utensils, Dumbbell, Combine, Clapperboard, BookOpen, Podcast, GraduationCap, AudioLines } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ProtocolEditor } from '../admin/ProtocolEditor';
 import { RoutineMark } from '../Header';
@@ -28,6 +28,7 @@ import { AGE_RANGES, LIFE_STAGES } from '../../utils/audienceTaxonomy';
 import { brandKitLinks, brandKitOf, defaultBrandKit, type BrandKit } from '../../utils/brandKit';
 import { GuardianProducts, GuardianShop } from './GuardianProducts';
 import { ActivitiesLibrary } from './ActivitiesLibrary';
+import { CookingEquipment, CookingTechniques } from './CookingLibrary';
 import { buildProtocolWithAI, foldSleepSteps, saveDraftStep, updateProtocolWithAI, listProtocolItems, createProtocol, findOrCreateProtocol, createProtocolItem, listProtocols, type AdminProtocol } from '../../utils/protocolAdmin';
 import {
   recoverUpsellPayment, createGuideLead, createGuideOffer, createGuideRecipe, createGuideValueRamp, getGuideProfile, getGuideProfileBySlug,
@@ -84,8 +85,8 @@ function ExpertiseTags({ tags, color = '#667245', compact = false }: { tags: str
   </div>;
 }
 
-type Tab = 'home' | 'profile' | 'library' | 'leads' | 'value_ramps' | 'offer_builder' | 'products' | 'recipes' | 'diet' | 'fitness' | 'activities' | 'content' | 'protocols' | 'admin';
-const WORKSPACE_TABS: readonly Tab[] = ['home', 'profile', 'library', 'leads', 'value_ramps', 'offer_builder', 'products', 'recipes', 'diet', 'fitness', 'activities', 'content', 'protocols', 'admin'];
+type Tab = 'home' | 'profile' | 'library' | 'leads' | 'value_ramps' | 'offer_builder' | 'products' | 'recipes' | 'diet' | 'fitness' | 'activities' | 'cooking' | 'equipment' | 'content' | 'protocols' | 'admin';
+const WORKSPACE_TABS: readonly Tab[] = ['home', 'profile', 'library', 'leads', 'value_ramps', 'offer_builder', 'products', 'recipes', 'diet', 'fitness', 'activities', 'cooking', 'equipment', 'content', 'protocols', 'admin'];
 const SETUP_STEPS = [1, 2, 3, 4, 5] as const;
 type FreeOfferKind = 'ebook' | 'one_to_one_call' | 'group_call' | 'recipe_book' | 'routine' | 'in_person';
 type UpsellKind = 'ebook' | 'routine' | 'routine_guidance' | 'recipe_book' | 'group_call' | 'one_to_one_call' | 'in_person' | 'festival';
@@ -346,6 +347,8 @@ const nav: { id: Tab; label: string; Icon: typeof Users }[] = [
   { id: 'protocols', label: 'Protocols', Icon: HeartPulse },
   { id: 'diet', label: 'Diet', Icon: Utensils },
   { id: 'recipes', label: 'Recipes', Icon: Salad },
+  { id: 'cooking', label: 'Cooking techniques', Icon: CookingPot },
+  { id: 'equipment', label: 'Cooking equipment', Icon: ChefHat },
   { id: 'fitness', label: 'Fitness', Icon: Dumbbell },
   { id: 'activities', label: 'Activities', Icon: Activity },
   { id: 'content', label: 'Content', Icon: Clapperboard },
@@ -357,7 +360,7 @@ const nav: { id: Tab; label: string; Icon: typeof Users }[] = [
 type GuardianBuilder = { label: string; tab: Tab; Icon: typeof Users; sub: { label: string; tab: Tab }[] };
 const GUARDIAN_BUILDERS: GuardianBuilder[] = [
   { label: 'Protocol builder', tab: 'protocols', Icon: Hammer, sub: [{ label: 'All Protocols', tab: 'protocols' }, { label: 'Library', tab: 'library' }] },
-  { label: 'Diet planner', tab: 'diet', Icon: Utensils, sub: [{ label: 'Diet planner', tab: 'diet' }, { label: 'Recipes', tab: 'recipes' }] },
+  { label: 'Diet planner', tab: 'diet', Icon: Utensils, sub: [{ label: 'Diet planner', tab: 'diet' }, { label: 'Recipes', tab: 'recipes' }, { label: 'Cooking techniques', tab: 'cooking' }, { label: 'Cooking equipment', tab: 'equipment' }] },
   { label: 'Fitness planner', tab: 'fitness', Icon: Dumbbell, sub: [{ label: 'Fitness planner', tab: 'fitness' }, { label: 'Activities', tab: 'activities' }] },
   { label: 'Offer builder', tab: 'offer_builder', Icon: PencilRuler, sub: [{ label: 'Offer builder', tab: 'offer_builder' }, { label: 'Offer paths', tab: 'value_ramps' }, { label: 'Leads', tab: 'leads' }] },
   { label: 'Content builder', tab: 'content', Icon: Clapperboard, sub: [{ label: 'Content builder', tab: 'content' }] },
@@ -3785,6 +3788,8 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
         {copyError && <p role="alert">{copyError}</p>}
         {tab === 'diet' && accessToken && user && <DietBuilder key={childPlanId || 'diet'} initialProtocolId={childPlanId} accessToken={accessToken} ownerId={user.id} protocols={protocols} recipes={recipes} onSaved={(saved) => setProtocols((current) => [saved, ...current.filter((p) => p.id !== saved.id)])} onOpen={(id) => { setTab('protocols'); setProtocolId(id); }} />}
         {tab === 'activities' && accessToken && <ActivitiesLibrary accessToken={accessToken} />}
+        {tab === 'cooking' && accessToken && <CookingTechniques accessToken={accessToken} />}
+        {tab === 'equipment' && accessToken && <CookingEquipment accessToken={accessToken} />}
         {tab === 'fitness' && accessToken && user && <FitnessBuilder key={childPlanId || 'fitness'} initialProtocolId={childPlanId} accessToken={accessToken} ownerId={user.id} protocols={protocols} onSaved={(saved) => setProtocols((current) => [saved, ...current.filter((p) => p.id !== saved.id)])} onOpen={(id) => { setTab('protocols'); setProtocolId(id); }} />}
         {tab === 'recipes' && recipeId && <RecipeBuilder key={recipeId} recipe={recipes.find((recipe) => recipe.id === recipeId)!} userId={user.id} offers={offers} onBack={() => setRecipeId(null)} onSaved={(saved) => setRecipes((current) => current.map((recipe) => recipe.id === saved.id ? saved : recipe))} />}
         {tab === 'protocols' && protocolId && accessToken && user && <div style={{ background: '#F5F4EF', color: '#151515', padding: 18, minHeight: 700 }}>
