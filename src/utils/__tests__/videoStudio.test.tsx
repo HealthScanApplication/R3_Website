@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { costCopy, pollDelay, progressOf } from '../higgsfieldVideo';
 import { defaultBrandKit } from '../brandKit';
+import { postCopy } from '../postCopy';
 
 const models = [{ id: 'kling-3-std', label: 'Kling 3.0 Standard', durations: [3, 15], aspects: [{ aspect: '9:16', delivered: '9:16' }, { aspect: '4:5', delivered: '9:16' }, { aspect: '1:1', delivered: '1:1' }, { aspect: '16:9', delivered: '16:9' }] }];
 const api = vi.hoisted(() => ({
@@ -92,22 +93,20 @@ describe('VideoStudio', () => {
     expect(prompt.value).toMatch(/stress/i);
   });
 
-  it('drafts an editable script and lays the post text over the video, drafted from the script', async () => {
+  it('drafts an editable script and lays the short post copy over the video', async () => {
     api.higgsfieldStatus.mockResolvedValue({ connected: true, key_hint: 'ef12', connected_at: null, live: false, models });
     render(<VideoStudio {...props} free siteUrl="/guardians/john" />);
     const script = await screen.findByLabelText(/Script · hook/) as HTMLTextAreaElement;
     expect(script.value.split('\n')[0]).toBe('Sleep problems? It might be your routine.');
     expect(script.value.split('\n').at(-1)).toBe('Get the free routine at the link in bio.');
     expect(screen.getByLabelText('Text on the video').tagName).toBe('CANVAS');
-    expect((screen.getByLabelText('Video headline') as HTMLInputElement).value).toBe('Sleep problems? It might be your routine.');
-    expect((screen.getByLabelText('Video button') as HTMLInputElement).value).toBe('Get the free routine');
+    // The text layer uses the same short copy as the Content studio, not the script's spoken lines.
+    expect((screen.getByLabelText('Video headline') as HTMLInputElement).value).toBe(postCopy({ audience: props.audience, problem: props.problem, offer: props.offer ? { title: props.offer, free: true } : null }).headline);
+    expect((screen.getByLabelText('Video headline') as HTMLInputElement).value.split(' ').length).toBeLessThanOrEqual(5);
     expect(screen.getByRole('group', { name: 'Video text style' }).querySelectorAll('button')).toHaveLength(6);
     expect(screen.getByLabelText('Video text position').querySelectorAll('option')).toHaveLength(4);
-    // Editing the script's hook moves the headline with it, until the headline itself is edited.
     fireEvent.change(script, { target: { value: 'Tired of 3am wake-ups?\nOne line.\nJoin free.' } });
-    expect((screen.getByLabelText('Video headline') as HTMLInputElement).value).toBe('Tired of 3am wake-ups?');
     fireEvent.change(screen.getByLabelText('Video headline'), { target: { value: 'My headline' } });
-    fireEvent.change(script, { target: { value: 'Another hook\nOne line.\nJoin free.' } });
     expect((screen.getByLabelText('Video headline') as HTMLInputElement).value).toBe('My headline');
     fireEvent.click(screen.getByRole('checkbox', { name: /Text on the video/ }));
     expect(screen.queryByLabelText('Text on the video')).toBeNull();

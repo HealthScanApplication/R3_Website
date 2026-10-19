@@ -13,6 +13,7 @@ import { Copy, Download, ExternalLink } from 'lucide-react';
 import QRCode from 'qrcode';
 import { ensureBrandFont, type BrandKit, type ButtonColours } from '../../utils/brandKit';
 import { copyPrompt, imagePrompt } from '../../utils/brandBrief';
+import { postCopy, type CopyKind } from '../../utils/postCopy';
 import { AS_IS, compositionBrief, legacyPlacement, placeBackground, type Placement } from '../../utils/postLayout';
 import { connectOpenAI, disconnectOpenAI, generateImage, imageStatus, priceLabel, type ImageQuality, type ImageSource, type ImageStatus } from '../../utils/guardianImages';
 
@@ -56,7 +57,8 @@ const bgUrl = (file: string) => `/images/content/${file}.webp`;
 const GENERATED = '__generated';
 const FIT_COLOUR = { good: '#7FB069', ok: '#E0B354', poor: '#D9695F' } as const;
 
-export interface StudioOffer { title: string; free: boolean; price?: string; description?: string }
+/** `days`, `ingredients`, `minutes`: facts the default copy can use (a Protocol's length, a recipe's size). */
+export interface StudioOffer { title: string; free: boolean; price?: string; description?: string; days?: number | null; ingredients?: number | null; minutes?: number | null }
 
 /** "Sleep problems" → "sleep"; "Low energy" → "energy". The solution the headline promises. */
 function solutionFor(problem: string): string {
@@ -341,7 +343,7 @@ export function StyleThumb({ styleId, bg, headline, subline, cta, credit, brand,
   return <canvas ref={ref} aria-hidden="true" style={{ width: '100%', aspectRatio: '9 / 16', display: 'block', background: '#1B1C18' }} />;
 }
 
-export function ContentStudio({ creator, avatar = null, audience, problem, offers, siteUrl, heading = 'Create posts for this offer path', brand = null }: { creator: string; avatar?: string | null; audience: string; problem: string; offers: StudioOffer[]; siteUrl: string; heading?: string; brand?: PostBrand | null }) {
+export function ContentStudio({ creator, avatar = null, audience, problem, offers, siteUrl, heading = 'Create posts for this offer path', brand = null, kind = 'offer' }: { kind?: CopyKind; creator: string; avatar?: string | null; audience: string; problem: string; offers: StudioOffer[]; siteUrl: string; heading?: string; brand?: PostBrand | null }) {
   // Template fonts load from Google Fonts; redraw once they are registered, or the first frame uses a fallback.
   const [fontsReady, setFontsReady] = useState(0);
   useEffect(() => {
@@ -368,10 +370,10 @@ export function ContentStudio({ creator, avatar = null, audience, problem, offer
   const [generated, setGenerated] = useState<{ url: string; fmt: FormatId; position: TextPosition; mock: boolean } | null>(null);
   const [genOpen, setGenOpen] = useState(false);
   useEffect(() => {
-    setHeadline(`Build a routine for ${solution}`);
-    setSubline(offer.description ? offer.description.split(/(?<=[.!?])\s/)[0].replace(/\.$/, '') : `Simple daily actions for ${audience.toLowerCase()}`);
-    setCta(offer.free ? 'Get routine' : 'Start the Protocol');
-  }, [offerIndex, solution, audience]);
+    // Short, specific defaults (≤5-word headline, ≤8-word subline) from the audience, problem and offer; editable.
+    const c = postCopy({ audience, problem, solution: `A routine for ${solution}`, offer, kind });
+    setHeadline(c.headline); setSubline(c.subline); setCta(c.cta);
+  }, [offerIndex, solution, audience, problem, kind, offer.title, offer.description]); // eslint-disable-line react-hooks/exhaustive-deps
   const fmt = FORMATS.find((f) => f.id === fmtId)!;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const background = bg || autoBg;
