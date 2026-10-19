@@ -8,7 +8,7 @@
  */
 import { Fragment, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { AlertTriangle, Dumbbell, Heart, Loader2, Search, Wheat, X } from 'lucide-react';
-import { RECIPE_DIETS, browseIngredients, browseRecipes, listFitnessRoutines, recipeIngredientNames, routinePeriod, routineSteps, type CatalogFood, type FitnessRoutine, type RoutineStep } from '../../utils/protocolBuilders';
+import { RECIPE_DIETS, browseIngredients, browseRecipes, listFitnessRoutines, listMyDietPlans, recipeIngredientNames, routinePeriod, routineSteps, type CatalogFood, type FitnessRoutine, type RoutineStep } from '../../utils/protocolBuilders';
 import { ProtocolHomeScreen } from '../mockups/ProtocolHomeScreen';
 import { PhoneFrame } from '../mockups/PhoneFrame';
 import { NUTRIENTS } from '../../utils/recipeNutrients';
@@ -242,6 +242,7 @@ export function isBasicFor(s: Pick<RoutineStep, 'subtype' | 'category' | 'name'>
 /** The app's fitness routines (catalogue Protocols) with their steps. */
 /** A section's published routines (catalogue Protocols in its categories), e.g. Fitness, Beauty, Wellness. */
 export const ROUTINE_SECTIONS = {
+  diet: { title: 'Diet protocols', kicker: 'Diet', categories: ['diet', 'nutrition', 'fasting', 'meal plan'], names: ['fast', 'diet', 'keto', 'whole30', 'meal', 'nutrition', 'paleo'], copy: 'Diet and fasting routines published in the ROUTINE³ app, and the diet plans you saved from the Diet planner.' },
   fitness: { title: 'Fitness routines', kicker: 'Fitness', categories: ['fitness', 'strength', 'recovery', 'mobility', 'cardio', 'hiit'], copy: 'The fitness routines and Protocols published in the ROUTINE³ app. Open one to see its steps.' },
   hygiene: { title: 'Hygiene protocols', kicker: 'Hygiene', categories: ['hygiene', 'oral care', 'personal care'], copy: 'Hygiene routines published in the ROUTINE³ app: morning and evening sets for teeth, skin and body.' },
   beauty: { title: 'Beauty protocols', kicker: 'Beauty', categories: ['beauty', 'skin & face', 'skin', 'hair'], copy: 'Beauty routines published in the ROUTINE³ app: skin, face and hair.' },
@@ -276,7 +277,14 @@ export const descriptionParagraphs = (text: string) => text.split(/\s*#{2,}\s*/)
 
 export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbbell }: { accessToken: string; section?: RoutineSection; Icon?: typeof Dumbbell }) {
   const cfg = ROUTINE_SECTIONS[section];
-  const { items, busy, error } = useLoad<FitnessRoutine>(() => listFitnessRoutines(accessToken, [...cfg.categories]), [accessToken, section]);
+  const names: string[] = 'names' in cfg ? [...cfg.names] : [];
+  // Diet also lists the Guardian's own plans saved from the Diet planner, before the published ones.
+  const { items, busy, error } = useLoad<FitnessRoutine>(async () => {
+    const published = await listFitnessRoutines(accessToken, [...cfg.categories], names);
+    if (section !== 'diet') return published;
+    const mine = (await listMyDietPlans(accessToken)).map((r) => ({ ...r, tags: ['your plan', ...r.tags] }));
+    return [...mine, ...published.filter((p) => !mine.some((m) => m.id === p.id))];
+  }, [accessToken, section]);
   const [open, setOpen] = useState<string | null>(null);
   const [steps, setSteps] = useState<RoutineStep[] | null>(null);
   const [day, setDay] = useState(1);
