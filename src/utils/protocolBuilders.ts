@@ -1053,16 +1053,6 @@ export function hazardsOf(v: unknown): CatalogHazard[] {
   const rank: Record<string, number> = { high: 0, moderate: 1, medium: 1, low: 2, trace: 3 };
   return Object.entries(v as Record<string, any>).map(([key, x]) => ({ key, level: String(x?.level || 'trace') })).sort((a, b) => (rank[a.level] ?? 4) - (rank[b.level] ?? 4) || a.key.localeCompare(b.key));
 }
-/** Points off the stored health score per recorded hazard: a food with high lead or cadmium cannot read 100. Capped at 40. */
-export const HAZARD_PENALTY: Record<string, number> = { high: 12, moderate: 6, medium: 6, low: 2, trace: 0 };
-export function hazardAdjustedScore(score: number | null, hazards: CatalogHazard[]): number | null {
-  if (score == null) return null;
-  const off = Math.min(40, hazards.reduce((t, h) => t + (HAZARD_PENALTY[h.level] || 0), 0));
-  return Math.max(0, Math.round(score - off));
-}
-const scored = <T extends { healthScore: number | null; hazards: CatalogHazard[] }>(f: T): T => ({ ...f, healthScore: hazardAdjustedScore(f.healthScore, f.hazards) });
-/** Re-rank a page by the adjusted score (the server orders by the stored one). */
-const byScore = <T extends { healthScore: number | null }>(a: T[]) => a.sort((x, y) => (y.healthScore ?? -1) - (x.healthScore ?? -1));
 const DIET_FLAGS: Array<[string, string]> = [['vegan', 'Vegan'], ['vegetarian', 'Vegetarian'], ['pescatarian', 'Pescatarian'], ['keto', 'Keto'], ['low_carb', 'Low-carb'], ['gluten_free', 'Gluten-free'], ['dairy_free', 'Dairy-free'], ['nut_free', 'Nut-free'], ['egg_free', 'Egg-free']];
 export const RECIPE_DIETS = DIET_FLAGS;
 const dietsOf = (d: unknown) => (d && typeof d === 'object' ? DIET_FLAGS.filter(([k]) => (d as any)[k] === true).map(([, l]) => l) : []);
@@ -1076,8 +1066,8 @@ export async function browseRecipes(accessToken: string, f: { offset?: number; q
   if (f.diet) p.push(`dietary_info->>${f.diet}=eq.true`);
   const res = await fetch(`${rest()}/catalog_recipes?${p.join('&')}`, { headers: headers(accessToken) });
   if (!res.ok) throw new Error(`Could not load recipes (${res.status})`);
-  return byScore(((await res.json()) as any[]).map((r) => scored({ id: r.id, name: r.name_common, image: r.image_primary_url || r.image_url || null, category: r.meal_slot || null, description: txt(r.description_simple) || txt(r.description), healthScore: num(r.health_score), per100: per100Of(r.nutrition_per_100g), hazards: hazardsOf(r.elements_hazardous), diets: dietsOf(r.dietary_info),
-    meta: [['Cuisine', txt(r.cuisine)], ['Meal', txt(r.meal_slot)], ['Prep', r.prep_time ? `${r.prep_time} min` : null], ['Cook', r.cook_time ? `${r.cook_time} min` : null], ['Serves', r.servings ? String(r.servings) : null]] })));
+  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name_common, image: r.image_primary_url || r.image_url || null, category: r.meal_slot || null, description: txt(r.description_simple) || txt(r.description), healthScore: num(r.health_score), per100: per100Of(r.nutrition_per_100g), hazards: hazardsOf(r.elements_hazardous), diets: dietsOf(r.dietary_info),
+    meta: [['Cuisine', txt(r.cuisine)], ['Meal', txt(r.meal_slot)], ['Prep', r.prep_time ? `${r.prep_time} min` : null], ['Cook', r.cook_time ? `${r.cook_time} min` : null], ['Serves', r.servings ? String(r.servings) : null]] }));
 }
 export async function recipeIngredientNames(accessToken: string, recipeId: string): Promise<Array<{ name: string; grams: number | null }>> {
   const res = await fetch(`${rest()}/catalog_recipe_ingredients?select=ingredient_name,amount_g,sort_order&recipe_id=eq.${recipeId}&order=sort_order.asc.nullslast`, { headers: headers(accessToken) });
@@ -1105,8 +1095,8 @@ export async function browseIngredients(accessToken: string, f: { offset?: numbe
   if (f.category) p.push(`category=eq.${encodeURIComponent(f.category)}`);
   const res = await fetch(`${rest()}/catalog_ingredients?${p.join('&')}`, { headers: headers(accessToken) });
   if (!res.ok) throw new Error(`Could not load ingredients (${res.status})`);
-  return byScore(((await res.json()) as any[]).map((r) => scored({ ...ingredientForm(String(r.name_common || ''), txt(r.category_sub), r.category || null), id: r.id, name: r.name_common, image: r.image_primary_url || r.image_url || null, category: r.category || null, description: txt(r.description_simple) || txt(r.description), healthScore: num(r.health_score), per100: per100Of(r.nutrition_per_100g), hazards: hazardsOf(r.elements_hazardous), diets: [],
-    meta: [['Type', txt(r.category_sub)], ['Season', Array.isArray(r.season) ? r.season.join(', ') : txt(r.season)], ['Origin', Array.isArray(r.origin_region) ? r.origin_region.join(', ') : txt(r.origin_region)]] })));
+  return ((await res.json()) as any[]).map((r) => ({ ...ingredientForm(String(r.name_common || ''), txt(r.category_sub), r.category || null), id: r.id, name: r.name_common, image: r.image_primary_url || r.image_url || null, category: r.category || null, description: txt(r.description_simple) || txt(r.description), healthScore: num(r.health_score), per100: per100Of(r.nutrition_per_100g), hazards: hazardsOf(r.elements_hazardous), diets: [],
+    meta: [['Type', txt(r.category_sub)], ['Season', Array.isArray(r.season) ? r.season.join(', ') : txt(r.season)], ['Origin', Array.isArray(r.origin_region) ? r.origin_region.join(', ') : txt(r.origin_region)]] }));
 }
 
 export interface FitnessRoutine { id: string; name: string; description: string | null; image: string | null; category: string | null; tags: string[] }

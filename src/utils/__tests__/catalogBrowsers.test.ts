@@ -19,12 +19,3 @@ it('splits ingredients into whole/raw and processed, with how', () => {
   expect(ingredientForm('Bread', null, 'Grains & bakery')).toEqual({ form: 'processed', processing: 'Baked' });
   expect(ingredientForm('Quinoa', null, 'Grains & bakery')).toEqual({ form: null, processing: null });
 });
-import { hazardAdjustedScore } from '../protocolBuilders';
-it('lowers the health score for recorded hazards', () => {
-  // Baby spinach: high lead and cadmium, low oxalates and perchlorate, trace phytates.
-  const h = ['high', 'high', 'low', 'low', 'trace'].map((level, i) => ({ key: `k${i}`, level }));
-  expect(hazardAdjustedScore(100, h)).toBe(72);
-  expect(hazardAdjustedScore(100, [])).toBe(100);
-  expect(hazardAdjustedScore(30, Array(9).fill({ key: 'x', level: 'high' }))).toBe(0);
-  expect(hazardAdjustedScore(null, h)).toBeNull();
-});
