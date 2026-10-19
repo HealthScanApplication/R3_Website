@@ -631,6 +631,8 @@ export async function draftFitnessWeek(accessToken: string, goalId: string, leve
     // Exercises the person picked go first in every session whose categories they belong to.
     for (const f of likes?.exercises || []) {
       if (exercises.length >= dose.exercises || !t.categories.includes(f.category || '') || exercises.some((e) => e.id === f.id)) continue;
+      // On a muscle day only exercises for that day's muscles: a chest pick stays out of a leg day.
+      if (t.muscles?.length) { const parts = new Set(MUSCLE_GROUPS.filter((g) => t.muscles!.includes(g.id)).flatMap((g) => g.parts as readonly string[])); if (!(f.bodyParts || []).some((b) => parts.has(b))) continue; }
       const timed = /cardio|sports|stretch|recovery|yoga/i.test(f.category || '');
       exercises.push({ ...f, sets: timed ? null : dose.sets, reps: timed ? null : dose.reps, rest_seconds: timed ? null : dose.rest, minutes: timed ? Math.max(5, Math.round(minutes / dose.exercises)) : null });
       used.add(f.id);

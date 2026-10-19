@@ -425,7 +425,9 @@ export function FitnessBuilder({ accessToken, ownerId, protocols, initialProtoco
   useEffect(() => {
     if (!likedCats.length) { setTypeExercises(null); return; }
     let live = true; setTypeExercises(null);
-    Promise.all((likes.muscles?.length ? likes.muscles : [null]).map((m) => searchActivities(accessToken, { categories: likedCats, muscle: m, limit: 24 }).catch(() => [])))
+    // One fetch per category (so one category can't fill the list), muscle focus only where it applies.
+    const MUSCLE_CATS = ['Strength', 'Gym', 'Fitness', 'Calisthenics'];
+    Promise.all(likedCats.flatMap((c) => (MUSCLE_CATS.includes(c) && likes.muscles?.length ? likes.muscles : [null]).map((m) => searchActivities(accessToken, { categories: [c], muscle: m, limit: 12 }).catch(() => []))))
       .then((lists) => { if (live) setTypeExercises([...new Map(lists.flat().map((a) => [a.id, a])).values()]); });
     return () => { live = false; };
   }, [accessToken, likedCats.join(), (likes.muscles || []).join()]); // eslint-disable-line react-hooks/exhaustive-deps
