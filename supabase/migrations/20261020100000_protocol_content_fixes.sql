@@ -4,7 +4,8 @@
 --  3. Marathon and Half Marathon: say plainly that they give one repeating week, with progression rules.
 --  4. Length: 7-Day Whole-Foods Plan = 7 days, Gut Healing = 28 days (a 4-week block, repeated to 8).
 --  5. Bare rule titles ("Strength Training", "Drink Water", "Meal") carry their note's meaning, or are hidden when empty.
--- Idempotent; catalogue protocols only (user_id IS NULL).
+-- Idempotent; catalogue protocols only (user_id IS NULL). "Has steps" ignores the standard daily basics (hygiene sets, sleep anchors) and
+-- a set's sub-steps, so replaying every migration in order still fills the empty routines.
 
 -- 5. bare rule titles (done first so Wolverine's own rules are covered)
 UPDATE public.protocol_items i SET display_name = 'Progressive overload: add weight or reps'
@@ -29,7 +30,7 @@ BEGIN
     UPDATE public.protocols SET description = 'A physique-prep template inspired by the principles reported around Hugh Jackman''s Wolverine preparation: heavy compound lifts, progressive overload, intermittent fasting and high-protein eating. The exact programme is not public, so this is a four-day lifting week with a conditioning day and two rest days, to repeat and progress over about 12 weeks. Add weight or reps when a session feels controlled. Not affiliated with or endorsed by Hugh Jackman. Educational, not medical advice.',
       source_attribution = 'Principles from public interviews; the weekly template is an editorial synthesis, not his actual programme.', total_days = NULL
     WHERE id = pid;
-    IF NOT EXISTS (SELECT 1 FROM public.protocol_items WHERE protocol_id = pid AND kind = 'action') THEN
+    IF NOT EXISTS (SELECT 1 FROM public.protocol_items WHERE protocol_id = pid AND kind = 'action' AND parent_protocol_item_id IS NULL AND coalesce(subtype, '') <> 'hygiene' AND category IS DISTINCT FROM 'sleep') THEN
       INSERT INTO public.protocol_items (id, protocol_id, item_type, display_name, kind, category, subtype, scope, scheduled_time, duration_minutes, sort_order, recurrence_type, recurrence_days_of_week, hidden, enabled, notes, group_name, catalog_activity_id, catalog_recipe_id, sets, reps) VALUES
     (gen_random_uuid(), pid, 'activity', 'Barbell Bench Press', 'action', 'do', 'exercise', NULL, '17:30:00'::time, 12, 100, 'weekly', ARRAY[1]::int[], false, true, NULL, 'Chest and triceps', 'activity_barbell_bench_press', NULL, 4, 6),
     (gen_random_uuid(), pid, 'activity', 'Barbell Incline Bench Press', 'action', 'do', 'exercise', NULL, '17:42:00'::time, 12, 101, 'weekly', ARRAY[1]::int[], false, true, NULL, 'Chest and triceps', 'activity_barbell_incline_bench_press', NULL, 4, 8),
@@ -58,7 +59,7 @@ BEGIN
 
   -- 2. Weekly Gut Health Reset: the three instructions become Sunday steps
   SELECT id INTO pid FROM public.protocols WHERE user_id IS NULL AND name = 'Weekly Gut Health Reset' LIMIT 1;
-  IF pid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.protocol_items WHERE protocol_id = pid AND kind = 'action') THEN
+  IF pid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.protocol_items WHERE protocol_id = pid AND kind = 'action' AND parent_protocol_item_id IS NULL AND coalesce(subtype, '') <> 'hygiene' AND category IS DISTINCT FROM 'sleep') THEN
     UPDATE public.protocol_items SET kind = 'action', item_type = 'consume', category = 'consume', subtype = 'meal', scope = NULL, display_name = 'Kefir or yoghurt', scheduled_time = '08:00', duration_minutes = 5, group_name = 'Breakfast'
       WHERE protocol_id = pid AND display_name = 'Fermented Foods Day';
     UPDATE public.protocol_items SET kind = 'action', item_type = 'consume', category = 'consume', subtype = 'meal', scope = NULL, display_name = 'Prebiotic fibre boost', scheduled_time = '12:35', duration_minutes = 5, group_name = 'Lunch'
