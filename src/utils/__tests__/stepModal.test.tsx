@@ -30,3 +30,14 @@ it('shows a meal step as a button that opens its recipe, and an unlinked one as 
   // a generic meal slot falls back to its suggested recipe
   expect(stepTarget({ id: 's', name: 'Breakfast' } as any, 'Meals', {}, { s: { id: 'r9', name: 'Oats', image: null } as any }).target).toEqual({ kind: 'recipe', id: 'r9', name: 'Oats' });
 });
+
+import { routineSteps } from '../protocolBuilders';
+it('reads every step of a long routine across pages', async () => {
+  const row = (n: number) => ({ id: `i${n}`, display_name: `Step ${n}`, kind: 'action', day_number: 1, sort_order: n, scheduled_time: null });
+  const calls: string[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => { calls.push(String(url)); const off = Number(/offset=(\d+)/.exec(String(url))![1]); return json(off === 0 ? Array.from({ length: 1000 }, (_, k) => row(k)) : Array.from({ length: 213 }, (_, k) => row(1000 + k))); }));
+  const steps = await routineSteps('t', 'p1');
+  expect(steps).toHaveLength(1213);
+  expect(calls).toHaveLength(2);
+  expect(calls[0]).toContain('limit=1000');
+});
