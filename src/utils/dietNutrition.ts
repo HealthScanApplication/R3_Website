@@ -2,6 +2,7 @@ import { mealDrinks, mealPickKey, MEAL_SLOTS, selectedServings, toMealNutrition,
 import { canonicalMicros, ingredientHazards, NUTRIENTS, nutrientByKey, recipeHazards, type RecipeHazard } from './recipeNutrients';
 import type { GuideRecipe } from './guidePortal';
 import { projectId, publicAnonKey } from './supabase/info';
+import { combinePral, fetchWithPralFallback, sumPral, trustedPral, type PralTotal } from './pral';
 
 export type DietAnalysis = Record<string, MealPick>;
 export function dietSelections(cfg: DietConfig, day?: number): Array<MealPick | string> {
@@ -46,18 +47,24 @@ export interface DietTotals {
   hazards: Array<RecipeHazard & { amount: number | null; unknown: number; occurrences: number }>;
   /** Ingredients across the selections; grams = portion in this plan (servings applied), null if unknown. */
   ingredients: PlanIngredient[];
+  /** PRAL (acid/base load) in mEq: a total only when every weighed item has a value. */
+  pral: PralTotal;
+  pralMeals: Array<{ name: string; pral: PralTotal | null }>;
 }
 const LEVELS = ['trace','low','moderate','high'];
 function totals(items: Array<MealPick | string>, analysis: DietAnalysis): DietTotals {
-  const result: DietTotals = { count: items.length, unlinked: 0, unassessed: 0, nutrients: {}, hazards: [], ingredients: [] };
+  const result: DietTotals = { count: items.length, unlinked: 0, unassessed: 0, nutrients: {}, hazards: [], ingredients: [], pral: combinePral([]), pralMeals: [] };
+  const pralParts: Array<{ pral?: PralTotal; servings: number } | null> = [];
   const ingredients = new Map<string, PlanIngredient>();
   for (const k of ['energy_kcal','protein_g','carbohydrates_g','fats_g','fiber_g', ...NUTRIENTS.map((d) => d.key)]) result.nutrients[k] = { amount: null, known: 0 };
   const hazards = new Map<string, DietTotals['hazards'][number]>();
   for (const item of items) {
-    if (typeof item === 'string') { result.unlinked++; result.unassessed++; continue; }
+    if (typeof item === 'string') { result.unlinked++; result.unassessed++; pralParts.push(null); result.pralMeals.push({ name: item, pral: null }); continue; }
     const p = { ...item, ...analysis[mealPickKey(item)], servings: item.servings };
     const servings = selectedServings(p);
     if (!p.analysisComplete) result.unassessed++;
+    pralParts.push({ pral: p.pral, servings });
+    result.pralMeals.push({ name: p.name, pral: p.pral ? { ...p.pral, total: p.pral.total == null ? null : p.pral.total * servings } : null });
     for (const i of p.ingredients || []) {
       const cur = ingredients.get(i.name) || { ...i, grams: 0 };
       cur.grams = cur.grams == null || i.grams == null ? null : cur.grams + i.grams * servings;
@@ -81,6 +88,7 @@ function totals(items: Array<MealPick | string>, analysis: DietAnalysis): DietTo
       hazards.set(h.key, cur);
     }
   }
+  result.pral = combinePral(pralParts);
   result.hazards = [...hazards.values()].sort((a,b) => LEVELS.indexOf(b.level)-LEVELS.indexOf(a.level) || a.label.localeCompare(b.label));
   result.ingredients = [...ingredients.values()].sort((a,b) => (b.grams ?? 0)-(a.grams ?? 0));
   return result;
@@ -93,13 +101,15 @@ export function aggregateDiet(cfg: DietConfig, analysis: DietAnalysis = {}) {
  * Owner-private recipes remain behind the caller's token/RLS; nothing is published. */
 export async function loadDietAnalysis(token: string, picks: MealPick[], recipes: GuideRecipe[], signal?: AbortSignal): Promise<DietAnalysis> {
   const result: DietAnalysis = {};
-  const read = async (table: string, select: string, field: string, ids: string[]) => {
+  const read = async (table: string, select: string, field: string, ids: string[], pral = false) => {
     const rows: any[] = [];
     for (let start = 0; start < ids.length; start += 40) {
       const values = ids.slice(start,start+40).map((id) => `"${id.replace(/["\\]/g,'')}"`).join(',');
       for (let offset = 0; ; offset += 1000) {
-        const params = new URLSearchParams({ select, [field]: `in.(${values})`, limit: '1000', offset: String(offset), order: 'id.asc' });
-        const response = await fetch(`https://${projectId}.supabase.co/rest/v1/${table}?${params}`, { signal, headers: { apikey: publicAnonKey, Authorization: `Bearer ${token}` } });
+        const url = (sel: string) => `https://${projectId}.supabase.co/rest/v1/${table}?${new URLSearchParams({ select: sel, [field]: `in.(${values})`, limit: '1000', offset: String(offset), order: 'id.asc' })}`;
+        const init = { signal, headers: { apikey: publicAnonKey, Authorization: `Bearer ${token}` } };
+        // A database without the pral_* columns must never empty the planner: retry once without them.
+        const response = pral ? await fetchWithPralFallback(url, select, init) : await fetch(url(select), init);
         if (!response.ok) throw Error('Could not refresh meal nutrients and hazards.');
         const page = await response.json(); rows.push(...page); if (page.length < 1000) break;
       }
@@ -109,7 +119,7 @@ export async function loadDietAnalysis(token: string, picks: MealPick[], recipes
   const ids = [...new Set(picks.filter((p) => p.source === 'catalog').map((p) => p.id))];
   const rows = await read('catalog_recipes','id,nutrition_per_serving,servings','id',ids);
   const links = await read('catalog_recipe_ingredients','id,recipe_id,ingredient_id,amount_g,retention_factor','recipe_id',rows.map((r) => r.id));
-  const ingredients = new Map((await read('catalog_ingredients','id,name_common,nutrition_per_100g,elements_beneficial,elements_hazardous','id',[...new Set(links.map((j) => j.ingredient_id).filter(Boolean))] as string[])).map((r) => [r.id,r]));
+  const ingredients = new Map((await read('catalog_ingredients','id,name_common,nutrition_per_100g,elements_beneficial,elements_hazardous','id',[...new Set(links.map((j) => j.ingredient_id).filter(Boolean))] as string[],true)).map((r) => [r.id,r]));
   for (const pick of picks) {
     if (result[mealPickKey(pick)]) continue;
     const row = pick.source === 'guide' ? recipes.find((r) => r.id === pick.id) : rows.find((r) => r.id === pick.id);
@@ -119,12 +129,12 @@ export async function loadDietAnalysis(token: string, picks: MealPick[], recipes
     let complete = true;
     const items = pick.source === 'guide' ? ((row as GuideRecipe).ingredients || []).map((i: any) => {
       if (!i?.per100 || number(i.grams) == null) complete = false;
-      return { name: i?.catalog_name || i?.name || 'Ingredient', grams: number(i?.grams) ?? 0, known: number(i?.grams) != null, per100: i?.per100?.micros || {}, micros: number(i?.grams) == null ? {} : i?.per100?.micros || {}, hazards: i?.per100?.hazards || [] };
+      return { name: i?.catalog_name || i?.name || 'Ingredient', grams: number(i?.grams) ?? 0, known: number(i?.grams) != null, per100: i?.per100?.micros || {}, micros: number(i?.grams) == null ? {} : i?.per100?.micros || {}, hazards: i?.per100?.hazards || [], pral: trustedPral(i?.per100), pralRule: i?.per100?.pral_status === 'rule' };
     }) : links.filter((j) => j.recipe_id === pick.id).map((j) => {
       const ing = ingredients.get(j.ingredient_id);
       const retention = j.retention_factor == null ? 1 : number(j.retention_factor);
       if (!ing || number(j.amount_g) == null || retention == null) complete = false;
-      return { name: ing?.name_common || 'Ingredient', grams: (number(j.amount_g) ?? 0) * (retention ?? 0), known: number(j.amount_g) != null && retention != null, per100: ing ? { ...canonicalValues(ing.nutrition_per_100g || {}), ...recordedMicros(ing) } : {}, micros: number(j.amount_g) == null || retention == null ? {} : recordedMicros(ing), hazards: ingredientHazards(ing) };
+      return { name: ing?.name_common || 'Ingredient', grams: (number(j.amount_g) ?? 0) * (retention ?? 0), known: number(j.amount_g) != null && retention != null, per100: ing ? { ...canonicalValues(ing.nutrition_per_100g || {}), ...recordedMicros(ing) } : {}, micros: number(j.amount_g) == null || retention == null ? {} : recordedMicros(ing), hazards: ingredientHazards(ing), pral: trustedPral(ing), pralRule: ing?.pral_status === 'rule' };
     });
     if (!items.length) complete = false;
     for (const i of items) for (const [k,v] of Object.entries(i.micros)) if (number(v) != null) micros[k] = (micros[k] || 0) + Number(v) * i.grams / 100 / divisor;
@@ -135,9 +145,11 @@ export async function loadDietAnalysis(token: string, picks: MealPick[], recipes
       return { ...h, total, perServing: total == null ? null : total / divisor, assessed: complete && items.flatMap((i) => i.hazards).filter((hz) => hz.key === h.key).every((hz) => hz.assessed) };
     });
     const unknownHazards = hazards.filter((h) => !complete || items.some((i) => i.hazards.some((hz) => hz.key === h.key && hz.per100 == null))).map((h) => h.key);
-    result[mealPickKey(pick)] = { ...pick, nutrition: toMealNutrition(row.nutrition_per_serving), micros, hazards, analysisComplete: complete,
+    // Same basis as micros: grams already carry retention; per serving via the same divisor.
+    const pral = sumPral(items.map((i) => ({ name: i.name, grams: i.known ? i.grams : null, pral: i.pral, rule: i.pralRule })), divisor);
+    result[mealPickKey(pick)] = { ...pick, nutrition: toMealNutrition(row.nutrition_per_serving), micros, hazards, analysisComplete: complete, pral,
       partialNutrients: Object.keys(micros).filter((key) => !complete || items.some((i) => i.micros[key] == null)), unknownHazards,
-      ingredients: items.map((i) => ({ name: i.name, grams: i.known ? i.grams / divisor : null, per100: i.per100, hazards: i.hazards })) };
+      ingredients: items.map((i) => ({ name: i.name, grams: i.known ? i.grams / divisor : null, per100: i.per100, hazards: i.hazards, pral: i.pral, pralRule: i.pralRule })) };
   }
   return result;
 }
