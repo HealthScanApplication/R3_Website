@@ -6,7 +6,7 @@
  *   CatalogIngredients ingredients by category, with nutrients and hazards (Diet section).
  *   FitnessRoutines    the app's published fitness Protocols and their steps (Fitness section).
  */
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useState, type CSSProperties } from 'react';
 import { AlertTriangle, Dumbbell, Heart, Loader2, Search, Wheat, X } from 'lucide-react';
 import { RECIPE_DIETS, browseIngredients, browseRecipes, listFitnessRoutines, recipeIngredientNames, routineSteps, type CatalogFood, type FitnessRoutine, type RoutineStep } from '../../utils/protocolBuilders';
 import { ProtocolHomeScreen } from '../mockups/ProtocolHomeScreen';
@@ -83,7 +83,19 @@ function useLoad<T>(fn: () => Promise<T[]>, deps: unknown[], delay = 0) {
   useEffect(() => { let live = true; const t = window.setTimeout(() => { set((x) => ({ ...x, busy: true, error: '' })); fn().then((items) => { if (live) set({ items, busy: false, error: '' }); }).catch((e) => { if (live) set({ items: [], busy: false, error: (e as Error).message }); }); }, delay); return () => { live = false; window.clearTimeout(t); }; }, deps); // eslint-disable-line react-hooks/exhaustive-deps
   return s;
 }
-const Status = ({ busy, error, n, what }: { busy: boolean; error: string; n: number; what: string }) => <p role="status" style={{ color: error ? warn : muted, fontSize: 11, margin: '0 0 8px', display: 'flex', gap: 6, alignItems: 'center' }}>{busy ? <><Loader2 size={12} className="animate-spin" />Loading…</> : error || `${n}${n === 60 ? '+' : ''} ${what} · highest health score first`}</p>;
+export const PAGE = 60;
+const Status = ({ busy, error, n, what, page = 0 }: { busy: boolean; error: string; n: number; what: string; page?: number }) => <p role="status" style={{ color: error ? warn : muted, fontSize: 11, margin: '0 0 8px', display: 'flex', gap: 6, alignItems: 'center' }}>{busy ? <><Loader2 size={12} className="animate-spin" />Loading…</> : error || (n ? `${what} ${page * PAGE + 1}–${page * PAGE + n} · highest health score first` : `No ${what}`)}</p>;
+/** Previous / next pages for a card list; `more` = another page exists. */
+export function Pager({ page, more, onPage }: { page: number; more: boolean; onPage: (p: number) => void }) {
+  if (!page && !more) return null;
+  const b = (on: boolean): CSSProperties => ({ border: `1px solid ${line}`, background: 'transparent', color: on ? ink : muted, padding: '7px 14px', fontSize: 11, fontWeight: 700, cursor: on ? 'pointer' : 'default', opacity: on ? 1 : 0.4 });
+  const go = (p: number) => { onPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  return <nav aria-label="Pages" style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 16 }}>
+    <button type="button" disabled={!page} onClick={() => go(page - 1)} style={b(page > 0)}>← Previous</button>
+    <span style={{ color: muted, fontSize: 11 }}>Page {page + 1}</span>
+    <button type="button" disabled={!more} onClick={() => go(page + 1)} style={b(more)}>Next →</button>
+  </nav>;
+}
 
 function Ingredients({ accessToken, id }: { accessToken: string; id: string }) {
   const [list, setList] = useState<Array<{ name: string; grams: number | null }> | null>(null);
@@ -97,7 +109,11 @@ const MEALS = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Drink'];
 /** Published ROUTINE³ recipes, below the Guardian's own on the Recipes page. */
 export function CatalogRecipes({ accessToken }: { accessToken: string }) {
   const [query, setQuery] = useState(''), [cuisine, setCuisine] = useState(''), [meal, setMeal] = useState(''), [diet, setDiet] = useState('');
-  const { items, busy, error } = useLoad(() => browseRecipes(accessToken, { query, cuisine, meal, diet }), [accessToken, query, cuisine, meal, diet], query ? 250 : 0);
+  const [page, setPage] = useState(0);
+  useEffect(() => { setPage(0); }, [query, cuisine, meal, diet]);
+  // One extra row says whether there is a next page.
+  const { items: got, busy, error } = useLoad(() => browseRecipes(accessToken, { query, cuisine, meal, diet, limit: PAGE + 1, offset: page * PAGE }), [accessToken, query, cuisine, meal, diet, page], query ? 250 : 0);
+  const items = got.slice(0, PAGE);
   return <section aria-label="ROUTINE³ recipes" style={{ marginTop: 34 }}>
     <div style={{ ...kicker, margin: '0 0 4px' }}>ROUTINE³ recipes</div>
     <p style={{ color: muted, fontSize: 12, margin: '0 0 12px' }}>The published recipe database: filter by region, meal and diet, and open one for its health score, nutrients, hazards and ingredients.</p>
@@ -107,8 +123,9 @@ export function CatalogRecipes({ accessToken }: { accessToken: string }) {
       <select aria-label="Meal" value={meal} onChange={(e) => setMeal(e.target.value)} style={field}><option value="">All meals</option>{MEALS.map((m) => <option key={m} value={m}>{m}</option>)}</select>
       <select aria-label="Diet" value={diet} onChange={(e) => setDiet(e.target.value)} style={field}><option value="">Any diet</option>{RECIPE_DIETS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
     </div>
-    <Status busy={busy} error={error} n={items.length} what="recipes" />
+    <Status busy={busy} error={error} n={items.length} what="recipes" page={page} />
     {!busy && <FoodGrid items={items} renderExtra={(f) => <Ingredients accessToken={accessToken} id={f.id} />} />}
+    {!busy && <Pager page={page} more={got.length > PAGE} onPage={setPage} />}
   </section>;
 }
 
@@ -116,11 +133,16 @@ const INGREDIENT_CATEGORIES = ['Vegetables', 'Fruit', 'Grains & bakery', 'Legume
 export function CatalogIngredients({ accessToken }: { accessToken: string }) {
   const [query, setQuery] = useState(''), [category, setCategory] = useState(''), [form, setForm] = useState<'' | 'raw' | 'processed'>(''), [processing, setProcessing] = useState('');
   // Form is derived from the name, so with a form filter on, read the whole published list (about 1,400 rows) and filter it here.
-  const { items: all, busy, error } = useLoad(() => browseIngredients(accessToken, { query, category, limit: form ? 2000 : 60 }), [accessToken, query, category, form], query ? 250 : 0);
+  const [page, setPage] = useState(0);
+  useEffect(() => { setPage(0); }, [query, category, form, processing]);
+  // Without a form filter, page on the server (one extra row says whether there is a next page); with one, the whole list is filtered and paged here.
+  const { items: all, busy, error } = useLoad(() => browseIngredients(accessToken, form ? { query, category, limit: 2000 } : { query, category, limit: PAGE + 1, offset: page * PAGE }), [accessToken, query, category, form, form ? 0 : page], query ? 250 : 0);
   // A processing choice from earlier results must not hide everything after the search or category changes.
   useEffect(() => { setProcessing(''); }, [query, category]);
   const kinds = [...new Set(all.filter((f) => f.form === 'processed' && f.processing).map((f) => f.processing!))].sort();
-  const items = all.filter((f) => (!form || f.form === form) && (!processing || f.processing === processing)).slice(0, 60);
+  const shown = all.filter((f) => (!form || f.form === form) && (!processing || f.processing === processing));
+  const items = form ? shown.slice(page * PAGE, (page + 1) * PAGE) : shown.slice(0, PAGE);
+  const more = form ? shown.length > (page + 1) * PAGE : all.length > PAGE;
   return <div>
     <Header Icon={Wheat} kicker="Diet" title="Ingredients" copy="Every published ingredient in the ROUTINE³ database, with its nutrients per 100 g and recorded hazards." />
     <div role="group" aria-label="Ingredient category" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
@@ -130,8 +152,9 @@ export function CatalogIngredients({ accessToken }: { accessToken: string }) {
       <div role="group" aria-label="Form" style={{ display: 'inline-flex', border: `1px solid ${line}` }}>{([['', 'All'], ['raw', 'Whole / raw'], ['processed', 'Processed']] as const).map(([v, l]) => <button key={v || 'all'} type="button" aria-pressed={form === v} onClick={() => { setForm(v); setProcessing(''); }} style={{ border: 0, background: form === v ? ink : 'transparent', color: form === v ? '#090A08' : ink, padding: '0 12px', height: 40, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{l}</button>)}</div>
       {form === 'processed' && kinds.length > 0 && <select aria-label="Processing type" value={processing} onChange={(e) => setProcessing(e.target.value)} style={field}><option value="">Any processing</option>{kinds.map((k) => <option key={k} value={k}>{k}</option>)}</select>}
     </div>
-    <Status busy={busy} error={error} n={items.length} what="ingredients" />
+    <Status busy={busy} error={error} n={items.length} what="ingredients" page={page} />
     {!busy && <FoodGrid items={items} />}
+    {!busy && <Pager page={page} more={more} onPage={setPage} />}
   </div>;
 }
 

@@ -509,8 +509,8 @@ export function planFitnessWeek(goal: FitnessGoal, likes?: FitnessLikes, schedul
 
 const LEVEL = { beginner: { sets: 2, reps: '10', rest: 90, exercises: 3 }, intermediate: { sets: 3, reps: '8–12', rest: 75, exercises: 4 }, advanced: { sets: 4, reps: '6–10', rest: 60, exercises: 5 } };
 
-export async function searchActivities(accessToken: string, opts: { query?: string; categories?: string[]; excludeCategories?: string[]; limit?: number; muscle?: MuscleGroupId | null }): Promise<ActivityPick[]> {
-  const params = [`select=${ACTIVITY_SELECT}`, 'is_group=not.is.true', `limit=${opts.limit || 12}`, 'order=health_score.desc.nullslast'];
+export async function searchActivities(accessToken: string, opts: { query?: string; categories?: string[]; excludeCategories?: string[]; limit?: number; offset?: number; muscle?: MuscleGroupId | null }): Promise<ActivityPick[]> {
+  const params = [`select=${ACTIVITY_SELECT}`, 'is_group=not.is.true', `limit=${opts.limit || 12}`, `offset=${opts.offset || 0}`, 'order=health_score.desc.nullslast,name.asc,id.asc'];
   const group = opts.muscle ? MUSCLE_GROUPS.find((g) => g.id === opts.muscle) : null;
   if (group) {
     // body_parts is a jsonb array: match any of the group's parts; face also matches by name.
@@ -1058,8 +1058,8 @@ export const RECIPE_DIETS = DIET_FLAGS;
 const dietsOf = (d: unknown) => (d && typeof d === 'object' ? DIET_FLAGS.filter(([k]) => (d as any)[k] === true).map(([, l]) => l) : []);
 const q = (s: string) => encodeURIComponent(s.replace(/[%,()*]/g, ' ').trim());
 
-export async function browseRecipes(accessToken: string, f: { query?: string; cuisine?: string; meal?: string; diet?: string; limit?: number }): Promise<CatalogFood[]> {
-  const p = ['select=id,name_common,image_primary_url,image_url,meal_slot,cuisine,description_simple,description,health_score,prep_time,cook_time,servings,nutrition_per_100g,elements_hazardous,dietary_info', 'is_published=is.true', 'order=health_score.desc.nullslast', `limit=${f.limit || 60}`];
+export async function browseRecipes(accessToken: string, f: { offset?: number; query?: string; cuisine?: string; meal?: string; diet?: string; limit?: number }): Promise<CatalogFood[]> {
+  const p = ['select=id,name_common,image_primary_url,image_url,meal_slot,cuisine,description_simple,description,health_score,prep_time,cook_time,servings,nutrition_per_100g,elements_hazardous,dietary_info', 'is_published=is.true', 'order=health_score.desc.nullslast,name_common.asc,id.asc', `limit=${f.limit || 60}`, `offset=${f.offset || 0}`];
   if (f.query?.trim()) p.push(`name_common=ilike.*${q(f.query)}*`);
   if (f.cuisine) p.push(`cuisine=eq.${encodeURIComponent(f.cuisine)}`);
   if (f.meal) p.push(`meal_slot=ilike.${encodeURIComponent(f.meal)}`);
@@ -1089,8 +1089,8 @@ export function ingredientForm(name: string, sub: string | null, category: strin
   if (category && WHOLE_CATEGORIES.has(category)) return { form: 'raw', processing: null };
   return { form: null, processing: null };
 }
-export async function browseIngredients(accessToken: string, f: { query?: string; category?: string; limit?: number }): Promise<CatalogFood[]> {
-  const p = ['select=id,name_common,image_primary_url,image_url,category,category_sub,description_simple,description,health_score,nutrition_per_100g,elements_hazardous,season,origin_region', 'is_published=is.true', 'is_group=not.is.true', 'order=health_score.desc.nullslast', `limit=${f.limit || 60}`];
+export async function browseIngredients(accessToken: string, f: { offset?: number; query?: string; category?: string; limit?: number }): Promise<CatalogFood[]> {
+  const p = ['select=id,name_common,image_primary_url,image_url,category,category_sub,description_simple,description,health_score,nutrition_per_100g,elements_hazardous,season,origin_region', 'is_published=is.true', 'is_group=not.is.true', 'order=health_score.desc.nullslast,name_common.asc,id.asc', `limit=${f.limit || 60}`, `offset=${f.offset || 0}`];
   if (f.query?.trim()) p.push(`name_common=ilike.*${q(f.query)}*`);
   if (f.category) p.push(`category=eq.${encodeURIComponent(f.category)}`);
   const res = await fetch(`${rest()}/catalog_ingredients?${p.join('&')}`, { headers: headers(accessToken) });
