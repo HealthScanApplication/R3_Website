@@ -150,7 +150,13 @@ export function repegTimes(rows: Row[]): Row[] {
 }
 
 /* ───────── the standard as a change list ───────── */
-export function standardiseProtocol(rows: Row[], mode: Mode = 'cleanup'): Change[] {
+/** Protocol categories that own the daily basics; any other routine (fitness, diet…) never gets them added or asked for. */
+export const HYGIENE_THEMES = ['hygiene', 'oral care', 'personal care', 'beauty', 'skin & face', 'skin', 'hair'];
+export const SLEEP_THEMES = ['sleep', 'wellness'];
+/** `theme` = the Protocol's category. Without one (unknown), the basics are handled as before. */
+export function standardiseProtocol(rows: Row[], mode: Mode = 'cleanup', theme?: string | null): Change[] {
+  const t = theme?.trim().toLowerCase();
+  const wantsSleep = !t || SLEEP_THEMES.includes(t), wantsHygiene = !t || HYGIENE_THEMES.includes(t);
   const changes: Change[] = [];
   const live = rows.filter((r) => !r.hidden);
   const tops = live.filter((r) => !r.parent_protocol_item_id && (r.kind === 'action' || !r.kind));
@@ -177,7 +183,7 @@ export function standardiseProtocol(rows: Row[], mode: Mode = 'cleanup'): Change
   const plainBed = beds.filter((r) => !isRuleLikeTitle(r.display_name || '')).sort((a, b) => night(b) - night(a));
   const bed = plainBed[0] || null;
   if (wake) rename(wake, END_SLEEP, 'Wake anchor');
-  else changes.push(mode === 'new'
+  else if (wantsSleep) changes.push(mode === 'new'
     ? { item_id: 'new:wake', action: 'insert', reason: 'Every day starts with End Sleep', insert: { display_name: END_SLEEP, category: 'sleep', subtype: 'sleep', kind: 'action', scheduled_time: '07:00:00' } }
     : { item_id: '-', action: 'flag', reason: 'No wake item (End Sleep) — add one' });
   for (const x of extraWakes) changes.push({ item_id: x.id, action: 'flag', reason: `Second wake item (“${x.display_name}”) — keep one End Sleep` });
@@ -186,7 +192,7 @@ export function standardiseProtocol(rows: Row[], mode: Mode = 'cleanup'): Change
     // "Sleep by 10pm, cool dark room" → keep the advice as a do on Start Sleep.
     if (!PLAIN_BEDTIME.test((bed.display_name || '').trim())) changes.push({ item_id: `rule:${bed.id}`, action: 'insert', reason: 'Bedtime advice kept as a do on Start Sleep', insert: { parent_ref: bed.id, display_name: bed.display_name, kind: 'rule_do' } });
   }
-  else if (!wake || beds.length === 0) changes.push(mode === 'new'
+  else if (wantsSleep && (!wake || beds.length === 0)) changes.push(mode === 'new'
     ? { item_id: 'new:bed', action: 'insert', reason: 'Every day ends with Start Sleep', insert: { display_name: START_SLEEP, category: 'sleep', subtype: 'sleep', kind: 'action', scheduled_time: '22:00:00' } }
     : { item_id: '-', action: 'flag', reason: 'No bedtime item (Start Sleep) — add one' });
   for (const extra of beds.filter((r) => r !== bed)) {
@@ -324,6 +330,8 @@ export function standardiseProtocol(rows: Row[], mode: Mode = 'cleanup'): Change
     if (set) {
       const m = minsOf(set);
       if (base != null && m != null && !set.filter?.anchor) changes.push({ item_id: set.id, action: 'update', field: 'filter.anchor', from: null, to: { to, offset_minutes: Math.abs(m - base) }, reason: `Pegged to ${to} so it moves with it` });
+    } else if (!wantsHygiene) {
+      continue; // not this routine's job: the website suggests hygiene beside it instead
     } else if (mode === 'new') {
       const steps = label === 'Morning hygiene' ? DEFAULT_MORNING_HYGIENE : DEFAULT_EVENING_HYGIENE;
       changes.push({ item_id: `new:${to}-hygiene`, action: 'insert', reason: `${label} set pegged to ${to}`, insert: { display_name: label, category: 'do', subtype: 'hygiene', kind: 'action', filter: { anchor: { to, offset_minutes: to === 'wake' ? 10 : 30 } } } });
