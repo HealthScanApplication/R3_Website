@@ -9,9 +9,16 @@
  *   - truth: the name and description agree with the steps (time of day, length in days, empty or step-less).
  */
 import { readFileSync } from 'fs';
-import { standardiseProtocol, type Row } from '../src/utils/routineStandard';
-import { ruleGroupFor } from '../src/utils/protocolRules';
-import { routinePeriod } from '../src/utils/protocolBuilders';
+import type { Row } from '../src/utils/routineStandard';
+
+void (async () => {
+// The app modules log to stdout on import (Supabase client manager); keep that out of the report.
+const realLog = console.log;
+console.log = () => {};
+const { standardiseProtocol } = await import('../src/utils/routineStandard');
+const { ruleGroupFor } = await import('../src/utils/protocolRules');
+const { routinePeriod } = await import('../src/utils/protocolBuilders');
+console.log = realLog;
 
 type P = { id: string; name: string; description: string | null; category: string | null; total_days: number | null; tags: string[] | null };
 const protocols: P[] = JSON.parse(readFileSync(process.argv[2], 'utf8'));
@@ -48,7 +55,8 @@ for (const p of protocols) {
 
   // Truth: the name's time of day matches when the steps happen.
   const period = routinePeriod({ name: p.name, description: p.description, tags: p.tags || [], totalDays: p.total_days });
-  const times = actions.map((r) => mins(r.scheduled_time)).filter((m): m is number => m != null && !/sleep/i.test(''));
+  // Sleep anchors (End/Start Sleep) are not part of what the name promises: leave them out of the time-of-day check.
+  const times = actions.filter((r) => r.category !== 'sleep' && !/\bsleep\b/i.test(r.display_name || '')).map((r) => mins(r.scheduled_time)).filter((m): m is number => m != null);
   const share = (lo: number, hi: number) => times.length ? times.filter((m) => m >= lo && m < hi).length / times.length : 1;
   if (period === 'Morning' && share(0, 12 * 60) < 0.6) add(p, 'truth', `Named for the morning but ${Math.round((1 - share(0, 720)) * 100)}% of timed steps are after 12:00`);
   if (period === 'Evening' && share(17 * 60, 24 * 60) < 0.6) add(p, 'truth', `Named for the evening but ${Math.round((1 - share(1020, 1440)) * 100)}% of timed steps are before 17:00`);
@@ -72,3 +80,4 @@ for (const n of names) {
   for (const f of findings.filter((x) => x.protocol === n)) out.push(`- **${f.check}** — ${f.detail}`);
 }
 process.stdout.write(out.join('\n') + '\n');
+})();

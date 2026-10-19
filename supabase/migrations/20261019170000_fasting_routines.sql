@@ -9,7 +9,7 @@ BEGIN
   SELECT id INTO dry FROM public.protocols WHERE user_id IS NULL AND name = 'Dry Fasting • Protocol' LIMIT 1;
 
   -- Daniel Fast: copy the catalogue row shape from the water fast, then set its own fields.
-  IF NOT EXISTS (SELECT 1 FROM public.protocols WHERE id = pid) THEN
+  IF src.id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.protocols WHERE id = pid) THEN
     INSERT INTO public.protocols SELECT (jsonb_populate_record(NULL::public.protocols, to_jsonb(src) || jsonb_build_object(
       'id', pid, 'name', 'Daniel Fast · 21 Days', 'category', 'Diet', 'total_days', 21, 'is_public', true, 'is_active', true,
       'tags', jsonb_build_array('fasting', 'plant-based', 'daniel-fast'), 'image_url', NULL,

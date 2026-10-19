@@ -1,12 +1,11 @@
-📦 Supabase client manager loaded
 # Protocol compliance audit
 
-140 catalogue Protocols · 67 fully compliant · 154 findings
+140 catalogue Protocols · 68 fully compliant · 153 findings
 
 | Check | Findings |
 |---|---|
 | standard flag | 93 |
-| truth | 33 |
+| truth | 32 |
 | rule group | 22 |
 | standard update | 6 |
 
@@ -203,9 +202,6 @@
 - **standard flag** — Fasted Cardio — No duration or set info
 - **standard flag** — Start Sleep — No duration or set info
 - **standard flag** — Evening Walk on Beach — No duration or set info
-
-## Midday Reset
-- **truth** — Named for midday but most timed steps are outside 11:00–16:00
 
 ## Mobility & Flow
 - **standard flag** — Flexibility & Dance — No duration or set info

@@ -118,3 +118,7 @@ it('puts a smart list\'s rules beside its steps, each rule once with the steps i
   expect(acts.map((a) => a.name)).toEqual(['Breakfast', 'Lunch']);
   expect(rules).toEqual([{ name: 'No juice or soda', dont: true, on: [] }, { name: 'Chew slowly', dont: false, on: ['Breakfast', 'Lunch'] }]);
 });
+it('files a label rule by what it is about', () => {
+  expect(smartListOfStep({ name: 'Check food labels for added sugar', kind: 'rule_do' } as any)).toBe('Meals');
+  expect(smartListOfStep({ name: 'Check label: T. chebula', kind: 'rule_do' } as any)).toBe('Supplements');
+});

@@ -103,6 +103,15 @@ function orderKey(it: HomeItem): number {
   if (isBed(it)) return 1e9;
   return parseHM(it.time)?.mins ?? 5e8;
 }
+// An indented sub-item stays with the item above it: it takes that parent's time, slot and list, so grouping by part
+// of the day and sorting by time never separate the two (the stable sorts then keep it right under its parent).
+function inheritParentSlot(items: HomeItem[]): HomeItem[] {
+  let parent: HomeItem | undefined;
+  return items.map((it) => {
+    if (!it.indent) { parent = it; return it; }
+    return parent ? { ...it, time: parent.time, group_name: parent.group_name, category: parent.category, subtype: parent.subtype } : it;
+  });
+}
 // Book-end any day with grey Sleep anchors when the protocol doesn't supply them.
 // The WAKE default links to the protocol's own first timed step (so a 7am routine
 // wakes at 7am, not a fixed 6am). Bedtime stays a real 10pm default — the last
@@ -238,7 +247,7 @@ export function ProtocolHomeScreen({
   // In-frame toggle for per-step descriptions + child do/don't lines (mirrors the app's showDetails).
   const [showDetails, setShowDetails] = useState(showDetailsProp);
   // book-end the day with grey Sleep anchors (End Sleep / Start Sleep), like the app
-  const allItems = anchors ? withSleepAnchors(items) : items;
+  const allItems = anchors ? withSleepAnchors(inheritParentSlot(items)) : inheritParentSlot(items);
   // sleep window (hours slept = bedtime → wake) — shown on the anchor cards
   const sleepWin = computeSleepWindow(allItems.map((i) => ({
     display_name: i.display_name,

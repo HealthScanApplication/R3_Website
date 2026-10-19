@@ -323,7 +323,7 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
   const [day, setDay] = useState(1);
   const listRef = useRef<HTMLDivElement | null>(null);
   // Picking a day on the phone scrolls the step list to that day.
-  const pickDay = (d: number) => { setDay(d); const el = listRef.current?.querySelector<HTMLElement>(`[data-day="${d}"]`); if (el && listRef.current) listRef.current.scrollTo({ top: el.offsetTop - listRef.current.offsetTop - 4, behavior: 'smooth' }); };
+  const pickDay = (d: number) => { setDay(d); const el = listRef.current?.querySelector<HTMLElement>(`[data-day="${d}"]`); if (el && listRef.current) listRef.current.scrollTo({ top: Math.max(0, el.offsetTop - 4), behavior: 'smooth' }); };
   useEffect(() => { if (!open) return; let live = true; setSteps(null); setDay(1); routineSteps(accessToken, open).then((s) => { if (live) setSteps(s); }); return () => { live = false; }; }, [accessToken, open]);
   const days = steps ? Math.max(1, ...steps.map((s) => s.day || 1)) : 1;
   // The app shows one day: every-day items (no day_number) plus that day's.

@@ -1183,8 +1183,8 @@ export function routinePeriod(r: Pick<FitnessRoutine, 'name' | 'description' | '
 }
 /** The app's published fitness routines: catalogue Protocols in fitness categories. */
 export async function listFitnessRoutines(accessToken: string, categories: string[] = ['fitness', 'strength', 'recovery', 'mobility', 'cardio', 'hiit'], nameTerms: string[] = []): Promise<FitnessRoutine[]> {
-  // Catalogue categories are not consistently cased ("Beauty", "wellness"), so match case-insensitively; a section may also match by name ("fast", "keto").
-  const or = [...categories.map((c) => `category.ilike.${encodeURIComponent(c)}`), ...nameTerms.map((t) => `name.ilike.*${encodeURIComponent(t)}*`)].join(',');
+  // Catalogue categories are not consistently cased ("Beauty", "wellness"), so match case-insensitively; a section may also match by name at the start of a word ("fast" finds Fasting, not Breakfast).
+  const or = [...categories.map((c) => `category.ilike.${encodeURIComponent(c)}`), ...nameTerms.map((t) => `name.imatch.%5Cm${encodeURIComponent(t.replace(/[^\w ]/g, ''))}`)].join(',');
   const res = await fetch(`${rest()}/protocols?select=id,name,description,image_url,category,tags,total_days&user_id=is.null&is_public=not.is.false&is_active=not.is.false&or=(${or})&order=name`, { headers: headers(accessToken) });
   if (!res.ok) throw new Error(`Could not load fitness routines (${res.status})`);
   return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, description: txt(r.description), image: txt(r.image_url), category: r.category, tags: Array.isArray(r.tags) ? r.tags.map(String) : [], totalDays: num(r.total_days) }));
