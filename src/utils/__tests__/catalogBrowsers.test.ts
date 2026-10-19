@@ -122,3 +122,20 @@ it('files a label rule by what it is about', () => {
   expect(smartListOfStep({ name: 'Check food labels for added sugar', kind: 'rule_do' } as any)).toBe('Meals');
   expect(smartListOfStep({ name: 'Check label: T. chebula', kind: 'rule_do' } as any)).toBe('Supplements');
 });
+import { mergeHygieneSets } from '../../components/guides/CatalogBrowsers';
+it('merges the Morning hygiene set into the Hygiene list', () => {
+  const steps = [
+    { id: 'c', name: 'Gentle Cleanse', time: '06:30', subtype: 'hygiene', kind: 'action' },
+    { id: 'h', name: 'Morning hygiene', time: '07:10', subtype: 'hygiene', category: 'do', itemType: 'activity', kind: 'action' },
+    { id: 't', parentId: 'h', name: 'Scrape tongue', kind: 'action' },
+    { id: 'b', parentId: 'h', name: 'Brush teeth', kind: 'action', time: '07:12' },
+    { id: 'r', parentId: 'h', name: 'Use fluoride-free paste', kind: 'rule_do' },
+    { id: 's', name: 'Zinc', time: '07:30', subtype: 'supplement', kind: 'action' },
+  ] as any;
+  const m = mergeHygieneSets(steps);
+  expect(m.map((x) => x.name)).toEqual(['Gentle Cleanse', 'Scrape tongue', 'Brush teeth', 'Use fluoride-free paste', 'Zinc']);
+  expect(m[1]).toMatchObject({ parentId: null, time: '07:10', subtype: 'hygiene' });
+  expect(m[2].time).toBe('07:12');
+  expect(smartListOfStep(m[1])).toBe('Hygiene');
+  expect(mergeHygieneSets([{ id: 'x', name: 'Morning hygiene', subtype: 'hygiene' }] as any)).toHaveLength(1); // a set with no steps is left alone
+});

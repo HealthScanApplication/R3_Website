@@ -260,6 +260,24 @@ function MealSuggestion({ accessToken, food }: { accessToken: string; food: Cata
   </div>;
 }
 /** Top-level steps with their sub-items and rules (by parent link); orphans of a hidden parent count as top-level. */
+/**
+ * "Morning hygiene" / "Evening hygiene" is the Hygiene smart list's own set, so it is not shown twice: the set row is
+ * dropped and its steps (and rules) take its place in the Hygiene list, with the set's time (a step's own time wins),
+ * day and list. Its wake/bedtime peg still sets that time in the data.
+ */
+export function mergeHygieneSets(steps: RoutineStep[]): RoutineStep[] {
+  const isRule = (s: RoutineStep) => !!s.kind?.startsWith('rule');
+  const isSet = (s: RoutineStep) => !!s.id && !s.parentId && !isRule(s) && /^(morning|midday|afternoon|evening|night|daily)?\s*hygiene$/i.test(s.name.trim()) && steps.some((k) => k.parentId === s.id && !isRule(k));
+  const sets = new Set(steps.filter(isSet).map((s) => s.id));
+  if (!sets.size) return steps;
+  const out: RoutineStep[] = [];
+  for (const s of steps) {
+    if (s.parentId && sets.has(s.parentId)) continue; // placed with its set, below
+    if (!sets.has(s.id)) { out.push(s); continue; }
+    for (const k of steps.filter((x) => x.parentId === s.id)) out.push({ ...k, parentId: null, time: k.time || s.time, day: k.day ?? s.day, group: k.group || s.group, itemType: k.itemType || s.itemType, category: k.category || s.category, subtype: k.subtype || s.subtype, scope: k.scope || s.scope });
+  }
+  return out;
+}
 export function stepTree(steps: RoutineStep[]) {
   const ids = new Set(steps.map((s) => s.id).filter(Boolean));
   const top = steps.filter((s) => !s.parentId || !ids.has(s.parentId));
@@ -328,8 +346,9 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
   const days = steps ? Math.max(1, ...steps.map((s) => s.day || 1)) : 1;
   // The app shows one day: every-day items (no day_number) plus that day's.
   // Only the routine's own steps; daily basics (hygiene, sleep) are suggested beside it, not part of it.
-  const own = (steps || []).filter((s) => !isBasicFor(s, section));
   const basics = (steps || []).filter((s) => isBasicFor(s, section));
+  const basicIds = new Set(basics.map((s) => s.id));
+  const own = mergeHygieneSets((steps || []).filter((s) => !isBasicFor(s, section) && !(s.parentId && basicIds.has(s.parentId))));
   const tree = stepTree(own);
   const isRule = (s: RoutineStep) => !!s.kind?.startsWith('rule');
   // A generic meal slot ("Breakfast", "Lunch") gets a suggested catalogue recipe that follows this Protocol's diet rules.
