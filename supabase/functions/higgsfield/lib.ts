@@ -9,6 +9,7 @@ export const ASPECTS: Aspect[] = ['9:16', '4:5', '1:1', '16:9'];
 
 export interface HfModel {
   id: string; label: string;
+  usdPerSecond?: number;               // published API price, for test mode and as a fallback (see docs/higgsfield-integration.md)
   t2v: string; i2v: string;            // endpoint ids (POST {HF_BASE}/{endpoint})
   aspects: string[];                   // aspect_ratio values the text-to-video schema accepts
   i2vAspect: boolean;                  // image-to-video takes aspect_ratio (otherwise it follows the image)
@@ -18,9 +19,9 @@ export interface HfModel {
 
 /** Models offered to Guardians. Kept small on purpose: cheap, fast, and covering our four formats. */
 export const MODELS: HfModel[] = [
-  { id: 'kling-3-std', label: 'Kling 3.0 Standard', t2v: 'kling-video/v3.0/std/text-to-video', i2v: 'kling-video/v3.0/std/image-to-video', aspects: ['16:9', '9:16', '1:1'], i2vAspect: false, durations: [3, 15], extra: { sound: 'off' } },
+  { id: 'kling-3-std', label: 'Kling 3.0 Standard', t2v: 'kling-video/v3.0/std/text-to-video', i2v: 'kling-video/v3.0/std/image-to-video', aspects: ['16:9', '9:16', '1:1'], i2vAspect: false, durations: [3, 15], extra: { sound: 'off' }, usdPerSecond: 0.084 },
   { id: 'wan-2.7', label: 'Wan 2.7', t2v: 'wan/v2.7/text-to-video', i2v: 'wan/v2.7/image-to-video', aspects: ['16:9', '9:16', '1:1', '4:3', '3:4'], i2vAspect: false, durations: [2, 15] },
-  { id: 'seedance-2', label: 'Seedance 2.0', t2v: 'bytedance/seedance-2.0/text-to-video', i2v: 'bytedance/seedance-2.0/image-to-video', aspects: ['16:9', '4:3', '1:1', '3:4', '9:16', '21:9'], i2vAspect: false, durations: [4, 15] },
+  { id: 'seedance-2', label: 'Seedance 2.0', t2v: 'bytedance/seedance-2.0/text-to-video', i2v: 'bytedance/seedance-2.0/image-to-video', aspects: ['16:9', '4:3', '1:1', '3:4', '9:16', '21:9'], i2vAspect: false, durations: [4, 15], usdPerSecond: 0.141 },
 ];
 export const DEFAULT_MODEL = 'kling-3-std';
 export const PROMPT_MAX = 1500;
@@ -56,6 +57,22 @@ export function shapeRequest(input: GenerateInput): Shaped {
   const body: Record<string, unknown> = { prompt, duration, ...(model.extra || {}) };
   if (image) { body.image_url = image; if (model.i2vAspect) body.aspect_ratio = delivered; } else body.aspect_ratio = delivered;
   return { ok: true, model, endpoint: image ? model.i2v : model.t2v, body, aspect, delivered, duration };
+}
+
+/**
+ * Cost before generating. Higgsfield's `POST /estimate/{endpoint}` (free, same body) answers with strings such as
+ * {"credits":"1.500","usd":"0.094"}; without it (test mode, or the call failing) we fall back to the published
+ * per-second price, flagged as approximate. Unknown price → null, and the panel says so.
+ */
+export interface Estimate { usd: number | null; credits: number | null; source: 'higgsfield' | 'price_list'; per_second: number | null }
+export function parseEstimate(body: any): Estimate | null {
+  const usd = Number(body?.usd), credits = Number(body?.credits);
+  if (!Number.isFinite(usd) || usd < 0) return null;
+  return { usd, credits: Number.isFinite(credits) ? credits : null, source: 'higgsfield', per_second: null };
+}
+export function listEstimate(model: HfModel, duration: number): Estimate {
+  const per = model.usdPerSecond ?? null;
+  return { usd: per === null ? null : Math.round(per * duration * 1000) / 1000, credits: null, source: 'price_list', per_second: per };
 }
 
 export type JobStatus = 'queued' | 'in_progress' | 'completed' | 'failed' | 'nsfw' | 'canceled';

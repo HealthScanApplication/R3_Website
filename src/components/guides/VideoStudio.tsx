@@ -14,7 +14,7 @@ import { draftVideoScript, parseScript, scriptPrompt, scriptText } from '../../u
 import { OVERLAY_FORMATS, recordWithOverlay } from '../../utils/videoOverlay';
 import { buildVideoPrompt, VIDEO_ASPECTS, VIDEO_PROMPT_MAX, type VideoAspect } from '../../utils/videoPrompt';
 import type { BrandKit } from '../../utils/brandKit';
-import { connectHiggsfield, disconnectHiggsfield, generateVideo, higgsfieldStatus, isFinished, listVideos, pollDelay, pollVideo, progressOf, type HiggsfieldStatus, type VideoJob } from '../../utils/higgsfieldVideo';
+import { connectHiggsfield, costCopy, disconnectHiggsfield, estimateVideo, generateVideo, higgsfieldStatus, isFinished, listVideos, pollDelay, pollVideo, progressOf, type HiggsfieldStatus, type VideoEstimate, type VideoJob } from '../../utils/higgsfieldVideo';
 
 const ink = '#F5F2EA', muted = '#B8B6AF', line = 'rgba(245,242,234,0.24)', acid = '#C7D8A3', warn = '#E8B07A';
 const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', height: 38, border: `1px solid ${line}`, background: '#090A08', color: ink, padding: '0 10px', fontSize: 13, borderRadius: 2 };
@@ -113,6 +113,20 @@ export function VideoStudio({ creator, audience, problem, focusKind, offer, free
   const model = status?.models.find((m) => m.id === modelId) || status?.models[0];
   const delivered = model?.aspects.find((a) => a.aspect === aspect)?.delivered || aspect;
   useEffect(() => { if (model) setDuration((d) => Math.min(model.durations[1], Math.max(model.durations[0], d))); }, [model]);
+  // Cost before generating; refreshed (debounced) when the model, format or length changes. Never spends anything.
+  const [estimate, setEstimate] = useState<VideoEstimate | null>(null);
+  const [estimating, setEstimating] = useState(false);
+  useEffect(() => {
+    if (!status?.connected || !model || !(duration > 0)) return;
+    let stale = false; setEstimating(true);
+    const t = window.setTimeout(() => {
+      estimateVideo({ model: model.id, aspect_ratio: aspect, duration })
+        .then((r) => { if (!stale) setEstimate(r.estimate); }).catch(() => { if (!stale) setEstimate(null); })
+        .finally(() => { if (!stale) setEstimating(false); });
+    }, 400);
+    return () => { stale = true; window.clearTimeout(t); };
+  }, [status?.connected, model?.id, aspect, duration]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cost = costCopy(estimating ? null : estimate, duration, model?.label || 'this model');
 
   const connect = async () => {
     setBusy('connect'); setError('');
@@ -174,8 +188,8 @@ export function VideoStudio({ creator, audience, problem, focusKind, offer, free
         <textarea id="video-prompt" value={prompt} maxLength={VIDEO_PROMPT_MAX} onChange={(e) => setPrompt(e.target.value)} rows={8} style={{ ...field, height: 'auto', padding: 10, lineHeight: 1.5, resize: 'vertical' }} />
         <span style={{ display: 'block', color: muted, fontSize: 9.5, marginTop: 4 }}>Built from your audience, {problem.toLowerCase()}{offer ? ', the offer' : ''}{kit && brandName ? ` and ${brandName}’s visual language` : ''}. {prompt.length}/{VIDEO_PROMPT_MAX}</span>
       </div>
-      <button type="button" onClick={generate} disabled={busy === 'generate' || (!!job && !isFinished(job.status)) || prompt.trim().length < 10} style={primary}>{busy === 'generate' ? <Loader2 size={14} className="animate-spin" /> : <Film size={14} />} Generate {duration}s video</button>
-      <span style={{ color: muted, fontSize: 10 }}>Uses your Higgsfield API balance{status.live ? '' : ' (test mode: nothing is spent)'}. Failed or blocked videos aren’t charged.</span>
+      <button type="button" onClick={generate} disabled={busy === 'generate' || (!!job && !isFinished(job.status)) || prompt.trim().length < 10} style={primary}>{busy === 'generate' ? <Loader2 size={14} className="animate-spin" /> : <Film size={14} />} Generate {duration}s video{cost.short ? ` · ${cost.short}` : ''}</button>
+      <span aria-live="polite" style={{ color: muted, fontSize: 10, lineHeight: 1.5 }}>{estimating ? 'Checking the price…' : cost.detail} Paid from your Higgsfield API balance{status.live ? '' : ' (test mode: nothing is spent)'}. Failed or blocked videos aren’t charged.</span>
       <div style={{ borderTop: `1px solid ${line}`, paddingTop: 12 }}><div style={{ ...lab, display: 'flex', justifyContent: 'space-between', gap: 8 }}><label htmlFor="video-script">Script · hook, lines, call to action</label>{scriptEdited && <button type="button" onClick={resetScript} style={quiet}><RotateCcw size={11} />Use suggested</button>}</div>
         <textarea id="video-script" value={script} onChange={(e) => setScript(e.target.value)} rows={5} style={{ ...field, height: 'auto', padding: 10, lineHeight: 1.5, resize: 'vertical' }} />
         <span style={{ display: 'flex', gap: 14, marginTop: 5 }}>

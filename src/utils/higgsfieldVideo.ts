@@ -25,6 +25,16 @@ export const higgsfieldStatus = () => call<HiggsfieldStatus>({ action: 'status' 
 export const connectHiggsfield = (key: string, secret: string) => call<{ connected: true; key_hint: string; live: boolean }>({ action: 'connect', key, secret });
 export const disconnectHiggsfield = () => call<{ connected: false }>({ action: 'disconnect' });
 export const generateVideo = (req: { model: string; prompt: string; aspect_ratio: VideoAspect; duration: number; image_url?: string | null; brand_id?: string | null }) => call<{ job: VideoJob }>({ action: 'generate', ...req });
+export interface VideoEstimate { usd: number | null; credits: number | null; source: 'higgsfield' | 'price_list'; per_second: number | null }
+/** Cost before generating: Higgsfield's own quote in live mode, else the published per-second price. */
+export const estimateVideo = (req: { model: string; aspect_ratio: VideoAspect; duration: number }) => call<{ estimate: VideoEstimate; duration: number }>({ action: 'estimate', ...req });
+/** "≈ $0.42" and the line under the button that says where the number comes from. */
+export function costCopy(e: VideoEstimate | null, duration: number, modelLabel: string): { short: string; detail: string } {
+  if (!e || e.usd === null) return { short: '', detail: `No price for ${modelLabel} here yet; Higgsfield shows it in your console before you top up.` };
+  const usd = `$${e.usd.toFixed(2)}`;
+  if (e.source === 'higgsfield') return { short: `≈ ${usd}`, detail: `Higgsfield’s quote for this video: ${usd}${e.credits !== null ? ` (${e.credits} credits)` : ''}.` };
+  return { short: `≈ ${usd}`, detail: `About ${usd}: ${duration} s × $${e.per_second}/s at Higgsfield’s published price. Higgsfield’s own quote replaces this once live.` };
+}
 export const pollVideo = (jobId: string) => call<{ job: VideoJob; warning?: string }>({ action: 'poll', job_id: jobId });
 export const listVideos = () => call<{ jobs: VideoJob[] }>({ action: 'list' });
 

@@ -99,6 +99,18 @@ Deno.serve(async (req) => {
     return json({ jobs: await Promise.all((data || []).map(withSignedUrl)) });
   }
 
+  if (action === 'estimate') {
+    // Cost doesn't depend on the words, so a fixed prompt is sent: the Guardian's prompt isn't shared before they generate.
+    const shaped = hf.shapeRequest({ ...body, prompt: 'A calm morning routine at home.', image_url: null });
+    if (!shaped.ok) return fail(shaped.error);
+    const fallback = hf.listEstimate(shaped.model, shaped.duration);
+    if (!LIVE) return json({ estimate: fallback, duration: shaped.duration, delivered_aspect: shaped.delivered });
+    const creds = await credentialsFor(user.id).catch(() => null);
+    if (!creds) return json({ estimate: fallback, duration: shaped.duration, delivered_aspect: shaped.delivered });
+    const res = await higgsfield(creds, `estimate/${shaped.endpoint}`, { body: shaped.body });
+    return json({ estimate: (res.ok && hf.parseEstimate(res.body)) || fallback, duration: shaped.duration, delivered_aspect: shaped.delivered });
+  }
+
   if (action === 'generate') {
     const shaped = hf.shapeRequest(body);
     if (!shaped.ok) return fail(shaped.error);

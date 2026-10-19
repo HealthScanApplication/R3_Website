@@ -43,6 +43,12 @@ describe('higgsfield lib', () => {
     expect(hf.mapStatus({ status: 'Cancelled' }).status).toBe('canceled');
     expect(hf.mapStatus({ status: 'something-new' }).status).toBe('in_progress');
   });
+  it('reads Higgsfield estimates and falls back to the published per-second price', () => {
+    expect(hf.parseEstimate({ credits: '1.500', usd: '0.094' })).toEqual({ usd: 0.094, credits: 1.5, source: 'higgsfield', per_second: null });
+    expect(hf.parseEstimate({ detail: 'nope' })).toBeNull();
+    expect(hf.listEstimate(hf.MODELS.find((m) => m.id === 'kling-3-std')!, 5)).toEqual({ usd: 0.42, credits: null, source: 'price_list', per_second: 0.084 });
+    expect(hf.listEstimate(hf.MODELS.find((m) => m.id === 'wan-2.7')!, 5).usd).toBeNull();
+  });
   it('explains HTTP errors without echoing credentials', () => {
     expect(hf.errorMessage(401, {})).toMatch(/did not accept/);
     expect(hf.errorMessage(403, {})).toMatch(/balance/);
@@ -190,6 +196,26 @@ describe('higgsfield Edge Function', () => {
     const before = s.calls.length;
     await s.call({ action: 'poll', job_id: body.job.id });
     expect(s.calls.length).toBe(before);
+  });
+
+  it('quotes a price before generating: list price in test mode, Higgsfield’s free estimate when live', async () => {
+    const mock = server();
+    await mock.call({ action: 'connect', ...KEY });
+    expect((await mock.call({ action: 'estimate', model: 'kling-3-std', aspect_ratio: '9:16', duration: 8 })).body.estimate).toEqual({ usd: 0.672, credits: null, source: 'price_list', per_second: 0.084 });
+    expect(mock.calls).toHaveLength(0);
+
+    const live = server({ live: true, hf: (url) => url.includes('/estimate/') ? { status: 200, body: { credits: '6.720', usd: '0.672' } } : { status: 200, body: {} } });
+    await live.call({ action: 'connect', ...KEY });
+    const res = (await live.call({ action: 'estimate', model: 'kling-3-std', aspect_ratio: '1:1', duration: 8, prompt: 'my private idea' })).body;
+    expect(res.estimate).toEqual({ usd: 0.672, credits: 6.72, source: 'higgsfield', per_second: null });
+    const call = live.calls.at(-1)!;
+    expect(call.url).toBe('https://api.higgsfield.ai/estimate/kling-video/v3.0/std/text-to-video');
+    expect(JSON.parse(call.init.body)).toEqual({ prompt: 'A calm morning routine at home.', duration: 8, aspect_ratio: '1:1', sound: 'off' });
+    expect(live.tables.guardian_video_jobs).toHaveLength(0); // an estimate never starts a job
+
+    const down = server({ live: true, hf: (url) => url.includes('/estimate/') ? { status: 503, body: {} } : { status: 200, body: {} } });
+    await down.call({ action: 'connect', ...KEY });
+    expect((await down.call({ action: 'estimate', model: 'kling-3-std', aspect_ratio: '9:16', duration: 5 })).body.estimate.source).toBe('price_list');
   });
 
   it('caps videos rendering at once', async () => {
