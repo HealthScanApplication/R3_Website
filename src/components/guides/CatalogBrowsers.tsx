@@ -182,21 +182,24 @@ export function partsOfDay(steps: RoutineStep[]): Array<{ key: string; label: st
   const actionPeriod = (s: RoutineStep) => { const a = steps.find((x) => !isRule(x) && x.time && x.subtype && x.subtype === s.subtype && (x.day || 1) === (s.day || 1)); return a ? periodOfTime(a.time) : null; };
   const part = (s: RoutineStep) => {
     if (!isRule(s)) return periodOfTime(s.time) || 'Anytime';
-    if (WEEK_RULE.test(s.name)) return 'Week rules';
+    if (s.recurrenceType === 'weekly' || WEEK_RULE.test(s.name)) return 'Week rules';
     return periodOfTime(s.time) || periodOfText(s.name) || actionPeriod(s) || 'Day rules';
   };
   const order = ['Week rules', 'Morning', 'Afternoon', 'Evening', 'Anytime', 'Day rules'];
   const out = new Map<string, { key: string; label: string; rules: boolean; steps: RoutineStep[] }>();
   for (const s of steps) {
     const p = part(s);
-    const d = p === 'Week rules' || !multi ? 0 : s.day || 1;
-    const key = `${d}-${order.indexOf(p)}`;
-    if (!out.has(key)) out.set(key, { key, label: d ? `Day ${d} · ${p}` : p, rules: p.endsWith('rules'), steps: [] });
+    // In a multi-day routine an item without a day runs every day: its own "Every day" groups, listed first.
+    const d = p === 'Week rules' || !multi ? 0 : s.day || -1;
+    const key = `${d}|${order.indexOf(p)}`;
+    if (!out.has(key)) out.set(key, { key, label: d > 0 ? `Day ${d} · ${p}` : d < 0 ? `Every day · ${p}` : p, rules: p.endsWith('rules'), steps: [] });
     out.get(key)!.steps.push(s);
   }
   // Within a part of the day, the timed steps first and its rules after them.
   for (const g of out.values()) g.steps.sort((x, y) => Number(isRule(x)) - Number(isRule(y)));
-  return [...out.values()].sort((a, b) => { const [ad, ap] = a.key.split('-').map(Number), [bd, bp] = b.key.split('-').map(Number); return ad - bd || ap - bp; });
+  // Week rules, then every-day groups, then Day 1, Day 2…; within each, the parts of the day in order.
+  const rank = (k: string) => { const [d, p] = k.split('|').map(Number); return [p === 0 ? -2 : d, p]; };
+  return [...out.values()].sort((a, b) => { const [ad, ap] = rank(a.key), [bd, bp] = rank(b.key); return ad - bd || ap - bp; });
 }
 /** The app's smart list a step belongs to, used to group rules: Meals, Supplements, Fitness, Hygiene, Wellness. */
 export function smartListOfStep(s: Pick<RoutineStep, 'subtype' | 'scope' | 'category' | 'itemType'>): string {

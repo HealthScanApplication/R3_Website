@@ -72,12 +72,12 @@ begin
     coalesce(to_jsonb(source.instructions),'[]'::jsonb),'draft',new_recipe_id,scope_id,greatest(coalesce(source.servings,1),1),source.nutrition_per_serving)
   returning * into result;
   update public.protocol_items set catalog_recipe_id=new_recipe_id where protocol_id=p_protocol and catalog_recipe_id=source.id;
-  update public.catalog_protocols set builder_config=jsonb_set(builder_config,'{plan}',(
+  update public.catalog_protocols set builder_config=jsonb_set(builder_config,'{plan}',coalesce((
     select jsonb_object_agg(key,case when (value->>'id'=source.id and value->>'source'='catalog') or
       (value->>'source'='guide' and exists(select 1 from public.guide_recipes g where g.id::text=value->>'id' and g.catalog_recipe_id=source.id))
       then value || jsonb_build_object('id',new_recipe_id,'source','catalog') else value end)
     from jsonb_each(builder_config->'plan')
-  )) where id=p_protocol and jsonb_typeof(builder_config->'plan')='object';
+  ),'{}'::jsonb)) where id=p_protocol and jsonb_typeof(builder_config->'plan')='object';
   perform public.sync_protocol_child(p_protocol);
   return result;
 end $$;

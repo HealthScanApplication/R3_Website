@@ -57,3 +57,10 @@ it('nests rules and sub-steps under their parent and names the smart list', () =
   expect(smartListOfStep({ subtype: 'meal', scope: 'consume' } as any)).toBe('Meals');
   expect(smartListOfStep({ subtype: 'exercise' } as any)).toBe('Fitness');
 });
+it('lists every-day steps of a multi-day routine once, before the numbered days, and weekly rules by recurrence', () => {
+  const g = partsOfDay([
+    { name: 'Long run', time: '07:00', day: 2 }, { name: 'Hydrate', time: '08:00', day: null }, { name: 'Intervals', time: '07:00', day: 1 },
+    { name: 'Deload', kind: 'rule_do', recurrenceType: 'weekly' },
+  ] as any);
+  expect(g.map((x) => x.label)).toEqual(['Week rules', 'Every day · Morning', 'Day 1 · Morning', 'Day 2 · Morning']);
+});

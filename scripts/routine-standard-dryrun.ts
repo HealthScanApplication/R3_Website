@@ -1,12 +1,14 @@
 /*
  * Routine layout standard — DRY RUN over an export (reads JSON, writes CSV, never touches the database).
- *   node dist.js protocol_items.json [protocols.json] > standard-dryrun.csv   (protocols.json: [{id, category}] — basics only for their own routines)
+ *   node dist.js protocol_items.json protocols.json > standard-dryrun.csv   (protocols.json: [{id, category}] — basics only for their own routines)
  */
 import { readFileSync } from 'fs';
 import { standardiseProtocol, isCalendarEntry, type Row } from '../src/utils/routineStandard';
 
 const rows: (Row & { protocol_id: string })[] = JSON.parse(readFileSync(process.argv[2], 'utf8'));
-const themes = new Map<string, string | null>(process.argv[3] ? (JSON.parse(readFileSync(process.argv[3], 'utf8')) as Array<{ id: string; category: string | null }>).map((p) => [p.id, p.category]) : []);
+// Categories are required: without them every routine would be judged as unknown and asked for sleep and hygiene basics.
+if (!process.argv[3]) { process.stderr.write('Usage: node dist.js protocol_items.json protocols.json\n'); process.exit(1); }
+const themes = new Map<string, string | null>((JSON.parse(readFileSync(process.argv[3], 'utf8')) as Array<{ id: string; category: string | null }>).map((p) => [p.id, p.category]));
 const csv = (v: unknown) => `"${(typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v ?? '')).replace(/"/g, '""')}"`;
 const byId = new Map(rows.map((r) => [r.id, r]));
 const byProtocol = new Map<string, Row[]>();
