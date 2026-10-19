@@ -139,3 +139,22 @@ it('merges the Morning hygiene set into the Hygiene list', () => {
   expect(smartListOfStep(m[1])).toBe('Hygiene');
   expect(mergeHygieneSets([{ id: 'x', name: 'Morning hygiene', subtype: 'hygiene' }] as any)).toHaveLength(1); // a set with no steps is left alone
 });
+import { expandWeekly, WEEKDAYS_FULL } from '../../components/guides/CatalogBrowsers';
+it('shows a repeating week by weekday, with every-day steps and week rules kept once', () => {
+  const steps = [
+    { id: 'a', name: 'Long Run', time: '07:00', recurrenceType: 'weekly', dows: [0], kind: 'action' },
+    { id: 'b', name: 'Tempo Run', time: '07:00', recurrenceType: 'weekly', dows: [2, 4], kind: 'action' },
+    { id: 'c', parentId: 'b', name: 'Warm up', kind: 'rule_do' },
+    { id: 'd', name: 'Lunch', time: '12:30', kind: 'action' },
+    { id: 'e', name: 'Progress each week', kind: 'rule_do', recurrenceType: 'weekly', dows: [0] },
+  ] as any;
+  const { steps: out, weekdays } = expandWeekly(steps);
+  expect(weekdays).toBe(true);
+  expect(out.filter((s) => s.name === 'Tempo Run').map((s) => s.day)).toEqual([2, 4]);
+  expect(out.find((s) => s.name === 'Long Run')!.day).toBe(7);
+  expect(out.filter((s) => s.name === 'Warm up').map((s) => `${s.day}:${s.parentId}`)).toEqual(['2:b@2', '4:b@4']);
+  expect(out.filter((s) => s.name === 'Lunch' || s.name === 'Progress each week')).toHaveLength(2);
+  expect(partsOfDay(out.filter((s) => !s.parentId), (d) => WEEKDAYS_FULL[d - 1]).map((g) => g.label)).toEqual(['Week rules', 'Every day · Afternoon', 'Tuesday · Morning', 'Thursday · Morning', 'Sunday · Morning']);
+  // a numbered-day cycle is left alone
+  expect(expandWeekly([{ id: 'x', name: 'A', day: 3, recurrenceType: 'weekly', dows: [1] }] as any).weekdays).toBe(false);
+});

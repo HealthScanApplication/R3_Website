@@ -177,7 +177,7 @@ const periodOfText = (name: string) => (/\b(morning|on rising|on waking|breakfas
  * ("on rising", "before bed"), or the time of the step it governs (same subtype, e.g. form rules with the workout).
  * Per day when the routine has several.
  */
-export function partsOfDay(steps: RoutineStep[]): Array<{ key: string; label: string; rules: boolean; day: number; steps: RoutineStep[] }> {
+export function partsOfDay(steps: RoutineStep[], dayLabel: (d: number) => string = (d) => `Day ${d}`): Array<{ key: string; label: string; rules: boolean; day: number; steps: RoutineStep[] }> {
   const multi = new Set(steps.map((s) => s.day || 1)).size > 1;
   const isRule = (s: RoutineStep) => !!s.kind?.startsWith('rule');
   const actionPeriod = (s: RoutineStep) => { const a = steps.find((x) => !isRule(x) && x.time && x.subtype && x.subtype === s.subtype && (x.day || 1) === (s.day || 1)); return a ? periodOfTime(a.time) : null; };
@@ -193,7 +193,7 @@ export function partsOfDay(steps: RoutineStep[]): Array<{ key: string; label: st
     // In a multi-day routine an item without a day runs every day: its own "Every day" groups, listed first.
     const d = p === 'Week rules' || !multi ? 0 : s.day || -1;
     const key = `${d}|${order.indexOf(p)}`;
-    if (!out.has(key)) out.set(key, { key, label: d > 0 ? `Day ${d} · ${p}` : d < 0 ? `Every day · ${p}` : p, rules: p.endsWith('rules'), day: d, steps: [] });
+    if (!out.has(key)) out.set(key, { key, label: d > 0 ? `${dayLabel(d)} · ${p}` : d < 0 ? `Every day · ${p}` : p, rules: p.endsWith('rules'), day: d, steps: [] });
     out.get(key)!.steps.push(s);
   }
   // Within a part of the day, the timed steps first and its rules after them.
@@ -245,6 +245,27 @@ export function smartListBlocks(steps: RoutineStep[], kids: (s: RoutineStep) => 
 /** A meal step with no dish of its own: "Breakfast", "Light lunch", "Afternoon snack", "Dinner meal". */
 export const GENERIC_MEAL = /^((light|healthy|balanced|big|small|pre-[a-z]+|post-[a-z]+|morning|afternoon|evening|late) )?(breakfast|lunch|dinner|supper|snack|meal)( meal)?$/i;
 /** A suggested recipe under a meal slot: image, name and health score; opens its details and ingredients. */
+export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+export const WEEKDAYS_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+/**
+ * A routine built as a repeating week (items with weekly recurrence on certain weekdays, no numbered days) is shown by
+ * weekday: each such step is repeated on its days (Mon = 1 … Sun = 7); steps with no weekdays stay "every day".
+ * Rules of the whole week stay once; a rule under a step follows its step's days. A numbered-day cycle is left alone.
+ */
+export function expandWeekly(steps: RoutineStep[]): { steps: RoutineStep[]; weekdays: boolean } {
+  const isRule = (s: RoutineStep) => !!s.kind?.startsWith('rule');
+  const weekly = steps.some((s) => s.recurrenceType === 'weekly' && s.dows?.length);
+  if (!weekly || steps.some((s) => (s.day || 0) > 1)) return { steps, weekdays: false };
+  const byId = new Map(steps.map((s) => [s.id, s]));
+  const dowsOf = (s: RoutineStep): number[] | null => (s.dows?.length ? s.dows : s.parentId && byId.get(s.parentId) ? dowsOf(byId.get(s.parentId)!) : null);
+  const out: RoutineStep[] = [];
+  for (const s of steps) {
+    const ds = isRule(s) && !s.parentId ? null : dowsOf(s);
+    if (!ds) { out.push(s); continue; }
+    for (const dow of ds) { const day = dow === 0 ? 7 : dow; out.push({ ...s, id: s.id ? `${s.id}@${day}` : s.id, parentId: s.parentId ? `${s.parentId}@${day}` : s.parentId, day }); }
+  }
+  return { steps: out, weekdays: true };
+}
 /** The catalogue item a step opens (its own link, else the suggested recipe of a generic meal slot) and its image. */
 export function stepTarget(s: RoutineStep, _list: string, media: Record<string, { name: string; image: string | null }>, suggestions: Record<string, CatalogFood>): { target: StepTarget | null; image: string | null } {
   if (s.activityId) return { target: { kind: 'activity', id: s.activityId, name: media[`a:${s.activityId}`]?.name || s.name }, image: media[`a:${s.activityId}`]?.image || null };
@@ -388,12 +409,15 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
   const pickDay = (d: number) => { setDay(d); const el = listRef.current?.querySelector<HTMLElement>(`[data-day="${d}"]`); if (el && listRef.current) listRef.current.scrollTo({ top: Math.max(0, el.offsetTop - 4), behavior: 'smooth' }); };
   useEffect(() => { if (!open) return; let live = true; setSteps(null); setDay(1); routineSteps(accessToken, open).then((s) => { if (live) setSteps(s); }); return () => { live = false; }; }, [accessToken, open]);
   // The cycle length is the routine's Length (total_days: Day / Week / 2 weeks / Month), or its last numbered day.
-  const days = steps ? Math.max(1, items.find((r) => r.id === open)?.totalDays || 1, ...steps.map((s) => s.day || 1)) : 1;
   // The app shows one day: every-day items (no day_number) plus that day's.
   // Only the routine's own steps; daily basics (hygiene, sleep) are suggested beside it, not part of it.
   const basics = (steps || []).filter((s) => isBasicFor(s, section));
   const basicIds = new Set(basics.map((s) => s.id));
-  const own = mergeHygieneSets((steps || []).filter((s) => !isBasicFor(s, section) && !(s.parentId && basicIds.has(s.parentId))));
+  const weekView = expandWeekly(mergeHygieneSets((steps || []).filter((s) => !isBasicFor(s, section) && !(s.parentId && basicIds.has(s.parentId)))));
+  const own = weekView.steps, weekdays = weekView.weekdays;
+  // A repeating week is a 7-day view (Mon–Sun); a numbered cycle uses its Length (total_days) or its last numbered day.
+  const days = !steps ? 1 : weekdays ? 7 : Math.max(1, items.find((r) => r.id === open)?.totalDays || 1, ...steps.map((s) => s.day || 1));
+  const dayName = (d: number) => (weekdays ? WEEKDAYS_FULL[d - 1] : `Day ${d}`);
   const tree = stepTree(own);
   const isRule = (s: RoutineStep) => !!s.kind?.startsWith('rule');
   // A generic meal slot ("Breakfast", "Lunch") gets a suggested catalogue recipe that follows this Protocol's diet rules.
@@ -449,15 +473,15 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
         </button>
         {open === r.id && <div role="region" aria-label={`${r.name} steps`} style={{ gridColumn: '1 / -1', border: `1px solid ${acid}`, background: '#141611', padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 20, alignItems: 'start' }}>
           <div aria-label="As in the app" style={{ display: 'grid', justifyItems: 'center', gap: 8 }}>
-            <div style={{ ...kicker, margin: 0 }}>As in the app{days > 1 ? ` · day ${day} of ${days}${days > 7 ? ` · week ${Math.ceil(day / 7)}` : ''}` : ''}</div>
+            <div style={{ ...kicker, margin: 0 }}>As in the app{days > 1 ? (weekdays ? ` · ${dayName(day)}` : ` · day ${day} of ${days}${days > 7 ? ` · week ${Math.ceil(day / 7)}` : ''}`) : ''}</div>
             {days > 1 && (() => {
               const phases = routinePhases(r.description);
-              const chip = (d: number) => <button key={d} type="button" aria-pressed={d === day} title={phaseOf(phases, d) || undefined} onClick={() => pickDay(d)} style={{ border: `1px solid ${d === day ? acid : line}`, background: d === day ? 'rgba(199,216,163,.14)' : 'transparent', color: d === day ? acid : ink, borderRadius: 999, padding: '3px 8px', fontSize: 10, cursor: 'pointer', minWidth: 30 }}>{days > 7 ? d : `Day ${d}`}</button>;
+              const chip = (d: number) => <button key={d} type="button" aria-pressed={d === day} title={phaseOf(phases, d) || undefined} onClick={() => pickDay(d)} style={{ border: `1px solid ${d === day ? acid : line}`, background: d === day ? 'rgba(199,216,163,.14)' : 'transparent', color: d === day ? acid : ink, borderRadius: 999, padding: '3px 8px', fontSize: 10, cursor: 'pointer', minWidth: 30 }}>{weekdays ? WEEKDAYS[d - 1] : days > 7 ? d : `Day ${d}`}</button>;
               // Over a week: one row per week (Week 1: days 1–7…), so a 40-day plan reads as six weeks.
               const weeks = days > 7 ? Array.from({ length: Math.ceil(days / 7) }, (_, w) => Array.from({ length: Math.min(7, days - w * 7) }, (_, k) => w * 7 + k + 1)) : [Array.from({ length: days }, (_, k) => k + 1)];
               return <div role="group" aria-label="Day" style={{ display: 'grid', gap: 4, justifyItems: 'center' }}>
                 {weeks.map((ds, w) => <div key={w} style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>{days > 7 && <span style={{ color: muted, fontSize: 10, width: 46, textAlign: 'right' }}>Week {w + 1}</span>}{ds.map(chip)}</div>)}
-                {phaseOf(phases, day) && <div style={{ color: acid, fontSize: 11 }}>Day {day} · {phaseOf(phases, day)}</div>}
+                {!weekdays && phaseOf(phases, day) && <div style={{ color: acid, fontSize: 11 }}>Day {day} · {phaseOf(phases, day)}</div>}
               </div>;
             })()}
             {steps ? <PhoneFrame width={300} screenBg="#FFFFFF"><ProtocolHomeScreen protocolName={r.name} items={dayItems} showDetails imageUrl={r.image || undefined} profileName="ROUTINE³" grouping="smart" /></PhoneFrame> : <span style={{ color: muted, fontSize: 11 }}>Loading…</span>}
@@ -466,7 +490,7 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
           <div style={{ fontSize: 17, fontWeight: 600 }}>{r.name}</div>
           {r.description && descriptionParagraphs(r.description).map((t, k) => <p key={k} style={{ color: muted, fontSize: 12, lineHeight: 1.55, maxWidth: 760, margin: '0 0 8px' }}>{t}</p>)}
           <div style={kicker}>Steps{steps ? ` · ${own.length}` : ''}</div>
-          {!steps ? <span style={{ color: muted, fontSize: 11 }}>Loading…</span> : <div ref={listRef} style={{ display: 'grid', gap: 10, ...(days > 1 ? { maxHeight: '78vh', overflowY: 'auto', paddingRight: 6, position: 'relative' } : {}) }}>{partsOfDay(tree.top).map((g, gi, all) => <section key={g.key} aria-label={g.label} data-day={g.day > 0 && all[gi - 1]?.day !== g.day ? g.day : undefined} style={g.day > 0 && all[gi - 1]?.day !== g.day ? { borderTop: `1px solid ${g.day === day ? acid : line}`, paddingTop: 10 } : undefined}>{g.day > 0 && all[gi - 1]?.day !== g.day && <div style={{ fontSize: 13, fontWeight: 700, color: g.day === day ? acid : ink, margin: '0 0 6px' }}>{days > 7 ? `Week ${Math.ceil(g.day / 7)} · ` : ''}Day {g.day}{phaseOf(routinePhases(r.description), g.day) ? <span style={{ color: muted, fontWeight: 400 }}> · {phaseOf(routinePhases(r.description), g.day)}</span> : null}</div>}
+          {!steps ? <span style={{ color: muted, fontSize: 11 }}>Loading…</span> : <div ref={listRef} style={{ display: 'grid', gap: 10, ...(days > 1 ? { maxHeight: '78vh', overflowY: 'auto', paddingRight: 6, position: 'relative' } : {}) }}>{partsOfDay(tree.top, dayName).map((g, gi, all) => <section key={g.key} aria-label={g.label} data-day={g.day > 0 && all[gi - 1]?.day !== g.day ? g.day : undefined} style={g.day > 0 && all[gi - 1]?.day !== g.day ? { borderTop: `1px solid ${g.day === day ? acid : line}`, paddingTop: 10 } : undefined}>{g.day > 0 && all[gi - 1]?.day !== g.day && <div style={{ fontSize: 13, fontWeight: 700, color: g.day === day ? acid : ink, margin: '0 0 6px' }}>{!weekdays && days > 7 ? `Week ${Math.ceil(g.day / 7)} · ` : ''}{dayName(g.day)}{!weekdays && phaseOf(routinePhases(r.description), g.day) ? <span style={{ color: muted, fontWeight: 400 }}> · {phaseOf(routinePhases(r.description), g.day)}</span> : null}</div>}
             <div style={{ ...kicker, color: g.rules ? warn : muted, margin: '0 0 4px' }}>{g.label} <span style={{ opacity: .7 }}>· {g.steps.length}</span></div>
             {/* Each smart list: its steps on the left, every rule for it (its own and its steps') on the right. */}
             {smartListBlocks(g.steps, tree.kids).map(([list, acts, rules]) => <div key={list} style={{ marginLeft: 12, borderLeft: `2px solid ${line}`, paddingLeft: 10, marginBottom: 8 }}>

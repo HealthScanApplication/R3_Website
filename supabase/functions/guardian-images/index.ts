@@ -24,7 +24,7 @@ async function ownKey(userId: string): Promise<string | null> {
 }
 async function houseUsedToday(userId: string): Promise<number> {
   const since = new Date(); since.setUTCHours(0, 0, 0, 0);
-  const { count } = await service.from('guardian_image_jobs').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('source', 'house').eq('mock', false).gte('created_at', since.toISOString());
+  const { count } = await service.from('guardian_image_jobs').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('source', 'house').eq('mock', false).gte('created_at', since.toISOString()).in('status', ['pending', 'completed']);
   return count || 0;
 }
 
@@ -80,7 +80,6 @@ Deno.serve(async (req) => {
       if (!key) return fail('Connect your OpenAI key first.', 409);
     } else {
       if (!HOUSE_KEY) return fail('R³ images are not available right now; connect your own OpenAI key instead.', 503);
-      if (LIVE && await houseUsedToday(user.id) >= HOUSE_PER_DAY) return fail(`You've used today's ${HOUSE_PER_DAY} R³ images. Connect your own OpenAI key for more.`, 429);
       key = HOUSE_KEY;
     }
     const log = { user_id: user.id, source: shaped.source, model: MODEL, aspect_ratio: shaped.aspect, quality: shaped.quality, usd: shaped.usd, prompt: shaped.body.prompt, mock: !LIVE };
@@ -88,16 +87,34 @@ Deno.serve(async (req) => {
       await service.from('guardian_image_jobs').insert({ ...log, status: 'completed' });
       return json({ image: gi.mockImage(shaped.aspect), usd: 0, mock: true, size: shaped.body.size });
     }
-    const res = await fetch(`${gi.OPENAI_BASE}/images/generations`, { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(shaped.body) });
-    const out = await res.json().catch(() => ({}));
+    // House images: reserve the daily slot atomically BEFORE calling OpenAI, so simultaneous requests cannot overspend the cap.
+    let jobId: string | null = null;
+    if (shaped.source === 'house') {
+      const { data: reserved, error: reserveError } = await service.rpc('reserve_house_image', { p_user: user.id, p_limit: HOUSE_PER_DAY, p_model: MODEL, p_aspect: shaped.aspect, p_quality: shaped.quality, p_usd: shaped.usd, p_prompt: shaped.body.prompt });
+      if (reserveError) return fail('Could not reserve an image just now. Try again.', 500);
+      if (!reserved) return fail(`You've used today's ${HOUSE_PER_DAY} R³ images. Connect your own OpenAI key for more.`, 429);
+      jobId = reserved as string;
+    }
+    const finish = async (status: 'completed' | 'failed', error?: string) => {
+      if (jobId) await service.from('guardian_image_jobs').update({ status, error: error ?? null }).eq('id', jobId);
+      else await service.from('guardian_image_jobs').insert({ ...log, status, ...(error ? { error } : {}) });
+    };
+    let res: Response; let out: any;
+    try {
+      res = await fetch(`${gi.OPENAI_BASE}/images/generations`, { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(shaped.body) });
+      out = await res.json().catch(() => ({}));
+    } catch {
+      await finish('failed', 'Could not reach OpenAI.');
+      return fail('Could not reach OpenAI. Try again.', 502);
+    }
     const b64 = out?.data?.[0]?.b64_json;
     if (!res.ok || !b64) {
       const error = gi.friendlyOpenAIError(res.status, out);
       console.warn('guardian-images openai', res.status, out?.error?.code || '');
-      await service.from('guardian_image_jobs').insert({ ...log, status: 'failed', error });
+      await finish('failed', error);
       return fail(error, 502);
     }
-    await service.from('guardian_image_jobs').insert({ ...log, status: 'completed' });
+    await finish('completed');
     return json({ image: `data:image/webp;base64,${b64}`, usd: shaped.usd, mock: false, size: shaped.body.size });
   }
 
