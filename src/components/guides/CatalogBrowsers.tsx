@@ -130,13 +130,22 @@ export function CatalogRecipes({ accessToken }: { accessToken: string }) {
 }
 
 const INGREDIENT_CATEGORIES = ['Vegetables', 'Fruit', 'Grains & bakery', 'Legumes, nuts & seeds', 'Meat', 'Fish & seafood', 'Dairy & eggs', 'Herbs & spices', 'Oils & fats', 'Drinks', 'Condiments & sauces', 'Sweeteners', 'Additives', 'Supplements & other', 'Confectionery & snacks', 'Prepared foods'];
+/** Every matching ingredient, read in pages: the API caps one response at 1,000 rows. */
+async function allIngredients(accessToken: string, query: string, category: string): Promise<CatalogFood[]> {
+  const out: CatalogFood[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const got = await browseIngredients(accessToken, { query, category, limit: 1000, offset });
+    out.push(...got);
+    if (got.length < 1000) return out;
+  }
+}
 export function CatalogIngredients({ accessToken }: { accessToken: string }) {
   const [query, setQuery] = useState(''), [category, setCategory] = useState(''), [form, setForm] = useState<'' | 'raw' | 'processed'>(''), [processing, setProcessing] = useState('');
   // Form is derived from the name, so with a form filter on, read the whole published list (about 1,400 rows) and filter it here.
   const [page, setPage] = useState(0);
   useEffect(() => { setPage(0); }, [query, category, form, processing]);
   // Without a form filter, page on the server (one extra row says whether there is a next page); with one, the whole list is filtered and paged here.
-  const { items: all, busy, error } = useLoad(() => browseIngredients(accessToken, form ? { query, category, limit: 2000 } : { query, category, limit: PAGE + 1, offset: page * PAGE }), [accessToken, query, category, form, form ? 0 : page], query ? 250 : 0);
+  const { items: all, busy, error } = useLoad(() => (form ? allIngredients(accessToken, query, category) : browseIngredients(accessToken, { query, category, limit: PAGE + 1, offset: page * PAGE })), [accessToken, query, category, form, form ? 0 : page], query ? 250 : 0);
   // A processing choice from earlier results must not hide everything after the search or category changes.
   useEffect(() => { setProcessing(''); }, [query, category]);
   const kinds = [...new Set(all.filter((f) => f.form === 'processed' && f.processing).map((f) => f.processing!))].sort();

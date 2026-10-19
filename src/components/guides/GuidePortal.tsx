@@ -3696,6 +3696,9 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
   const navItems = isAdminUser ? [...nav, { id: 'admin' as Tab, label: 'Admin', Icon: ShieldCheck as typeof Users }] : nav;
   // Sidebar sections the Guardian opened with their chevron; the current page's own branch is always open.
   const [navOpen, setNavOpen] = useState<string[]>([]);
+  // Sections folded by hand while on their branch; cleared on navigation so the new page's branch opens.
+  const [navClosed, setNavClosed] = useState<string[]>([]);
+  useEffect(() => { setNavClosed([]); }, [tab]);
   const [leads, setLeads] = useState<GuideLead[]>([]);
   const [offers, setOffers] = useState<GuideOffer[]>([]);
   const [recipes, setRecipes] = useState<GuideRecipe[]>([]);
@@ -3773,7 +3776,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
           const chain = (x: string): string[] => { const p = NAV_PARENT[x]; return p ? [...chain(p), p] : []; };
           const ancestors = chain(id), depth = ancestors.length, parent = ancestors[depth - 1];
           // Children stay folded unless every ancestor is open (opened with its chevron, or on the current page's branch).
-          const isOpen = (x: string) => navOpen.includes(x) || x === tab || chain(tab).includes(x);
+          const isOpen = (x: string) => !navClosed.includes(x) && (navOpen.includes(x) || x === tab || chain(tab).includes(x));
           if (!ancestors.every(isOpen)) return null;
           const hasChildren = Object.values(NAV_PARENT).includes(id as Tab);
           const on = tab === id || (id === 'offer_builder' && tab === 'value_ramps');
@@ -3786,7 +3789,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
             {parent && <span aria-hidden="true" style={{ position: 'absolute', left: lineX(depth), top: 0, bottom: siblingsAfter(id) ? 0 : '50%', borderLeft: `1px solid ${line}` }} />}
             {parent && <span aria-hidden="true" style={{ position: 'absolute', left: lineX(depth), top: '50%', width: 6, borderTop: `1px solid ${line}` }} />}
             <button onClick={() => { setTab(id); setProtocolId(null); setRecipeId(null); setChildPlanId(null); setParentContext(null); }} title={n} aria-current={on ? 'page' : undefined} style={{ flex: 1, minWidth: 0, height: depth ? 34 : 42, border: 0, background: on ? '#1C1E19' : 'transparent', color: on || family ? ink : muted, display: 'flex', alignItems: 'center', gap: depth ? 10 : 12, padding: depth ? '0 20px 0 22px' : '0 20px', cursor: 'pointer', fontFamily: sans, fontSize: depth ? 10 : 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>            <Icon size={depth ? 13 : 16} style={{ flex: '0 0 auto', marginLeft: depth ? 6 + depth * 10 : 0, color: on ? acid : undefined }} /><span className="g-rlabel" style={{ flex: 1, textAlign: 'left' }}>{n}</span></button>
-            {hasChildren && <button type="button" aria-label={`${isOpen(id) ? 'Fold' : 'Unfold'} ${n}`} aria-expanded={isOpen(id)} className="g-rlabel" onClick={() => setNavOpen((o) => (isOpen(id) ? o.filter((x) => x !== id) : [...o, id]))} style={{ border: 0, background: 'transparent', color: muted, cursor: 'pointer', padding: '0 14px 0 4px', display: 'inline-flex', alignItems: 'center' }}><ChevronRight size={12} style={{ transform: isOpen(id) ? 'rotate(90deg)' : undefined, transition: 'transform .15s ease' }} /></button>}
+            {hasChildren && <button type="button" aria-label={`${isOpen(id) ? 'Fold' : 'Unfold'} ${n}`} aria-expanded={isOpen(id)} className="g-rlabel" onClick={() => { if (isOpen(id)) { setNavOpen((o) => o.filter((x) => x !== id)); setNavClosed((c) => [...c, id]); } else { setNavClosed((c) => c.filter((x) => x !== id)); setNavOpen((o) => [...o, id]); } }} style={{ border: 0, background: 'transparent', color: muted, cursor: 'pointer', padding: '0 14px 0 4px', display: 'inline-flex', alignItems: 'center' }}><ChevronRight size={12} style={{ transform: isOpen(id) ? 'rotate(90deg)' : undefined, transition: 'transform .15s ease' }} /></button>}
           </div>; })}</aside>
       </div>
       {/* overflow-x clip, not hidden: hidden makes main a scroll container and breaks sticky columns inside (Diet planner). */}
