@@ -3,7 +3,7 @@ import {
   ArrowRight, ChevronRight, FileText, HeartPulse, LogOut,
   Mail, Package, Plus, Salad, Sparkles, Users, Globe2, Loader2,
   Upload, Check, Instagram, Youtube, Link2, AtSign, Route, CalendarDays, Download,
-  MoreHorizontal, Activity, Bath, Sparkle, HeartHandshake, Hourglass, ChefHat, Wheat, ListChecks, CookingPot, FolderOpen, Trash2, ExternalLink, Hammer, PencilRuler, Blocks, LayoutDashboard, Play, Clock, ShieldCheck, Utensils, Dumbbell, Combine, Clapperboard, BookOpen, Podcast, GraduationCap, AudioLines } from 'lucide-react';
+  MoreHorizontal, Droplets, Activity, Bath, Sparkle, HeartHandshake, Hourglass, ChefHat, Wheat, ListChecks, CookingPot, FolderOpen, Trash2, ExternalLink, Hammer, PencilRuler, Blocks, LayoutDashboard, Play, Clock, ShieldCheck, Utensils, Dumbbell, Combine, Clapperboard, BookOpen, Podcast, GraduationCap, AudioLines } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ProtocolEditor } from '../admin/ProtocolEditor';
 import { RoutineMark } from '../Header';
@@ -86,8 +86,8 @@ function ExpertiseTags({ tags, color = '#667245', compact = false }: { tags: str
   </div>;
 }
 
-type Tab = 'home' | 'profile' | 'library' | 'leads' | 'value_ramps' | 'offer_builder' | 'products' | 'recipes' | 'diet' | 'fitness' | 'activities' | 'cooking' | 'equipment' | 'ingredients' | 'routines' | 'hygiene' | 'hygiene_protocols' | 'hygiene_activities' | 'beauty' | 'beauty_protocols' | 'beauty_activities' | 'wellness' | 'wellness_protocols' | 'wellness_activities' | 'longevity' | 'longevity_protocols' | 'content' | 'protocols' | 'admin';
-const WORKSPACE_TABS: readonly Tab[] = ['home', 'profile', 'library', 'leads', 'value_ramps', 'offer_builder', 'products', 'recipes', 'diet', 'fitness', 'activities', 'cooking', 'equipment', 'ingredients', 'routines', 'hygiene', 'hygiene_protocols', 'hygiene_activities', 'beauty', 'beauty_protocols', 'beauty_activities', 'wellness', 'wellness_protocols', 'wellness_activities', 'longevity', 'longevity_protocols', 'content', 'protocols', 'admin'];
+type Tab = 'home' | 'profile' | 'library' | 'leads' | 'value_ramps' | 'offer_builder' | 'products' | 'recipes' | 'diet' | 'fitness' | 'activities' | 'cooking' | 'equipment' | 'ingredients' | 'routines' | 'hygiene' | 'hygiene_protocols' | 'hygiene_activities' | 'beauty' | 'beauty_protocols' | 'beauty_activities' | 'wellness' | 'wellness_protocols' | 'wellness_activities' | 'longevity' | 'longevity_protocols' | 'detox' | 'detox_protocols' | 'content' | 'protocols' | 'admin';
+const WORKSPACE_TABS: readonly Tab[] = ['home', 'profile', 'library', 'leads', 'value_ramps', 'offer_builder', 'products', 'recipes', 'diet', 'fitness', 'activities', 'cooking', 'equipment', 'ingredients', 'routines', 'hygiene', 'hygiene_protocols', 'hygiene_activities', 'beauty', 'beauty_protocols', 'beauty_activities', 'wellness', 'wellness_protocols', 'wellness_activities', 'longevity', 'longevity_protocols', 'detox', 'detox_protocols', 'content', 'protocols', 'admin'];
 const SETUP_STEPS = [1, 2, 3, 4, 5] as const;
 type FreeOfferKind = 'ebook' | 'one_to_one_call' | 'group_call' | 'recipe_book' | 'routine' | 'in_person';
 type UpsellKind = 'ebook' | 'routine' | 'routine_guidance' | 'recipe_book' | 'group_call' | 'one_to_one_call' | 'in_person' | 'festival';
@@ -339,9 +339,31 @@ function guardianHeadlineSuggestions(topics: string[], audiences: string[]) {
     `Guidance that meets you where you are.`,
   ])).slice(0, 30);
 }
-const SECTION_ICON = { hygiene: Bath, beauty: Sparkle, wellness: HeartHandshake, longevity: Hourglass } as const;
+const SECTION_ICON = { hygiene: Bath, beauty: Sparkle, wellness: HeartHandshake, detox: Droplets, longevity: Hourglass } as const;
+/** Themes the Protocols page groups by, in sidebar order. */
+const PROTOCOL_THEMES = ['Diet', 'Fitness', 'Hygiene', 'Beauty', 'Wellness', 'Detox', 'Longevity', 'Other'] as const;
+/** A Protocol's theme from its category, then its builder, then words in its name / description. */
+function protocolTheme(x: { category?: string | null; name?: string | null; description?: string | null; builder_kind?: string | null }): typeof PROTOCOL_THEMES[number] {
+  const c = `${x.category || ''} ${(x as any).builder_kind || ''}`.toLowerCase(), t = `${x.name || ''} ${x.description || ''}`.toLowerCase();
+  const by = (re: RegExp) => re.test(c) || re.test(t);
+  if (/diet|nutrition|meal/.test(c)) return 'Diet';
+  if (/fitness|strength|cardio|hiit|recovery|mobility|workout/.test(c)) return 'Fitness';
+  if (/hygiene|oral|dental/.test(c)) return 'Hygiene';
+  if (/beauty|skin|hair/.test(c)) return 'Beauty';
+  if (/detox|cleanse/.test(c)) return 'Detox';
+  if (/longevity|performance/.test(c)) return 'Longevity';
+  if (/wellness|health|sleep|mind/.test(c)) return 'Wellness';
+  if (by(/\b(diet|meal|recipe|nutrition|eat|food|fasting)\b/)) return 'Diet';
+  if (by(/\b(fitness|workout|training|strength|run|gym|exercise)\b/)) return 'Fitness';
+  if (by(/\b(detox|cleanse|parasite)\b/)) return 'Detox';
+  if (by(/\b(skin|beauty|hair|glow)\b/)) return 'Beauty';
+  if (by(/\b(teeth|dental|oral|hygiene)\b/)) return 'Hygiene';
+  if (by(/\b(longevity|ageing|aging)\b/)) return 'Longevity';
+  if (by(/\b(sleep|stress|wellness|calm|menopause)\b/)) return 'Wellness';
+  return 'Other';
+}
 /** Sidebar sub-pages and the family they sit under. */
-const NAV_PARENT: Partial<Record<string, Tab>> = { diet: 'protocols', fitness: 'protocols', hygiene: 'protocols', beauty: 'protocols', wellness: 'protocols', longevity: 'protocols', recipes: 'diet', ingredients: 'diet', cooking: 'diet', equipment: 'diet', routines: 'fitness', activities: 'fitness', hygiene_protocols: 'hygiene', hygiene_activities: 'hygiene', beauty_protocols: 'beauty', beauty_activities: 'beauty', wellness_protocols: 'wellness', wellness_activities: 'wellness', longevity_protocols: 'longevity' };
+const NAV_PARENT: Partial<Record<string, Tab>> = { diet: 'protocols', fitness: 'protocols', hygiene: 'protocols', beauty: 'protocols', wellness: 'protocols', detox: 'protocols', longevity: 'protocols', recipes: 'diet', ingredients: 'diet', cooking: 'diet', equipment: 'diet', routines: 'fitness', activities: 'fitness', hygiene_protocols: 'hygiene', hygiene_activities: 'hygiene', beauty_protocols: 'beauty', beauty_activities: 'beauty', wellness_protocols: 'wellness', wellness_activities: 'wellness', longevity_protocols: 'longevity', detox_protocols: 'detox' };
 const nav: { id: Tab; label: string; Icon: typeof Users }[] = [
   { id: 'home', label: 'Overview', Icon: Sparkles },
   { id: 'library', label: 'Library', Icon: FolderOpen },
@@ -355,19 +377,21 @@ const nav: { id: Tab; label: string; Icon: typeof Users }[] = [
   { id: 'cooking', label: 'Cooking techniques', Icon: CookingPot },
   { id: 'equipment', label: 'Cooking equipment', Icon: ChefHat },
   { id: 'fitness', label: 'Fitness', Icon: Dumbbell },
-  { id: 'routines', label: 'Fitness routines', Icon: ListChecks },
+  { id: 'routines', label: 'Protocols', Icon: ListChecks },
   { id: 'activities', label: 'Activities', Icon: Activity },
   { id: 'hygiene', label: 'Hygiene', Icon: Bath },
-  { id: 'hygiene_protocols', label: 'Hygiene protocols', Icon: ListChecks },
-  { id: 'hygiene_activities', label: 'Hygiene activities', Icon: Activity },
+  { id: 'hygiene_protocols', label: 'Protocols', Icon: ListChecks },
+  { id: 'hygiene_activities', label: 'Activities', Icon: Activity },
   { id: 'beauty', label: 'Beauty', Icon: Sparkle },
-  { id: 'beauty_protocols', label: 'Beauty protocols', Icon: ListChecks },
-  { id: 'beauty_activities', label: 'Beauty activities', Icon: Activity },
+  { id: 'beauty_protocols', label: 'Protocols', Icon: ListChecks },
+  { id: 'beauty_activities', label: 'Activities', Icon: Activity },
   { id: 'wellness', label: 'Wellness', Icon: HeartHandshake },
-  { id: 'wellness_protocols', label: 'Wellness protocols', Icon: ListChecks },
-  { id: 'wellness_activities', label: 'Wellness activities', Icon: Activity },
+  { id: 'wellness_protocols', label: 'Protocols', Icon: ListChecks },
+  { id: 'wellness_activities', label: 'Activities', Icon: Activity },
+  { id: 'detox', label: 'Detox', Icon: Droplets },
+  { id: 'detox_protocols', label: 'Protocols', Icon: ListChecks },
   { id: 'longevity', label: 'Longevity', Icon: Hourglass },
-  { id: 'longevity_protocols', label: 'Longevity protocols', Icon: ListChecks },
+  { id: 'longevity_protocols', label: 'Protocols', Icon: ListChecks },
   { id: 'content', label: 'Content', Icon: Clapperboard },
   { id: 'profile', label: 'Profile', Icon: FileText },
 ];
@@ -3670,6 +3694,8 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
   const [tab, setTab] = useGuardianPage<Tab>('tab', WORKSPACE_TABS, 'home');
   const isAdminUser = ['true', '1', 'yes', true].includes((user?.app_metadata as any)?.is_admin) || (user?.app_metadata as any)?.role === 'admin';
   const navItems = isAdminUser ? [...nav, { id: 'admin' as Tab, label: 'Admin', Icon: ShieldCheck as typeof Users }] : nav;
+  // Sidebar sections the Guardian opened with their chevron; the current page's own branch is always open.
+  const [navOpen, setNavOpen] = useState<string[]>([]);
   const [leads, setLeads] = useState<GuideLead[]>([]);
   const [offers, setOffers] = useState<GuideOffer[]>([]);
   const [recipes, setRecipes] = useState<GuideRecipe[]>([]);
@@ -3737,7 +3763,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
         {GUARDIAN_STEP_LABELS.map((stepLabel, index) => <a key={stepLabel} href={`/guardians/workspace?step=${index + 1}`} style={{ height: 50, display: 'grid', placeItems: 'center', borderRight: index < 4 ? `1px solid ${line}` : 0, color: muted, textDecoration: 'none', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{String(index + 1).padStart(2, '0')} · {stepLabel}</a>)}
       </div>
     </div>
-    <div style={{ display: 'grid', gridTemplateColumns: '64px minmax(0,1fr)', minHeight: 'calc(100vh - 63px)' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr)', minHeight: 'calc(100vh - 63px)' }}>
       <div className="g-railwrap">
         <aside className="g-rail" aria-label="Guardian sections"><a href="/guardians/workspace" title="Dashboard" style={{ display: 'flex', alignItems: 'center', gap: 12, height: 42, padding: '0 20px', marginBottom: 10, borderBottom: `1px solid ${line}`, color: ink, textDecoration: 'none', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}><LayoutDashboard size={16} style={{ flex: '0 0 auto' }} /><span className="g-rlabel">Dashboard</span></a>{navItems.map(({ id, label: n, Icon }) => {
           // Sub-pages sit under their family (Diet: Recipes, Cooking techniques, Cooking equipment; Fitness: Activities) as
@@ -3746,6 +3772,10 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
           // 10px (the collapsed rail is 64px wide); ancestor lines run on through the rows below them.
           const chain = (x: string): string[] => { const p = NAV_PARENT[x]; return p ? [...chain(p), p] : []; };
           const ancestors = chain(id), depth = ancestors.length, parent = ancestors[depth - 1];
+          // Children stay folded unless every ancestor is open (opened with its chevron, or on the current page's branch).
+          const isOpen = (x: string) => navOpen.includes(x) || x === tab || chain(tab).includes(x);
+          if (!ancestors.every(isOpen)) return null;
+          const hasChildren = Object.values(NAV_PARENT).includes(id as Tab);
           const on = tab === id || (id === 'offer_builder' && tab === 'value_ramps');
           const family = chain(tab).includes(id);
           const siblingsAfter = (x: string) => { const i = navItems.findIndex((y) => y.id === x); return navItems.slice(i + 1).some((y) => NAV_PARENT[y.id] === NAV_PARENT[x]); };
@@ -3754,7 +3784,8 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
             {ancestors.slice(1).map((a, k) => siblingsAfter(a) && <span key={a} aria-hidden="true" style={{ position: 'absolute', left: lineX(k + 1), top: 0, bottom: 0, borderLeft: `1px solid ${line}` }} />)}
             {parent && <span aria-hidden="true" style={{ position: 'absolute', left: lineX(depth), top: 0, bottom: siblingsAfter(id) ? 0 : '50%', borderLeft: `1px solid ${line}` }} />}
             {parent && <span aria-hidden="true" style={{ position: 'absolute', left: lineX(depth), top: '50%', width: 6, borderTop: `1px solid ${line}` }} />}
-            <Icon size={depth ? 13 : 16} style={{ flex: '0 0 auto', marginLeft: depth ? 6 + depth * 10 : 0, color: on ? acid : undefined }} /><span className="g-rlabel">{n}</span></button>; })}</aside>
+            <Icon size={depth ? 13 : 16} style={{ flex: '0 0 auto', marginLeft: depth ? 6 + depth * 10 : 0, color: on ? acid : undefined }} /><span className="g-rlabel" style={{ flex: 1, textAlign: 'left' }}>{n}</span>
+            {hasChildren && <span role="button" tabIndex={0} aria-label={`${isOpen(id) ? 'Fold' : 'Unfold'} ${n}`} aria-expanded={isOpen(id)} className="g-rlabel" onClick={(e) => { e.stopPropagation(); setNavOpen((o) => (isOpen(id) ? o.filter((x) => x !== id) : [...o, id])); }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setNavOpen((o) => (isOpen(id) ? o.filter((x) => x !== id) : [...o, id])); } }} style={{ display: 'inline-flex', padding: 4, color: muted }}><ChevronRight size={12} style={{ transform: isOpen(id) ? 'rotate(90deg)' : undefined, transition: 'transform .15s ease' }} /></span>}</button>; })}</aside>
       </div>
       {/* overflow-x clip, not hidden: hidden makes main a scroll container and breaks sticky columns inside (Diet planner). */}
       <main style={{ padding: 'clamp(26px,5vw,68px)', overflowX: 'clip' }}>
@@ -3806,10 +3837,13 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
                 {protocolView === 'cards'
                   ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18 }}>{forPeople.map((x) => { const person = personalPeople.get(x.id)!; return <ProductCard key={x.id} kind="routine" imageUrl={person.imageUrl || x.image_url} eyebrow={['Personal', `${x.total_days || 1} days`, x.is_public ? 'Published' : 'Draft'].join(' · ')} title={x.name.replace(/\s*·\s*Personal Protocol$/i, '') + '’s Protocol'} copy={shortCopy(x.description)} name={person.name} avatarUrl={person.imageUrl} accent={acid} cta="Open R3 builder" onClick={() => setProtocolId(x.id)} />; })}</div>
                   : forPeople.map((x) => { const person = personalPeople.get(x.id)!; return <Row key={x.id} image={person.imageUrl || x.image_url} title={x.name} meta={`${person.name} · ${meta(x)}`} action="Open R3 builder" onClick={() => setProtocolId(x.id)} />; })}</>}
-              {forOthers.length > 0 && <>{sectionHead('General Protocols', `${forOthers.length} Protocol${forOthers.length === 1 ? '' : 's'} for an audience or offer.`, forPeople.length ? undefined : viewToggle)}
-                {protocolView === 'cards'
-                  ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18 }}>{forOthers.map((x) => <ProductCard key={x.id} kind="routine" eyebrow={[protocolAudience(x) || 'Everyone', `${x.total_days || 1} days`, x.is_public ? 'Published' : 'Draft'].join(' · ')} title={x.name.replace(/^R3 Protocol\s*>\s*/i, '')} imageUrl={x.image_url} copy={(() => { const d = (x.description || '').replace(/\s+/g, ' ').trim(); return d.length > 110 ? `${d.slice(0, 110).replace(/\s+\S*$/, '')}…` : d || undefined; })()} name={profile.display_name} avatarUrl={profile.avatar_url} accent={acid} cta="Open R3 builder" onClick={() => setProtocolId(x.id)} />)}</div>
-                  : forOthers.map((x) => <Row key={x.id} image={x.image_url} title={x.name} meta={meta(x)} action="Open R3 builder" onClick={() => setProtocolId(x.id)} />)}</>}
+              {forOthers.length > 0 && <>{sectionHead('General Protocols', `${forOthers.length} Protocol${forOthers.length === 1 ? '' : 's'} for an audience or offer, by theme.`, forPeople.length ? undefined : viewToggle)}
+                {PROTOCOL_THEMES.map((theme) => { const list = forOthers.filter((x) => protocolTheme(x) === theme); if (!list.length) return null; return <div key={theme} style={{ marginBottom: 26 }}>
+                  <h3 style={{ ...label, color: ink, display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0 12px' }}>{theme}<span style={{ color: muted, fontWeight: 400 }}>· {list.length}</span></h3>
+                  {protocolView === 'cards'
+                    ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18 }}>{list.map((x) => <ProductCard key={x.id} kind="routine" eyebrow={[protocolAudience(x) || 'Everyone', `${x.total_days || 1} days`, x.is_public ? 'Published' : 'Draft'].join(' · ')} title={x.name.replace(/^R3 Protocol\s*>\s*/i, '')} imageUrl={x.image_url} copy={(() => { const d = (x.description || '').replace(/\s+/g, ' ').trim(); return d.length > 110 ? `${d.slice(0, 110).replace(/\s+\S*$/, '')}…` : d || undefined; })()} name={profile.display_name} avatarUrl={profile.avatar_url} accent={acid} cta="Open R3 builder" onClick={() => setProtocolId(x.id)} />)}</div>
+                    : list.map((x) => <Row key={x.id} image={x.image_url} title={x.name} meta={meta(x)} action="Open R3 builder" onClick={() => setProtocolId(x.id)} />)}
+                </div>; })}</>}
               {personal.length > 0 && sectionHead('Your routines', 'Your own routine and your family’s.')}
               {personal.map(({ x, child }) => { const owner = routineOwners.get(x.id); const row = <Row key={x.id} image={owner?.avatarUrl || x.image_url} title={owner && /^your routine$/i.test(x.name.trim()) ? `${owner.name}’s routine` : x.name} meta={`${owner ? `${child && owner.relation ? `${owner.relation.charAt(0).toUpperCase()}${owner.relation.slice(1)} · ` : ''}Personal routine · ` : ''}${x.total_days || 1} days · ${x.is_public ? 'Published' : 'Draft'} · PDF + app twin`} action="Open R3 builder" onClick={() => setProtocolId(x.id)} />;
               return child ? <div key={x.id} style={{ marginLeft: 40, paddingLeft: 16, borderLeft: `1px solid ${line}` }}>{row}</div> : row; })}
@@ -3823,7 +3857,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
         {tab === 'cooking' && accessToken && <CookingTechniques accessToken={accessToken} />}
         {tab === 'ingredients' && accessToken && <CatalogIngredients accessToken={accessToken} />}
         {tab === 'routines' && accessToken && <FitnessRoutines accessToken={accessToken} />}
-        {(['hygiene', 'beauty', 'wellness', 'longevity'] as const).map((sec) => (tab === sec || tab === `${sec}_protocols`) && accessToken && <FitnessRoutines key={sec} accessToken={accessToken} section={sec} Icon={SECTION_ICON[sec]} />)}
+        {(['hygiene', 'beauty', 'wellness', 'detox', 'longevity'] as const).map((sec) => (tab === sec || tab === `${sec}_protocols`) && accessToken && <FitnessRoutines key={sec} accessToken={accessToken} section={sec} Icon={SECTION_ICON[sec]} />)}
         {tab === 'hygiene_activities' && accessToken && <ActivitiesLibrary key="hygiene" accessToken={accessToken} lockGroup="hygiene" />}
         {tab === 'beauty_activities' && accessToken && <ActivitiesLibrary key="beauty" accessToken={accessToken} lockGroup="beauty" />}
         {tab === 'wellness_activities' && accessToken && <ActivitiesLibrary key="wellness" accessToken={accessToken} lockGroup="wellness" />}
@@ -4011,16 +4045,16 @@ export function GuidePortal() {
     @media (max-width:720px){.g-header-row{grid-template-columns:auto 1fr;row-gap:10px;padding-top:10px;padding-bottom:10px}.g-builders{grid-column:1/-1;grid-row:2;justify-self:center}.g-brand-full{display:none}.g-brand-r3{display:inline-grid}.g-header-name{display:none}}
     .g-builder-menu{opacity:0;visibility:hidden;transform:translateY(-4px);transition:opacity .14s ease,transform .14s ease,visibility .14s;z-index:60}
     .g-builder:hover>.g-builder-menu,.g-builder:has(:focus-visible)>.g-builder-menu{opacity:1;visibility:visible;transform:translateY(0)}
-    /* Collapsible icon rail: 64px, expands over content on hover/focus */
-    .g-railwrap{position:relative;width:64px}
+    /* Collapsible icon rail: 64px, widens to 224px on hover/focus and pushes the page aside (no overlay) */
+    .g-railwrap{position:relative;width:64px;transition:width .18s ease}
+    .g-railwrap:hover,.g-railwrap:has(:focus-visible){width:224px}
     /* overflow-y:auto: on short screens (phone landscape) the grid row can be shorter than the ~512px of links;
        the rail scrolls on its own instead of clipping them. Scrollbar hidden so the 64px icon column stays aligned. */
-    .g-rail{position:absolute;inset:0;width:64px;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;background:${black};border-right:1px solid ${line};padding:20px 0;z-index:30;transition:width .18s ease,box-shadow .18s ease}
-    .g-railwrap:hover .g-rail,.g-rail:has(:focus-visible){width:224px;box-shadow:16px 0 40px rgba(0,0,0,.45)}
+    .g-rail{position:absolute;inset:0;width:100%;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;background:${black};border-right:1px solid ${line};padding:20px 0;z-index:30;}
     .g-rail::-webkit-scrollbar{display:none}
     .g-rlabel{opacity:0;transition:opacity .14s ease}
     .g-railwrap:hover .g-rail .g-rlabel,.g-rail:has(:focus-visible) .g-rlabel{opacity:1}
-    @media (prefers-reduced-motion:reduce){.g-rail,.g-rlabel,.g-builder-menu,.g-chip-label{transition:none}}`}</style><GuidePortalRoutes /></div>;
+    @media (prefers-reduced-motion:reduce){.g-railwrap,.g-rail,.g-rlabel,.g-builder-menu,.g-chip-label{transition:none}}`}</style><GuidePortalRoutes /></div>;
 }
 
 function GuidePortalRoutes() {
