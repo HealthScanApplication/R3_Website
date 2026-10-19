@@ -3,7 +3,7 @@ import {
   ArrowRight, ChevronRight, FileText, HeartPulse, LogOut,
   Mail, Package, Plus, Salad, Sparkles, Users, Globe2, Loader2,
   Upload, Check, Instagram, Youtube, Link2, AtSign, Route, CalendarDays, Download,
-  MoreHorizontal, Activity, ChefHat, Wheat, ListChecks, CookingPot, FolderOpen, Trash2, ExternalLink, Hammer, PencilRuler, Blocks, LayoutDashboard, Play, Clock, ShieldCheck, Utensils, Dumbbell, Combine, Clapperboard, BookOpen, Podcast, GraduationCap, AudioLines } from 'lucide-react';
+  MoreHorizontal, Activity, Bath, Sparkle, HeartHandshake, Hourglass, ChefHat, Wheat, ListChecks, CookingPot, FolderOpen, Trash2, ExternalLink, Hammer, PencilRuler, Blocks, LayoutDashboard, Play, Clock, ShieldCheck, Utensils, Dumbbell, Combine, Clapperboard, BookOpen, Podcast, GraduationCap, AudioLines } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ProtocolEditor } from '../admin/ProtocolEditor';
 import { RoutineMark } from '../Header';
@@ -86,8 +86,8 @@ function ExpertiseTags({ tags, color = '#667245', compact = false }: { tags: str
   </div>;
 }
 
-type Tab = 'home' | 'profile' | 'library' | 'leads' | 'value_ramps' | 'offer_builder' | 'products' | 'recipes' | 'diet' | 'fitness' | 'activities' | 'cooking' | 'equipment' | 'ingredients' | 'routines' | 'content' | 'protocols' | 'admin';
-const WORKSPACE_TABS: readonly Tab[] = ['home', 'profile', 'library', 'leads', 'value_ramps', 'offer_builder', 'products', 'recipes', 'diet', 'fitness', 'activities', 'cooking', 'equipment', 'ingredients', 'routines', 'content', 'protocols', 'admin'];
+type Tab = 'home' | 'profile' | 'library' | 'leads' | 'value_ramps' | 'offer_builder' | 'products' | 'recipes' | 'diet' | 'fitness' | 'activities' | 'cooking' | 'equipment' | 'ingredients' | 'routines' | 'hygiene' | 'hygiene_activities' | 'beauty' | 'beauty_activities' | 'wellness' | 'wellness_activities' | 'longevity' | 'content' | 'protocols' | 'admin';
+const WORKSPACE_TABS: readonly Tab[] = ['home', 'profile', 'library', 'leads', 'value_ramps', 'offer_builder', 'products', 'recipes', 'diet', 'fitness', 'activities', 'cooking', 'equipment', 'ingredients', 'routines', 'hygiene', 'hygiene_activities', 'beauty', 'beauty_activities', 'wellness', 'wellness_activities', 'longevity', 'content', 'protocols', 'admin'];
 const SETUP_STEPS = [1, 2, 3, 4, 5] as const;
 type FreeOfferKind = 'ebook' | 'one_to_one_call' | 'group_call' | 'recipe_book' | 'routine' | 'in_person';
 type UpsellKind = 'ebook' | 'routine' | 'routine_guidance' | 'recipe_book' | 'group_call' | 'one_to_one_call' | 'in_person' | 'festival';
@@ -339,8 +339,9 @@ function guardianHeadlineSuggestions(topics: string[], audiences: string[]) {
     `Guidance that meets you where you are.`,
   ])).slice(0, 30);
 }
+const SECTION_ICON = { hygiene: Bath, beauty: Sparkle, wellness: HeartHandshake, longevity: Hourglass } as const;
 /** Sidebar sub-pages and the family they sit under. */
-const NAV_PARENT: Partial<Record<string, Tab>> = { recipes: 'diet', ingredients: 'diet', cooking: 'diet', equipment: 'diet', routines: 'fitness', activities: 'fitness' };
+const NAV_PARENT: Partial<Record<string, Tab>> = { recipes: 'diet', ingredients: 'diet', cooking: 'diet', equipment: 'diet', routines: 'fitness', activities: 'fitness', hygiene_activities: 'hygiene', beauty_activities: 'beauty', wellness_activities: 'wellness' };
 const nav: { id: Tab; label: string; Icon: typeof Users }[] = [
   { id: 'home', label: 'Overview', Icon: Sparkles },
   { id: 'library', label: 'Library', Icon: FolderOpen },
@@ -356,6 +357,13 @@ const nav: { id: Tab; label: string; Icon: typeof Users }[] = [
   { id: 'fitness', label: 'Fitness', Icon: Dumbbell },
   { id: 'routines', label: 'Fitness routines', Icon: ListChecks },
   { id: 'activities', label: 'Activities', Icon: Activity },
+  { id: 'hygiene', label: 'Hygiene', Icon: Bath },
+  { id: 'hygiene_activities', label: 'Hygiene activities', Icon: Activity },
+  { id: 'beauty', label: 'Beauty', Icon: Sparkle },
+  { id: 'beauty_activities', label: 'Beauty activities', Icon: Activity },
+  { id: 'wellness', label: 'Wellness', Icon: HeartHandshake },
+  { id: 'wellness_activities', label: 'Wellness activities', Icon: Activity },
+  { id: 'longevity', label: 'Longevity', Icon: Hourglass },
   { id: 'content', label: 'Content', Icon: Clapperboard },
   { id: 'profile', label: 'Profile', Icon: FileText },
 ];
@@ -3806,6 +3814,10 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
         {tab === 'cooking' && accessToken && <CookingTechniques accessToken={accessToken} />}
         {tab === 'ingredients' && accessToken && <CatalogIngredients accessToken={accessToken} />}
         {tab === 'routines' && accessToken && <FitnessRoutines accessToken={accessToken} />}
+        {(['hygiene', 'beauty', 'wellness', 'longevity'] as const).map((sec) => tab === sec && accessToken && <FitnessRoutines key={sec} accessToken={accessToken} section={sec} Icon={SECTION_ICON[sec]} />)}
+        {tab === 'hygiene_activities' && accessToken && <ActivitiesLibrary key="hygiene" accessToken={accessToken} lockGroup="hygiene" />}
+        {tab === 'beauty_activities' && accessToken && <ActivitiesLibrary key="beauty" accessToken={accessToken} lockGroup="beauty" />}
+        {tab === 'wellness_activities' && accessToken && <ActivitiesLibrary key="wellness" accessToken={accessToken} lockGroup="wellness" />}
         {tab === 'recipes' && !recipeId && accessToken && <CatalogRecipes accessToken={accessToken} />}
         {tab === 'equipment' && accessToken && <CookingEquipment accessToken={accessToken} />}
         {tab === 'fitness' && accessToken && user && <FitnessBuilder key={childPlanId || 'fitness'} initialProtocolId={childPlanId} accessToken={accessToken} ownerId={user.id} protocols={protocols} onSaved={(saved) => setProtocols((current) => [saved, ...current.filter((p) => p.id !== saved.id)])} onOpen={(id) => { setTab('protocols'); setProtocolId(id); }} />}

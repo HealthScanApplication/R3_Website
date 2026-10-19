@@ -1085,8 +1085,10 @@ export async function browseIngredients(accessToken: string, f: { query?: string
 
 export interface FitnessRoutine { id: string; name: string; description: string | null; image: string | null; category: string | null; tags: string[] }
 /** The app's published fitness routines: catalogue Protocols in fitness categories. */
-export async function listFitnessRoutines(accessToken: string): Promise<FitnessRoutine[]> {
-  const res = await fetch(`${rest()}/protocols?select=id,name,description,image_url,category,tags&user_id=is.null&is_public=not.is.false&is_active=not.is.false&category=in.(Fitness,Strength,Recovery,Mobility,Cardio)&order=name`, { headers: headers(accessToken) });
+export async function listFitnessRoutines(accessToken: string, categories: string[] = ['fitness', 'strength', 'recovery', 'mobility', 'cardio', 'hiit']): Promise<FitnessRoutine[]> {
+  // Catalogue categories are not consistently cased ("Beauty", "wellness"), so match case-insensitively.
+  const or = categories.map((c) => `category.ilike.${encodeURIComponent(c)}`).join(',');
+  const res = await fetch(`${rest()}/protocols?select=id,name,description,image_url,category,tags&user_id=is.null&is_public=not.is.false&is_active=not.is.false&or=(${or})&order=name`, { headers: headers(accessToken) });
   if (!res.ok) throw new Error(`Could not load fitness routines (${res.status})`);
   return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, description: txt(r.description), image: txt(r.image_url), category: r.category, tags: Array.isArray(r.tags) ? r.tags.map(String) : [] }));
 }
