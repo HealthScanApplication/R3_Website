@@ -86,8 +86,8 @@ function ExpertiseTags({ tags, color = '#667245', compact = false }: { tags: str
   </div>;
 }
 
-type Tab = 'home' | 'profile' | 'library' | 'leads' | 'value_ramps' | 'offer_builder' | 'products' | 'recipes' | 'diet' | 'fitness' | 'activities' | 'cooking' | 'equipment' | 'ingredients' | 'routines' | 'hygiene' | 'hygiene_activities' | 'beauty' | 'beauty_activities' | 'wellness' | 'wellness_activities' | 'longevity' | 'content' | 'protocols' | 'admin';
-const WORKSPACE_TABS: readonly Tab[] = ['home', 'profile', 'library', 'leads', 'value_ramps', 'offer_builder', 'products', 'recipes', 'diet', 'fitness', 'activities', 'cooking', 'equipment', 'ingredients', 'routines', 'hygiene', 'hygiene_activities', 'beauty', 'beauty_activities', 'wellness', 'wellness_activities', 'longevity', 'content', 'protocols', 'admin'];
+type Tab = 'home' | 'profile' | 'library' | 'leads' | 'value_ramps' | 'offer_builder' | 'products' | 'recipes' | 'diet' | 'fitness' | 'activities' | 'cooking' | 'equipment' | 'ingredients' | 'routines' | 'hygiene' | 'hygiene_protocols' | 'hygiene_activities' | 'beauty' | 'beauty_protocols' | 'beauty_activities' | 'wellness' | 'wellness_protocols' | 'wellness_activities' | 'longevity' | 'longevity_protocols' | 'content' | 'protocols' | 'admin';
+const WORKSPACE_TABS: readonly Tab[] = ['home', 'profile', 'library', 'leads', 'value_ramps', 'offer_builder', 'products', 'recipes', 'diet', 'fitness', 'activities', 'cooking', 'equipment', 'ingredients', 'routines', 'hygiene', 'hygiene_protocols', 'hygiene_activities', 'beauty', 'beauty_protocols', 'beauty_activities', 'wellness', 'wellness_protocols', 'wellness_activities', 'longevity', 'longevity_protocols', 'content', 'protocols', 'admin'];
 const SETUP_STEPS = [1, 2, 3, 4, 5] as const;
 type FreeOfferKind = 'ebook' | 'one_to_one_call' | 'group_call' | 'recipe_book' | 'routine' | 'in_person';
 type UpsellKind = 'ebook' | 'routine' | 'routine_guidance' | 'recipe_book' | 'group_call' | 'one_to_one_call' | 'in_person' | 'festival';
@@ -341,7 +341,7 @@ function guardianHeadlineSuggestions(topics: string[], audiences: string[]) {
 }
 const SECTION_ICON = { hygiene: Bath, beauty: Sparkle, wellness: HeartHandshake, longevity: Hourglass } as const;
 /** Sidebar sub-pages and the family they sit under. */
-const NAV_PARENT: Partial<Record<string, Tab>> = { recipes: 'diet', ingredients: 'diet', cooking: 'diet', equipment: 'diet', routines: 'fitness', activities: 'fitness', hygiene_activities: 'hygiene', beauty_activities: 'beauty', wellness_activities: 'wellness' };
+const NAV_PARENT: Partial<Record<string, Tab>> = { recipes: 'diet', ingredients: 'diet', cooking: 'diet', equipment: 'diet', routines: 'fitness', activities: 'fitness', hygiene_protocols: 'hygiene', hygiene_activities: 'hygiene', beauty_protocols: 'beauty', beauty_activities: 'beauty', wellness_protocols: 'wellness', wellness_activities: 'wellness', longevity_protocols: 'longevity' };
 const nav: { id: Tab; label: string; Icon: typeof Users }[] = [
   { id: 'home', label: 'Overview', Icon: Sparkles },
   { id: 'library', label: 'Library', Icon: FolderOpen },
@@ -358,12 +358,16 @@ const nav: { id: Tab; label: string; Icon: typeof Users }[] = [
   { id: 'routines', label: 'Fitness routines', Icon: ListChecks },
   { id: 'activities', label: 'Activities', Icon: Activity },
   { id: 'hygiene', label: 'Hygiene', Icon: Bath },
+  { id: 'hygiene_protocols', label: 'Hygiene protocols', Icon: ListChecks },
   { id: 'hygiene_activities', label: 'Hygiene activities', Icon: Activity },
   { id: 'beauty', label: 'Beauty', Icon: Sparkle },
+  { id: 'beauty_protocols', label: 'Beauty protocols', Icon: ListChecks },
   { id: 'beauty_activities', label: 'Beauty activities', Icon: Activity },
   { id: 'wellness', label: 'Wellness', Icon: HeartHandshake },
+  { id: 'wellness_protocols', label: 'Wellness protocols', Icon: ListChecks },
   { id: 'wellness_activities', label: 'Wellness activities', Icon: Activity },
   { id: 'longevity', label: 'Longevity', Icon: Hourglass },
+  { id: 'longevity_protocols', label: 'Longevity protocols', Icon: ListChecks },
   { id: 'content', label: 'Content', Icon: Clapperboard },
   { id: 'profile', label: 'Profile', Icon: FileText },
 ];
@@ -3814,7 +3818,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
         {tab === 'cooking' && accessToken && <CookingTechniques accessToken={accessToken} />}
         {tab === 'ingredients' && accessToken && <CatalogIngredients accessToken={accessToken} />}
         {tab === 'routines' && accessToken && <FitnessRoutines accessToken={accessToken} />}
-        {(['hygiene', 'beauty', 'wellness', 'longevity'] as const).map((sec) => tab === sec && accessToken && <FitnessRoutines key={sec} accessToken={accessToken} section={sec} Icon={SECTION_ICON[sec]} />)}
+        {(['hygiene', 'beauty', 'wellness', 'longevity'] as const).map((sec) => (tab === sec || tab === `${sec}_protocols`) && accessToken && <FitnessRoutines key={sec} accessToken={accessToken} section={sec} Icon={SECTION_ICON[sec]} />)}
         {tab === 'hygiene_activities' && accessToken && <ActivitiesLibrary key="hygiene" accessToken={accessToken} lockGroup="hygiene" />}
         {tab === 'beauty_activities' && accessToken && <ActivitiesLibrary key="beauty" accessToken={accessToken} lockGroup="beauty" />}
         {tab === 'wellness_activities' && accessToken && <ActivitiesLibrary key="wellness" accessToken={accessToken} lockGroup="wellness" />}

@@ -125,10 +125,10 @@ export function CatalogIngredients({ accessToken }: { accessToken: string }) {
 /** A section's published routines (catalogue Protocols in its categories), e.g. Fitness, Beauty, Wellness. */
 export const ROUTINE_SECTIONS = {
   fitness: { title: 'Fitness routines', kicker: 'Fitness', categories: ['fitness', 'strength', 'recovery', 'mobility', 'cardio', 'hiit'], copy: 'The fitness routines and Protocols published in the ROUTINE³ app. Open one to see its steps.' },
-  hygiene: { title: 'Hygiene', kicker: 'Hygiene', categories: ['hygiene', 'oral care', 'personal care'], copy: 'Hygiene routines published in the ROUTINE³ app: morning and evening sets for teeth, skin and body.' },
-  beauty: { title: 'Beauty', kicker: 'Beauty', categories: ['beauty', 'skin & face', 'skin', 'hair'], copy: 'Beauty routines published in the ROUTINE³ app: skin, face and hair.' },
-  wellness: { title: 'Wellness', kicker: 'Wellness', categories: ['wellness', 'health', 'general health', 'detox', 'cleanse', 'sleep', 'mind'], copy: 'Wellness routines published in the ROUTINE³ app: sleep, stress, detox and everyday health.' },
-  longevity: { title: 'Longevity', kicker: 'Longevity', categories: ['longevity', 'performance', 'supplements'], copy: 'Longevity and performance routines published in the ROUTINE³ app.' },
+  hygiene: { title: 'Hygiene protocols', kicker: 'Hygiene', categories: ['hygiene', 'oral care', 'personal care'], copy: 'Hygiene routines published in the ROUTINE³ app: morning and evening sets for teeth, skin and body.' },
+  beauty: { title: 'Beauty protocols', kicker: 'Beauty', categories: ['beauty', 'skin & face', 'skin', 'hair'], copy: 'Beauty routines published in the ROUTINE³ app: skin, face and hair.' },
+  wellness: { title: 'Wellness protocols', kicker: 'Wellness', categories: ['wellness', 'health', 'general health', 'detox', 'cleanse', 'sleep', 'mind'], copy: 'Wellness routines published in the ROUTINE³ app: sleep, stress, detox and everyday health.' },
+  longevity: { title: 'Longevity protocols', kicker: 'Longevity', categories: ['longevity', 'performance', 'supplements'], copy: 'Longevity and performance routines published in the ROUTINE³ app.' },
 } as const;
 export type RoutineSection = keyof typeof ROUTINE_SECTIONS;
 
