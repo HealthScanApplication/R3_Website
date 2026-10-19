@@ -49,10 +49,13 @@ function FoodGrid({ items, renderExtra }: { items: CatalogFood[]; renderExtra?: 
   return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 8 }}>
     {items.map((f) => <Fragment key={f.id}>
       <button type="button" aria-pressed={open === f.id} onClick={() => setOpen(open === f.id ? null : f.id)} style={{ textAlign: 'left', border: `1px solid ${open === f.id ? acid : line}`, background: panel, color: ink, padding: 0, cursor: 'pointer', overflow: 'hidden' }}>
-        <div style={{ aspectRatio: '4 / 3', background: f.image ? `url(${f.image}) center/cover` : '#1B1C18' }} />
+        <div style={{ position: 'relative', aspectRatio: '4 / 3', background: f.image ? `url(${f.image}) center/cover` : '#1B1C18' }}>
+          {f.healthScore != null && <span aria-label={`Health score ${Math.round(f.healthScore)}`} style={{ position: 'absolute', top: 6, right: 6, display: 'inline-flex', alignItems: 'center', gap: 3, background: 'rgba(9,10,8,.82)', color: acid, border: `1px solid ${acid}`, borderRadius: 999, padding: '2px 7px', fontSize: 11, fontWeight: 700 }}><Heart size={10} aria-hidden="true" />{Math.round(f.healthScore)}</span>}
+          {f.processing && <span style={{ position: 'absolute', left: 6, bottom: 6, background: 'rgba(9,10,8,.82)', color: ink, border: `1px solid ${line}`, borderRadius: 3, padding: '1px 6px', fontSize: 10 }}>{f.processing}</span>}
+        </div>
         <div style={{ padding: '8px 10px 10px' }}>
           <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.25 }}>{f.name}</div>
-          <div style={{ color: muted, fontSize: 10, marginTop: 4, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>{f.healthScore != null && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: acid }}><Heart size={10} aria-hidden="true" />{Math.round(f.healthScore)}</span>}{f.per100.energy_kcal != null && <span>{Math.round(f.per100.energy_kcal)} kcal/100 g</span>}{f.hazards.some((h) => h.level === 'high') && <span style={{ color: danger, display: 'inline-flex', alignItems: 'center', gap: 3 }}><AlertTriangle size={10} aria-hidden="true" />high</span>}</div>
+          <div style={{ color: muted, fontSize: 10, marginTop: 4, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>{f.form && <span>{f.form === 'raw' ? 'Whole / raw' : 'Processed'}</span>}{f.per100.energy_kcal != null && <span>{Math.round(f.per100.energy_kcal)} kcal/100 g</span>}{f.hazards.some((h) => h.level === 'high') && <span style={{ color: danger, display: 'inline-flex', alignItems: 'center', gap: 3 }}><AlertTriangle size={10} aria-hidden="true" />high</span>}</div>
         </div>
       </button>
       {open === f.id && <div role="region" aria-label={`${f.name} details`} style={{ gridColumn: '1 / -1', border: `1px solid ${acid}`, background: '#141611', padding: 14, display: 'grid', gridTemplateColumns: f.image ? 'minmax(0,150px) minmax(0,1fr)' : 'minmax(0,1fr)', gap: 14, position: 'relative' }}>
@@ -62,6 +65,7 @@ function FoodGrid({ items, renderExtra }: { items: CatalogFood[]; renderExtra?: 
           <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 6, paddingRight: 20 }}>{f.name}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
             {f.healthScore != null && <span style={{ ...tag, color: acid, borderColor: acid }}>Health score {Math.round(f.healthScore)}</span>}
+            {f.form && <span style={tag}>{f.form === 'raw' ? 'Whole / raw' : `Processed${f.processing ? ` · ${f.processing}` : ''}`}</span>}
             {f.meta.filter(([, v]) => v).map(([k, v]) => <span key={k} style={tag}>{k}: {v}</span>)}
             {f.diets.map((d) => <span key={d} style={tag}>{d}</span>)}
           </div>
@@ -110,14 +114,20 @@ export function CatalogRecipes({ accessToken }: { accessToken: string }) {
 
 const INGREDIENT_CATEGORIES = ['Vegetables', 'Fruit', 'Grains & bakery', 'Legumes, nuts & seeds', 'Meat', 'Fish & seafood', 'Dairy & eggs', 'Herbs & spices', 'Oils & fats', 'Drinks', 'Condiments & sauces', 'Sweeteners', 'Additives', 'Supplements & other', 'Confectionery & snacks', 'Prepared foods'];
 export function CatalogIngredients({ accessToken }: { accessToken: string }) {
-  const [query, setQuery] = useState(''), [category, setCategory] = useState('');
-  const { items, busy, error } = useLoad(() => browseIngredients(accessToken, { query, category }), [accessToken, query, category], query ? 250 : 0);
+  const [query, setQuery] = useState(''), [category, setCategory] = useState(''), [form, setForm] = useState<'' | 'raw' | 'processed'>(''), [processing, setProcessing] = useState('');
+  // Form is derived from the name, so filter a wider page client-side.
+  const { items: all, busy, error } = useLoad(() => browseIngredients(accessToken, { query, category, limit: form ? 400 : 60 }), [accessToken, query, category, form], query ? 250 : 0);
+  const kinds = [...new Set(all.filter((f) => f.form === 'processed' && f.processing).map((f) => f.processing!))].sort();
+  const items = all.filter((f) => (!form || f.form === form) && (!processing || f.processing === processing)).slice(0, 60);
   return <div>
     <Header Icon={Wheat} kicker="Diet" title="Ingredients" copy="Every published ingredient in the ROUTINE³ database, with its nutrients per 100 g and recorded hazards." />
     <div role="group" aria-label="Ingredient category" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
       {['', ...INGREDIENT_CATEGORIES].map((c) => <button key={c || 'all'} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} style={{ border: `1px solid ${category === c ? acid : line}`, background: category === c ? 'rgba(199,216,163,.14)' : 'transparent', color: category === c ? acid : ink, borderRadius: 999, padding: '6px 11px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{c || 'All'}</button>)}
     </div>
-    <div style={{ display: 'flex', marginBottom: 12 }}><Search_ value={query} onChange={setQuery} placeholder="Search ingredients" /></div>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}><Search_ value={query} onChange={setQuery} placeholder="Search ingredients" />
+      <div role="group" aria-label="Form" style={{ display: 'inline-flex', border: `1px solid ${line}` }}>{([['', 'All'], ['raw', 'Whole / raw'], ['processed', 'Processed']] as const).map(([v, l]) => <button key={v || 'all'} type="button" aria-pressed={form === v} onClick={() => { setForm(v); setProcessing(''); }} style={{ border: 0, background: form === v ? ink : 'transparent', color: form === v ? '#090A08' : ink, padding: '0 12px', height: 40, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{l}</button>)}</div>
+      {form === 'processed' && kinds.length > 0 && <select aria-label="Processing type" value={processing} onChange={(e) => setProcessing(e.target.value)} style={field}><option value="">Any processing</option>{kinds.map((k) => <option key={k} value={k}>{k}</option>)}</select>}
+    </div>
     <Status busy={busy} error={error} n={items.length} what="ingredients" />
     {!busy && <FoodGrid items={items} />}
   </div>;

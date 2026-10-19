@@ -8,3 +8,11 @@ it('lists recorded hazards highest level first', () => {
   expect(hazardsOf({ arsenic: { level: 'low' }, lead: { level: 'high' }, cadmium: { level: 'moderate' } }).map((h) => h.key)).toEqual(['lead', 'cadmium', 'arsenic']);
   expect(hazardsOf([])).toEqual([]);
 });
+import { ingredientForm } from '../protocolBuilders';
+it('splits ingredients into whole/raw and processed, with how', () => {
+  expect(ingredientForm('Orange juice', null, 'Drinks')).toEqual({ form: 'processed', processing: 'Juice' });
+  expect(ingredientForm('Beetroot powder', null, 'Vegetables')).toEqual({ form: 'processed', processing: 'Powder' });
+  expect(ingredientForm('Brown Meagre', 'fish, raw', 'Fish & seafood')).toEqual({ form: 'raw', processing: null });
+  expect(ingredientForm('Apple', null, 'Fruit')).toEqual({ form: 'raw', processing: null });
+  expect(ingredientForm('Xanthan gum', null, 'Additives')).toEqual({ form: 'processed', processing: 'Additive' });
+});

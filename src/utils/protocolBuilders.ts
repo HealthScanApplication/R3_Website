@@ -1040,7 +1040,7 @@ export async function listKitchenEquipment(accessToken: string): Promise<Kitchen
 
 /* ── catalogue browsing: ROUTINE³ recipes, ingredients, fitness routines ── */
 export interface CatalogHazard { key: string; level: string }
-export interface CatalogFood { id: string; name: string; image: string | null; category: string | null; description: string | null; healthScore: number | null; per100: Record<string, number>; hazards: CatalogHazard[]; meta: Array<[string, string | null]>; diets: string[] }
+export interface CatalogFood { form?: 'raw' | 'processed'; processing?: string | null; id: string; name: string; image: string | null; category: string | null; description: string | null; healthScore: number | null; per100: Record<string, number>; hazards: CatalogHazard[]; meta: Array<[string, string | null]>; diets: string[] }
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 /** Flat numeric keys of a nutrition_per_100g record (provenance keys starting with "_" are skipped). */
 export function per100Of(v: unknown): Record<string, number> {
@@ -1074,13 +1074,24 @@ export async function recipeIngredientNames(accessToken: string, recipeId: strin
   if (!res.ok) return [];
   return ((await res.json()) as any[]).map((r) => ({ name: String(r.ingredient_name || ''), grams: num(r.amount_g) })).filter((r) => r.name);
 }
+/** Whole/raw or processed, and how: from the name and sub-category (juice, powder, oil…), else processed-by-nature categories. */
+const PROCESS_WORDS: Array<[RegExp, string]> = [[/\bjuice\b/i, 'Juice'], [/\bpowder(ed)?\b/i, 'Powder'], [/\boil\b/i, 'Oil'], [/\bflour\b/i, 'Flour'], [/\b(dried|dehydrated)\b/i, 'Dried'], [/\b(ground|milled)\b/i, 'Ground'], [/\b(extract|concentrate)\b/i, 'Extract'], [/\b(paste|puree|purée)\b/i, 'Paste'], [/\b(canned|tinned)\b/i, 'Canned'], [/\bsmoked\b/i, 'Smoked'], [/\b(cured)\b/i, 'Cured'], [/\bpickled\b/i, 'Pickled'], [/\bfermented\b/i, 'Fermented'], [/\b(cooked|boiled|roasted|fried)\b/i, 'Cooked'], [/\bfrozen\b/i, 'Frozen'], [/\b(refined|processed)\b/i, 'Refined']];
+const PROCESSED_CATEGORIES: Record<string, string> = { 'Additives': 'Additive', 'Oils & fats': 'Oil', 'Condiments & sauces': 'Condiment', 'Sweeteners': 'Sweetener', 'Confectionery & snacks': 'Snack', 'Prepared foods': 'Prepared', 'Supplements & other': 'Supplement' };
+export function ingredientForm(name: string, sub: string | null, category: string | null): { form: 'raw' | 'processed'; processing: string | null } {
+  const text = `${name} ${sub || ''}`;
+  if (/\b(raw|fresh)\b/i.test(text) && !PROCESS_WORDS.some(([re]) => re.test(text))) return { form: 'raw', processing: null };
+  const hit = PROCESS_WORDS.find(([re]) => re.test(text));
+  if (hit) return { form: 'processed', processing: hit[1] };
+  if (category && PROCESSED_CATEGORIES[category]) return { form: 'processed', processing: PROCESSED_CATEGORIES[category] };
+  return { form: 'raw', processing: null };
+}
 export async function browseIngredients(accessToken: string, f: { query?: string; category?: string; limit?: number }): Promise<CatalogFood[]> {
   const p = ['select=id,name_common,image_primary_url,image_url,category,category_sub,description_simple,description,health_score,nutrition_per_100g,elements_hazardous,season,origin_region', 'is_published=is.true', 'is_group=not.is.true', 'order=health_score.desc.nullslast', `limit=${f.limit || 60}`];
   if (f.query?.trim()) p.push(`name_common=ilike.*${q(f.query)}*`);
   if (f.category) p.push(`category=eq.${encodeURIComponent(f.category)}`);
   const res = await fetch(`${rest()}/catalog_ingredients?${p.join('&')}`, { headers: headers(accessToken) });
   if (!res.ok) throw new Error(`Could not load ingredients (${res.status})`);
-  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name_common, image: r.image_primary_url || r.image_url || null, category: r.category || null, description: txt(r.description_simple) || txt(r.description), healthScore: num(r.health_score), per100: per100Of(r.nutrition_per_100g), hazards: hazardsOf(r.elements_hazardous), diets: [],
+  return ((await res.json()) as any[]).map((r) => ({ ...ingredientForm(String(r.name_common || ''), txt(r.category_sub), r.category || null), id: r.id, name: r.name_common, image: r.image_primary_url || r.image_url || null, category: r.category || null, description: txt(r.description_simple) || txt(r.description), healthScore: num(r.health_score), per100: per100Of(r.nutrition_per_100g), hazards: hazardsOf(r.elements_hazardous), diets: [],
     meta: [['Type', txt(r.category_sub)], ['Season', Array.isArray(r.season) ? r.season.join(', ') : txt(r.season)], ['Origin', Array.isArray(r.origin_region) ? r.origin_region.join(', ') : txt(r.origin_region)]] }));
 }
 
