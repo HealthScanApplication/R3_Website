@@ -2,12 +2,12 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { pollDelay, progressOf } from '../higgsfieldVideo';
+import { costCopy, pollDelay, progressOf } from '../higgsfieldVideo';
 import { defaultBrandKit } from '../brandKit';
 
 const models = [{ id: 'kling-3-std', label: 'Kling 3.0 Standard', durations: [3, 15], aspects: [{ aspect: '9:16', delivered: '9:16' }, { aspect: '4:5', delivered: '9:16' }, { aspect: '1:1', delivered: '1:1' }, { aspect: '16:9', delivered: '16:9' }] }];
 const api = vi.hoisted(() => ({
-  higgsfieldStatus: vi.fn(), connectHiggsfield: vi.fn(), disconnectHiggsfield: vi.fn(), generateVideo: vi.fn(), pollVideo: vi.fn(), listVideos: vi.fn(async () => ({ jobs: [] })),
+  higgsfieldStatus: vi.fn(), estimateVideo: vi.fn(async () => ({ estimate: { usd: 0.42, credits: null, source: 'price_list', per_second: 0.084 }, duration: 5 })), connectHiggsfield: vi.fn(), disconnectHiggsfield: vi.fn(), generateVideo: vi.fn(), pollVideo: vi.fn(), listVideos: vi.fn(async () => ({ jobs: [] })),
 }));
 vi.mock('../higgsfieldVideo', async (importOriginal) => ({ ...await importOriginal<any>(), ...api }));
 const { VideoStudio } = await import('../../components/guides/VideoStudio');
@@ -22,6 +22,11 @@ describe('progress copy and polling', () => {
     expect(early).toBeGreaterThan(0.12); expect(late).toBeGreaterThan(early); expect(late).toBeLessThanOrEqual(0.95);
     expect(progressOf({ status: 'completed', created_at: at, duration_seconds: 5 })).toEqual({ label: 'Ready', fraction: 1 });
     expect(progressOf({ status: 'nsfw', created_at: at, duration_seconds: 5 }).label).toMatch(/safety/);
+  });
+  it('words the cost by where it came from', () => {
+    expect(costCopy({ usd: 0.42, credits: null, source: 'price_list', per_second: 0.084 }, 5, 'Kling')).toEqual({ short: '≈ $0.42', detail: expect.stringMatching(/5 s × \$0\.084\/s at Higgsfield’s published price/) });
+    expect(costCopy({ usd: 0.672, credits: 6.72, source: 'higgsfield', per_second: null }, 8, 'Kling').detail).toBe('Higgsfield’s quote for this video: $0.67 (6.72 credits).');
+    expect(costCopy({ usd: null, credits: null, source: 'price_list', per_second: null }, 5, 'Wan 2.7')).toEqual({ short: '', detail: expect.stringMatching(/No price for Wan 2\.7/) });
   });
   it('backs off from 2 s to 10 s', () => {
     expect(pollDelay(0, 0)).toBe(2000);
@@ -56,6 +61,8 @@ describe('VideoStudio', () => {
     expect(screen.getByText(/renders at 9:16/)).toBeTruthy();
     expect(prompt.value).toMatch(/portrait 4:5/);
     expect(screen.getByText('Test mode')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Generate 5s video · ≈ $0.42' })).toBeTruthy();
+    expect(api.estimateVideo).toHaveBeenLastCalledWith({ model: 'kling-3-std', aspect_ratio: '4:5', duration: 5 });
     fireEvent.click(screen.getByRole('button', { name: /Generate 5s video/ }));
     await waitFor(() => expect(api.generateVideo).toHaveBeenCalledWith(expect.objectContaining({ model: 'kling-3-std', aspect_ratio: '4:5', duration: 5 })));
     expect(await screen.findByRole('progressbar', { name: 'Video progress' })).toBeTruthy();

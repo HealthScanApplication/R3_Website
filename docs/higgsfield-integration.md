@@ -113,6 +113,11 @@ What this means for us:
    - **Downloads**: "Download with text" records the video plus the text layer on a canvas (MediaRecorder; MP4 where the browser supports it, otherwise WebM), in real time. "Video only" downloads the plain MP4. "Text layer PNG" gives a transparent overlay for editors like CapCut.
    - **CORS caveat**: recording needs the video served with CORS headers. Our `guardian-videos` signed URLs have them. If copying to storage failed and the URL is Higgsfield's CDN, the panel says so and offers the separate downloads instead.
 
+8. **Cost shown before generating.** The panel quotes each video as the model, format or length changes, and puts the price on the button ("Generate 5s video · ≈ $0.42").
+   - **Live mode:** the `estimate` action asks Higgsfield's free `POST /estimate/{endpoint}` for a quote. It sends a fixed placeholder prompt, so the Guardian's prompt isn't shared before they generate.
+   - **Test mode, or if the quote fails:** we use the published per-second price instead, labelled as approximate. Kling 3.0 Standard is $0.084/s (Higgsfield blog). Seedance 2.0 is $0.141/s, which is third-party and unverified. Wan 2.7 has no known price, so the panel says so.
+   - Update `usdPerSecond` in `supabase/functions/higgsfield/lib.ts` if Higgsfield's prices change.
+
 ### Not built yet (proposed next)
 
 - **Image-to-video from the post's background or brand imagery.** The server already supports `image_url` (public https). The panel doesn't expose it yet because the post background lives inside ContentStudio.
@@ -120,7 +125,6 @@ What this means for us:
 - Voice-over from the script (Higgsfield or another TTS) and captions timed to the script.
 - Webhooks (`hf_webhook`) as a hint to re-poll sooner.
 - MCP OAuth as an alternative for Guardians who have only a subscription and no API balance. This needs Higgsfield's agreement and an MCP client.
-- Higgsfield's cost estimate shown in the panel before Generate.
 
 ## Plan / go-live checklist
 
