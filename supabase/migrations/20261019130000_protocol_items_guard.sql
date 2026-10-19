@@ -50,9 +50,29 @@ begin
     return query select 'R6', false, r.item_type || ' without catalogue link'; end if;
 end $$;
 
+-- Soft violations are logged through this helper: it runs as its owner, so a signed-in writer (who has no rights on
+-- the log table, RLS on, no policies) can still save. Without it every logged rule would abort the write.
+create or replace function public.protocol_item_guard_log_write(p_item uuid, p_protocol uuid, p_op text, p_rule text, p_detail text)
+returns void language sql security definer set search_path = public as $$
+  insert into public.protocol_item_guard_log(protocol_item_id, protocol_id, op, rule, detail) values (p_item, p_protocol, p_op, p_rule, p_detail);
+$$;
+revoke all on function public.protocol_item_guard_log_write(uuid, uuid, text, text, text) from public, anon;
+grant execute on function public.protocol_item_guard_log_write(uuid, uuid, text, text, text) to authenticated, service_role;
+
 create or replace function public.protocol_items_guard() returns trigger language plpgsql as $$
 declare v record; was_ok boolean;
 begin
+  -- Moving a row that has children: it may not become a child itself (children would be nested twice, R4c), and
+  -- may not change protocol (children would point into another protocol, R4b). Their own triggers never run.
+  if tg_op = 'UPDATE' and (new.parent_protocol_item_id is distinct from old.parent_protocol_item_id or new.protocol_id <> old.protocol_id)
+     and exists (select 1 from public.protocol_items c where c.parent_protocol_item_id = new.id and c.id <> new.id) then
+    if new.parent_protocol_item_id is not null and new.parent_protocol_item_id <> new.id then
+      raise exception 'protocol_items guard R4c: item has children, so it cannot become a child (item %)', coalesce(new.display_name, new.id::text) using errcode = 'check_violation';
+    end if;
+    if new.protocol_id <> old.protocol_id then
+      raise exception 'protocol_items guard R4b: item has children in protocol %, move them too (item %)', old.protocol_id, coalesce(new.display_name, new.id::text) using errcode = 'check_violation';
+    end if;
+  end if;
   for v in select * from public.protocol_item_guard_violations(new) loop
     if v.hard then
       was_ok := tg_op = 'INSERT' or not exists (select 1 from public.protocol_item_guard_violations(old) o where o.rule = v.rule);
@@ -61,8 +81,7 @@ begin
           using errcode = 'check_violation';
       end if;
     end if;
-    insert into public.protocol_item_guard_log(protocol_item_id, protocol_id, op, rule, detail)
-    values (new.id, new.protocol_id, tg_op, v.rule, v.detail);
+    perform public.protocol_item_guard_log_write(new.id, new.protocol_id, tg_op, v.rule, v.detail);
   end loop;
   return new;
 end $$;
