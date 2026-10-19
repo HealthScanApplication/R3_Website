@@ -76,7 +76,8 @@ async function oauthClientId(): Promise<string> {
   const res = await fetch(hf.OAUTH.register, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(hf.registrationBody(SELF)) });
   const body = await res.json().catch(() => null);
   if (!res.ok || !body?.client_id) throw new Error('Higgsfield login is not available right now.');
-  await service.from('higgsfield_oauth_clients').upsert({ redirect_uri: SELF, client_id: body.client_id });
+  const saved = await service.from('higgsfield_oauth_clients').upsert({ redirect_uri: SELF, client_id: body.client_id });
+  if (saved.error) console.warn('higgsfield oauth client not saved', saved.error.message); // the login carries its client id in its state, so it still completes
   return body.client_id;
 }
 
@@ -107,7 +108,7 @@ async function oauthCallback(url: URL): Promise<Response> {
   const code = url.searchParams.get('code');
   if (!code) return back(url.searchParams.get('error') === 'access_denied' ? 'cancelled' : 'error');
   try {
-    const clientId = await oauthClientId();
+    const clientId = state.client_id || await oauthClientId(); // the client the login started with, never a fresh registration
     const res = await fetch(hf.OAUTH.token, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: SELF, client_id: clientId, code_verifier: state.verifier, resource: hf.MCP_URL }) });
     const body = await res.json().catch(() => null);
     const tokens = res.ok ? hf.tokensFrom(body) : null;
@@ -170,8 +171,9 @@ Deno.serve(async (req) => {
     if (!returnTo) return fail('Logging in with Higgsfield isn’t enabled for this site address yet.');
     try {
       const verifier = hf.pkceVerifier();
-      const state = await hf.sealState({ user_id: user.id, verifier, return_to: returnTo, exp: Date.now() + 15 * 60 * 1000 }, ENC);
-      return json({ url: hf.authorizeUrl({ clientId: await oauthClientId(), redirectUri: SELF, state, challenge: await hf.pkceChallenge(verifier) }) });
+      const clientId = await oauthClientId();
+      const state = await hf.sealState({ user_id: user.id, verifier, return_to: returnTo, exp: Date.now() + 15 * 60 * 1000, client_id: clientId }, ENC);
+      return json({ url: hf.authorizeUrl({ clientId, redirectUri: SELF, state, challenge: await hf.pkceChallenge(verifier) }) });
     } catch (e) { return fail((e as Error).message, 502); }
   }
 
