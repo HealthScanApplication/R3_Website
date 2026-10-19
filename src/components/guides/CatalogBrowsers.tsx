@@ -8,7 +8,9 @@
  */
 import { Fragment, useEffect, useState } from 'react';
 import { AlertTriangle, Dumbbell, Heart, Loader2, Search, Wheat, X } from 'lucide-react';
-import { RECIPE_DIETS, browseIngredients, browseRecipes, listFitnessRoutines, recipeIngredientNames, routineSteps, type CatalogFood, type FitnessRoutine } from '../../utils/protocolBuilders';
+import { RECIPE_DIETS, browseIngredients, browseRecipes, listFitnessRoutines, recipeIngredientNames, routineSteps, type CatalogFood, type FitnessRoutine, type RoutineStep } from '../../utils/protocolBuilders';
+import { ProtocolHomeScreen } from '../mockups/ProtocolHomeScreen';
+import { PhoneFrame } from '../mockups/PhoneFrame';
 import { NUTRIENTS } from '../../utils/recipeNutrients';
 import { Header } from './GuardianBuilders';
 
@@ -137,8 +139,12 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
   const cfg = ROUTINE_SECTIONS[section];
   const { items, busy, error } = useLoad<FitnessRoutine>(() => listFitnessRoutines(accessToken, [...cfg.categories]), [accessToken, section]);
   const [open, setOpen] = useState<string | null>(null);
-  const [steps, setSteps] = useState<Array<{ name: string; time: string | null; group: string | null; day: number | null }> | null>(null);
-  useEffect(() => { if (!open) return; let live = true; setSteps(null); routineSteps(accessToken, open).then((s) => { if (live) setSteps(s); }); return () => { live = false; }; }, [accessToken, open]);
+  const [steps, setSteps] = useState<RoutineStep[] | null>(null);
+  const [day, setDay] = useState(1);
+  useEffect(() => { if (!open) return; let live = true; setSteps(null); setDay(1); routineSteps(accessToken, open).then((s) => { if (live) setSteps(s); }); return () => { live = false; }; }, [accessToken, open]);
+  const days = steps ? Math.max(1, ...steps.map((s) => s.day || 1)) : 1;
+  // The app shows one day: every-day items (no day_number) plus that day's.
+  const dayItems = (steps || []).filter((s) => !s.day || s.day === day).map((s) => ({ display_name: s.name, item_type: s.itemType || undefined, kind: s.kind, scope: s.scope, time: s.time, duration_minutes: s.minutes, group_name: s.group, category: s.category, subtype: s.subtype }));
   return <div>
     <Header Icon={Icon} kicker={cfg.kicker} title={cfg.title} copy={cfg.copy} />
     <p role="status" style={{ color: error ? warn : muted, fontSize: 11 }}>{busy ? 'Loading…' : error || (items.length ? `${items.length} routines` : `No published ${cfg.kicker.toLowerCase()} routines yet. Build one in the Protocol builder, and see the ${cfg.kicker.toLowerCase()} activities below this section in the sidebar.`)}</p>
@@ -148,11 +154,18 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
           <div style={{ aspectRatio: '16 / 9', background: r.image ? `url(${r.image}) center/cover` : '#1B1C18' }} />
           <div style={{ padding: '8px 10px 10px' }}><div style={{ fontSize: 13, fontWeight: 600 }}>{r.name}</div><div style={{ color: muted, fontSize: 10, marginTop: 3 }}>{[r.category, ...r.tags.slice(0, 2)].filter(Boolean).join(' · ')}</div></div>
         </button>
-        {open === r.id && <div role="region" aria-label={`${r.name} steps`} style={{ gridColumn: '1 / -1', border: `1px solid ${acid}`, background: '#141611', padding: 14 }}>
+        {open === r.id && <div role="region" aria-label={`${r.name} steps`} style={{ gridColumn: '1 / -1', border: `1px solid ${acid}`, background: '#141611', padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 20, alignItems: 'start' }}>
+          <div aria-label="As in the app" style={{ display: 'grid', justifyItems: 'center', gap: 8 }}>
+            <div style={{ ...kicker, margin: 0 }}>As in the app{days > 1 ? ` · day ${day} of ${days}` : ''}</div>
+            {days > 1 && <div role="group" aria-label="Day" style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center' }}>{Array.from({ length: days }, (_, i) => i + 1).map((d) => <button key={d} type="button" aria-pressed={d === day} onClick={() => setDay(d)} style={{ border: `1px solid ${d === day ? acid : line}`, background: d === day ? 'rgba(199,216,163,.14)' : 'transparent', color: d === day ? acid : ink, borderRadius: 999, padding: '3px 9px', fontSize: 10, cursor: 'pointer' }}>Day {d}</button>)}</div>}
+            {steps ? <PhoneFrame width={300} screenBg="#FFFFFF"><ProtocolHomeScreen protocolName={r.name} items={dayItems} imageUrl={r.image || undefined} profileName="ROUTINE³" grouping="smart" /></PhoneFrame> : <span style={{ color: muted, fontSize: 11 }}>Loading…</span>}
+          </div>
+          <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 17, fontWeight: 600 }}>{r.name}</div>
           {r.description && <p style={{ color: muted, fontSize: 12, lineHeight: 1.55, maxWidth: 760 }}>{r.description}</p>}
           <div style={kicker}>Steps{steps ? ` · ${steps.length}` : ''}</div>
-          {!steps ? <span style={{ color: muted, fontSize: 11 }}>Loading…</span> : <ol style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 3, fontSize: 12 }}>{steps.map((s, i) => <li key={i}><span style={{ color: acid }}>{[s.day ? `Day ${s.day}` : null, s.time].filter(Boolean).join(' · ')}</span>{s.day || s.time ? ' · ' : ''}{s.name}{s.group ? <span style={{ color: muted }}> · {s.group}</span> : null}</li>)}</ol>}
+          {!steps ? <span style={{ color: muted, fontSize: 11 }}>Loading…</span> : <ol style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 3, fontSize: 12 }}>{steps.map((s, i) => <li key={i}><span style={{ color: acid }}>{[s.day ? `Day ${s.day}` : null, s.time].filter(Boolean).join(' · ')}</span>{s.day || s.time ? ' · ' : ''}{s.name}{[s.sets && s.reps ? `${s.sets} × ${s.reps}` : null, s.weight, s.minutes ? `${s.minutes} min` : null].filter(Boolean).map((x) => <span key={x} style={{ color: acid }}> · {x}</span>)}{s.group ? <span style={{ color: muted }}> · {s.group}</span> : null}{s.kind?.startsWith('rule') ? <span style={{ color: warn }}> · rule</span> : null}</li>)}</ol>}
+          </div>
         </div>}
       </Fragment>)}
     </div>

@@ -1093,8 +1093,9 @@ export async function listFitnessRoutines(accessToken: string, categories: strin
   if (!res.ok) throw new Error(`Could not load fitness routines (${res.status})`);
   return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, description: txt(r.description), image: txt(r.image_url), category: r.category, tags: Array.isArray(r.tags) ? r.tags.map(String) : [] }));
 }
-export async function routineSteps(accessToken: string, protocolId: string): Promise<Array<{ name: string; time: string | null; group: string | null; day: number | null }>> {
-  const res = await fetch(`${rest()}/protocol_items?select=display_name,scheduled_time,group_name,day_number,sort_order&protocol_id=eq.${protocolId}&order=day_number.asc.nullsfirst,scheduled_time.asc.nullslast,sort_order.asc&limit=200`, { headers: headers(accessToken) });
+export interface RoutineStep { name: string; time: string | null; group: string | null; day: number | null; kind: string | null; itemType: string | null; scope: string | null; category: string | null; subtype: string | null; minutes: number | null; sets: number | null; reps: number | null; weight: string | null }
+export async function routineSteps(accessToken: string, protocolId: string): Promise<RoutineStep[]> {
+  const res = await fetch(`${rest()}/protocol_items?select=display_name,scheduled_time,group_name,day_number,sort_order,kind,item_type,scope,category,subtype,duration_minutes,sets,reps,weight_display,hidden&hidden=not.is.true&protocol_id=eq.${protocolId}&order=day_number.asc.nullsfirst,scheduled_time.asc.nullslast,sort_order.asc&limit=200`, { headers: headers(accessToken) });
   if (!res.ok) return [];
-  return ((await res.json()) as any[]).map((r) => ({ name: String(r.display_name || ''), time: r.scheduled_time ? String(r.scheduled_time).slice(0, 5) : null, group: r.group_name || null, day: num(r.day_number) })).filter((r) => r.name);
+  return ((await res.json()) as any[]).map((r) => ({ name: String(r.display_name || ''), time: r.scheduled_time ? String(r.scheduled_time).slice(0, 5) : null, group: r.group_name || null, day: num(r.day_number), kind: r.kind || null, itemType: r.item_type || null, scope: r.scope || null, category: r.category || null, subtype: r.subtype || null, minutes: num(r.duration_minutes), sets: num(r.sets), reps: num(r.reps), weight: txt(r.weight_display) })).filter((r) => r.name);
 }
