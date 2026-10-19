@@ -179,7 +179,7 @@ function buildSmartBands(list: HomeItem[], tod: string): Band[] {
     const items = byCat.get(c);
     if (!items?.length) continue;
     const sorted = sortItems(items);
-    bands.push({ cat: SMART_TINT[c], slot: "smart", firstMin: parseHM(sorted[0].time)?.mins ?? null, order: orderKey(sorted[0]), time: sorted[0].time, label: `${tod} ${SMART_TITLE[c]}`.toUpperCase(), items: sorted });
+    bands.push({ cat: SMART_TINT[c], slot: "smart", firstMin: parseHM(sorted[0].time)?.mins ?? null, order: orderKey(sorted[0]), time: sorted[0].time, label: SMART_TITLE[c].toUpperCase() /* the part of the day is its own header above */, items: sorted });
   }
   // Wake leads the morning; every other sleep band (bedtime, "Sleep in complete darkness") closes
   // the day. Smart groups sit between, in category order.

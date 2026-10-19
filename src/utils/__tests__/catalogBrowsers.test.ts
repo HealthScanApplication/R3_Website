@@ -93,3 +93,8 @@ it('reads named phases from a description and files binder rules under supplemen
   expect(smartListOfStep({ name: 'Binder 2 h from everything', kind: 'rule_do' } as any)).toBe('Supplements');
   expect(smartListOfStep({ name: 'Follow every label', kind: 'rule_do' } as any)).toBe('Supplements');
 });
+import { bySmartList } from '../../components/guides/CatalogBrowsers';
+it('orders a part of the day into smart lists in order of first appearance', () => {
+  const r = bySmartList([{ name: 'Cleanse', subtype: 'hygiene' }, { name: 'Collagen', subtype: 'supplement' }, { name: 'Lunch', subtype: 'meal' }, { name: 'Wash face', subtype: 'hygiene' }, { name: 'Zinc', subtype: 'supplement' }] as any);
+  expect(r.map((s) => s.name)).toEqual(['Cleanse', 'Wash face', 'Collagen', 'Zinc', 'Lunch']);
+});
