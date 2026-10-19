@@ -2,7 +2,7 @@
 
 **Scope:** 22 catalogue Protocols on STAGING (`mofhvoudjxinvpplsytd`, `protocols.user_id IS NULL`) whose name or description says N days or N weeks, while every item has `day_number` NULL or 1.
 **Status:** applied on STAGING 2026-10-19 (9 protocols now hold 484 items, matching the dry run). Production is not touched.
-**Migration:** `supabase/migrations/20261019120000_multi_week_catalogue_routines.sql`
+**Migration:** `supabase/migrations/20261019125000_multi_week_catalogue_routines.sql`
 
 ## How the app reads days (mobile `useActiveProtocol`, `protocolDayNumber`)
 
