@@ -8,13 +8,13 @@
  * Every draft stays editable; once edited, a brief change no longer overwrites it.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, Download, Film, ImageDown, KeyRound, Loader2, RotateCcw, Type, Unplug } from 'lucide-react';
+import { Copy, Download, Film, ImageDown, KeyRound, LogIn, Loader2, RotateCcw, Type, Unplug } from 'lucide-react';
 import { StyleThumb, drawPost, qrLink, TEXT_POSITIONS, TEXT_STYLES, type PostBrand, type TextPosition, type TextStyleId } from './ContentStudio';
 import { draftVideoScript, parseScript, scriptPrompt, scriptText } from '../../utils/videoScript';
 import { OVERLAY_FORMATS, recordWithOverlay } from '../../utils/videoOverlay';
 import { buildVideoPrompt, VIDEO_ASPECTS, VIDEO_PROMPT_MAX, type VideoAspect } from '../../utils/videoPrompt';
 import type { BrandKit } from '../../utils/brandKit';
-import { connectHiggsfield, costCopy, disconnectHiggsfield, estimateVideo, generateVideo, higgsfieldStatus, isFinished, listVideos, pollDelay, pollVideo, progressOf, type HiggsfieldStatus, type VideoEstimate, type VideoJob } from '../../utils/higgsfieldVideo';
+import { connectHiggsfield, costCopy, startHiggsfieldLogin, takeLoginOutcome, disconnectHiggsfield, estimateVideo, generateVideo, higgsfieldStatus, isFinished, listVideos, pollDelay, pollVideo, progressOf, type HiggsfieldStatus, type VideoEstimate, type VideoJob } from '../../utils/higgsfieldVideo';
 
 const ink = '#F5F2EA', muted = '#B8B6AF', line = 'rgba(245,242,234,0.24)', acid = '#C7D8A3', warn = '#E8B07A';
 const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', height: 38, border: `1px solid ${line}`, background: '#090A08', color: ink, padding: '0 10px', fontSize: 13, borderRadius: 2 };
@@ -39,7 +39,9 @@ export function VideoStudio({ creator, avatar = null, audience, problem, focusKi
   const [status, setStatus] = useState<HiggsfieldStatus | null>(null);
   const [setupError, setSetupError] = useState('');
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState<'' | 'connect' | 'disconnect' | 'generate'>('');
+  const [busy, setBusy] = useState<'' | 'connect' | 'login' | 'disconnect' | 'generate'>('');
+  const [connectWith, setConnectWith] = useState<'login' | 'api_key'>('login');
+  const [notice, setNotice] = useState('');
   const [keyId, setKeyId] = useState('');
   const [secret, setSecret] = useState('');
   const [aspect, setAspect] = useState<VideoAspect>('9:16');
@@ -65,6 +67,11 @@ export function VideoStudio({ creator, avatar = null, audience, problem, focusKi
   const [, tick] = useState(0);
 
   useEffect(() => {
+    // Back from the Higgsfield login page?
+    const outcome = takeLoginOutcome();
+    if (outcome === 'connected') setNotice('Logged in with Higgsfield.');
+    else if (outcome === 'cancelled') setNotice('Higgsfield login was cancelled.');
+    else if (outcome === 'error') setError('Higgsfield login didn’t finish. Try again, or connect with an API key.');
     higgsfieldStatus().then((s) => { setStatus(s); if (s.connected) listVideos().then((r) => setRecent(r.jobs)).catch(() => {}); })
       .catch((e) => setSetupError((e as Error).message || 'Video generation is not available here yet.'));
   }, []);
@@ -130,8 +137,13 @@ export function VideoStudio({ creator, avatar = null, audience, problem, focusKi
 
   const connect = async () => {
     setBusy('connect'); setError('');
-    try { const r = await connectHiggsfield(keyId, secret); setStatus((s) => s && { ...s, connected: true, key_hint: r.key_hint }); setKeyId(''); setSecret(''); }
+    try { const r = await connectHiggsfield(keyId, secret); setStatus((s) => s && { ...s, connected: true, method: 'api_key', key_hint: r.key_hint }); setKeyId(''); setSecret(''); }
     catch (e) { setError((e as Error).message); } finally { setBusy(''); }
+  };
+  const login = async () => {
+    setBusy('login'); setError('');
+    try { const { url } = await startHiggsfieldLogin(window.location.href); window.location.assign(url); }
+    catch (e) { setError((e as Error).message); setBusy(''); }
   };
   const disconnect = async () => {
     if (!window.confirm('Disconnect Higgsfield? Your key is deleted from ROUTINE³. Videos you made stay here.')) return;
@@ -151,27 +163,39 @@ export function VideoStudio({ creator, avatar = null, audience, problem, focusKi
       <span><span style={{ ...lab, color: acid, marginBottom: 6 }}>Video · Higgsfield</span><strong style={{ color: ink, fontSize: 20, fontWeight: 400, fontFamily: '"CanelaText", Georgia, serif' }}>Generate a short video</strong></span>
       {status?.connected && <span style={{ display: 'inline-flex', gap: 12, alignItems: 'center', color: muted, fontSize: 10 }}>
         {!status.live && <span title="The video service runs in test mode on this environment: no Higgsfield calls, no credits spent." style={{ border: `1px solid ${warn}`, color: warn, padding: '3px 7px', fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', fontSize: 9 }}>Test mode</span>}
-        <span>Connected · key …{status.key_hint}</span>
+        <span>{status.method === 'oauth' ? `Logged in with Higgsfield · ${status.key_hint || ''}` : `Connected · key …${status.key_hint}`}</span>
         <button type="button" onClick={disconnect} disabled={busy === 'disconnect'} style={quiet}><Unplug size={12} />Disconnect</button>
       </span>}
     </div>
     {children}
+ {notice && <p role="status" style={{ color: acid, fontSize: 12, margin: '0 0 12px' }}>{notice}</p>}
     {error && <p role="alert" style={{ color: warn, fontSize: 12, margin: '12px 0 0' }}>{error}</p>}
   </section>;
 
   if (setupError) return shell(<p style={{ color: muted, fontSize: 12, margin: 0 }}>Video generation isn’t switched on here yet. ({setupError})</p>);
   if (!status) return shell(<p style={{ color: muted, fontSize: 12, margin: 0, display: 'flex', gap: 8, alignItems: 'center' }}><Loader2 size={14} className="animate-spin" />Checking your Higgsfield connection…</p>);
 
+  const tab = (id: 'login' | 'api_key', title: string, note: string) => <button type="button" aria-pressed={connectWith === id} onClick={() => setConnectWith(id)} style={{ border: `1px solid ${connectWith === id ? acid : line}`, background: connectWith === id ? '#20251B' : 'transparent', color: ink, textAlign: 'left', padding: '9px 11px', cursor: 'pointer' }}><strong style={{ display: 'block', fontSize: 12 }}>{title}</strong><span style={{ display: 'block', color: muted, fontSize: 10, marginTop: 2 }}>{note}</span></button>;
   if (!status.connected) return shell(<div style={{ display: 'grid', gap: 12, maxWidth: 520 }}>
-    <p style={{ color: ink, fontSize: 13, lineHeight: 1.55, margin: 0 }}>Make videos with your own Higgsfield account. Videos are paid from your <strong>Higgsfield API balance</strong>, which is separate from a Higgsfield subscription.</p>
-    <ol style={{ color: muted, fontSize: 12, lineHeight: 1.6, margin: 0, paddingLeft: 18 }}>
-      <li>Open <a href="https://open.higgsfield.ai" target="_blank" rel="noopener noreferrer" style={{ color: acid }}>open.higgsfield.ai</a>, add API balance, and create an API key.</li>
-      <li>Paste its key ID and secret below. The secret is shown only once on Higgsfield.</li>
-    </ol>
-    <label><span style={lab}>API key ID</span><input value={keyId} onChange={(e) => setKeyId(e.target.value)} autoComplete="off" spellCheck={false} style={field} /></label>
-    <label><span style={lab}>API key secret</span><input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="new-password" spellCheck={false} style={field} /></label>
-    <button type="button" onClick={connect} disabled={!keyId.trim() || busy === 'connect'} style={{ ...primary, opacity: keyId.trim() ? 1 : 0.5 }}>{busy === 'connect' ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />} Connect Higgsfield</button>
-    <p style={{ color: muted, fontSize: 10.5, lineHeight: 1.5, margin: 0 }}>ROUTINE³ stores the key encrypted and uses it only when you click Generate. It never reaches your browser again, and you can disconnect at any time.</p>
+    <p style={{ color: ink, fontSize: 13, lineHeight: 1.55, margin: 0 }}>Make videos with your own Higgsfield account. Choose how to connect it:</p>
+    <div role="group" aria-label="How to connect Higgsfield" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+      {tab('login', 'Log in with Higgsfield', 'Uses your Higgsfield plan credits')}
+      {tab('api_key', 'Use an API key', 'Uses your Higgsfield API balance')}
+    </div>
+    {connectWith === 'login' ? <>
+      <p style={{ color: muted, fontSize: 12, lineHeight: 1.55, margin: 0 }}>You’ll sign in on Higgsfield and approve ROUTINE³, then come straight back here. Needs a paid Higgsfield plan.</p>
+      <button type="button" onClick={login} disabled={busy === 'login'} style={primary}>{busy === 'login' ? <Loader2 size={14} className="animate-spin" /> : <LogIn size={14} />} Log in with Higgsfield</button>
+      <p style={{ color: muted, fontSize: 10.5, lineHeight: 1.5, margin: 0 }}>ROUTINE³ never sees your Higgsfield password. The login is stored encrypted, and you can disconnect at any time.</p>
+    </> : <>
+      <ol style={{ color: muted, fontSize: 12, lineHeight: 1.6, margin: 0, paddingLeft: 18 }}>
+        <li>Open <a href="https://open.higgsfield.ai" target="_blank" rel="noopener noreferrer" style={{ color: acid }}>open.higgsfield.ai</a>, add API balance, and create an API key. API balance is separate from a Higgsfield plan.</li>
+        <li>Paste its key ID and secret below. The secret is shown only once on Higgsfield.</li>
+      </ol>
+      <label><span style={lab}>API key ID</span><input value={keyId} onChange={(e) => setKeyId(e.target.value)} autoComplete="off" spellCheck={false} style={field} /></label>
+      <label><span style={lab}>API key secret</span><input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="new-password" spellCheck={false} style={field} /></label>
+      <button type="button" onClick={connect} disabled={!keyId.trim() || busy === 'connect'} style={{ ...primary, opacity: keyId.trim() ? 1 : 0.5 }}>{busy === 'connect' ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />} Connect Higgsfield</button>
+      <p style={{ color: muted, fontSize: 10.5, lineHeight: 1.5, margin: 0 }}>ROUTINE³ stores the key encrypted and uses it only when you click Generate. It never reaches your browser again, and you can disconnect at any time.</p>
+    </>}
   </div>);
 
   const progress = job ? progressOf(job) : null;
@@ -189,7 +213,7 @@ export function VideoStudio({ creator, avatar = null, audience, problem, focusKi
         <span style={{ display: 'block', color: muted, fontSize: 9.5, marginTop: 4 }}>Built from your audience, {problem.toLowerCase()}{offer ? ', the offer' : ''}{kit && brandName ? ` and ${brandName}’s visual language` : ''}. {prompt.length}/{VIDEO_PROMPT_MAX}</span>
       </div>
       <button type="button" onClick={generate} disabled={busy === 'generate' || (!!job && !isFinished(job.status)) || prompt.trim().length < 10} style={primary}>{busy === 'generate' ? <Loader2 size={14} className="animate-spin" /> : <Film size={14} />} Generate {duration}s video{cost.short ? ` · ${cost.short}` : ''}</button>
-      <span aria-live="polite" style={{ color: muted, fontSize: 10, lineHeight: 1.5 }}>{estimating ? 'Checking the price…' : cost.detail} Paid from your Higgsfield API balance{status.live ? '' : ' (test mode: nothing is spent)'}. Failed or blocked videos aren’t charged.</span>
+      <span aria-live="polite" style={{ color: muted, fontSize: 10, lineHeight: 1.5 }}>{estimating ? 'Checking the price…' : cost.detail} {status.method === 'oauth' ? 'Paid from your Higgsfield plan' : 'Paid from your Higgsfield API balance'}{status.live ? '' : ' (test mode: nothing is spent)'}.{status.live && status.method === 'oauth' ? ' Making videos through a Higgsfield login is still being set up; connect with an API key to generate now.' : ''} Failed or blocked videos aren’t charged.</span>
       <div style={{ borderTop: `1px solid ${line}`, paddingTop: 12 }}><div style={{ ...lab, display: 'flex', justifyContent: 'space-between', gap: 8 }}><label htmlFor="video-script">Script · hook, lines, call to action</label>{scriptEdited && <button type="button" onClick={resetScript} style={quiet}><RotateCcw size={11} />Use suggested</button>}</div>
         <textarea id="video-script" value={script} onChange={(e) => setScript(e.target.value)} rows={5} style={{ ...field, height: 'auto', padding: 10, lineHeight: 1.5, resize: 'vertical' }} />
         <span style={{ display: 'flex', gap: 14, marginTop: 5 }}>

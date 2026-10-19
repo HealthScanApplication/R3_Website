@@ -138,3 +138,77 @@ export function mockStatus(createdAtMs: number, nowMs: number): JobStatus {
   const t = nowMs - createdAtMs;
   return t < 3000 ? 'queued' : t < 12000 ? 'in_progress' : 'completed';
 }
+
+/* ── "Log in with Higgsfield": OAuth 2.1 + PKCE against Higgsfield's MCP server (the REST API has no OAuth) ── */
+// Published at https://mcp.higgsfield.ai/.well-known/oauth-authorization-server (read 2026-10-19).
+export const MCP_URL = 'https://mcp.higgsfield.ai/mcp';
+export const OAUTH = {
+  authorize: 'https://mcp.higgsfield.ai/oauth2/authorize',
+  token: 'https://mcp.higgsfield.ai/oauth2/token',
+  register: 'https://mcp.higgsfield.ai/oauth2/register',
+  scope: 'openid email offline_access',
+};
+
+const b64url = (bytes: Uint8Array) => b64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+export function pkceVerifier(): string { return b64url(crypto.getRandomValues(new Uint8Array(32))); }
+export async function pkceChallenge(verifier: string): Promise<string> {
+  return b64url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))));
+}
+
+/**
+ * OAuth `state`: who started the login, their PKCE verifier and where to send them back, sealed with the same
+ * AES-GCM key so nothing needs storing and nobody can forge or read it. Expires after 15 minutes.
+ */
+export interface LoginState { user_id: string; verifier: string; return_to: string; exp: number }
+export async function sealState(s: LoginState, secretB64: string): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const out = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode('higgsfield-oauth-state') }, await aesKey(secretB64), new TextEncoder().encode(JSON.stringify(s)));
+  return `${b64url(iv)}.${b64url(new Uint8Array(out))}`;
+}
+export async function openState(token: string, secretB64: string, now = Date.now()): Promise<LoginState | null> {
+  try {
+    const [iv, data] = token.split('.').map((p) => unb64(p.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (p.length % 4)) % 4)));
+    const out = await crypto.subtle.decrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode('higgsfield-oauth-state') }, await aesKey(secretB64), data);
+    const s = JSON.parse(new TextDecoder().decode(out)) as LoginState;
+    return s.exp > now ? s : null;
+  } catch { return null; }
+}
+
+/** Only send people back to our own sites (open-redirect guard). */
+export function safeReturn(url: string, allowedOrigins: string[]): string | null {
+  try { const u = new URL(url); return allowedOrigins.includes(u.origin) ? u.toString() : null; } catch { return null; }
+}
+
+export function authorizeUrl(p: { clientId: string; redirectUri: string; state: string; challenge: string }): string {
+  const q = new URLSearchParams({ response_type: 'code', client_id: p.clientId, redirect_uri: p.redirectUri, scope: OAUTH.scope, state: p.state, code_challenge: p.challenge, code_challenge_method: 'S256', resource: MCP_URL, prompt: 'consent' });
+  return `${OAUTH.authorize}?${q}`;
+}
+
+/** Dynamic client registration body: a public client (PKCE, no secret) for our callback URL. */
+export const registrationBody = (redirectUri: string) => ({ client_name: 'ROUTINE³ Guardians', redirect_uris: [redirectUri], grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'], token_endpoint_auth_method: 'none', scope: OAUTH.scope });
+
+export interface OAuthTokens { access_token: string; refresh_token: string | null; expires_at: number }
+/** Token endpoint answer → what we store (encrypted). `expires_in` is seconds. */
+export function tokensFrom(body: any, now = Date.now(), previousRefresh: string | null = null): OAuthTokens | null {
+  if (typeof body?.access_token !== 'string' || !body.access_token) return null;
+  const ttl = Number(body.expires_in) > 0 ? Number(body.expires_in) : 3600;
+  return { access_token: body.access_token, refresh_token: typeof body.refresh_token === 'string' ? body.refresh_token : previousRefresh, expires_at: now + ttl * 1000 };
+}
+export const needsRefresh = (t: OAuthTokens, now = Date.now()) => t.expires_at - now < 60_000;
+
+/** The signed-in email from an id_token (display only, never trusted for auth), masked: "jo…@gmail.com". */
+export function emailHint(idToken: unknown): string {
+  try {
+    const payload = JSON.parse(atob(String(idToken).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    const [name, domain] = String(payload.email || '').split('@');
+    return name && domain ? `${name.slice(0, 2)}…@${domain}` : 'Higgsfield account';
+  } catch { return 'Higgsfield account'; }
+}
+
+/** MCP streamable HTTP answers either JSON or an SSE stream; return the JSON-RPC message with our id. */
+export function parseMcpResponse(text: string, contentType: string, id: number): any {
+  const messages = /text\/event-stream/.test(contentType)
+    ? text.split(/\n\n+/).map((ev) => ev.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trim()).join('\n')).filter(Boolean).map((d) => { try { return JSON.parse(d); } catch { return null; } })
+    : [(() => { try { return JSON.parse(text); } catch { return null; } })()];
+  return messages.find((m) => m && m.id === id) ?? null;
+}

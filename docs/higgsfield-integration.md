@@ -4,7 +4,9 @@ Researched 2026-10-18 from Higgsfield's public docs, help centre and Terms of Us
 
 ## Short answer
 
-- **No "log in with Higgsfield" for the REST API.** It uses a per-account **API key ID + secret**. A Guardian connects by pasting both. The only OAuth path is Higgsfield's MCP server, which is meant for AI agents and spends subscription credits. It is not a web-app login.
+- **Two ways to connect, and we offer both.**
+  - **API key:** the REST API uses a per-account key ID + secret, and the Guardian pastes both.
+  - **"Log in with Higgsfield":** Higgsfield's MCP server runs standard OAuth 2.1 with PKCE, refresh tokens and open client registration. Its published metadata (read 2026-10-19) is at `https://mcp.higgsfield.ai/.well-known/oauth-authorization-server` and `/.well-known/oauth-protected-resource`. It spends **plan** credits, not API balance. Its `higgsfield_auth_hints` list AI agents (Claude, etc.) as the expected clients, so a website using it is a grey area to confirm with Higgsfield.
 - **The API is paid separately from a Higgsfield subscription.** It runs on a prepaid USD API balance (minimum top-up $5, credits expire after a year). A Guardian with a Higgsfield subscription still has to add API balance.
 - **Every video is an async job:** submit → `request_id` → poll the status endpoint, or receive a webhook → `video.url`.
 - **9:16, 1:1 and 16:9 are native. 4:5 is not offered by any Higgsfield video model.** We render 4:5 at 3:4 where the model supports it, otherwise at 9:16. Instagram's feed shows both as 4:5.
@@ -118,25 +120,35 @@ What this means for us:
    - **Test mode, or if the quote fails:** we use the published per-second price instead, labelled as approximate. Kling 3.0 Standard is $0.084/s (Higgsfield blog). Seedance 2.0 is $0.141/s, which is third-party and unverified. Wan 2.7 has no known price, so the panel says so.
    - Update `usdPerSecond` in `supabase/functions/higgsfield/lib.ts` if Higgsfield's prices change.
 
+9. **"Log in with Higgsfield"** (alongside the API key; the panel lets the Guardian pick).
+   - **Start:** `oauth_start` returns Higgsfield's authorize URL, with PKCE (S256), `resource=https://mcp.higgsfield.ai/mcp` and scopes `openid email offline_access`. The `state` is the user id, PKCE verifier and return address, sealed with AES-GCM and valid for 15 minutes, so nothing is stored. Return addresses must be on `HIGGSFIELD_RETURN_ORIGINS`.
+   - **Client registration:** our OAuth client is registered once per environment (dynamic client registration as a public client) and kept in `higgsfield_oauth_clients`.
+   - **Callback:** Higgsfield redirects to the function itself (`GET …/functions/v1/higgsfield?code&state`). The function swaps the code for tokens, stores them encrypted with `method = 'oauth'` and a masked email as the hint, and sends the Guardian back with `?higgsfield=connected`, `cancelled` or `error`. Tokens are refreshed shortly before they expire.
+   - **Generating through the login is not wired up yet.** The MCP server's video tools can only be listed after a real login. The `tools` action lists them (initialize → tools/list over streamable HTTP/SSE). Until those tools are mapped, generating through a login connection works in test mode only. In live mode the panel asks the Guardian to use an API key, and nothing is spent. Cost shows as "uses your plan credits".
+
 ### Not built yet (proposed next)
 
 - **Image-to-video from the post's background or brand imagery.** The server already supports `image_url` (public https). The panel doesn't expose it yet because the post background lives inside ContentStudio.
 - Server-side burn-in (ffmpeg) for a guaranteed MP4 with text, if browser recording proves unreliable.
 - Voice-over from the script (Higgsfield or another TTS) and captions timed to the script.
 - Webhooks (`hf_webhook`) as a hint to re-poll sooner.
-- MCP OAuth as an alternative for Guardians who have only a subscription and no API balance. This needs Higgsfield's agreement and an MCP client.
+- Map video generation onto the login's MCP tools, after one real login and the `tools` listing.
 
 ## Plan / go-live checklist
 
 Everything is written and tested with Supabase and Higgsfield mocked. Nothing is deployed or applied.
 
-1. **Legal or Higgsfield sign-off** that Guardians may connect their own keys to ROUTINE³ (ToS §11.3 / §11.5).
+1. **Legal or Higgsfield sign-off** that Guardians may connect their own keys (ToS §11.3 / §11.5), and that a website may use the MCP login.
+   - **Login extras (after the first migration):**
+     - Apply `supabase/migrations/20261019100000_guardian_higgsfield_login.sql`.
+     - Set `HIGGSFIELD_RETURN_ORIGINS` to the site origins (e.g. the Staging site's origin, `http://localhost:5173`).
+     - Redeploy with `--no-verify-jwt`, because Higgsfield's redirect carries no Supabase token. POST calls still check the Guardian's JWT inside the function.
 2. **Apply the migration on Staging:** `supabase/migrations/20261018120000_guardian_higgsfield.sql`. It adds two tables with RLS and column grants, and the private `guardian-videos` bucket (200 MB, mp4).
 3. **Set function secrets on Staging:**
    - `HIGGSFIELD_ENCRYPTION_KEY` = 32 random bytes, base64. Generate with `openssl rand -base64 32`. Keep it safe: losing it means every Guardian has to reconnect.
    - Optional: `HIGGSFIELD_DAILY_LIMIT` (default 20).
    - Leave `HIGGSFIELD_LIVE` unset (mock mode).
-4. **Deploy:** `supabase functions deploy higgsfield --project-ref mofhvoudjxinvpplsytd`. It verifies the JWT itself and needs signed-in Guardians.
+4. **Deploy:** `supabase functions deploy higgsfield --no-verify-jwt --project-ref mofhvoudjxinvpplsytd`. The function checks the Guardian's JWT itself; the gateway check is off so the OAuth redirect can reach it.
 5. **Test the flow on Staging in mock mode:** connect with any well-formed key, generate, watch progress, disconnect.
 6. **One real test, with the user's explicit OK:** set `HIGGSFIELD_LIVE=true` on Staging. Connect a real key with a small API balance (the $5 minimum) and generate one 5 s 9:16 Kling clip (about $0.42). Then check that the download comes from the `guardian-videos` bucket.
 7. **Production:** the Guardian schema has to reach Production first. Then apply the same migration, set a **different** `HIGGSFIELD_ENCRYPTION_KEY`, deploy, and set `HIGGSFIELD_LIVE=true` when ready.

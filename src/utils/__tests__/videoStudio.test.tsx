@@ -7,11 +7,22 @@ import { defaultBrandKit } from '../brandKit';
 
 const models = [{ id: 'kling-3-std', label: 'Kling 3.0 Standard', durations: [3, 15], aspects: [{ aspect: '9:16', delivered: '9:16' }, { aspect: '4:5', delivered: '9:16' }, { aspect: '1:1', delivered: '1:1' }, { aspect: '16:9', delivered: '16:9' }] }];
 const api = vi.hoisted(() => ({
-  higgsfieldStatus: vi.fn(), estimateVideo: vi.fn(async () => ({ estimate: { usd: 0.42, credits: null, source: 'price_list', per_second: 0.084 }, duration: 5 })), connectHiggsfield: vi.fn(), disconnectHiggsfield: vi.fn(), generateVideo: vi.fn(), pollVideo: vi.fn(), listVideos: vi.fn(async () => ({ jobs: [] })),
+  higgsfieldStatus: vi.fn(), startHiggsfieldLogin: vi.fn(async () => ({ url: 'https://mcp.higgsfield.ai/oauth2/authorize?x=1' })), estimateVideo: vi.fn(async () => ({ estimate: { usd: 0.42, credits: null, source: 'price_list', per_second: 0.084 }, duration: 5 })), connectHiggsfield: vi.fn(), disconnectHiggsfield: vi.fn(), generateVideo: vi.fn(), pollVideo: vi.fn(), listVideos: vi.fn(async () => ({ jobs: [] })),
 }));
 vi.mock('../higgsfieldVideo', async (importOriginal) => ({ ...await importOriginal<any>(), ...api }));
 const { VideoStudio } = await import('../../components/guides/VideoStudio');
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
+
+describe('login round trip', () => {
+  it('reads and clears ?higgsfield= from the address', async () => {
+    const { takeLoginOutcome } = await vi.importActual<any>('../higgsfieldVideo');
+    const replace = vi.fn();
+    expect(takeLoginOutcome({ href: 'https://routine3.com/g?tab=content&higgsfield=connected' }, replace)).toBe('connected');
+    expect(replace).toHaveBeenCalledWith('https://routine3.com/g?tab=content');
+    expect(takeLoginOutcome({ href: 'https://routine3.com/g?higgsfield=weird' }, replace)).toBe('error');
+    expect(takeLoginOutcome({ href: 'https://routine3.com/g' }, replace)).toBeNull();
+  });
+});
 
 describe('progress copy and polling', () => {
   it('maps job statuses to labels and a progress fraction', () => {
@@ -42,6 +53,8 @@ describe('VideoStudio', () => {
     api.higgsfieldStatus.mockResolvedValue({ connected: false, key_hint: null, connected_at: null, live: false, models });
     api.connectHiggsfield.mockResolvedValue({ connected: true, key_hint: 'ef12', live: false });
     render(<VideoStudio {...props} />);
+    expect(await screen.findByRole('button', { name: /^Log in with Higgsfield$/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Use an API key/ }));
     fireEvent.change(await screen.findByLabelText('API key ID'), { target: { value: 'key_abcdef12' } });
     fireEvent.change(screen.getByLabelText('API key secret'), { target: { value: 'sec_ret_123456' } });
     expect(screen.getByLabelText('API key secret')).toHaveProperty('type', 'password');
@@ -98,6 +111,25 @@ describe('VideoStudio', () => {
     expect((screen.getByLabelText('Video headline') as HTMLInputElement).value).toBe('My headline');
     fireEvent.click(screen.getByRole('checkbox', { name: /Text on the video/ }));
     expect(screen.queryByLabelText('Text on the video')).toBeNull();
+  });
+
+  it('offers "Log in with Higgsfield" and sends the Guardian to Higgsfield', async () => {
+    api.higgsfieldStatus.mockResolvedValue({ connected: false, method: null, key_hint: null, connected_at: null, live: false, models });
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, href: 'http://localhost:5173/guardians?tab=content', assign });
+    render(<VideoStudio {...props} />);
+    fireEvent.click(await screen.findByRole('button', { name: /^Log in with Higgsfield$/ }));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('https://mcp.higgsfield.ai/oauth2/authorize?x=1'));
+    expect(api.startHiggsfieldLogin).toHaveBeenCalledWith('http://localhost:5173/guardians?tab=content');
+    vi.unstubAllGlobals();
+  });
+
+  it('shows a login connection with the account email and plan credits', async () => {
+    api.higgsfieldStatus.mockResolvedValue({ connected: true, method: 'oauth', key_hint: 'jo…@example.com', connected_at: null, live: false, models });
+    api.estimateVideo.mockResolvedValueOnce({ estimate: { usd: null, credits: null, source: 'plan', per_second: null }, duration: 5 });
+    render(<VideoStudio {...props} />);
+    expect(await screen.findByText('Logged in with Higgsfield · jo…@example.com')).toBeTruthy();
+    expect(await screen.findByText(/Uses credits from your Higgsfield plan/)).toBeTruthy();
   });
 
   it('says so when the function is not deployed on this environment', async () => {
