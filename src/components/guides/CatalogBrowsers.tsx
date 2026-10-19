@@ -55,7 +55,7 @@ function FoodGrid({ items, renderExtra }: { items: CatalogFood[]; renderExtra?: 
         </div>
         <div style={{ padding: '8px 10px 10px' }}>
           <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.25 }}>{f.name}</div>
-          <div style={{ color: muted, fontSize: 10, marginTop: 4, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>{f.form && <span>{f.form === 'raw' ? 'Whole / raw' : 'Processed'}</span>}{f.per100.energy_kcal != null && <span>{Math.round(f.per100.energy_kcal)} kcal/100 g</span>}{f.hazards.some((h) => h.level === 'high') && <span style={{ color: danger, display: 'inline-flex', alignItems: 'center', gap: 3 }}><AlertTriangle size={10} aria-hidden="true" />high</span>}</div>
+          <div style={{ color: muted, fontSize: 10, marginTop: 4, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>{f.form && <span>{f.form === 'raw' ? 'Whole / raw' : 'Processed'}</span>}{f.per100.energy_kcal != null && <span>{Math.round(f.per100.energy_kcal)} kcal/100 g</span>}{(['high', 'moderate', 'low', 'trace'] as const).map((l) => { const n = f.hazards.filter((h) => h.level === l || (l === 'moderate' && h.level === 'medium')).length; return n ? <span key={l} title={f.hazards.filter((h) => h.level === l || (l === 'moderate' && h.level === 'medium')).map((h) => title(h.key)).join(', ')} style={{ color: levelTone(l), display: 'inline-flex', alignItems: 'center', gap: 3 }}>{l !== 'trace' && <AlertTriangle size={10} aria-hidden="true" />}{n} {l}</span> : null; })}</div>
         </div>
       </button>
       {open === f.id && <div role="region" aria-label={`${f.name} details`} style={{ gridColumn: '1 / -1', border: `1px solid ${acid}`, background: '#141611', padding: 14, display: 'grid', gridTemplateColumns: f.image ? 'minmax(0,150px) minmax(0,1fr)' : 'minmax(0,1fr)', gap: 14, position: 'relative' }}>
@@ -84,7 +84,7 @@ function useLoad<T>(fn: () => Promise<T[]>, deps: unknown[], delay = 0) {
   return s;
 }
 export const PAGE = 60;
-const Status = ({ busy, error, n, what, page = 0 }: { busy: boolean; error: string; n: number; what: string; page?: number }) => <p role="status" style={{ color: error ? warn : muted, fontSize: 11, margin: '0 0 8px', display: 'flex', gap: 6, alignItems: 'center' }}>{busy ? <><Loader2 size={12} className="animate-spin" />Loading…</> : error || (n ? `${what} ${page * PAGE + 1}–${page * PAGE + n} · highest health score first` : `No ${what}`)}</p>;
+const Status = ({ busy, error, n, what, page = 0 }: { busy: boolean; error: string; n: number; what: string; page?: number }) => <p role="status" style={{ color: error ? warn : muted, fontSize: 11, margin: '0 0 8px', display: 'flex', gap: 6, alignItems: 'center' }}>{busy ? <><Loader2 size={12} className="animate-spin" />Loading…</> : error || (n ? `${what} ${page * PAGE + 1}–${page * PAGE + n} · highest health score first (hazards lower it)` : `No ${what}`)}</p>;
 /** Previous / next pages for a card list; `more` = another page exists. */
 export function Pager({ page, more, onPage }: { page: number; more: boolean; onPage: (p: number) => void }) {
   if (!page && !more) return null;
