@@ -50,7 +50,7 @@ export async function generateBrandBrief(accessToken: string, facts: BrandFacts,
 }
 
 /* ── prompts for content tools ── */
-export interface PromptContext { brandName?: string; kit?: BrandKit | null; audience: string; focus: string; offer?: string; format: string; headline?: string; cta?: string }
+export interface PromptContext { brandName?: string; kit?: BrandKit | null; audience: string; focus: string; offer?: string; format: string; headline?: string; cta?: string; layout?: string }
 const brandLines = (c: PromptContext) => {
   const k = c.kit;
   if (!k) return [];
@@ -61,13 +61,14 @@ const brandLines = (c: PromptContext) => {
     k.avoid && `Avoid: ${k.avoid}`,
   ].filter(Boolean) as string[];
 };
-/** For image and video generators (Midjourney, Higgsfield…): the scene, audience and the brand's look. */
+/** For image and video generators (Midjourney, Higgsfield…): the scene, audience and the brand's look. `layout`
+ *  (postLayout.compositionBrief) replaces the default lower-third line with the post's actual text and QR zones. */
 export function imagePrompt(c: PromptContext): string {
   const k = c.kit;
   return [
     `A ${c.format} social image for ${c.brandName || 'a wellness guide'}${c.offer ? ` promoting "${c.offer}"` : ''}.`,
     `Scene: ${c.audience.toLowerCase() === 'everyone' ? 'an adult' : c.audience} in a calm, real moment of their daily routine that relates to ${c.focus.toLowerCase()}.`,
-    `Leave clean space in the lower third for a headline and button.`,
+    c.layout || `Leave clean space in the lower third for a headline and button.`,
     ...brandLines({ ...c, kit: k ? { ...k, voice: '', words: '' } : k }),
     k && (k.ctaMode === 'mono' ? `Palette: ${k.mono === 'black_on_white' ? 'black on white' : 'white on black'}, natural tones.` : `Palette accents: ${k.primary} and ${k.secondary}.`),
     'No text, logos or watermarks in the image.',
