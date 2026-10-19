@@ -1082,6 +1082,35 @@ export const RECIPE_DIETS = DIET_FLAGS;
 const dietsOf = (d: unknown) => (d && typeof d === 'object' ? DIET_FLAGS.filter(([k]) => (d as any)[k] === true).map(([, l]) => l) : []);
 const q = (s: string) => encodeURIComponent(s.replace(/[%,()*]/g, ' ').trim());
 
+/**
+ * The diet a Protocol's own rules and description ask for, to pick meals that follow it: a dietary_info flag
+ * (vegan, keto…) and name words to leave out ("no added sugar" → no cakes or cookies, "no fried" → no fries).
+ */
+export function protocolDiet(rules: string[], description = ''): { diet: string | null; avoid: RegExp | null } {
+  const t = `${rules.join(' · ')} · ${description}`.toLowerCase();
+  const diet = /\bvegan\b|plant foods only|whole plant foods|no meat, fish, dairy or eggs/.test(t) ? 'vegan'
+    : /\bvegetarian\b|no meat\b/.test(t) ? 'vegetarian'
+    : /\bketo|ketogenic/.test(t) ? 'keto'
+    : /low[- ]carb/.test(t) ? 'low_carb'
+    : /gluten[- ]free|no gluten/.test(t) ? 'gluten_free'
+    : /dairy[- ]free|no dairy/.test(t) ? 'dairy_free' : null;
+  const words: string[] = [];
+  if (/no (added )?sugar|no sweet|sugar[- ]free|low sugar/.test(t)) words.push('cake', 'cookie', 'donut', 'doughnut', 'brownie', 'muffin', 'candy', 'chocolate', 'syrup', 'pancake', 'sundae', 'ice cream', 'milkshake', 'pie');
+  if (/no (deep[- ])?fried|no processed|ultra-processed|whole foods?/.test(t)) words.push('fried', 'fries', 'nugget', 'burger', 'pizza', 'hot dog', 'crisps', 'chips');
+  if (/no alcohol/.test(t)) words.push('wine', 'beer', 'cocktail');
+  if (/yeast|leavened/.test(t)) words.push('bread', 'bun', 'bagel', 'toast', 'sandwich', 'pizza');
+  return { diet, avoid: words.length ? new RegExp(`\\b(${words.join('|')})`, 'i') : null };
+}
+/** A meal step's slot for recipe suggestions, from its title, group or time. */
+export function mealSlotOf(name: string, group: string | null, time: string | null): 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack' | null {
+  const t = `${name} ${group || ''}`;
+  if (/breakfast/i.test(t)) return 'Breakfast';
+  if (/lunch/i.test(t)) return 'Lunch';
+  if (/dinner|supper/i.test(t)) return 'Dinner';
+  if (/snack/i.test(t)) return 'Snack';
+  const m = /^(\d\d):/.exec(time || ''); if (!m) return null;
+  const h = +m[1]; return h < 11 ? 'Breakfast' : h < 15 ? 'Lunch' : h < 17 ? 'Snack' : 'Dinner';
+}
 export async function browseRecipes(accessToken: string, f: { offset?: number; query?: string; cuisine?: string; meal?: string; diet?: string; limit?: number }): Promise<CatalogFood[]> {
   const p = ['select=id,name_common,image_primary_url,image_url,meal_slot,cuisine,description_simple,description,health_score,prep_time,cook_time,servings,nutrition_per_100g,elements_hazardous,dietary_info', 'is_published=is.true', 'order=health_score.desc.nullslast,name_common.asc,id.asc', `limit=${f.limit || 60}`, `offset=${f.offset || 0}`];
   if (f.query?.trim()) p.push(`name_common=ilike.*${q(f.query)}*`);
@@ -1160,9 +1189,9 @@ export async function listFitnessRoutines(accessToken: string, categories: strin
   if (!res.ok) throw new Error(`Could not load fitness routines (${res.status})`);
   return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, description: txt(r.description), image: txt(r.image_url), category: r.category, tags: Array.isArray(r.tags) ? r.tags.map(String) : [], totalDays: num(r.total_days) }));
 }
-export interface RoutineStep { id?: string; parentId?: string | null; name: string; time: string | null; group: string | null; day: number | null; kind: string | null; itemType: string | null; scope: string | null; recurrenceType?: string | null; category: string | null; subtype: string | null; minutes: number | null; sets: number | null; reps: number | null; weight: string | null }
+export interface RoutineStep { id?: string; parentId?: string | null; recipeId?: string | null; name: string; time: string | null; group: string | null; day: number | null; kind: string | null; itemType: string | null; scope: string | null; recurrenceType?: string | null; category: string | null; subtype: string | null; minutes: number | null; sets: number | null; reps: number | null; weight: string | null }
 export async function routineSteps(accessToken: string, protocolId: string): Promise<RoutineStep[]> {
-  const res = await fetch(`${rest()}/protocol_items?select=id,parent_protocol_item_id,display_name,scheduled_time,group_name,day_number,sort_order,kind,item_type,scope,recurrence_type,category,subtype,duration_minutes,sets,reps,weight_display,hidden&hidden=not.is.true&protocol_id=eq.${protocolId}&order=day_number.asc.nullsfirst,scheduled_time.asc.nullslast,sort_order.asc&limit=200`, { headers: headers(accessToken) });
+  const res = await fetch(`${rest()}/protocol_items?select=id,parent_protocol_item_id,catalog_recipe_id,display_name,scheduled_time,group_name,day_number,sort_order,kind,item_type,scope,recurrence_type,category,subtype,duration_minutes,sets,reps,weight_display,hidden&hidden=not.is.true&protocol_id=eq.${protocolId}&order=day_number.asc.nullsfirst,scheduled_time.asc.nullslast,sort_order.asc&limit=200`, { headers: headers(accessToken) });
   if (!res.ok) return [];
-  return ((await res.json()) as any[]).map((r) => ({ id: String(r.id), parentId: r.parent_protocol_item_id || null, name: String(r.display_name || ''), time: r.scheduled_time ? String(r.scheduled_time).slice(0, 5) : null, group: r.group_name || null, day: num(r.day_number), kind: r.kind || null, itemType: r.item_type || null, scope: r.scope || null, recurrenceType: r.recurrence_type || null, category: r.category || null, subtype: r.subtype || null, minutes: num(r.duration_minutes), sets: num(r.sets), reps: num(r.reps), weight: txt(r.weight_display) })).filter((r) => r.name);
+  return ((await res.json()) as any[]).map((r) => ({ id: String(r.id), parentId: r.parent_protocol_item_id || null, recipeId: r.catalog_recipe_id || null, name: String(r.display_name || ''), time: r.scheduled_time ? String(r.scheduled_time).slice(0, 5) : null, group: r.group_name || null, day: num(r.day_number), kind: r.kind || null, itemType: r.item_type || null, scope: r.scope || null, recurrenceType: r.recurrence_type || null, category: r.category || null, subtype: r.subtype || null, minutes: num(r.duration_minutes), sets: num(r.sets), reps: num(r.reps), weight: txt(r.weight_display) })).filter((r) => r.name);
 }

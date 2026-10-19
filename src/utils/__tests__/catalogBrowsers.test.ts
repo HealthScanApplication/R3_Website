@@ -98,3 +98,23 @@ it('orders a part of the day into smart lists in order of first appearance', () 
   const r = bySmartList([{ name: 'Cleanse', subtype: 'hygiene' }, { name: 'Collagen', subtype: 'supplement' }, { name: 'Lunch', subtype: 'meal' }, { name: 'Wash face', subtype: 'hygiene' }, { name: 'Zinc', subtype: 'supplement' }] as any);
   expect(r.map((s) => s.name)).toEqual(['Cleanse', 'Wash face', 'Collagen', 'Zinc', 'Lunch']);
 });
+import { protocolDiet, mealSlotOf } from '../protocolBuilders';
+import { smartListBlocks, GENERIC_MEAL } from '../../components/guides/CatalogBrowsers';
+it('reads the diet from a Protocol\'s rules and suggests only for generic meal slots', () => {
+  const d = protocolDiet(['Whole plant foods only', 'No added sugar or sweeteners', 'No yeast-leavened bread']);
+  expect(d.diet).toBe('vegan');
+  expect(d.avoid!.test('Chocolate Brownie')).toBe(true);
+  expect(d.avoid!.test('Lentil stew')).toBe(false);
+  expect(GENERIC_MEAL.test('Breakfast') && GENERIC_MEAL.test('Afternoon Snack') && GENERIC_MEAL.test('Dinner meal')).toBe(true);
+  expect(GENERIC_MEAL.test('Oats with berries and walnuts')).toBe(false);
+  expect(mealSlotOf('Morning Snack', null, '10:00')).toBe('Snack');
+  expect(mealSlotOf('Meal', null, '19:00')).toBe('Dinner');
+});
+it('puts a smart list\'s rules beside its steps, each rule once with the steps it applies to', () => {
+  const steps = [{ id: 'b', name: 'Breakfast', subtype: 'meal', time: '07:00' }, { id: 'l', name: 'Lunch', subtype: 'meal', time: '12:00' }, { name: 'No juice or soda', kind: 'rule_dont', subtype: 'drink', scope: 'consume' }] as any;
+  const kids = (s: any) => (s.id === 'b' || s.id === 'l' ? [{ name: 'Chew slowly', kind: 'rule_do', parentId: s.id }] : []) as any;
+  const [[list, acts, rules]] = smartListBlocks(steps, kids);
+  expect(list).toBe('Meals');
+  expect(acts.map((a) => a.name)).toEqual(['Breakfast', 'Lunch']);
+  expect(rules).toEqual([{ name: 'No juice or soda', dont: true, on: [] }, { name: 'Chew slowly', dont: false, on: ['Breakfast', 'Lunch'] }]);
+});
