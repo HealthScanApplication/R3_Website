@@ -1,8 +1,13 @@
 import { Fragment, useState, type Dispatch, type SetStateAction } from 'react';
 import { defaultFasting, fastingWindows, SUPPLEMENT_PERIODS, supplementCell, WEEK, FASTING_TYPES, type DietConfig, type SupplementPeriod } from '../../utils/protocolBuilders';
+import { CircleSlash, Clock, Droplets, DropletOff, Hourglass, Leaf, Pill, Timer, type LucideIcon } from 'lucide-react';
 import { SupplementPicker } from './SupplementPicker';
 const muted = '#B8B6AF', acid = '#C7D8A3', border = '1px solid rgba(245,242,234,.24)';
 const button = { border, background:'#11120F',color:'#F5F2EA',padding:'6px 9px',borderRadius:15,cursor:'pointer',fontSize:11 };
+/** One look for every "add" tag in the Diet planner: meal, drink and supplement. */
+export const addTag = { ...button, display:'inline-flex', alignItems:'center', gap:5, fontSize:10, lineHeight:1.2, textAlign:'left' as const };
+const FASTING_ICON: Record<string, LucideIcon> = { none: CircleSlash, intermittent: Timer, water: Droplets, dry: DropletOff, daniel: Leaf };
+const ico = (Icon: LucideIcon, size = 12) => <Icon size={size} strokeWidth={1.8} aria-hidden="true" />;
 const input = { border,background:'#0D0E0C',color:'#F5F2EA',width:'100%',boxSizing:'border-box' as const,padding:6,fontSize:12 };
 type Props = { cfg:DietConfig; setCfg:Dispatch<SetStateAction<DietConfig>> };
 export const fastHatch = 'repeating-linear-gradient(135deg,rgba(199,216,163,.10),rgba(199,216,163,.10) 5px,transparent 5px,transparent 10px)';
@@ -13,11 +18,11 @@ export function DietFastingControls({ cfg,setCfg }: Props) {
   const change = (patch: Partial<typeof f>) => setCfg(c => ({ ...c,fasting:{ ...(c.fasting || defaultFasting()),...patch } }));
   const length = f.fullDay ? 24 : ((Number(f.end.slice(0,2))*60+Number(f.end.slice(3)) - Number(f.start.slice(0,2))*60-Number(f.start.slice(3))+1440)%1440)/60;
   return <div aria-label="Fasting settings" style={{ border,padding:12,marginBottom:14 }}>
-    <div style={{color:acid,fontSize:11,marginBottom:8}}>Fasting schedule</div>
-    <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>{FASTING_TYPES.map(t => <button type="button" key={t.id} aria-pressed={f.type === t.id} style={{...button,color:f.type===t.id?acid:undefined}} onClick={() => change({type:t.id,...(t.id==='daniel'?{fullDay:false}:{})})}>{t.label}</button>)}</div>
+    <div style={{color:acid,fontSize:11,marginBottom:8,display:'flex',alignItems:'center',gap:6}}>{ico(Hourglass)}Fasting schedule</div>
+    <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>{FASTING_TYPES.map(t => <button type="button" key={t.id} aria-pressed={f.type === t.id} style={{...button,display:'inline-flex',alignItems:'center',gap:5,color:f.type===t.id?acid:undefined}} onClick={() => change({type:t.id,...(t.id==='daniel'?{fullDay:false}:{})})}>{FASTING_ICON[t.id] && ico(FASTING_ICON[t.id])}{t.label}</button>)}</div>
     {f.type !== 'none' && <>
       {f.type !== 'daniel' && <>
-        <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap',marginTop:12}}>{[16,18,20].map(hours => <button type="button" key={hours} aria-pressed={!f.fullDay && length===hours} style={button} onClick={() => change({start:'20:00',end:clock((20*60+hours*60)%1440),fullDay:false})}>{hours}:{24-hours}</button>)}
+        <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap',marginTop:12}}>{[16,18,20].map(hours => <button type="button" key={hours} aria-pressed={!f.fullDay && length===hours} style={{...button,display:'inline-flex',alignItems:'center',gap:5}} onClick={() => change({start:'20:00',end:clock((20*60+hours*60)%1440),fullDay:false})}>{ico(Clock,11)}{hours}:{24-hours}</button>)}
           <label style={{fontSize:12}}><input type="checkbox" checked={!!f.fullDay} onChange={e => change({fullDay:e.target.checked})} /> Full-day fast (24h)</label>
           <span style={{fontSize:11,color:muted}}>{length}h fasting · {24-length}h eating window</span>
         </div>
@@ -49,11 +54,11 @@ export function WeeklySupplementRows({ cfg,setCfg,accessToken,periodId }: Props 
   const selected = editing ? supplementCell(cfg,editing.day,editing.period) : null;
   return <>
     {SUPPLEMENT_PERIODS.filter(p=>!periodId||p.id===periodId).map(period => <Fragment key={period.id}>
-      <div style={{fontSize:11,color:acid,alignSelf:'center'}}>{period.label} supplements</div>
+      <div style={{fontSize:11,color:acid,alignSelf:'center',display:'flex',alignItems:'center',gap:6}}>{ico(Pill)}{period.label} supplements</div>
       {WEEK.map(w => { const cell=supplementCell(cfg,w.day,period.id);return <div key={w.day} aria-label={`${w.short} ${period.id} supplements`} style={{border,padding:8,minWidth:0}}>
         {cell.items.map((p,i)=><div key={i} style={{fontSize:11,marginBottom:5,overflowWrap:'anywhere'}}>{typeof p==='string'?p:p.name}</div>)}
         <label style={{fontSize:10,color:muted}}>Time<input type="time" aria-label={`${w.short} ${period.id} supplement time`} value={cell.time} style={input} onChange={e=>update(w.day,period.id,{time:e.target.value})} /></label>
-        <button type="button" aria-label={`Edit ${w.short} ${period.id} supplements`} style={{...button,marginTop:6,fontSize:10}} onClick={()=>setEditing({day:w.day,period:period.id})}>{cell.items.length?'Edit supplements':'+ Supplement'}</button>
+        <button type="button" aria-label={`Edit ${w.short} ${period.id} supplements`} style={{...addTag,marginTop:6}} onClick={()=>setEditing({day:w.day,period:period.id})}>{ico(Pill,11)}{cell.items.length?'Edit supplements':'Supplement'}</button>
       </div>; })}
     </Fragment>)}
     {editing && selected && <div style={{gridColumn:'1 / -1',border,padding:14}}>
