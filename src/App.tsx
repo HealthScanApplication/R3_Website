@@ -9,7 +9,7 @@ import { queryClient } from './lib/queryClient';
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { DesignSystemProvider } from "./contexts/DesignSystemContext";
 import { PageRenderer } from "./components/PageRenderer";
-import { Header } from "./components/Header";
+import { Header, RoutineMark } from "./components/Header";
 import { Footer } from "./components/Footer";
 import { EmailConfirmationBanner } from "./components/EmailConfirmationBanner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -29,17 +29,30 @@ import {
   isRefreshTokenError 
 } from "./utils/refreshTokenRecovery";
 
-// Loading screen component
-function LoadingScreen() {
+// Loading screen: a flipbook of black-and-white photos from the content library, cutting frame to frame, under the
+// ROUTINE³ masthead mark. Only frames that have loaded are shown, so it never flashes a blank; reduced motion holds
+// the first frame.
+const LOADER_FRAMES = ['11-morning-routine', '08-daily-movement', '10-healthy-eating', '04-stress-and-calm', '09-hydration', '13-focus', '12-evening-reset', '20-body-mind-soul'].map((f) => `/images/content/${f}.webp`);
+export function LoadingScreen() {
+  const guardian = /^\/(guardians|guides?)(\/|$)/.test(window.location.pathname);
+  const [ready, setReady] = useState<string[]>([]);
+  const [frame, setFrame] = useState(0);
+  useEffect(() => {
+    let live = true;
+    LOADER_FRAMES.forEach((src) => { const img = new Image(); img.onload = () => { if (live) setReady((r) => (r.includes(src) ? r : LOADER_FRAMES.filter((f) => f === src || r.includes(f)))); }; img.src = src; });
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const t = still ? 0 : window.setInterval(() => setFrame((n) => n + 1), 420);
+    return () => { live = false; if (t) window.clearInterval(t); };
+  }, []);
+  const src = ready.length ? ready[frame % ready.length] : null;
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100">
-      <div className="text-center">
-        <div className="w-16 h-16 border-4 border-[var(--healthscan-green)] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-        <h2 className="text-xl font-semibold text-gray-800">
-          Loading ROUTINE³...
-        </h2>
-        <p className="text-gray-600 mt-2">
-          Preparing your health dashboard
+    <div role="status" aria-live="polite" style={{ position: 'relative', overflow: 'hidden', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#16140F', color: '#F4F1EA', padding: 24 }}>
+      {src && <img key={src} src={src} alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%', filter: 'grayscale(1) contrast(1.08) brightness(0.92)' }} />}
+      <span aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'radial-gradient(60% 50% at 50% 50%, rgba(22,20,15,0.55), rgba(22,20,15,0.2))' }} />
+      <div style={{ position: 'relative', display: 'grid', justifyItems: 'center', gap: 14 }}>
+        <RoutineMark size={32} textColor="#F4F1EA" hairline="#F4F1EA" suffix={guardian ? 'Guardians' : ''} />
+        <p style={{ margin: 0, color: 'rgba(244,241,234,0.78)', fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase' }}>
+          {guardian ? 'Opening your workspace' : 'Loading'}
         </p>
       </div>
     </div>

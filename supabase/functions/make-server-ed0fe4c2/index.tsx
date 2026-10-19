@@ -628,6 +628,73 @@ Rules: use whole, minimally processed foods. Every ingredient needs a real quant
 
 // Pasted free text (e.g. a ceremony-prep email) → event-anchored Protocol plan. Offsets are days
 // relative to the event (0 = event day), so the web client dates them and links catalog records.
+// Guardian brand brief: voice, visual language, words to use / avoid, drafted from the brand's own details.
+// Prefers ANTHROPIC_API_KEY (Claude), falls back to OPENAI_API_KEY; the client writes an offline draft when
+// this returns an error, so no key ≠ no feature.
+app.post('/make-server-ed0fe4c2/guides/brand-brief', async (c) => {
+  try {
+    const accessToken = c.req.header('Authorization')?.replace('Bearer ', '')
+    if (!accessToken) return c.json({ error: 'Sign in to draft a brand brief' }, 401)
+    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken)
+    if (authError || !user) return c.json({ error: 'Invalid session' }, 401)
+    const body = await c.req.json()
+    const clip = (v: unknown, n = 400) => (typeof v === 'string' ? v.trim().slice(0, n) : '')
+    const name = clip(body.name, 80) || 'this brand'
+    const tags = Array.isArray(body.tags) ? body.tags.map((t: unknown) => clip(t, 40)).filter(Boolean).slice(0, 10) : []
+    const current = body.current && typeof body.current === 'object' ? body.current : {}
+    const palette = body.ctaMode === 'mono' ? `monochrome (${body.mono === 'white_on_black' ? 'white on black' : 'black on white'})` : `brand colours ${clip(body.primary, 7)} and ${clip(body.secondary, 7)}`
+    const prompt = `You write brand briefs for wellness Guardians (coaches and practitioners) who publish routines, recipes and offers on ROUTINE³.
+
+Brand: ${name}
+About: ${clip(body.about, 600) || '(not given)'}
+Expertise: ${tags.join(', ') || '(not given)'}
+Audience: ${clip(body.audience, 120) || 'everyone'}
+Typeface: ${clip(body.font, 40)}. Buttons: ${palette}.
+Current notes (keep what is specific and good): voice="${clip(current.voice)}" visual="${clip(current.visual)}" words="${clip(current.words)}" avoid="${clip(current.avoid)}"
+
+Return STRICT JSON: {"brief":{"voice":"...","visual":"...","words":"...","avoid":"..."}}
+- voice: 2–3 sentences on tone and personality, written so a copywriter can follow it.
+- visual: 2–3 sentences of visual language for photography/video generators: light, setting, people, colour, composition, mood. Use the palette and typeface above.
+- words: up to 10 comma-separated words or short phrases the brand uses.
+- avoid: comma-separated words, claims and styles to avoid. Always include health claims such as cure, detox, miracle.
+Plain English, no hype, no medical claims, no emojis.`
+    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
+    const openaiKey = Deno.env.get('OPENAI_API_KEY')
+    let raw = ''
+    if (anthropicKey) {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 900, messages: [{ role: 'user', content: prompt }] }),
+      })
+      const j = await r.json()
+      if (!r.ok) return c.json({ error: `Anthropic: ${j?.error?.message || r.status}` }, 502)
+      raw = j?.content?.[0]?.text || ''
+    } else if (openaiKey) {
+      const r = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${openaiKey}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'gpt-4o-mini', response_format: { type: 'json_object' }, temperature: 0.5, messages: [{ role: 'user', content: prompt }] }),
+      })
+      const j = await r.json()
+      if (!r.ok) return c.json({ error: `OpenAI: ${j?.error?.message || r.status}` }, 502)
+      raw = j?.choices?.[0]?.message?.content || ''
+    } else {
+      return c.json({ error: 'AI brand brief is not configured' }, 501)
+    }
+    const text = raw.replace(/^```(json)?/m, '').replace(/```\s*$/m, '').trim()
+    const parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1))
+    const b = parsed?.brief || {}
+    const brief = { voice: clip(b.voice, 600), visual: clip(b.visual, 600), words: clip(b.words, 300), avoid: clip(b.avoid, 300) }
+    // An incomplete answer is a failure, so the client falls back to its offline draft instead of blank fields.
+    if (!brief.voice || !brief.visual || !brief.words || !brief.avoid) return c.json({ error: 'AI returned an incomplete brand brief' }, 502)
+    return c.json({ brief })
+  } catch (error) {
+    console.error('brand-brief error:', error)
+    return c.json({ error: 'Could not draft the brand brief' }, 500)
+  }
+})
+
 app.post('/make-server-ed0fe4c2/guides/plan-event-protocol', async (c) => {
   try {
     const accessToken = c.req.header('Authorization')?.replace('Bearer ', '')

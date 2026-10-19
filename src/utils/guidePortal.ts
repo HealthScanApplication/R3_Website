@@ -1,5 +1,6 @@
 import { getSupabaseClient } from './supabase/client';
 import { projectId, publicAnonKey } from './supabase/info';
+import { LIBRARY_AUDIO_MIME_TYPES, type GuideLibraryKind, type GuideLibraryMetadata } from './guideLibrarySources';
 
 export type GuideStatus = 'draft' | 'submitted' | 'approved' | 'paused';
 
@@ -94,7 +95,7 @@ export interface GuideBrand {
   is_primary: boolean;
 }
 
-export type GuideLibraryKind = 'pdf' | 'url' | 'transcript';
+export type { GuideLibraryKind, GuideLibraryMetadata };
 
 export interface GuideLibraryFolder {
   id: string;
@@ -113,6 +114,8 @@ export interface GuideLibraryItem {
   source_url: string | null;
   file_path: string | null;
   transcript: string | null;
+  /** Book, podcast, paper and audio details; empty for older kinds. */
+  metadata?: GuideLibraryMetadata | null;
   created_at: string;
   updated_at: string;
 }
@@ -129,12 +132,14 @@ export interface ImportedGuideProfile {
 }
 
 export async function uploadGuideImage(userId: string, file: File): Promise<string> {
-  const isImage = /^image\/(?:jpeg|png|webp)$/.test(file.type);
+  const isGif = file.type === 'image/gif';
+  const isImage = isGif || /^image\/(?:jpeg|png|webp)$/.test(file.type);
   const isVideo = /^video\/(?:mp4|webm)$/.test(file.type);
-  if (!isImage && !isVideo) throw new Error('Choose a JPG, PNG, WebP, MP4, or WebM file.');
-  const sizeLimit = isVideo ? 25 : 8;
-  if (file.size > sizeLimit * 1024 * 1024) throw new Error(`${isVideo ? 'Video' : 'Image'} must be smaller than ${sizeLimit} MB.`);
-  const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : file.type === 'video/mp4' ? 'mp4' : file.type === 'video/webm' ? 'webm' : 'jpg';
+  if (!isImage && !isVideo) throw new Error('Choose a JPG, PNG, WebP, GIF, MP4, or WebM file.');
+  // Animated GIFs run larger than stills; videos and GIFs share the bucket's 25 MB ceiling.
+  const sizeLimit = isVideo ? 25 : isGif ? 15 : 8;
+  if (file.size > sizeLimit * 1024 * 1024) throw new Error(`${isVideo ? 'Video' : isGif ? 'GIF' : 'Image'} must be smaller than ${sizeLimit} MB.`);
+  const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : isGif ? 'gif' : file.type === 'video/mp4' ? 'mp4' : file.type === 'video/webm' ? 'webm' : 'jpg';
   const path = `${userId}/profile-${Date.now()}.${extension}`;
   const { error } = await db().storage.from('guide-assets').upload(path, file, { contentType: file.type, upsert: false });
   if (error) throw error;
@@ -147,6 +152,16 @@ export async function uploadGuideFile(userId: string, file: File): Promise<strin
   if (file.size > 50 * 1024 * 1024) throw new Error('File must be smaller than 50 MB.');
   const extension = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'pdf';
   const path = `${userId}/offer-${Date.now()}.${extension}`;
+  const { error } = await db().storage.from('guide-files').upload(path, file, { contentType: file.type, upsert: false });
+  if (error) throw error;
+  return path;
+}
+
+export async function uploadGuideLibraryAudio(userId: string, file: File): Promise<string> {
+  if (!LIBRARY_AUDIO_MIME_TYPES.includes(file.type)) throw new Error('Choose an MP3, M4A, WAV, AAC, OGG or WebM audio file.');
+  if (file.size > 50 * 1024 * 1024) throw new Error('Audio must be smaller than 50 MB.');
+  const extension = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'mp3';
+  const path = `${userId}/library-${Date.now()}.${extension}`;
   const { error } = await db().storage.from('guide-files').upload(path, file, { contentType: file.type, upsert: false });
   if (error) throw error;
   return path;
@@ -305,6 +320,13 @@ export async function createGuideValueRamp(guideId: string, ramp: Pick<GuideValu
   return data as GuideValueRamp;
 }
 
+/** The Guardian's saved brands (personal first, then business brands), each with its own brand kit in social_links. */
+export async function listGuideBrands(guideId: string): Promise<GuideBrand[]> {
+  const { data, error } = await db().from('guide_brands').select('*').eq('guide_id', guideId);
+  if (error) throw error;
+  return ((data || []) as GuideBrand[]).sort((a, b) => Number(b.kind === 'personal') - Number(a.kind === 'personal') || a.name.localeCompare(b.name));
+}
+
 export async function replaceGuideBrands(guideId: string, brands: Omit<GuideBrand, 'id' | 'guide_id'>[]): Promise<GuideBrand[]> {
   const { error: deleteError } = await db().from('guide_brands').delete().eq('guide_id', guideId);
   if (deleteError) throw deleteError;
@@ -365,8 +387,10 @@ export async function listGuideLibraryItems(guideId: string): Promise<GuideLibra
   return (data || []) as GuideLibraryItem[];
 }
 
-export async function createGuideLibraryItem(guideId: string, item: Pick<GuideLibraryItem, 'folder_id' | 'kind' | 'title' | 'source_url' | 'file_path' | 'transcript'>): Promise<GuideLibraryItem> {
-  const { data, error } = await db().from('guide_library_items').insert({ guide_id: guideId, ...item }).select().single();
+export async function createGuideLibraryItem(guideId: string, item: Pick<GuideLibraryItem, 'folder_id' | 'kind' | 'title' | 'source_url' | 'file_path' | 'transcript' | 'metadata'>): Promise<GuideLibraryItem> {
+  // Older kinds leave metadata out so they keep saving before the metadata column exists.
+  const { metadata, ...row } = item;
+  const { data, error } = await db().from('guide_library_items').insert({ guide_id: guideId, ...row, ...(metadata && Object.keys(metadata).length ? { metadata } : {}) }).select().single();
   if (error) throw error;
   return data as GuideLibraryItem;
 }
@@ -498,4 +522,75 @@ export async function listPersonalProtocolPeople(userId: string): Promise<Map<st
     const person = row.builder_config?.person || {};
     return [row.id as string, { name: String(person.name || 'Personal'), imageUrl: person.image_url || person.avatar_url || null }];
   }));
+}
+
+/** A Guardian's own Shopify product (guide_products). Sold on the Guardian's checkout; see docs/guardian-shopify-commerce.md. */
+export interface GuideProduct {
+  id: string;
+  guide_id: string;
+  shop_domain: string;
+  myshopify_domain: string | null;
+  product_handle: string;
+  variant_id: string | null;
+  variant_title: string | null;
+  title: string;
+  description: string | null;
+  image_url: string | null;
+  price_cents: number | null;
+  currency: string;
+  discount_code: string | null;
+  commission_percent: number | null;
+  status: 'draft' | 'published';
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  /** Protocols the product is shown on. */
+  protocol_ids: string[];
+}
+
+export type GuideProductInput = Omit<GuideProduct, 'id' | 'guide_id' | 'commission_percent' | 'created_at' | 'updated_at' | 'protocol_ids'>;
+
+// A missing table answers 404 with an empty body, so keep the status for the UI's message.
+function productsError(error: any, status: number): Error & { code?: string; status?: number } {
+  return Object.assign(new Error(error?.message || (status === 404 ? 'guide_products is not available yet' : `Products request failed (${status})`)), { code: error?.code || (status === 404 ? 'PGRST205' : undefined), status });
+}
+
+function withProtocolIds(row: any): GuideProduct {
+  const { guide_product_protocols: links, ...product } = row;
+  return { ...product, protocol_ids: ((links || []) as { protocol_id: string; position: number }[]).sort((a, b) => a.position - b.position).map((link) => link.protocol_id) } as GuideProduct;
+}
+
+export async function listGuideProducts(guideId: string): Promise<GuideProduct[]> {
+  const { data, error, status } = await db().from('guide_products').select('*, guide_product_protocols(protocol_id, position)').eq('guide_id', guideId).order('sort_order').order('created_at', { ascending: false });
+  if (error) throw productsError(error, status);
+  return (data || []).map(withProtocolIds);
+}
+
+/** Published products for a Guardian's public site. RLS also requires the Guardian to be approved. */
+export async function listPublicGuideProducts(guideId: string): Promise<GuideProduct[]> {
+  const { data, error, status } = await db().from('guide_products').select('*, guide_product_protocols(protocol_id, position)').eq('guide_id', guideId).eq('status', 'published').order('sort_order').limit(60);
+  if (error) throw productsError(error, status);
+  return (data || []).map(withProtocolIds);
+}
+
+export async function saveGuideProduct(guideId: string, product: GuideProductInput & { id?: string }, protocolIds: string[]): Promise<GuideProduct> {
+  const { id, ...row } = product;
+  const query = id
+    ? db().from('guide_products').update(row).eq('id', id).eq('guide_id', guideId)
+    : db().from('guide_products').insert({ guide_id: guideId, ...row });
+  const { data, error, status } = await query.select().single();
+  if (error) throw productsError(error, status);
+  // Replace the Protocol links so their order follows the Guardian's selection.
+  const { error: clearError, status: clearStatus } = await db().from('guide_product_protocols').delete().eq('product_id', data.id);
+  if (clearError) throw productsError(clearError, clearStatus);
+  if (protocolIds.length) {
+    const { error: linkError, status: linkStatus } = await db().from('guide_product_protocols').insert(protocolIds.map((protocol_id, position) => ({ product_id: data.id, protocol_id, position })));
+    if (linkError) throw productsError(linkError, linkStatus);
+  }
+  return { ...(data as Omit<GuideProduct, 'protocol_ids'>), protocol_ids: protocolIds };
+}
+
+export async function deleteGuideProduct(id: string): Promise<void> {
+  const { error, status } = await db().from('guide_products').delete().eq('id', id);
+  if (error) throw productsError(error, status);
 }

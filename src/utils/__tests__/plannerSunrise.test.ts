@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { plannerWeek, sunriseForDate, searchPlannerCities, nearestPlannerCity } from '../plannerSunrise';
 const warsaw = { name:'Warsaw', country:'Poland', latitude:52.23, longitude:21.01, timezone:'Europe/Warsaw' };
 it('uses the chosen city calendar date, including across the international date line', () => {
@@ -17,4 +17,20 @@ it('finds cities locally and resolves approximate device coordinates to a named 
   expect(cities.some(c=>c.name==='Warsaw' && c.timezone==='Europe/Warsaw')).toBe(true);
   expect((await nearestPlannerCity(52.23,21.01)).timezone).toBe('Europe/Warsaw');
   expect(await searchPlannerCities('')).toEqual([]);
+});
+
+it('defaults the home city to the largest city in a timezone, and prefers the one chosen on this device', async () => {
+  const { cityForTimezone, defaultHomeCity, saveHomeCity } = await import('../plannerSunrise');
+  expect((await cityForTimezone('Europe/London'))?.name).toBe('London');
+  expect((await cityForTimezone('America/New_York'))?.name).toBe('New York');
+  expect(await cityForTimezone('Not/AZone')).toBeNull();
+  const store = new Map<string, string>();
+  vi.stubGlobal('localStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => { store.set(k, v); }, removeItem: (k: string) => { store.delete(k); } });
+  try {
+    expect((await defaultHomeCity('Europe/Lisbon'))?.name).toBe('Lisbon');
+    saveHomeCity({ name: 'Warsaw', country: 'Poland', latitude: 52.23, longitude: 21.01, timezone: 'Europe/Warsaw' });
+    expect((await defaultHomeCity('Europe/Lisbon'))?.name).toBe('Warsaw');
+    saveHomeCity();
+    expect((await defaultHomeCity('Europe/Lisbon'))?.name).toBe('Lisbon');
+  } finally { vi.unstubAllGlobals(); }
 });
