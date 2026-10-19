@@ -54,8 +54,8 @@ export function ContentBuilder({ profile, offers, protocols, recipes }: { profil
       const rest = offers.filter((o) => o.id !== chosen?.id);
       return [chosen, ...rest].filter(Boolean).map((o) => ({ title: o!.title, free: o!.access_model !== 'paid', price: o!.access_model === 'paid' ? money(o!.price_cents, o!.currency) : undefined, description: o!.description || undefined }));
     }
-    if (source === 'protocol') { const p = protocols.find((x) => x.id === picked?.id); return p ? [{ title: p.name, free: !!p.is_public, description: p.description || undefined }] : []; }
-    if (source === 'recipe') { const r = recipes.find((x) => x.id === picked?.id); return r ? [{ title: r.title, free: true, description: r.description || undefined }] : []; }
+    if (source === 'protocol') { const p = protocols.find((x) => x.id === picked?.id); return p ? [{ title: p.name, free: !!p.is_public, description: p.description || undefined, days: p.total_days }] : []; }
+    if (source === 'recipe') { const r = recipes.find((x) => x.id === picked?.id); return r ? [{ title: r.title, free: true, description: r.description || undefined, ingredients: r.ingredients?.length || null, minutes: (r.prep_time || 0) + (r.cook_time || 0) || null }] : []; }
     return [{ title: `${problem} with ${profile.display_name}`, free: true }];
   }, [source, picked?.id, offers, protocols, recipes, problem, profile.display_name]);
 
@@ -147,7 +147,7 @@ export function ContentBuilder({ profile, offers, protocols, recipes }: { profil
         </div>}
       </div>
     </div>
-    <ContentStudio key={`${source}-${picked?.id || ''}`} creator={profile.display_name} avatar={profile.avatar_url} audience={audience} problem={problem} siteUrl={siteUrl} pageUrl={pageUrl} offers={studioOffers} heading={picked && source !== 'none' ? `Create posts about ${picked.name}` : 'Create posts about your topic'} brand={postBrand} />
-    <VideoStudio creator={profile.display_name} avatar={profile.avatar_url} audience={audience} problem={problem} focusKind={focus?.kind} offer={source !== 'none' ? studioOffers[0]?.title : undefined} free={studioOffers[0]?.free} siteUrl={siteUrl} pageUrl={pageUrl} brandName={videoBrand?.name} kit={videoBrand?.kit} brandId={brandId} postBrand={postBrand} />
+    <ContentStudio key={`${source}-${picked?.id || ''}`} creator={profile.display_name} avatar={profile.avatar_url} audience={audience} problem={problem} siteUrl={siteUrl} pageUrl={pageUrl} offers={studioOffers} kind={source} heading={picked && source !== 'none' ? `Create posts about ${picked.name}` : 'Create posts about your topic'} brand={postBrand} />
+    <VideoStudio creator={profile.display_name} avatar={profile.avatar_url} audience={audience} problem={problem} focusKind={focus?.kind} offer={source !== 'none' ? studioOffers[0]?.title : undefined} free={studioOffers[0]?.free} kind={source} copyOffer={source !== 'none' ? studioOffers[0] : null} siteUrl={siteUrl} pageUrl={pageUrl} brandName={videoBrand?.name} kit={videoBrand?.kit} brandId={brandId} postBrand={postBrand} />
   </div>;
 }

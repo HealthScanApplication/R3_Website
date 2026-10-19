@@ -14,6 +14,7 @@ import { draftVideoScript, parseScript, scriptPrompt, scriptText } from '../../u
 import { OVERLAY_FORMATS, recordWithOverlay } from '../../utils/videoOverlay';
 import { buildVideoPrompt, VIDEO_ASPECTS, VIDEO_PROMPT_MAX, type VideoAspect } from '../../utils/videoPrompt';
 import type { BrandKit } from '../../utils/brandKit';
+import { postCopy, type CopyKind, type CopyOffer } from '../../utils/postCopy';
 import { connectHiggsfield, costCopy, startHiggsfieldLogin, takeLoginOutcome, disconnectHiggsfield, estimateVideo, generateVideo, higgsfieldStatus, isFinished, listVideos, pollDelay, pollVideo, progressOf, type HiggsfieldStatus, type VideoEstimate, type VideoJob } from '../../utils/higgsfieldVideo';
 
 const ink = '#F5F2EA', muted = '#B8B6AF', line = 'rgba(245,242,234,0.24)', acid = '#C7D8A3', warn = '#E8B07A';
@@ -32,7 +33,8 @@ function useDraft(suggested: string): [string, (v: string) => void, boolean, () 
 }
 const saveBlob = (blob: Blob, name: string) => { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); window.setTimeout(() => URL.revokeObjectURL(url), 10000); };
 
-export function VideoStudio({ creator, avatar = null, audience, problem, focusKind, offer, free, siteUrl = '', pageUrl, brandName, kit = null, brandId = null, postBrand = null }: {
+export function VideoStudio({ creator, avatar = null, audience, problem, focusKind, offer, free, siteUrl = '', pageUrl, brandName, kit = null, brandId = null, postBrand = null, kind, copyOffer = null }: {
+  kind?: CopyKind; copyOffer?: CopyOffer | null;
   creator: string; avatar?: string | null; audience: string; problem: string; focusKind?: 'problem' | 'goal'; offer?: string; free?: boolean; siteUrl?: string; /** The Guardian's page when siteUrl is a routine link: keeps the @handle. */ pageUrl?: string;
   brandName?: string; kit?: BrandKit | null; brandId?: string | null; postBrand?: PostBrand | null;
 }) {
@@ -49,14 +51,16 @@ export function VideoStudio({ creator, avatar = null, audience, problem, focusKi
   const [duration, setDuration] = useState(5);
   const suggested = useMemo(() => buildVideoPrompt({ audience, problem, offer, brandName: brandName || creator, kit, aspect }), [audience, problem, offer, brandName, creator, kit, aspect]);
   const [prompt, setPrompt, edited, resetPrompt] = useDraft(suggested);
-  // Script in the brand's voice, then the static text layer drafted from it (hook → headline, line → subline, CTA → button).
+  // Script in the brand's voice. The static text layer uses the same short post copy as the Content studio
+  // (≤5-word headline, ≤8-word subline) rather than the script's longer spoken lines.
   const scriptBrief = { audience, focus: problem, focusKind, offer, free, creator, brandName: brandName || creator, kit, format: `${aspect} video` };
   const draft = useMemo(() => draftVideoScript(scriptBrief), [audience, problem, focusKind, offer, free, creator, brandName, kit]); // eslint-disable-line react-hooks/exhaustive-deps
   const [script, setScript, scriptEdited, resetScript] = useDraft(scriptText(draft));
   const beats = parseScript(script);
-  const [headline, setHeadline, headEdited, resetHead] = useDraft(beats.hook);
-  const [subline, setSubline, subEdited, resetSub] = useDraft(beats.lines[0] || '');
-  const [cta, setCta, ctaEdited, resetCta] = useDraft((beats.cta || '').replace(/\s+at the link in bio\.?$|\.$/i, ''));
+  const short = useMemo(() => postCopy({ audience, problem, offer: copyOffer || (offer ? { title: offer, free } : null), kind: kind || (offer ? 'offer' : 'none') }), [audience, problem, offer, free, kind, copyOffer]);
+  const [headline, setHeadline, headEdited, resetHead] = useDraft(short.headline || beats.hook);
+  const [subline, setSubline, subEdited, resetSub] = useDraft(short.subline || beats.lines[0] || '');
+  const [cta, setCta, ctaEdited, resetCta] = useDraft(short.cta || (beats.cta || '').replace(/\s+at the link in bio\.?$|\.$/i, ''));
   const [showText, setShowText] = useState(true);
   const [textStyle, setTextStyle] = useState<TextStyleId>('editorial');
   const [position, setPosition] = useState<TextPosition>('bottom-left');
