@@ -721,7 +721,7 @@ export function reviewDiet(cfg: DietConfig): Review {
       if (!mealIsFasting(cfg,day,slot.id)) return [];
       const meals = cfg.plan[key] ? [cfg.plan[key]!.name] : [];
       const drinks = mealDrinks(cfg,key).filter(d => !fastingDrinkAllowed(cfg,day,slot.id,d)).map(d => typeof d === 'string' ? d : d.name);
-      return [...meals,...drinks].map(item => ({ rule:'Fasting window',item,where:`${dayNameFor(day)} ${slot.label}`,reason:'Scheduled during a fasting period. Kept for review; move or remove it if required.' }));
+      return [...meals,...drinks].map(item => ({ rule:'Fasting window',item,where:`${WEEK.find(w=>w.day===day)?.short ?? `Day ${day}`} ${slot.label}`,reason:'Scheduled during a fasting period. Kept for review; move or remove it if required.' }));
     })),
     ...findConflicts(ruleRows(weekRules, 'week Meal checklist'), items),
     ...slots.flatMap((slot) => findConflicts(ruleRows(splitRules(cfg.mealRules?.[slot.id] || []), `${slot.label} checklist`), items.filter((i) => i.where.endsWith(slot.label)))),
