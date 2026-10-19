@@ -8,7 +8,7 @@
  */
 import { Fragment, useEffect, useState, type CSSProperties } from 'react';
 import { AlertTriangle, Dumbbell, Heart, Loader2, Search, Wheat, X } from 'lucide-react';
-import { RECIPE_DIETS, browseIngredients, browseRecipes, listFitnessRoutines, recipeIngredientNames, routineSteps, type CatalogFood, type FitnessRoutine, type RoutineStep } from '../../utils/protocolBuilders';
+import { RECIPE_DIETS, browseIngredients, browseRecipes, listFitnessRoutines, recipeIngredientNames, routinePeriod, routineSteps, type CatalogFood, type FitnessRoutine, type RoutineStep } from '../../utils/protocolBuilders';
 import { ProtocolHomeScreen } from '../mockups/ProtocolHomeScreen';
 import { PhoneFrame } from '../mockups/PhoneFrame';
 import { NUTRIENTS } from '../../utils/recipeNutrients';
@@ -234,6 +234,15 @@ export const ROUTINE_SECTIONS = {
   longevity: { title: 'Longevity protocols', kicker: 'Longevity', categories: ['longevity', 'performance', 'supplements'], copy: 'Longevity and performance routines published in the ROUTINE³ app.' },
 } as const;
 export type RoutineSection = keyof typeof ROUTINE_SECTIONS;
+/** A routine's category as its section name (Fitness, Hygiene, Beauty, Wellness, Detox, Longevity), else the raw category. */
+export function routineCategoryLabel(category: string | null): string | null {
+  const c = (category || '').trim().toLowerCase();
+  if (!c) return null;
+  const hit = (Object.values(ROUTINE_SECTIONS) as Array<{ kicker: string; categories: readonly string[] }>).find((x) => x.categories.includes(c));
+  return hit ? hit.kicker : c.replace(/\b\w/g, (m) => m.toUpperCase());
+}
+/** Description text stored as light markdown ("### The steps …", "**bold**"): paragraphs at each heading, markers removed. */
+export const descriptionParagraphs = (text: string) => text.split(/\s*#{2,}\s*/).map((p) => p.replace(/\*\*(.+?)\*\*/g, '$1').trim()).filter(Boolean);
 
 export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbbell }: { accessToken: string; section?: RoutineSection; Icon?: typeof Dumbbell }) {
   const cfg = ROUTINE_SECTIONS[section];
@@ -262,7 +271,9 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 8 }}>
       {items.map((r) => <Fragment key={r.id}>
         <button type="button" aria-pressed={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)} style={{ textAlign: 'left', border: `1px solid ${open === r.id ? acid : line}`, background: panel, color: ink, padding: 0, cursor: 'pointer', overflow: 'hidden' }}>
-          <div style={{ aspectRatio: '16 / 9', background: r.image ? `url(${r.image}) center/cover` : '#1B1C18' }} />
+          <div style={{ position: 'relative', aspectRatio: '16 / 9', background: r.image ? `url(${r.image}) center/cover` : '#1B1C18' }}>
+            <span style={{ position: 'absolute', top: 6, right: 6, display: 'flex', gap: 4 }}>{([[routineCategoryLabel(r.category), false], [routinePeriod(r), true]] as const).filter(([t]) => t).map(([t, period]) => <span key={String(period)} style={{ background: 'rgba(9,10,8,.82)', color: period ? acid : ink, border: `1px solid ${period ? acid : line}`, borderRadius: 999, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>{t}</span>)}</span>
+          </div>
           <div style={{ padding: '8px 10px 10px' }}><div style={{ fontSize: 13, fontWeight: 600 }}>{r.name}</div><div style={{ color: muted, fontSize: 10, marginTop: 3 }}>{[r.category, ...r.tags.slice(0, 2)].filter(Boolean).join(' · ')}</div></div>
         </button>
         {open === r.id && <div role="region" aria-label={`${r.name} steps`} style={{ gridColumn: '1 / -1', border: `1px solid ${acid}`, background: '#141611', padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 20, alignItems: 'start' }}>
@@ -273,7 +284,7 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
           </div>
           <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 17, fontWeight: 600 }}>{r.name}</div>
-          {r.description && <p style={{ color: muted, fontSize: 12, lineHeight: 1.55, maxWidth: 760 }}>{r.description}</p>}
+          {r.description && descriptionParagraphs(r.description).map((t, k) => <p key={k} style={{ color: muted, fontSize: 12, lineHeight: 1.55, maxWidth: 760, margin: '0 0 8px' }}>{t}</p>)}
           <div style={kicker}>Steps{steps ? ` · ${own.length}` : ''}</div>
           {!steps ? <span style={{ color: muted, fontSize: 11 }}>Loading…</span> : <div style={{ display: 'grid', gap: 10 }}>{partsOfDay(tree.top).map((g) => <section key={g.key} aria-label={g.label}>
             <div style={{ ...kicker, color: g.rules ? warn : muted, margin: '0 0 4px' }}>{g.label} <span style={{ opacity: .7 }}>· {g.steps.length}</span></div>

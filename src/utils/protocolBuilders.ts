@@ -1123,14 +1123,33 @@ export async function browseIngredients(accessToken: string, f: { offset?: numbe
     meta: [['Type', txt(r.category_sub)], ['Season', Array.isArray(r.season) ? r.season.join(', ') : txt(r.season)], ['Origin', Array.isArray(r.origin_region) ? r.origin_region.join(', ') : txt(r.origin_region)]] }));
 }
 
-export interface FitnessRoutine { id: string; name: string; description: string | null; image: string | null; category: string | null; tags: string[] }
+export interface FitnessRoutine { id: string; name: string; description: string | null; image: string | null; category: string | null; tags: string[]; totalDays?: number | null }
+/**
+ * What span a routine covers, for its card tag: a part of the day (Morning, Midday, Evening, Night), a whole Day,
+ * or a Week / N weeks / Month / N days programme. From total_days, then the name, description and tags.
+ */
+export function routinePeriod(r: Pick<FitnessRoutine, 'name' | 'description' | 'tags' | 'totalDays'>): string {
+  const name = r.name || '', all = `${name} ${(r.tags || []).join(' ')} ${r.description || ''}`;
+  if (/\b(morning|am routine|wake|sunrise)\b/i.test(name)) return 'Morning';
+  if (/\b(midday|lunch|afternoon)\b/i.test(name)) return 'Midday';
+  if (/\b(evening|pm routine|wind[- ]down)\b/i.test(name)) return 'Evening';
+  if (/\b(night|bedtime|sleep)\b/i.test(name) && !/\bprotocol\b/i.test(name)) return 'Night';
+  const n = r.totalDays && r.totalDays > 1 ? r.totalDays : null;
+  const span = (days: number) => (days % 30 === 0 || days === 28 || days === 31 ? (days <= 31 ? 'Month' : `${Math.round(days / 30)} months`) : days % 7 === 0 ? (days === 7 ? 'Week' : `${days / 7} weeks`) : `${days} days`);
+  const m = /(\d+)[- ](day|week|month)s?\b/i.exec(all);
+  if (m) { const k = +m[1], u = m[2].toLowerCase(); return u === 'month' ? (k === 1 ? 'Month' : `${k} months`) : u === 'week' ? (k === 1 ? 'Week' : `${k} weeks`) : k === 1 ? 'Day' : span(k); }
+  if (n) return span(n);
+  if (/\b(weekly|week)\b/i.test(name)) return 'Week';
+  if (/\b(monthly|month)\b/i.test(name)) return 'Month';
+  return 'Day';
+}
 /** The app's published fitness routines: catalogue Protocols in fitness categories. */
 export async function listFitnessRoutines(accessToken: string, categories: string[] = ['fitness', 'strength', 'recovery', 'mobility', 'cardio', 'hiit']): Promise<FitnessRoutine[]> {
   // Catalogue categories are not consistently cased ("Beauty", "wellness"), so match case-insensitively.
   const or = categories.map((c) => `category.ilike.${encodeURIComponent(c)}`).join(',');
-  const res = await fetch(`${rest()}/protocols?select=id,name,description,image_url,category,tags&user_id=is.null&is_public=not.is.false&is_active=not.is.false&or=(${or})&order=name`, { headers: headers(accessToken) });
+  const res = await fetch(`${rest()}/protocols?select=id,name,description,image_url,category,tags,total_days&user_id=is.null&is_public=not.is.false&is_active=not.is.false&or=(${or})&order=name`, { headers: headers(accessToken) });
   if (!res.ok) throw new Error(`Could not load fitness routines (${res.status})`);
-  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, description: txt(r.description), image: txt(r.image_url), category: r.category, tags: Array.isArray(r.tags) ? r.tags.map(String) : [] }));
+  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, description: txt(r.description), image: txt(r.image_url), category: r.category, tags: Array.isArray(r.tags) ? r.tags.map(String) : [], totalDays: num(r.total_days) }));
 }
 export interface RoutineStep { id?: string; parentId?: string | null; name: string; time: string | null; group: string | null; day: number | null; kind: string | null; itemType: string | null; scope: string | null; recurrenceType?: string | null; category: string | null; subtype: string | null; minutes: number | null; sets: number | null; reps: number | null; weight: string | null }
 export async function routineSteps(accessToken: string, protocolId: string): Promise<RoutineStep[]> {

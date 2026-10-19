@@ -64,3 +64,18 @@ it('lists every-day steps of a multi-day routine once, before the numbered days,
   ] as any);
   expect(g.map((x) => x.label)).toEqual(['Week rules', 'Every day · Morning', 'Day 1 · Morning', 'Day 2 · Morning']);
 });
+import { routinePeriod } from '../protocolBuilders';
+import { routineCategoryLabel, descriptionParagraphs } from '../../components/guides/CatalogBrowsers';
+it('tags each routine with the span it covers and its section', () => {
+  const p = (name: string, extra: object = {}) => routinePeriod({ name, description: null, tags: [], ...extra });
+  expect(p('K-Beauty • Midday')).toBe('Midday');
+  expect(p('K-Beauty • Evening')).toBe('Evening');
+  expect(p('28-Day Herbal Protocol')).toBe('Month');
+  expect(p('3-Week Herbal Tea Protocol')).toBe('3 weeks');
+  expect(p('Weekly Gut Health Reset')).toBe('Week');
+  expect(p('Half Marathon Training', { description: '12-week half marathon preparation' })).toBe('12 weeks');
+  expect(p('Golden Era Workout')).toBe('Day');
+  expect(routineCategoryLabel('skin & face')).toBe('Beauty');
+  expect(routineCategoryLabel('Strength')).toBe('Fitness');
+  expect(descriptionParagraphs('A reset. ### The steps A mist. **Morning SPF wears off.** Done')).toEqual(['A reset.', 'The steps A mist. Morning SPF wears off. Done']);
+});
