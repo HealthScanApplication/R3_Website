@@ -46,3 +46,7 @@ it('blocks invalid fasting times instead of saving a misleading schedule', () =>
 it('does not silently collapse repeated legacy supplement checklist entries', () => {
   expect(dietSupportItems(cfg({fasting:undefined,supplements:{morning:['Zinc','Zinc']}}))).toHaveLength(2);
 });
+it('names the weekday in a fasting-window conflict', () => {
+  const c = cfg({ timing:{ breakfast:{ anchor:'clock',time:'08:00',offset:0 } } });
+  expect(reviewDiet(c).conflicts.find(x => x.rule === 'Fasting window')?.where).toBe('Mon Breakfast');
+});

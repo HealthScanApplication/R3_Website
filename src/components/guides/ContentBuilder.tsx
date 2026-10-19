@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Clapperboard } from 'lucide-react';
-import { ContentStudio, type StudioOffer } from './ContentStudio';
+import { ContentStudio, type PostBrand, type StudioOffer } from './ContentStudio';
+import { VideoStudio } from './VideoStudio';
 import type { AdminProtocol } from '../../utils/protocolAdmin';
-import type { GuideOffer, GuideProfile, GuideRecipe } from '../../utils/guidePortal';
+import { listGuideBrands, type GuideBrand, type GuideOffer, type GuideProfile, type GuideRecipe } from '../../utils/guidePortal';
+import { brandKitOf, ctaColours } from '../../utils/brandKit';
+import { TargetPicker } from './TargetPicker';
+import { defaultAudience, describeAudience, solutionScore, type Audience, type Focus } from '../../utils/audienceTaxonomy';
 
 // Guardian dark tokens (same values as GuidePortal.tsx).
 const ink = '#F5F2EA';
@@ -30,11 +34,17 @@ export function ContentBuilder({ profile, offers, protocols, recipes }: { profil
   const [touched, setTouched] = useState(false);
   // Offers load after the page opens: default to the first offer unless the Guardian already chose.
   useEffect(() => { if (!touched && offers.length && source === 'none') setSource('offer'); }, [offers.length]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [audience, setAudience] = useState('Everyone');
-  const [problem, setProblem] = useState(profile.specialties?.[0] || 'Wellbeing');
-  const options = source === 'offer' ? offers.map((o) => ({ id: o.id, name: o.title }))
-    : source === 'protocol' ? protocols.map((p) => ({ id: p.id, name: p.name }))
-    : source === 'recipe' ? recipes.map((r) => ({ id: r.id, name: r.title })) : [];
+  // 01 audience → 02 problem or goal → 03 solution: each step narrows the next.
+  const [audienceSel, setAudienceSel] = useState<Audience>(defaultAudience);
+  const [focus, setFocus] = useState<Focus | null>(profile.specialties?.[0] ? { kind: 'goal', area: 'health', label: profile.specialties[0] } : null);
+  const audience = describeAudience(audienceSel);
+  const problem = focus?.label || 'Wellbeing';
+  const all = source === 'offer' ? offers.map((o) => ({ id: o.id, name: o.title, text: `${o.title} ${o.description || ''}` }))
+    : source === 'protocol' ? protocols.map((p) => ({ id: p.id, name: p.name, text: `${p.name} ${p.description || ''}` }))
+    : source === 'recipe' ? recipes.map((r) => ({ id: r.id, name: r.title, text: `${r.title} ${r.description || ''}` })) : [];
+  // Solutions that match the problem/goal (and audience) first; the best match is the default pick.
+  const options = all.map((o) => ({ ...o, score: solutionScore(o.text, focus, audienceSel) })).sort((a, b) => b.score - a.score);
+  const matching = options.filter((o) => o.score > 0);
   const picked = options.find((o) => o.id === pickedId) || options[0] || null;
 
   const studioOffers = useMemo<StudioOffer[]>(() => {
@@ -49,25 +59,58 @@ export function ContentBuilder({ profile, offers, protocols, recipes }: { profil
   }, [source, picked?.id, offers, protocols, recipes, problem, profile.display_name]);
 
   const siteUrl = `/guardians/${profile.slug}`;
+  // Brand look: the R³ template, or any saved brand that has a brand kit (defaults to the primary brand's kit).
+  const [brands, setBrands] = useState<GuideBrand[]>([]);
+  const [brandId, setBrandId] = useState<string | null>(null);
+  useEffect(() => {
+    listGuideBrands(profile.user_id).then((list) => {
+      const kitted = list.filter((b) => b.social_links?.brand_font);
+      setBrands(kitted);
+      const primary = kitted.find((b) => b.is_primary) || kitted.find((b) => b.kind === 'personal');
+      if (primary?.id) setBrandId((current) => current ?? primary.id!);
+    }).catch(() => setBrands([]));
+  }, [profile.user_id]);
+  const postBrand = useMemo<PostBrand | null>(() => {
+    const b = brands.find((x) => x.id === brandId);
+    if (!b) return null;
+    const kit = brandKitOf(b.social_links);
+    return { name: b.name, font: kit.font, cta: ctaColours(kit).primary, logo: b.logo_url, kit };
+  }, [brands, brandId]);
+  // The same brand kit (and its brief: visual language, palette) steers the video prompt.
+  const videoBrand = useMemo(() => {
+    const b = brands.find((x) => x.id === brandId);
+    return b ? { name: b.name, kit: brandKitOf(b.social_links) } : null;
+  }, [brands, brandId]);
 
   return <div>
     <div style={{ display: 'flex', gap: 18, alignItems: 'center', marginBottom: 26 }}>
       <div style={{ width: 64, height: 64, border: `1px solid ${line}`, display: 'grid', placeItems: 'center' }}><Clapperboard size={26} color={acid} /></div>
-      <div><div style={{ ...label, color: acid, margin: 0 }}>Build</div><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 300, margin: '6px 0 4px' }}>Content</h1><p style={{ color: muted, margin: 0, fontSize: 13, maxWidth: 640, lineHeight: 1.5 }}>Create stories, posts and thumbnails in the R³ template, about an offer, a Protocol, a recipe, or just your topic.</p></div>
+      <div><div style={{ ...label, color: acid, margin: 0 }}>Build</div><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 300, margin: '6px 0 4px' }}>Content builder</h1><p style={{ color: muted, margin: 0, fontSize: 13, maxWidth: 640, lineHeight: 1.5 }}>Create stories, posts, thumbnails and short videos about an offer, a Protocol, a recipe, or just your topic.</p></div>
     </div>
     <div style={{ border: `1px solid ${line}`, background: panel, padding: 16, marginBottom: 14, display: 'grid', gap: 14 }}>
-      <div><span style={label}>Post about</span><div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-        {([['offer', `Offer (${offers.length})`], ['protocol', `Protocol (${protocols.length})`], ['recipe', `Recipe (${recipes.length})`], ['none', 'Nothing specific']] as const).map(([id, text]) => <button key={id} type="button" onClick={() => { setTouched(true); setSource(id); setPickedId(''); }} style={chip(source === id)}>{text}</button>)}
-      </div></div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
-        {source !== 'none' && <label><span style={label}>{source === 'offer' ? 'Offer' : source === 'protocol' ? 'Protocol' : 'Recipe'}</span>
-          {options.length ? <select style={input} value={picked?.id || ''} onChange={(e) => setPickedId(e.target.value)}>{options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select>
-            : <div style={{ color: muted, fontSize: 12, paddingTop: 10 }}>None yet. Create one first, or pick “Nothing specific”.</div>}
-        </label>}
-        <label><span style={label}>Audience</span><input style={input} value={audience} onChange={(e) => setAudience(e.target.value)} /></label>
-        <label><span style={label}>Problem or goal</span><input style={input} value={problem} onChange={(e) => setProblem(e.target.value)} /></label>
+      <TargetPicker audience={audienceSel} onAudience={setAudienceSel} focus={focus} onFocus={(f) => { setFocus(f); setPickedId(''); }} />
+      <div style={{ borderTop: `1px solid ${line}`, paddingTop: 14 }}>
+        <div style={{ ...label, color: acid, marginBottom: 10 }}>03 · Solution</div>
+        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 12 }}>
+          {([['offer', `Offer (${offers.length})`], ['protocol', `Protocol (${protocols.length})`], ['recipe', `Recipe (${recipes.length})`], ['none', 'Nothing specific']] as const).map(([id, text]) => <button key={id} type="button" onClick={() => { setTouched(true); setSource(id); setPickedId(''); }} style={chip(source === id)}>{text}</button>)}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
+          {source !== 'none' && <label><span style={label}>{source === 'offer' ? 'Offer' : source === 'protocol' ? 'Protocol' : 'Recipe'}{focus && matching.length ? ` · ${matching.length} match ${focus.label.toLowerCase()}` : ''}</span>
+            {options.length ? <select style={input} value={picked?.id || ''} onChange={(e) => setPickedId(e.target.value)}>
+              {matching.length > 0 && <optgroup label={`Matches ${focus?.label || ''}`}>{matching.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</optgroup>}
+              {matching.length < options.length && <optgroup label={matching.length ? 'Other' : 'All'}>{options.filter((o) => o.score === 0).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</optgroup>}
+            </select>
+              : <div style={{ color: muted, fontSize: 12, paddingTop: 10 }}>None yet. Create one first, or pick “Nothing specific”.</div>}
+            {focus && options.length > 0 && !matching.length && <span style={{ display: 'block', color: muted, fontSize: 10, marginTop: 5 }}>Nothing here mentions {focus.label.toLowerCase()} yet. Build one for it, or post about your topic.</span>}
+          </label>}
+          <label><span style={label}>Brand look</span><select aria-label="Brand look" style={input} value={brandId || ''} onChange={(e) => setBrandId(e.target.value || null)}>
+            <option value="">ROUTINE³ template</option>
+            {brands.map((b) => <option key={b.id} value={b.id}>{b.name} · {brandKitOf(b.social_links).font}</option>)}
+          </select>{!brands.length && <span style={{ display: 'block', color: muted, fontSize: 10, marginTop: 5 }}>Add a brand kit in the Site builder to use your font, colours and logo.</span>}</label>
+        </div>
       </div>
     </div>
-    <ContentStudio key={`${source}-${picked?.id || ''}`} creator={profile.display_name} audience={audience} problem={problem} siteUrl={siteUrl} offers={studioOffers} heading={picked && source !== 'none' ? `Create posts about ${picked.name}` : 'Create posts about your topic'} />
+    <ContentStudio key={`${source}-${picked?.id || ''}`} creator={profile.display_name} avatar={profile.avatar_url} audience={audience} problem={problem} siteUrl={siteUrl} offers={studioOffers} heading={picked && source !== 'none' ? `Create posts about ${picked.name}` : 'Create posts about your topic'} brand={postBrand} />
+    <VideoStudio creator={profile.display_name} avatar={profile.avatar_url} audience={audience} problem={problem} focusKind={focus?.kind} offer={source !== 'none' ? studioOffers[0]?.title : undefined} free={studioOffers[0]?.free} siteUrl={siteUrl} brandName={videoBrand?.name} kit={videoBrand?.kit} brandId={brandId} postBrand={postBrand} />
   </div>;
 }

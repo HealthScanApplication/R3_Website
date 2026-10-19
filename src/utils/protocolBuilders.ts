@@ -169,7 +169,7 @@ export function planMealItems(cfg: DietConfig): SlotPlan[] {
 }
 
 export interface DietConfig {
-  location?: import('./plannerSunrise').PlannerLocation;
+  location?: import('./plannerSunrise').PlannerLocation | null; // null = the user cleared it (no default re-applied)
   framework: string;
   kcal: number;
   protein: number; carbs: number; fat: number; // % of energy
@@ -338,7 +338,7 @@ export async function autoFillDiet(accessToken: string, cfg: DietConfig, guideRe
 }
 
 /* ── fitness ── */
-export interface ActivityPick { id: string; name: string; image: string | null; category: string | null; minutes: number | null; bodyParts?: string[] }
+export interface ActivityPick { id: string; name: string; image: string | null; category: string | null; minutes: number | null; bodyParts?: string[]; description?: string | null; subcategory?: string | null; parentId?: string | null }
 
 /* ── muscle groups (from catalog_activities.body_parts) ── */
 export const MUSCLE_GROUPS = [
@@ -386,9 +386,49 @@ export function dayNameFor(exercises: Array<{ bodyParts?: string[]; category?: s
   }
   return 'Full body day';
 }
-export interface ExercisePick extends ActivityPick { sets: number | null; reps: string | null; rest_seconds: number | null }
+export interface ExercisePick extends ActivityPick { sets: number | null; reps: string | null; rest_seconds: number | null; role?: 'warmup' | 'recovery' }
+/** Warm-up first, then the training grouped by muscle, then recovery: the order a session is done in. */
+export const orderedExercises = <T extends ExercisePick>(list: T[]) => [...list.filter((e) => e.role === 'warmup'), ...sortByMuscle(list.filter((e) => !e.role)), ...list.filter((e) => e.role === 'recovery')];
+export const exerciseGroup = (e: ExercisePick) => (e.role === 'warmup' ? 'Warm-up' : e.role === 'recovery' ? 'Recovery' : muscleGroupOf(e));
 export interface FitnessSession { day: number; time: string; anchor?: Anchor; offset?: number; rules?: string[]; title: string; minutes: number; intensity: 'low' | 'moderate' | 'high'; exercises: ExercisePick[] }
-export interface FitnessConfig { goal: string; level: 'beginner' | 'intermediate' | 'advanced'; minutes: number; sessions: FitnessSession[]; rules?: string[] }
+/** What the person likes doing: training types steer each session's catalog categories, sports become sessions. */
+export interface FitnessLikes { types: string[]; sports: ActivityPick[] }
+/** Food or supplements around every training session: free text or catalog picks, like Diet supplements. */
+export type FuelItem = string | SupplementPick;
+export interface TrainingFuel { pre: FuelItem[]; post: FuelItem[]; preMinutes: number; postMinutes: number }
+export const defaultFuel = (): TrainingFuel => ({ pre: [], post: [], preMinutes: 30, postMinutes: 15 });
+/** When the person trains: which days are workdays, the time of day on workdays and on other days, and rest days. */
+export type TrainTime = 'morning' | 'lunch' | 'evening';
+export interface FitnessSchedule { workdays: number[]; workday: TrainTime; other: TrainTime; restDays: number[] }
+export const defaultSchedule = (): FitnessSchedule => ({ workdays: [1, 2, 3, 4, 5], workday: 'morning', other: 'morning', restDays: [] });
+export const TRAIN_TIMES: Array<{ id: TrainTime; label: string; timing: Timing }> = [
+  { id: 'morning', label: 'Morning', timing: { anchor: 'wake', time: '07:00', offset: 30 } },
+  { id: 'lunch', label: 'Lunchtime', timing: { anchor: 'clock', time: '12:30', offset: 0 } },
+  { id: 'evening', label: 'Evening', timing: { anchor: 'clock', time: '18:30', offset: 0 } },
+];
+/** A session's timing on this day under the schedule (morning = 30 min after waking when none is set). */
+export function sessionTimeFor(day: number, schedule?: FitnessSchedule): Timing {
+  const pref: TrainTime = !schedule ? 'morning' : schedule.workdays.includes(day) ? schedule.workday : schedule.other;
+  return { ...TRAIN_TIMES.find((t) => t.id === pref)!.timing };
+}
+export interface FitnessConfig { goal: string; level: 'beginner' | 'intermediate' | 'advanced'; minutes: number; sessions: FitnessSession[]; rules?: string[]; likes?: FitnessLikes; fuel?: TrainingFuel; schedule?: FitnessSchedule }
+
+export interface FuelSlot { day: number; session: string; when: 'pre' | 'post'; time: string; items: FuelItem[] }
+export const fuelName = (item: FuelItem) => (typeof item === 'string' ? item : item.name).trim();
+/** Each session's fuel, timed from the session: `preMinutes` before it starts, `postMinutes` after it ends. */
+export function trainingFuel(cfg: FitnessConfig): FuelSlot[] {
+  const f = cfg.fuel;
+  if (!f) return [];
+  const pre = f.pre.filter((i) => fuelName(i)), post = f.post.filter((i) => fuelName(i));
+  return [...cfg.sessions].sort((a, b) => a.day - b.day).flatMap((s) => {
+    const start = resolveTiming(sessionTiming(s));
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(start)) return [];
+    return [
+      ...(pre.length ? [{ day: s.day, session: s.title, when: 'pre' as const, time: toHHMM(toMin(start) - Math.max(0, f.preMinutes || 0)), items: pre }] : []),
+      ...(post.length ? [{ day: s.day, session: s.title, when: 'post' as const, time: toHHMM(toMin(start) + (s.minutes || 0) + Math.max(0, f.postMinutes || 0)), items: post }] : []),
+    ];
+  });
+}
 export const sessionTiming = (s: FitnessSession): Timing => ({ anchor: s.anchor || 'clock', time: s.time, offset: s.offset || 0 });
 
 type Template = { title: string; categories: string[]; terms: string[]; muscles?: MuscleGroupId[]; intensity: FitnessSession['intensity'] };
@@ -397,8 +437,8 @@ export interface FitnessGoal { id: string; label: string; note: string; days: nu
 const STRENGTH_UPPER: Template = { title: 'Upper body day', categories: ['Strength', 'Gym', 'Calisthenics'], terms: [], muscles: ['chest', 'back', 'shoulders', 'arms', 'back'], intensity: 'moderate' };
 const STRENGTH_LOWER: Template = { title: 'Leg day', categories: ['Strength', 'Gym', 'Calisthenics'], terms: [], muscles: ['legs', 'glutes', 'legs', 'core', 'glutes'], intensity: 'moderate' };
 const FULL_BODY: Template = { title: 'Full body day', categories: ['Strength', 'Gym', 'Calisthenics'], terms: [], muscles: ['legs', 'chest', 'back', 'core', 'shoulders'], intensity: 'moderate' };
-const CARDIO: Template = { title: 'Cardio day', categories: ['Cardio', 'Sports'], terms: ['walk', 'run', 'cycl', 'swim'], intensity: 'moderate' };
-const HIIT: Template = { title: 'Intervals day', categories: ['Hiit', 'Cardio', 'Calisthenics'], terms: ['burpee', 'climber', 'jump', 'sprint'], intensity: 'high' };
+const CARDIO: Template = { title: 'Cardio day', categories: ['Cardio', 'Sports', 'Water Sports'], terms: ['walk', 'run', 'cycl', 'swim'], intensity: 'moderate' };
+const HIIT: Template = { title: 'Intervals day', categories: ['Hiit', 'Cardio', 'Calisthenics', 'Martial Arts'], terms: ['burpee', 'climber', 'jump', 'sprint'], intensity: 'high' };
 const MOBILITY: Template = { title: 'Mobility day', categories: ['Stretch', 'Recovery', 'Yoga'], terms: ['hip', 'hamstring', 'shoulder', 'spine'], intensity: 'low' };
 
 /** Weekly splits per goal; days are WEEK.day numbers (1 = Mon). */
@@ -411,10 +451,65 @@ export const FITNESS_GOALS: FitnessGoal[] = [
   { id: 'general', label: 'General fitness', note: 'Balanced week: strength, cardio and mobility.', days: [1, 3, 5], pattern: [FULL_BODY, CARDIO, MOBILITY] },
 ];
 
+/** Training types a person can pick; each maps to catalog_activities categories. */
+export const TRAINING_TYPES: Array<{ id: string; label: string; categories: string[] }> = [
+  { id: 'strength', label: 'Strength', categories: ['Strength', 'Gym', 'Fitness'] },
+  { id: 'calisthenics', label: 'Calisthenics', categories: ['Calisthenics'] },
+  { id: 'cardio', label: 'Cardio', categories: ['Cardio'] },
+  { id: 'hiit', label: 'HIIT', categories: ['Hiit'] },
+  { id: 'stretching', label: 'Stretching & mobility', categories: ['Stretch'] },
+  { id: 'yoga', label: 'Yoga', categories: ['Yoga'] },
+  { id: 'martial_arts', label: 'Martial arts', categories: ['Martial Arts'] },
+  { id: 'water', label: 'Water sports', categories: ['Water Sports'] },
+  { id: 'recovery', label: 'Recovery', categories: ['Recovery'] },
+];
+
+/** Recovery activities that belong straight after training (ice bath, sauna, foam rolling…), not sleep or light hygiene. */
+export const isPostWorkoutRecovery = (name: string) =>
+  /ice bath|cold water|cryo|contrast|sauna|steam|foam roll|massage|compression|normatec|percussion|theragun|float tank|red light|active recovery|cool-down|easy spin|gentle walk|light walk|progressive muscle relaxation|recovery breath/i.test(name);
+
+export interface PlannedSession { day: number; template: Template; sport?: ActivityPick }
+const isCardioDay = (t: Template) => t.categories.includes('Cardio') && !t.categories.includes('Hiit');
+
+/**
+ * Which template each training day gets, adjusted to what the person likes. Picked training types narrow a
+ * session's catalog categories (kept as-is when none of them fit that session). Picked sports take over the
+ * cardio days in turn; a goal without cardio days gets one sports day on the first free day from Saturday.
+ */
+export function planFitnessWeek(goal: FitnessGoal, likes?: FitnessLikes, schedule?: FitnessSchedule): PlannedSession[] {
+  const rest = new Set(schedule?.restDays || []);
+  const chosen = new Set(TRAINING_TYPES.filter((t) => likes?.types.includes(t.id) && t.id !== 'recovery').flatMap((t) => t.categories));
+  const narrow = (t: Template): Template => {
+    if (!chosen.size || !t.categories.length) return t;
+    const kept = t.categories.filter((c) => chosen.has(c));
+    return kept.length ? { ...t, categories: kept } : t;
+  };
+  const sports = likes?.sports || [];
+  let next = 0;
+  const plan: PlannedSession[] = goal.days.map((day, i) => {
+    const t = goal.pattern[i % goal.pattern.length];
+    if (sports.length && isCardioDay(t)) { const sport = sports[next++ % sports.length]; return { day, sport, template: { title: sport.name, categories: ['Sports'], terms: [], intensity: 'moderate' } }; }
+    return { day, template: narrow(t) };
+  });
+  if (sports.length && next === 0) {
+    const free = [6, 7, 3, 5, 2, 4, 1].find((d) => !goal.days.includes(d) && !rest.has(d));
+    if (free) plan.push({ day: free, sport: sports[0], template: { title: sports[0].name, categories: ['Sports'], terms: [], intensity: 'moderate' } });
+  }
+  // Rest days: move a session to the nearest free day (next day first, then the day before…); keep it if none is free.
+  if (rest.size) {
+    const taken = new Set(plan.filter((p) => !rest.has(p.day)).map((p) => p.day));
+    for (const p of plan) if (rest.has(p.day)) {
+      const to = [1, 2, 3, 4, 5, 6].flatMap((d) => [p.day + d, p.day - d]).find((d) => d >= 1 && d <= 7 && !rest.has(d) && !taken.has(d));
+      if (to) { taken.add(to); p.day = to; }
+    }
+  }
+  return plan.sort((a, b) => a.day - b.day);
+}
+
 const LEVEL = { beginner: { sets: 2, reps: '10', rest: 90, exercises: 3 }, intermediate: { sets: 3, reps: '8–12', rest: 75, exercises: 4 }, advanced: { sets: 4, reps: '6–10', rest: 60, exercises: 5 } };
 
-export async function searchActivities(accessToken: string, opts: { query?: string; categories?: string[]; limit?: number; muscle?: MuscleGroupId | null }): Promise<ActivityPick[]> {
-  const params = ['select=id,name,image_url,primary_image_url,category,default_duration_min,body_parts', 'is_group=not.is.true', `limit=${opts.limit || 12}`, 'order=health_score.desc.nullslast'];
+export async function searchActivities(accessToken: string, opts: { query?: string; categories?: string[]; excludeCategories?: string[]; limit?: number; muscle?: MuscleGroupId | null }): Promise<ActivityPick[]> {
+  const params = [`select=${ACTIVITY_SELECT}`, 'is_group=not.is.true', `limit=${opts.limit || 12}`, 'order=health_score.desc.nullslast'];
   const group = opts.muscle ? MUSCLE_GROUPS.find((g) => g.id === opts.muscle) : null;
   if (group) {
     // body_parts is a jsonb array: match any of the group's parts; face also matches by name.
@@ -424,21 +519,98 @@ export async function searchActivities(accessToken: string, opts: { query?: stri
     params.push('category=not.in.(Beauty,Hygiene,Supplement,Consume)'); // muscle work only, not face mists or flossing
   }
   if (opts.categories?.length) params.push(`category=in.(${opts.categories.map((c) => `"${c}"`).join(',')})`);
+  else if (opts.excludeCategories?.length && !group) params.push(`category=not.in.(${opts.excludeCategories.map((c) => `"${c}"`).join(',')})`);
   const q = opts.query?.replace(/[%,()*]/g, ' ').trim();
   if (q) params.push(`name=ilike.*${encodeURIComponent(q)}*`);
   const res = await fetch(`${rest()}/catalog_activities?${params.join('&')}`, { headers: headers(accessToken) });
   if (!res.ok) throw new Error(`Activity search failed (${res.status})`);
-  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, image: r.image_url || r.primary_image_url || null, category: r.category, minutes: r.default_duration_min ?? null, bodyParts: Array.isArray(r.body_parts) ? r.body_parts.map(String) : [] }));
+  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, image: r.image_url || r.primary_image_url || null, category: r.category, minutes: r.default_duration_min ?? null, bodyParts: Array.isArray(r.body_parts) ? r.body_parts.map(String) : [], ...activityExtras(r) }));
+}
+
+const ACTIVITY_SELECT = 'id,name,image_url,primary_image_url,category,default_duration_min,body_parts,description,subcategory,parent_activity_id,parent_id';
+const activityExtras = (r: any) => ({ description: typeof r.description === 'string' ? r.description : null, subcategory: r.subcategory ?? null, parentId: r.parent_activity_id || r.parent_id || null });
+const toPick = (r: any): ActivityPick => ({ id: r.id, name: r.name, image: r.image_url || r.primary_image_url || null, category: r.category, minutes: r.default_duration_min ?? null, bodyParts: Array.isArray(r.body_parts) ? r.body_parts.map(String) : [], ...activityExtras(r) });
+
+/**
+ * Sub-activities of an activity: the others under the same parent group and subcategory (Treadmill Run, Trail
+ * Running, Long Run…), most similar names first. Empty when the activity has no parent in the catalogue.
+ */
+export async function activityRelatives(accessToken: string, a: ActivityPick, limit = 24): Promise<ActivityPick[]> {
+  if (!a.parentId) return [];
+  const params = [`select=${ACTIVITY_SELECT}`, 'is_group=not.is.true', `or=(parent_activity_id.eq.${a.parentId},parent_id.eq.${a.parentId})`, `id=neq.${a.id}`, `limit=${limit * 2}`];
+  if (a.subcategory) params.push(`subcategory=eq.${encodeURIComponent(a.subcategory)}`);
+  const res = await fetch(`${rest()}/catalog_activities?${params.join('&')}`, { headers: headers(accessToken) });
+  if (!res.ok) throw new Error(`Could not load related activities (${res.status})`);
+  const words = new Set(a.name.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 2));
+  const shared = (x: ActivityPick) => x.name.toLowerCase().split(/[^a-z]+/).filter((w) => words.has(w) || [...words].some((v) => w.startsWith(v.slice(0, 4)))).length;
+  return ((await res.json()) as any[]).map(toPick).sort((x, y) => shared(y) - shared(x) || x.name.localeCompare(y.name)).slice(0, limit);
+}
+
+/** Indoor or outdoor, when the name says so (treadmill, gym, pool… / trail, road, open water…). */
+export function activitySetting(name: string): 'Indoor' | 'Outdoor' | null {
+  if (/\b(treadmill|indoor|machine|gym|studio|stationary|rower|elliptical|pool|spin|sauna|cable)\b/i.test(name)) return 'Indoor';
+  if (/\b(trail|outdoor|road|hik(e|ing)|open water|mountain|beach|track|park|forest|sea|ski|surf)\b/i.test(name)) return 'Outdoor';
+  return null;
+}
+
+/** Everything the app's activity detail shows, for one catalog activity. */
+export interface ActivityDetail {
+  id: string; name: string; image: string | null; emoji: string | null; category: string | null; description: string | null;
+  steps: string[]; benefits: string[]; rules: string[]; tips: string | null; bodyParts: string[];
+  caloriesPerHour: number | null; intensity: string | null; sweat: string | null; minutes: number | null;
+}
+const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String).filter(Boolean) : typeof v === 'string' && v.trim() ? [v] : []);
+export async function getActivityDetail(accessToken: string, id: string): Promise<ActivityDetail | null> {
+  const res = await fetch(`${rest()}/catalog_activities?id=eq.${encodeURIComponent(id)}&select=id,name,image_url,primary_image_url,emoji_icon,category,description,instructions,steps,benefits,health_benefits,rules,tips,body_parts,calories_per_hour,intensity,sweat_level,default_duration_min&limit=1`, { headers: headers(accessToken) });
+  if (!res.ok) throw new Error(`Activity lookup failed (${res.status})`);
+  const r = ((await res.json()) as any[])[0];
+  if (!r) return null;
+  // Steps: the curated list, else the numbered instructions split into lines.
+  const steps = list(r.steps).length ? list(r.steps) : String(r.instructions || '').split('\n').map((s) => s.replace(/^\s*\d+[.)]\s*/, '').trim()).filter(Boolean);
+  const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : null; };
+  return {
+    id: r.id, name: r.name, image: r.image_url || r.primary_image_url || null, emoji: r.emoji_icon || null, category: r.category || null, description: r.description || null,
+    steps, benefits: [...new Set([...list(r.health_benefits), ...list(r.benefits)])], rules: list(r.rules), tips: r.tips || null, bodyParts: list(r.body_parts),
+    caloriesPerHour: num(r.calories_per_hour), intensity: r.intensity || null, sweat: r.sweat_level || null, minutes: num(r.default_duration_min),
+  };
 }
 
 /** Build the goal's weekly split, filling each session with catalog exercises that match its pattern. */
-export async function draftFitnessWeek(accessToken: string, goalId: string, level: FitnessConfig['level'], minutes: number): Promise<FitnessSession[]> {
+/**
+ * Warm-up stretches for a session: the stretches that cover most of the body parts it trains, preferring ones not
+ * used earlier in the week. Each is a short timed hold done before the training.
+ */
+export function pickWarmups(trained: Array<{ bodyParts?: string[] }>, stretches: ActivityPick[], usedThisWeek: Set<string>, count = 2): ExercisePick[] {
+  const parts = new Set(trained.flatMap((e) => e.bodyParts || []));
+  const score = (s: ActivityPick) => (s.bodyParts || []).filter((p) => parts.has(p)).length;
+  const ranked = [...stretches].sort((a, b) => score(b) - score(a) || Number(usedThisWeek.has(a.id)) - Number(usedThisWeek.has(b.id)));
+  const chosen = ranked.filter((s) => score(s) > 0).slice(0, count);
+  for (const s of ranked) if (chosen.length < count && !chosen.includes(s)) chosen.push(s); // no match: general stretches
+  chosen.forEach((s) => usedThisWeek.add(s.id));
+  return chosen.map((s) => ({ ...s, sets: null, reps: null, rest_seconds: null, minutes: 2, role: 'warmup' as const }));
+}
+
+export async function draftFitnessWeek(accessToken: string, goalId: string, level: FitnessConfig['level'], minutes: number, likes?: FitnessLikes, schedule?: FitnessSchedule): Promise<FitnessSession[]> {
   const goal = FITNESS_GOALS.find((g) => g.id === goalId) || FITNESS_GOALS[0];
   const dose = LEVEL[level];
   const used = new Set<string>();
   const sessions: FitnessSession[] = [];
-  for (const [index, day] of goal.days.entries()) {
-    const t = goal.pattern[index % goal.pattern.length];
+  // Recovery picked: each moderate/high session ends with a different post-workout recovery activity.
+  const recovery = likes?.types.includes('recovery')
+    ? (await searchActivities(accessToken, { categories: ['Recovery'], limit: 60 }).catch(() => [])).filter((a) => isPostWorkoutRecovery(a.name))
+    : [];
+  // Every training session starts with stretches for the muscles it works.
+  const stretches = await searchActivities(accessToken, { categories: ['Stretch'], limit: 80 }).catch(() => []);
+  const warmedUp = new Set<string>();
+  let nextRecovery = 0;
+  for (const { day, template: t, sport } of planFitnessWeek(goal, likes, schedule)) {
+    const when = sessionTimeFor(day, schedule);
+    if (sport) {
+      const warmups = pickWarmups([sport], stretches, warmedUp);
+      const after = recovery.length ? [{ ...recovery[nextRecovery++ % recovery.length], sets: null, reps: null, rest_seconds: null, role: 'recovery' as const }] : [];
+      sessions.push({ day, ...when, rules: warmups.length ? [] : ['Warm up for 5 minutes'], title: sport.name, minutes, intensity: 'moderate', exercises: [...warmups, { ...sport, sets: null, reps: null, rest_seconds: null, minutes }, ...after.map((r) => ({ ...r, minutes: r.minutes || 10 }))] });
+      continue;
+    }
     const exercises: ExercisePick[] = [];
     const picks: Array<{ term?: string; muscle?: MuscleGroupId }> = t.muscles?.length ? t.muscles.map((muscle) => ({ muscle })) : t.terms.map((term) => ({ term }));
     for (const pick of picks) {
@@ -450,7 +622,12 @@ export async function draftFitnessWeek(accessToken: string, goalId: string, leve
       const timed = /cardio|sports|stretch|recovery|yoga/i.test(hit.category || '') || muscleGroupOf(hit) === 'Face';
       exercises.push({ ...hit, sets: timed ? null : dose.sets, reps: timed ? null : dose.reps, rest_seconds: timed ? null : dose.rest, minutes: timed ? Math.max(2, Math.round(minutes / Math.max(1, picks.length))) : null });
     }
-    sessions.push({ day, time: '07:00', anchor: 'wake', offset: 30, rules: t.intensity === 'low' ? [] : ['Warm up for 5 minutes'], title: dayNameFor(exercises) || t.title, minutes: t.muscles?.includes('face') ? Math.min(minutes, 15) : minutes, intensity: level === 'beginner' && t.intensity === 'high' ? 'moderate' : t.intensity, exercises });
+    const title = dayNameFor(exercises) || t.title; // named from the training, before warm-up and recovery are added
+    // Mobility days are stretching already; everything else opens with matching stretches.
+    const warmups = t.intensity === 'low' ? [] : pickWarmups(exercises, stretches, warmedUp);
+    if (recovery.length && t.intensity !== 'low') { const r = recovery[nextRecovery++ % recovery.length]; exercises.push({ ...r, sets: null, reps: null, rest_seconds: null, minutes: r.minutes || 10, role: 'recovery' }); }
+    exercises.unshift(...warmups);
+    sessions.push({ day, ...when, rules: t.intensity === 'low' || warmups.length ? [] : ['Warm up for 5 minutes'], title, minutes: t.muscles?.includes('face') ? Math.min(minutes, 15) : minutes, intensity: level === 'beginner' && t.intensity === 'high' ? 'moderate' : t.intensity, exercises });
   }
   return sessions;
 }
@@ -571,7 +748,7 @@ export function reviewDiet(cfg: DietConfig): Review {
       if (!mealIsFasting(cfg,day,slot.id)) return [];
       const meals = cfg.plan[key] ? [cfg.plan[key]!.name] : [];
       const drinks = mealDrinks(cfg,key).filter(d => !fastingDrinkAllowed(cfg,day,slot.id,d)).map(d => typeof d === 'string' ? d : d.name);
-      return [...meals,...drinks].map(item => ({ rule:'Fasting window',item,where:`${dayNameFor(day)} ${slot.label}`,reason:'Scheduled during a fasting period. Kept for review; move or remove it if required.' }));
+      return [...meals,...drinks].map(item => ({ rule:'Fasting window',item,where:`${WEEK.find(w=>w.day===day)?.short ?? `Day ${day}`} ${slot.label}`,reason:'Scheduled during a fasting period. Kept for review; move or remove it if required.' }));
     })),
     ...findConflicts(ruleRows(weekRules, 'week Meal checklist'), items),
     ...slots.flatMap((slot) => findConflicts(ruleRows(splitRules(cfg.mealRules?.[slot.id] || []), `${slot.label} checklist`), items.filter((i) => i.where.endsWith(slot.label)))),
@@ -718,18 +895,27 @@ export async function saveFitnessProtocol(accessToken: string, ownerId: string, 
     const parent = await createProtocolItem(accessToken, {
       protocol_id: protocol.id, display_name: step?.title || s.title, kind: 'action', item_type: 'activity', category: 'do', subtype: 'exercise',
       scheduled_time: hhmmss(step?.time || resolveTiming(sessionTiming(s))), duration_minutes: s.minutes, intensity: s.intensity, day_number: 1, sort_order: order++,
-      catalog_activity_id: s.exercises[0]?.id || null, media_image_url: s.exercises[0]?.image || null,
+      catalog_activity_id: (s.exercises.find((e) => !e.role) || s.exercises[0])?.id || null, media_image_url: (s.exercises.find((e) => !e.role) || s.exercises[0])?.image || null,
       has_children: s.exercises.length > 0 || !!(step?.dos.length || step?.donts.length), enabled: true, hidden: false,
       notes: [s.anchor && s.anchor !== 'clock' ? describeTiming(sessionTiming(s)) : '', s.exercises.map((e) => e.name).join(' · ')].filter(Boolean).join(' · '), ...weekly(s.day),
     } as Partial<AdminProtocolItem>);
-    // Exercises are saved grouped by muscle (Legs, Glutes, Chest…), like a smart list inside the session.
-    for (const e of sortByMuscle(s.exercises)) await createProtocolItem(accessToken, {
-      protocol_id: protocol.id, parent_protocol_item_id: parent.id, display_name: e.name, kind: 'action', item_type: 'activity', category: 'do', subtype: 'exercise', group_name: muscleGroupOf(e),
+    // Exercises are saved in the order they are done: warm-up stretches, the training grouped by muscle (Legs, Glutes,
+    // Chest…), then recovery, like a smart list inside the session.
+    for (const e of orderedExercises(s.exercises)) await createProtocolItem(accessToken, {
+      protocol_id: protocol.id, parent_protocol_item_id: parent.id, display_name: e.name, kind: 'action', item_type: 'activity', category: 'do', subtype: 'exercise', group_name: exerciseGroup(e),
       catalog_activity_id: e.id, sets: e.sets, reps: e.reps ? parseInt(e.reps, 10) || null : null, reps_display: e.reps, rest_seconds: e.rest_seconds,
       duration_minutes: e.minutes, day_number: 1, sort_order: order++, has_children: false, enabled: true, hidden: false, notes: '', ...weekly(s.day),
     } as Partial<AdminProtocolItem>);
     await addRules(accessToken, protocol.id, step ? { dos: step.dos, donts: step.donts } : s.rules, { parentId: parent.id, category: 'do', days: weekly(s.day).recurrence_days_of_week, next: () => order++ });
   }
+  // Training fuel: one timed item per food/supplement before or after each session, linked to the catalog like Diet supplements.
+  for (const slot of trainingFuel(cfg)) for (const pick of slot.items) await createProtocolItem(accessToken, {
+    protocol_id: protocol.id, display_name: actionTitle(fuelName(pick), 'Take'), kind: 'action', item_type: 'supplement', category: 'supplement', subtype: 'supplement',
+    group_name: 'Training fuel', scheduled_time: hhmmss(slot.time), day_number: null, sort_order: order++, enabled: true, hidden: false, has_children: false,
+    notes: `${slot.when === 'pre' ? 'Before' : 'After'} ${slot.session}`,
+    ...(typeof pick === 'string' ? {} : { [pick.source === 'product' ? 'catalog_product_id' : 'supplement_id']: pick.id, media_image_url: pick.image }),
+    ...weekly(slot.day),
+  } as Partial<AdminProtocolItem>);
   await addGroupRules(accessToken, protocol.id, review.weekRules, 'fitness', () => order++);
   const saved = await saveBuilderMeta(accessToken, protocol.id, { builder_kind: 'fitness', builder_config: cfg });
   await syncProtocolChild(accessToken, protocol.id);
@@ -819,4 +1005,93 @@ export async function listBuilderMeta(accessToken: string, ownerId: string): Pro
   const res = await fetch(`${rest()}/protocols?user_id=eq.${ownerId}&builder_kind=not.is.null&select=id,builder_kind,builder_config,source_protocol_ids`, { headers: headers(accessToken) });
   if (!res.ok) return {};
   return Object.fromEntries(((await res.json()) as any[]).map((r) => [r.id, { builder_kind: r.builder_kind, builder_config: r.builder_config, source_protocol_ids: r.source_protocol_ids }]));
+}
+
+/* ── cooking methods and kitchen equipment (Diet section) ── */
+export interface CookingMethod { id: string; name: string; category: string | null; description: string | null; temperature: string | null; medium: string | null; typicalTime: string | null; nutrientEffect: string | null; bestFor: string | null; image: string | null; equipmentIds: string[] }
+export interface KitchenEquipment { id: string; name: string; category: string | null; description: string | null; image: string | null; useCase: string | null; material: string | null; methodsUsedWith: string[] }
+/** Equipment categories that belong in a kitchen (the table also holds gym kit). */
+export const KITCHEN_EQUIPMENT_CATEGORIES = ['Cookware', 'Appliances', 'Prep', 'Utensils', 'Cutting', 'Baking', 'Measuring'];
+const txt = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+const arr = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
+/** nutrient_effect is plain text or a JSON record of hazards formed / nutrients affected; show it as a sentence. */
+export function nutrientEffectText(v: unknown): string | null {
+  const raw = txt(v); if (!raw) return null;
+  if (!raw.startsWith('{')) return raw;
+  try {
+    const j = JSON.parse(raw) as { elements_hazardous?: Array<{ name?: string; likelihood?: string }>; elements_beneficial?: Array<{ name?: string; effect?: string }> };
+    const list = (xs?: Array<{ name?: string; likelihood?: string; effect?: string }>) => (xs || []).filter((x) => x.name).map((x) => `${x.name!.toLowerCase()}${x.likelihood || x.effect ? ` (${x.likelihood || x.effect})` : ''}`).join(', ');
+    const parts = [list(j.elements_hazardous) && `Can form: ${list(j.elements_hazardous)}`, list(j.elements_beneficial) && `Can raise: ${list(j.elements_beneficial)}`].filter(Boolean);
+    return parts.length ? parts.join('. ') : null;
+  } catch { return null; }
+}
+export async function listCookingMethods(accessToken: string): Promise<CookingMethod[]> {
+  const res = await fetch(`${rest()}/catalog_cooking_methods?select=id,name,category,description,temperature,medium,typical_time,nutrient_effect,best_for,image_url,equipment_ids&order=name`, { headers: headers(accessToken) });
+  if (!res.ok) throw new Error(`Could not load cooking techniques (${res.status})`);
+  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, category: txt(r.category), description: txt(r.description), temperature: txt(r.temperature), medium: txt(r.medium), typicalTime: txt(r.typical_time), nutrientEffect: nutrientEffectText(r.nutrient_effect), bestFor: txt(r.best_for), image: txt(r.image_url), equipmentIds: arr(r.equipment_ids) }));
+}
+export async function listKitchenEquipment(accessToken: string): Promise<KitchenEquipment[]> {
+  const cats = KITCHEN_EQUIPMENT_CATEGORIES.map((c) => `"${c}"`).join(',');
+  const res = await fetch(`${rest()}/catalog_equipment?select=id,name,category,description,image_url,use_case,material,cooking_methods_used_with&category=in.(${cats})&order=name`, { headers: headers(accessToken) });
+  if (!res.ok) throw new Error(`Could not load cooking equipment (${res.status})`);
+  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, category: txt(r.category), description: txt(r.description), image: txt(r.image_url), useCase: txt(r.use_case), material: txt(r.material), methodsUsedWith: arr(r.cooking_methods_used_with) }));
+}
+
+/* ── catalogue browsing: ROUTINE³ recipes, ingredients, fitness routines ── */
+export interface CatalogHazard { key: string; level: string }
+export interface CatalogFood { id: string; name: string; image: string | null; category: string | null; description: string | null; healthScore: number | null; per100: Record<string, number>; hazards: CatalogHazard[]; meta: Array<[string, string | null]>; diets: string[] }
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+/** Flat numeric keys of a nutrition_per_100g record (provenance keys starting with "_" are skipped). */
+export function per100Of(v: unknown): Record<string, number> {
+  if (!v || typeof v !== 'object') return {};
+  return Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([k, x]) => !k.startsWith('_') && num(x) !== null) as Array<[string, number]>);
+}
+/** elements_hazardous is keyed by hazard ({ lead: { level } }); highest level first. */
+export function hazardsOf(v: unknown): CatalogHazard[] {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return [];
+  const rank: Record<string, number> = { high: 0, moderate: 1, medium: 1, low: 2, trace: 3 };
+  return Object.entries(v as Record<string, any>).map(([key, x]) => ({ key, level: String(x?.level || 'trace') })).sort((a, b) => (rank[a.level] ?? 4) - (rank[b.level] ?? 4) || a.key.localeCompare(b.key));
+}
+const DIET_FLAGS: Array<[string, string]> = [['vegan', 'Vegan'], ['vegetarian', 'Vegetarian'], ['pescatarian', 'Pescatarian'], ['keto', 'Keto'], ['low_carb', 'Low-carb'], ['gluten_free', 'Gluten-free'], ['dairy_free', 'Dairy-free'], ['nut_free', 'Nut-free'], ['egg_free', 'Egg-free']];
+export const RECIPE_DIETS = DIET_FLAGS;
+const dietsOf = (d: unknown) => (d && typeof d === 'object' ? DIET_FLAGS.filter(([k]) => (d as any)[k] === true).map(([, l]) => l) : []);
+const q = (s: string) => encodeURIComponent(s.replace(/[%,()*]/g, ' ').trim());
+
+export async function browseRecipes(accessToken: string, f: { query?: string; cuisine?: string; meal?: string; diet?: string; limit?: number }): Promise<CatalogFood[]> {
+  const p = ['select=id,name_common,image_primary_url,image_url,meal_slot,cuisine,description_simple,description,health_score,prep_time,cook_time,servings,nutrition_per_100g,elements_hazardous,dietary_info', 'is_published=is.true', 'order=health_score.desc.nullslast', `limit=${f.limit || 60}`];
+  if (f.query?.trim()) p.push(`name_common=ilike.*${q(f.query)}*`);
+  if (f.cuisine) p.push(`cuisine=eq.${encodeURIComponent(f.cuisine)}`);
+  if (f.meal) p.push(`meal_slot=ilike.${encodeURIComponent(f.meal)}`);
+  if (f.diet) p.push(`dietary_info->>${f.diet}=eq.true`);
+  const res = await fetch(`${rest()}/catalog_recipes?${p.join('&')}`, { headers: headers(accessToken) });
+  if (!res.ok) throw new Error(`Could not load recipes (${res.status})`);
+  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name_common, image: r.image_primary_url || r.image_url || null, category: r.meal_slot || null, description: txt(r.description_simple) || txt(r.description), healthScore: num(r.health_score), per100: per100Of(r.nutrition_per_100g), hazards: hazardsOf(r.elements_hazardous), diets: dietsOf(r.dietary_info),
+    meta: [['Cuisine', txt(r.cuisine)], ['Meal', txt(r.meal_slot)], ['Prep', r.prep_time ? `${r.prep_time} min` : null], ['Cook', r.cook_time ? `${r.cook_time} min` : null], ['Serves', r.servings ? String(r.servings) : null]] }));
+}
+export async function recipeIngredientNames(accessToken: string, recipeId: string): Promise<Array<{ name: string; grams: number | null }>> {
+  const res = await fetch(`${rest()}/catalog_recipe_ingredients?select=ingredient_name,amount_g,sort_order&recipe_id=eq.${recipeId}&order=sort_order.asc.nullslast`, { headers: headers(accessToken) });
+  if (!res.ok) return [];
+  return ((await res.json()) as any[]).map((r) => ({ name: String(r.ingredient_name || ''), grams: num(r.amount_g) })).filter((r) => r.name);
+}
+export async function browseIngredients(accessToken: string, f: { query?: string; category?: string; limit?: number }): Promise<CatalogFood[]> {
+  const p = ['select=id,name_common,image_primary_url,image_url,category,category_sub,description_simple,description,health_score,nutrition_per_100g,elements_hazardous,season,origin_region', 'is_published=is.true', 'is_group=not.is.true', 'order=health_score.desc.nullslast', `limit=${f.limit || 60}`];
+  if (f.query?.trim()) p.push(`name_common=ilike.*${q(f.query)}*`);
+  if (f.category) p.push(`category=eq.${encodeURIComponent(f.category)}`);
+  const res = await fetch(`${rest()}/catalog_ingredients?${p.join('&')}`, { headers: headers(accessToken) });
+  if (!res.ok) throw new Error(`Could not load ingredients (${res.status})`);
+  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name_common, image: r.image_primary_url || r.image_url || null, category: r.category || null, description: txt(r.description_simple) || txt(r.description), healthScore: num(r.health_score), per100: per100Of(r.nutrition_per_100g), hazards: hazardsOf(r.elements_hazardous), diets: [],
+    meta: [['Type', txt(r.category_sub)], ['Season', Array.isArray(r.season) ? r.season.join(', ') : txt(r.season)], ['Origin', Array.isArray(r.origin_region) ? r.origin_region.join(', ') : txt(r.origin_region)]] }));
+}
+
+export interface FitnessRoutine { id: string; name: string; description: string | null; image: string | null; category: string | null; tags: string[] }
+/** The app's published fitness routines: catalogue Protocols in fitness categories. */
+export async function listFitnessRoutines(accessToken: string): Promise<FitnessRoutine[]> {
+  const res = await fetch(`${rest()}/protocols?select=id,name,description,image_url,category,tags&user_id=is.null&is_public=not.is.false&is_active=not.is.false&category=in.(Fitness,Strength,Recovery,Mobility,Cardio)&order=name`, { headers: headers(accessToken) });
+  if (!res.ok) throw new Error(`Could not load fitness routines (${res.status})`);
+  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, description: txt(r.description), image: txt(r.image_url), category: r.category, tags: Array.isArray(r.tags) ? r.tags.map(String) : [] }));
+}
+export async function routineSteps(accessToken: string, protocolId: string): Promise<Array<{ name: string; time: string | null; group: string | null; day: number | null }>> {
+  const res = await fetch(`${rest()}/protocol_items?select=display_name,scheduled_time,group_name,day_number,sort_order&protocol_id=eq.${protocolId}&order=day_number.asc.nullsfirst,scheduled_time.asc.nullslast,sort_order.asc&limit=200`, { headers: headers(accessToken) });
+  if (!res.ok) return [];
+  return ((await res.json()) as any[]).map((r) => ({ name: String(r.display_name || ''), time: r.scheduled_time ? String(r.scheduled_time).slice(0, 5) : null, group: r.group_name || null, day: num(r.day_number) })).filter((r) => r.name);
 }

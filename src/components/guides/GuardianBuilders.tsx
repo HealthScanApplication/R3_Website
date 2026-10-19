@@ -1,18 +1,21 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { Dumbbell, Loader2, Plus, Search, Sparkles, Trash2, Utensils, Users, X, Combine, AlertTriangle } from 'lucide-react';
+import { Pill, CalendarDays, ClipboardCheck, CupSoda, Croissant, Droplet, Drumstick, Eraser, Hourglass, Layers, LayoutGrid, CircleDot, ListChecks, SquarePen, UtensilsCrossed, Dumbbell, Loader2, Plus, Search, Sparkles, Trash2, Utensils, Users, X, Combine, AlertTriangle, Apple, Bean, Beef, Carrot, Egg, Fish, Grape, Leaf, MilkOff, Moon, Salad, Scale, Sun, Sunrise, WheatOff, Activity, Bike, Flame, Flower2, Footprints, HeartPulse, Medal, Mountain, PersonStanding, SignalHigh, SignalLow, SignalMedium, Smile, Snowflake, StretchHorizontal, Swords, Target, Trophy, Volleyball, Waves, Zap, type LucideIcon } from 'lucide-react';
 import { listProtocolItems, type AdminProtocol, type AdminProtocolItem } from '../../utils/protocolAdmin';
 import type { GuideLead, GuideRecipe } from '../../utils/guidePortal';
 import { smartFill, type RecipeIdea } from '../../utils/dietPlanner';
 import { nutrientsForTier, type Tier } from '../../utils/recipeNutrients';
 import { TIERS, tierLabel, useEssential90 } from './RecipeInsights';
-import { DietFastingControls, FastingDayCell, WeeklySupplementRows, fastHatch } from './DietSchedule';
+import { DietFastingControls, FastingDayCell, SupplementEditor, addTag, fastHatch } from './DietSchedule';
 import { DietNutritionPanel } from './DietNutritionPanel';
 import { DietLocationHeader } from './DietLocationHeader';
-import { plannerWeek, sunriseForDate, validPlannerLocation } from '../../utils/plannerSunrise';
+import { SupplementPicker } from './SupplementPicker';
+import { LinkedDiet, LinkedTraining } from './LinkedRoutine';
+import { ActivityDetailPreview } from './ActivityDetailPreview';
+import { defaultHomeCity, plannerWeek, saveHomeCity, sunriseForDate, validPlannerLocation } from '../../utils/plannerSunrise';
 import { aggregateDiet, dietSelections, loadDietAnalysis, type DietAnalysis } from '../../utils/dietNutrition';
 import {
-  MUSCLE_GROUPS, dayNameFor, muscleGroupOf, type MuscleGroupId, mealDrinks, mealPickKey, selectedServings, fitsSlot, DIET_FRAMEWORKS, FITNESS_GOALS, FRAMEWORK_RULES, mealTiming, resolveTiming, sessionTiming, mealIsFasting, fastingDrinkAllowed, type Anchor, type Timing, MEAL_SLOTS, WEEK, combineProtocols, draftFitnessWeek, findClashes, guideRecipeToPick,
-  dietSupportItems, isDrinkPick, SUPPLEMENT_PERIODS, listBuilderMeta, macroGrams, saveDietProtocol, saveFitnessProtocol, searchActivities, searchDietRecipes, sumNutrition,
+  MUSCLE_GROUPS, dayNameFor, muscleGroupOf, type MuscleGroupId, mealDrinks, mealPickKey, selectedServings, fitsSlot, DIET_FRAMEWORKS, FITNESS_GOALS, FRAMEWORK_RULES, mealTiming, resolveTiming, sessionTiming, mealIsFasting, fastingDrinkAllowed, type Anchor, type Timing, MEAL_SLOTS, WEEK, combineProtocols, draftFitnessWeek, TRAINING_TYPES, type FitnessLikes, defaultFuel, type TrainingFuel, defaultSchedule, TRAIN_TIMES, exerciseGroup, sessionTimeFor, type FitnessSchedule, type TrainTime, findClashes, guideRecipeToPick,
+  dietSupportItems, isDrinkPick, SUPPLEMENT_PERIODS, supplementCell, type SupplementPeriod, listBuilderMeta, macroGrams, saveDietProtocol, saveFitnessProtocol, searchActivities, searchDietRecipes, sumNutrition,
   reviewCombined, reviewDiet, reviewFitness, type Conflict, type Review, type ReviewNote, type ActivityPick, type BuilderKind, type Clash, type DietConfig, type FitnessConfig, type FitnessSession, type MealPick,
 } from '../../utils/protocolBuilders';
 
@@ -31,6 +34,45 @@ const label: React.CSSProperties = { display: 'block', color: muted, fontFamily:
 const btn: React.CSSProperties = { minHeight: 40, border: `1px solid ${line}`, background: ink, color: black, padding: '0 16px', borderRadius: 4, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 };
 const ghost: React.CSSProperties = { ...btn, background: 'transparent', color: ink };
 const chip = (on: boolean): React.CSSProperties => ({ border: `1px solid ${on ? acid : line}`, background: on ? 'rgba(199,216,163,.14)' : 'transparent', color: on ? acid : ink, borderRadius: 999, padding: '7px 12px', fontFamily: sans, fontSize: 11, fontWeight: 700, cursor: 'pointer' });
+// Leading icons for the diet framework and meal chips.
+const FRAMEWORK_ICON: Record<string, LucideIcon> = { balanced: Scale, mediterranean: Grape, vegan: Leaf, vegetarian: Carrot, pescatarian: Fish, keto: Egg, low_carb: Salad, high_protein: Beef, gluten_free: WheatOff, dairy_free: MilkOff, low_fodmap: Bean };
+const MEAL_ICON: Record<string, LucideIcon> = { breakfast: Sunrise, lunch: Sun, snack: Apple, dinner: Moon };
+/** What each diet framework means, in plain words, shown under the chips when it is selected. */
+const FRAMEWORK_ABOUT: Record<string, string> = {
+  balanced: 'An everyday whole-food diet with nothing excluded: vegetables, fruit, whole grains, protein and healthy fats in sensible portions.',
+  mediterranean: 'The traditional eating pattern of the Mediterranean coast: plenty of vegetables, legumes, whole grains, fruit, nuts and extra-virgin olive oil, fish a few times a week, and little red meat or sugar.',
+  vegan: 'Fully plant-based: no meat, fish, dairy, eggs or honey. Protein comes from legumes, soy, nuts and seeds; vitamin B12 needs a fortified food or a supplement.',
+  vegetarian: 'No meat or fish, but dairy and eggs are in. Protein comes from eggs, dairy, legumes, soy, nuts and seeds.',
+  pescatarian: 'Vegetarian plus fish and seafood: protein and omega-3 without meat.',
+  keto: 'Very low carbohydrate and high fat, so the body runs on fat (ketosis). Grains, sugar, most fruit and starchy vegetables are out.',
+  low_carb: 'Fewer carbohydrates than usual (under about a quarter of energy), with more protein and fat: less bread, pasta, rice and sugar.',
+  high_protein: 'Protein makes up about a third of energy, from lean meat, fish, eggs, dairy and legumes, to support muscle and fullness.',
+  gluten_free: 'No wheat, barley, rye or anything made from them, for coeliac disease or gluten sensitivity. Rice, potatoes, corn, quinoa and certified oats are fine.',
+  dairy_free: 'No milk, cheese, butter, yogurt or cream, for lactose intolerance or a milk allergy. Calcium comes from fortified plant milks, greens and tofu.',
+  low_fodmap: 'Limits fermentable carbohydrates (FODMAPs) that can upset sensitive guts, such as onion, garlic, wheat, beans and some fruit. Often used short-term for IBS, with a dietitian.',
+};
+const PERIOD_ICON: Record<string, LucideIcon> = { morning: Sunrise, afternoon: Sun, evening: Moon };
+const TIER_ICON: Record<number, LucideIcon> = { 15: CircleDot, 30: Layers, 90: LayoutGrid };
+const MACRO_CARD_ICON: Record<string, LucideIcon> = { energy_kcal: Flame, protein_g: Drumstick, carbohydrates_g: Croissant, fats_g: Droplet };
+const ico = (Icon: LucideIcon, size = 12) => <Icon size={size} strokeWidth={1.8} aria-hidden="true" />;
+const iconLabel: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 6 };
+// Day timeline, as in the app's Home timeline: a rail with a node per entry, tinted like the app (dark theme).
+const TL = { consume: '#6FCF77', supplements: '#4DD0E1' };
+const toMins = (hhmm: string) => { const [h, m] = hhmm.split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+const tlNode = (color: string, Icon: LucideIcon) => <span aria-hidden="true" style={{ position: 'absolute', left: -19, top: 0, width: 14, height: 14, borderRadius: 99, background: panel, border: `1.5px solid ${color}`, display: 'grid', placeItems: 'center', color }}><Icon size={8} strokeWidth={2.4} /></span>;
+const tlHead = (color: string): React.CSSProperties => ({ fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color, marginBottom: 4, lineHeight: '14px' });
+const iconChip = (on: boolean): React.CSSProperties => ({ ...chip(on), display: 'inline-flex', alignItems: 'center', gap: 6 });
+// Leading icons for the fitness goal, level, training-type and sport chips.
+const GOAL_ICON: Record<string, LucideIcon> = { weight_loss: Flame, muscle_gain: Dumbbell, endurance: Activity, mobility: StretchHorizontal, face: Smile, general: Target };
+const LEVEL_ICON: Record<string, LucideIcon> = { beginner: SignalLow, intermediate: SignalMedium, advanced: SignalHigh };
+const TYPE_ICON: Record<string, LucideIcon> = { strength: Dumbbell, calisthenics: PersonStanding, cardio: HeartPulse, hiit: Zap, stretching: StretchHorizontal, yoga: Flower2, martial_arts: Swords, water: Waves, recovery: Snowflake };
+const SPORT_ICONS: Array<[RegExp, LucideIcon]> = [
+  [/run|walk|hik|jog|triathlon|parkour/i, Footprints], [/cycl|bik/i, Bike], [/swim|surf|kayak|canoe|row|sail|paddle|scuba|water polo|pool/i, Waves],
+  [/box|kick|muay|judo|karate|jiu|taekwondo|wrestl|fenc|martial|sparring/i, Swords], [/climb|boulder/i, Mountain], [/ski|snow|ice skat/i, Snowflake],
+  [/volleyball/i, Volleyball], [/ball|hockey|cricket|tennis|padel|squash|badminton|racquet|pickle|golf|lacrosse|rugby/i, Trophy],
+];
+const sportIcon = (name: string) => SPORT_ICONS.find(([re]) => re.test(name))?.[1] || Medal;
+const IconLabel = ({ Icon, size = 13, children }: { Icon?: LucideIcon; size?: number; children: React.ReactNode }) => <>{Icon && <Icon size={size} strokeWidth={1.8} aria-hidden="true" />}{children}</>;
 const card: React.CSSProperties = { border: `1px solid ${line}`, background: panel, padding: 16 };
 const iconBtn: React.CSSProperties = { border: 0, background: 'transparent', color: muted, cursor: 'pointer', padding: 2, display: 'inline-flex' };
 
@@ -38,7 +80,7 @@ type SavedMeta = Record<string, { builder_kind: BuilderKind | null; builder_conf
 
 interface CommonProps { accessToken: string; ownerId: string; protocols: AdminProtocol[]; initialProtocolId?: string | null; onSaved: (protocol: AdminProtocol) => void; onOpen: (protocolId: string) => void }
 
-function Header({ kicker, title, copy, Icon }: { kicker: string; title: string; copy: string; Icon: typeof Users }) {
+export function Header({ kicker, title, copy, Icon }: { kicker: string; title: string; copy: string; Icon: typeof Users }) {
   return <div style={{ display: 'flex', gap: 18, alignItems: 'center', marginBottom: 26 }}>
     <div style={{ width: 64, height: 64, border: `1px solid ${line}`, display: 'grid', placeItems: 'center' }}><Icon size={26} color={acid} /></div>
     <div><div style={{ ...label, color: acid, margin: 0 }}>{kicker}</div><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 300, margin: '6px 0 4px' }}>{title}</h1><p style={{ color: muted, margin: 0, fontSize: 13, maxWidth: 640, lineHeight: 1.5 }}>{copy}</p></div>
@@ -60,10 +102,10 @@ function SavedList({ kind, protocols, meta, activeId, onPick, onOpen }: { kind: 
 }
 
 /** One rule per line; saved as checkable rule_do items (an item's do-checklist or a group's). */
-function RulesEditor({ title, rules, onChange, placeholder, compact }: { title: string; rules: string[]; onChange: (rules: string[]) => void; placeholder: string; compact?: boolean }) {
+function RulesEditor({ title, rules, onChange, placeholder, compact, Icon = ListChecks }: { title: string; rules: string[]; onChange: (rules: string[]) => void; placeholder: string; compact?: boolean; Icon?: LucideIcon }) {
   const [text, setText] = useState(rules.join('\n'));
   useEffect(() => { if (text.split('\n').map((x) => x.trim()).filter(Boolean).join('\n') !== rules.join('\n')) setText(rules.join('\n')); }, [rules.join('\n')]); // eslint-disable-line react-hooks/exhaustive-deps
-  return <label style={{ display: 'block' }}><span style={{ ...label, marginBottom: compact ? 3 : 7, fontSize: compact ? 9 : 10 }}>{title}</span>
+  return <label style={{ display: 'block' }}><span style={{ ...label, ...iconLabel, gap: 5, marginBottom: compact ? 3 : 7, fontSize: compact ? 9 : 10 }}>{ico(Icon, compact ? 10 : 11)}{title}</span>
     <textarea value={text} placeholder={placeholder} rows={compact ? 2 : 3} onChange={(e) => { setText(e.target.value); onChange(e.target.value.split('\n').map((x) => x.trim()).filter(Boolean)); }}
       style={{ ...input, height: 'auto', padding: compact ? 5 : 9, fontSize: compact ? 10 : 12, lineHeight: 1.4, resize: 'vertical' }} /></label>;
 }
@@ -122,11 +164,15 @@ export function DietBuilder({ accessToken, ownerId, protocols, recipes, initialP
   const [now,setNow]=useState(()=>new Date());
   useEffect(()=>{const timer=setInterval(()=>setNow(new Date()),60000);return()=>clearInterval(timer);},[]);
   const city=validPlannerLocation(cfg.location)?cfg.location:undefined;
+  // A plan without a city uses the home city (last chosen on this device, else the device timezone's largest city).
+  // Only a never-set location (undefined) gets the default; null means the user cleared it and is kept.
+  useEffect(() => { if (cfg.location !== undefined) return; let live = true; defaultHomeCity().then((home) => { if (live && home) setCfg((c) => c.location === undefined ? { ...c, location: home } : c); }); return () => { live = false; }; }, [cfg.location]);
   const weekDates=city?plannerWeek(city.timezone,now):[];
   const [name, setName] = useState('Mediterranean week');
   const [protocolId, setProtocolId] = useState<string | null>(null);
   const [meta, setMeta] = useState<SavedMeta>({});
   const [picking, setPicking] = useState<string | null>(null);
+  const [suppEditing, setSuppEditing] = useState<{ day: number; period: SupplementPeriod } | null>(null);
   const [drinkIndex, setDrinkIndex] = useState<number | null>(null);
   const [analysis, setAnalysis] = useState<DietAnalysis>({});
   const [analysisBusy, setAnalysisBusy] = useState(false);
@@ -204,40 +250,48 @@ export function DietBuilder({ accessToken, ownerId, protocols, recipes, initialP
   const shownResults = results.filter(r => !picking || drinkIndex == null || (isDrinkPick(r) && fastingDrinkAllowed(cfg,Number(picking.split(':')[0]),picking.split(':')[1],r)));
 
   return <div>
-    <Header Icon={Utensils} kicker="Build" title="Diet" copy="Plan meals and drinks from your recipes and the published recipe database. Daily and weekly macros, micronutrients and hazards use recorded nutrition and selected servings; missing data stays unknown." />
+    <Header Icon={Utensils} kicker="Build" title="Diet planner" copy="Plan meals and drinks from your recipes and the published recipe database. Daily and weekly macros, micronutrients and hazards use recorded nutrition and selected servings; missing data stays unknown." />
     <SavedList kind="diet" protocols={initialProtocolId ? protocols.filter((p) => p.id === initialProtocolId) : protocols} meta={meta} activeId={protocolId} onPick={load} onOpen={onOpen} />
     <div style={{ ...card, marginBottom: 14 }}>
-      <span style={label}>Diet framework</span>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>{DIET_FRAMEWORKS.map((f) => <button key={f.id} type="button" onClick={() => pickFramework(f.id)} style={chip(f.id === cfg.framework)}>{f.label}</button>)}</div>
-      <p style={{ color: muted, fontSize: 12, margin: '10px 0 0' }}>{framework.note}</p>
+      <span style={{ ...label, ...iconLabel }}>{ico(Salad, 11)}Diet framework</span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>{DIET_FRAMEWORKS.map((f) => { const Icon = FRAMEWORK_ICON[f.id]; return <button key={f.id} type="button" onClick={() => pickFramework(f.id)} style={iconChip(f.id === cfg.framework)}>{Icon && <Icon size={13} strokeWidth={1.8} aria-hidden="true" />}{f.label}</button>; })}</div>
+      <div style={{ borderLeft: `2px solid ${acid}`, padding: '2px 0 2px 10px', margin: '12px 0 0' }}>
+        <p style={{ color: ink, fontSize: 12, lineHeight: 1.5, margin: 0 }}><strong>{framework.label}:</strong> {FRAMEWORK_ABOUT[framework.id] || framework.note}</p>
+        <p style={{ color: muted, fontSize: 11, margin: '4px 0 0' }}>{framework.protein}% protein · {framework.carbs}% carbs · {framework.fat}% fat · Planner: {framework.note}</p>
+      </div>
     </div>
     <div style={{ ...card, marginBottom: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 12, alignItems: 'end' }}>
       <label><span style={label}>Name</span><input style={input} value={name} onChange={(e) => setName(e.target.value)} /></label>
       <label><span style={label}>kcal / day</span><input style={input} type="number" min={1000} step={50} value={cfg.kcal} onChange={(e) => setCfg({ ...cfg, kcal: Number(e.target.value) || 0 })} /></label>
       {(['protein', 'carbs', 'fat'] as const).map((k) => <label key={k}><span style={label}>{k} %</span><input style={input} type="number" min={0} max={100} value={cfg[k]} onChange={(e) => setCfg({ ...cfg, [k]: Number(e.target.value) || 0 })} /></label>)}
-      <div><span style={label}>Meals</span><div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{MEAL_SLOTS.map((s) => <button key={s.id} type="button" onClick={() => setCfg({ ...cfg, slots: cfg.slots.includes(s.id) ? cfg.slots.filter((x) => x !== s.id) : [...cfg.slots, s.id] })} style={{ ...chip(cfg.slots.includes(s.id)), padding: '5px 9px', fontSize: 10 }}>{s.label}</button>)}</div></div>
+      <div><span style={{ ...label, ...iconLabel }}>{ico(Utensils, 11)}Meals</span><div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{MEAL_SLOTS.map((s) => <button key={s.id} type="button" onClick={() => setCfg({ ...cfg, slots: cfg.slots.includes(s.id) ? cfg.slots.filter((x) => x !== s.id) : [...cfg.slots, s.id] })} style={{ ...iconChip(cfg.slots.includes(s.id)), padding: '5px 9px', fontSize: 10, gap: 5 }}>{(() => { const Icon = MEAL_ICON[s.id]; return Icon && <Icon size={12} strokeWidth={1.8} aria-hidden="true" />; })()}{s.label}</button>)}</div></div>
     </div>
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', borderTop: `1px solid ${line}`, borderBottom: `1px solid ${line}`, marginBottom: 18 }}>
+    <LinkedTraining accessToken={accessToken} protocolId={protocolId} diet={cfg} meta={meta} protocols={protocols} onOpen={onOpen} />
+    {/* Wide screens: planner on the left, macros + nutrients + hazards in one sticky column on the right. Stacked below 1200px. */}
+    <div className="g-diet-split">
+    <aside className="g-diet-side" aria-label="Macros, nutrients and hazards">
+    <div className="g-macro-strip" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', borderTop: `1px solid ${line}`, borderBottom: `1px solid ${line}`, marginBottom: 18 }}>
       {([['Energy', 'energy_kcal', 'kcal'], ['Protein', 'protein_g', 'g'], ['Carbs', 'carbohydrates_g', 'g'], ['Fat', 'fats_g', 'g']] as const).map(([l, k, u]) => <div key={k} style={{ padding: '14px 14px 14px 0', borderRight: `1px solid ${line}` }}>
-        <div style={{ ...label, margin: 0 }}>{l}</div>
+        <div style={{ ...label, ...iconLabel, margin: 0 }}>{ico(MACRO_CARD_ICON[k], 11)}{l}</div>
         <div style={{ fontFamily: serif, fontSize: 26 }}>{nutritionReport.week.nutrients[k]?.amount == null ? 'Unknown' : Math.round(week[k] || 0).toLocaleString()} <span style={{ fontSize: 13, color: muted }}>/ {(targets[k] * 7).toLocaleString()} {u} week</span></div>
         {nutritionReport.week.nutrients[k]?.known < nutritionReport.week.count && <div style={{ color: warn, fontSize: 10 }}>Recorded subtotal · incomplete</div>}
         <div style={{ color: muted, fontSize: 11 }}>{targets[k].toLocaleString()} {u} per day</div>
         <Bar value={week[k] || 0} target={targets[k] * 7} />
       </div>)}
     </div>
-    <DietNutritionPanel report={nutritionReport} loading={analysisBusy} error={analysisError} />
     {macroSum !== 100 && <p style={{ color: warn, fontSize: 12 }}>Macros add up to {macroSum}% of energy. Adjust them to 100%.</p>}
-    <section aria-label="Weekly diet planner">
-    <h2 style={{ fontSize: 16 }}>Weekly planner · meals, drinks &amp; supplements</h2>
-    <DietLocationHeader city={city} now={now} onChange={location=>setCfg(c=>({...c,location}))} />
+    <DietNutritionPanel report={nutritionReport} loading={analysisBusy} error={analysisError} />
+    </aside>
+    <section aria-label="Weekly diet planner" className="g-diet-plan" style={{ minWidth: 0 }}>
+    <h2 style={{ fontSize: 16, ...iconLabel, gap: 8 }}>{ico(CalendarDays, 16)}Weekly planner · meals, drinks &amp; supplements</h2>
+    <DietLocationHeader city={city} now={now} onChange={location=>{saveHomeCity(location);setCfg(c=>({...c,location:location??null}));}} />
     <DietFastingControls cfg={cfg} setCfg={setCfg} />
     <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
-      <span style={{ display: 'flex', gap: 5 }}>{TIERS.map((t) => <button key={t} type="button" onClick={() => setTier(t)} title="Rank meals by this essential-nutrient set and show each day's coverage" style={{ ...chip(t === tier), padding: '6px 10px', fontSize: 10 }}>{tierLabel(t)}</button>)}</span>
+      <span style={{ display: 'flex', gap: 5 }}>{TIERS.map((t) => <button key={t} type="button" onClick={() => setTier(t)} title="Rank meals by this essential-nutrient set and show each day's coverage" style={{ ...chip(t === tier), padding: '6px 10px', fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 4 }}>{ico(TIER_ICON[t], 11)}{tierLabel(t)}</button>)}</span>
       <button type="button" style={btn} disabled={busy || !slots.length} onClick={autoFill}><Sparkles size={13} /> Auto-fill week</button>
-      <button type="button" style={ghost} disabled={busy} onClick={() => setCfg({ ...cfg, plan: {}, drinkPlan: {} })}>Clear meals &amp; drinks</button>
-      <button type="button" style={btn} disabled={busy || (!selections.length && !dietSupportItems(cfg).length)} onClick={() => setReview(reviewDiet(cfg))}>Review &amp; {protocolId ? 'update' : 'save'}</button>
-      {protocolId && <button type="button" style={ghost} onClick={() => onOpen(protocolId)}>Open in editor</button>}
+      <button type="button" style={ghost} disabled={busy} onClick={() => setCfg({ ...cfg, plan: {}, drinkPlan: {} })}><Eraser size={13} /> Clear meals &amp; drinks</button>
+      <button type="button" style={btn} disabled={busy || (!selections.length && !dietSupportItems(cfg).length)} onClick={() => setReview(reviewDiet(cfg))}><ClipboardCheck size={13} /> Review &amp; {protocolId ? 'update' : 'save'}</button>
+      {protocolId && <button type="button" style={ghost} onClick={() => onOpen(protocolId)}><SquarePen size={13} /> Open in editor</button>}
       <Status busy={busy} message={message} />
     </div>
     {review && <ReviewPanel notes={review.notes} conflicts={review.conflicts} blocking={review.blocking} busy={busy} onClose={() => setReview(null)} saveLabel={review.conflicts.length ? 'Save with conflicts flagged' : protocolId ? 'Update Protocol' : 'Save as Protocol'} onSave={() => { setReview(null); save(); }} />}
@@ -247,36 +301,67 @@ export function DietBuilder({ accessToken, ownerId, protocols, recipes, initialP
           <div style={{ color: ink, fontSize: 10, letterSpacing: 0, textTransform: 'none', fontWeight: 400, marginTop: 4 }}>P {nutritionReport.days[i].nutrients.protein_g.amount == null ? 'Unknown' : Math.round(dayTotals[i].protein_g)} / {targets.protein_g} g</div><Bar value={dayTotals[i].protein_g} target={targets.protein_g} />
           {nutritionReport.days[i].count > 0 && <div title={reports[i].gaps.map((g) => g.label).join(', ')} style={{ fontSize: 10, letterSpacing: 0, textTransform: 'none', fontWeight: 400, marginTop: 4, color: reports[i].coverage >= 60 ? acid : warn }}>{tierLabel(tier)} recorded: {reports[i].coverage}%{reports[i].incomplete && <span style={{ display: 'block' }}>Incomplete data</span>}{reports[i].gaps.length ? <span style={{ display: 'block', color: muted }}>low recorded: {reports[i].gaps.slice(0, 3).map((g) => g.label).join(', ')}{reports[i].gaps.length > 3 ? ` +${reports[i].gaps.length - 3}` : ''}</span> : null}</div>}
         </div>)}
-        <div style={{...label,alignSelf:'center'}}>Fasting · 24h timeline</div>{WEEK.map(w => <FastingDayCell key={w.day} cfg={cfg} day={w.day} />)}
+        <div style={{...label,...iconLabel,alignSelf:'center'}}>{ico(Hourglass,11)}Fasting · 24h timeline</div>{WEEK.map(w => <FastingDayCell key={w.day} cfg={cfg} day={w.day} />)}
         {SUPPLEMENT_PERIODS.map(period=><Fragment key={period.id}>
-        <h3 style={{gridColumn:'1 / -1',fontSize:13,color:acid,margin:'12px 0 2px',borderTop:`1px solid ${line}`,paddingTop:12}}>{`${period.label} · meals, drinks & supplements`}</h3>
-        {slots.filter(s=>period.id==='morning'?s.id==='breakfast':period.id==='afternoon'?['lunch','snack'].includes(s.id):s.id==='dinner').map((s) => [<div key={s.id} style={{ ...label, margin: 0, alignSelf: 'center' }}>{s.label}<div style={{ fontWeight: 400, margin: '4px 0 2px' }}><TimingField compact value={mealTiming(cfg, s.id)} onChange={(t) => setCfg({ ...cfg, timing: { ...cfg.timing, [s.id]: t } })} /></div><div style={{ fontWeight: 400, letterSpacing: 0, textTransform: 'none' }}>≈ {resolveTiming(mealTiming(cfg, s.id))}</div></div>, ...WEEK.map(({ day }) => {
-          const key = `${day}:${s.id}`; const pick = cfg.plan[key]; const fasting = mealIsFasting(cfg,day,s.id);
-          const drinks = mealDrinks(cfg,key);
-          return <div key={key} aria-label={`${key} meal slot`} style={{ ...card, background:fasting?fastHatch:panel, padding: 8, minHeight: 92, borderColor: picking === key ? acid : line, position: 'relative' }}>
-            {fasting && <div style={{fontSize:10,color:warn,marginBottom:6}}>Fasting · {pick?'existing meal conflicts':'no meal at this time'}</div>}
-            {pick ? <>
-              {pick.image && <img src={pick.image} alt="" style={{ width: '100%', height: 44, objectFit: 'cover', marginBottom: 5 }} />}
-              <button type="button" disabled={fasting} aria-label={`Change ${key} meal`} onClick={() => { setPicking(key); setDrinkIndex(null); setQuery(''); }} style={{ ...iconBtn, textAlign: 'left', color: ink, fontSize: 11, lineHeight: 1.25, paddingRight: 14 }}>{pick.name}</button>
-              <label style={{ fontSize: 10, display: 'block', marginTop: 5 }}>Servings <input aria-label={`${key} meal servings`} type="number" min="0.01" step="0.25" value={selectedServings(pick)} onChange={(e) => setPick(key,{ ...pick, servings: Math.max(.01,Number(e.target.value)||1) })} style={{ ...input, width: 55, height: 26, padding: 3 }} /></label>
-              <div style={{ color: muted, fontSize: 10, marginTop: 3 }}>{pick.nutrition ? `${Math.round(pick.nutrition.energy_kcal)} kcal · P ${Math.round(pick.nutrition.protein_g)}` : 'No nutrition data'}{pick.healthScore != null ? ` · ♥ ${pick.healthScore}` : ''}{pick.source === 'guide' ? ' · yours' : ''}</div>
-              {(analysis[mealPickKey(pick)]?.hazards || pick.hazards || pick.hazardFlags || []).slice(0, 2).map((h) => <div key={h.label} title="All hazard records are listed in the nutrition section above" style={{ fontSize: 9, marginTop: 2, color: h.level === 'high' ? '#E88A7A' : warn, display: 'flex', gap: 3, alignItems: 'center' }}><AlertTriangle size={9} /> {h.label}</div>)}
-              <button type="button" title="Remove" onClick={(e) => { e.stopPropagation(); setPick(key, null); }} style={{ ...iconBtn, position: 'absolute', top: 4, right: 4 }}><X size={12} /></button>
-            </> : <button type="button" aria-label={`Add ${key} meal`} disabled={fasting} onClick={() => { setPicking(key); setDrinkIndex(null); setQuery(''); }} style={{ ...iconBtn, fontSize: 11, opacity:fasting?.4:1 }}><Plus size={12} /> Add meal</button>}
-            {drinks.map((d,i) => <div key={i} style={{ borderTop: `1px solid ${line}`, marginTop: 7, paddingTop: 5, fontSize: 10 }}>
-              {!fastingDrinkAllowed(cfg,day,s.id,d) && <div style={{color:warn}}>Existing drink conflicts with fast</div>}
-              <button type="button" onClick={() => { setPicking(key); setDrinkIndex(i); setQuery(typeof d === 'string' ? d : d.name); }} style={{ ...iconBtn, textAlign: 'left', fontSize: 10 }}>{typeof d === 'string' ? `${d} · match recipe (nutrition unknown)` : d.name}</button>
-              {typeof d !== 'string' && <label style={{ display: 'block' }}>Servings <input aria-label={`${key} drink ${i+1} servings`} type="number" min="0.01" step="0.25" value={selectedServings(d)} onChange={(e) => setDrinks(key,drinks.map((x,n) => n===i ? { ...d, servings: Math.max(.01,Number(e.target.value)||1) } : x))} style={{ ...input, width: 55, height: 26, padding: 3 }} /></label>}
-              <button type="button" aria-label={`Remove ${key} drink ${i+1}`} style={iconBtn} onClick={() => setDrinks(key,drinks.filter((_,n) => n!==i))}><X size={11} /></button>
-            </div>)}
-            <button type="button" disabled={fasting && cfg.fasting?.type==='dry'} aria-label={`Add ${key} drink`} onClick={() => { setPicking(key); setDrinkIndex(drinks.length); setQuery(fasting?'Water':''); }} style={{ ...iconBtn, fontSize: 10, marginTop: 7 }}><Plus size={11} /> {fasting?'Add plain water from recipes':'Add drink from recipes'}</button>
-          </div>;
-        })])}
-        <WeeklySupplementRows cfg={cfg} setCfg={setCfg} accessToken={accessToken} periodId={period.id} />
+        <h3 style={{gridColumn:'1 / -1',fontSize:13,color:acid,margin:'12px 0 2px',borderTop:`1px solid ${line}`,paddingTop:12,...iconLabel,gap:7}}>{ico(PERIOD_ICON[period.id],14)}{`${period.label} · meals, drinks & supplements`}</h3>
+        {(() => {
+          const periodSlots = slots.filter(s=>period.id==='morning'?s.id==='breakfast':period.id==='afternoon'?['lunch','snack'].includes(s.id):s.id==='dinner');
+          return [<div key="labels" style={{ ...label, margin: 0, alignSelf: 'start', display: 'grid', gap: 10 }}>{periodSlots.map((s) => <div key={s.id}><span style={{ ...iconLabel, gap: 5 }}>{MEAL_ICON[s.id] && ico(MEAL_ICON[s.id], 11)}{s.label}</span><div style={{ fontWeight: 400, margin: '4px 0 2px' }}><TimingField compact value={mealTiming(cfg, s.id)} onChange={(t) => setCfg({ ...cfg, timing: { ...cfg.timing, [s.id]: t } })} /></div><div style={{ fontWeight: 400, letterSpacing: 0, textTransform: 'none' }}>≈ {resolveTiming(mealTiming(cfg, s.id))}</div></div>)}</div>,
+          ...WEEK.map(({ day, short }) => {
+            // Everything in this part of the day, in time order: each meal with its drinks, then supplements at their time.
+            const supp = supplementCell(cfg, day, period.id);
+            const entries = [
+              ...periodSlots.map((s) => {
+                const key = `${day}:${s.id}`; const pick = cfg.plan[key]; const fasting = mealIsFasting(cfg,day,s.id); const drinks = mealDrinks(cfg,key); const time = resolveTiming(mealTiming(cfg, s.id));
+                if (!pick && !drinks.length && !fasting) return null;
+                return { mins: toMins(time), node: <div key={key} style={{ position: 'relative', marginBottom: 10, background: fasting ? fastHatch : undefined }}>
+                  {tlNode(TL.consume, MEAL_ICON[s.id] || UtensilsCrossed)}
+                  <div style={tlHead(TL.consume)}>{time} · {s.label}</div>
+                  {fasting && <div style={{fontSize:10,color:warn,marginBottom:4}}>Fasting · {pick?'existing meal conflicts':'no meal at this time'}</div>}
+                  {pick && <div style={{ position: 'relative' }}>
+                    {pick.image && <img src={pick.image} alt="" style={{ width: '100%', height: 44, objectFit: 'cover', marginBottom: 5, borderRadius: 6 }} />}
+                    <button type="button" disabled={fasting} aria-label={`Change ${key} meal`} onClick={() => { setPicking(key); setDrinkIndex(null); setQuery(''); }} style={{ ...iconBtn, textAlign: 'left', color: ink, fontSize: 11, lineHeight: 1.25, paddingRight: 14 }}>{pick.name}</button>
+                    <label style={{ fontSize: 10, display: 'block', marginTop: 5 }}>Servings <input aria-label={`${key} meal servings`} type="number" min="0.01" step="0.25" value={selectedServings(pick)} onChange={(e) => setPick(key,{ ...pick, servings: Math.max(.01,Number(e.target.value)||1) })} style={{ ...input, width: 55, height: 26, padding: 3 }} /></label>
+                    <div style={{ color: muted, fontSize: 10, marginTop: 3 }}>{pick.nutrition ? `${Math.round(pick.nutrition.energy_kcal)} kcal · P ${Math.round(pick.nutrition.protein_g)}` : 'No nutrition data'}{pick.healthScore != null ? ` · ♥ ${pick.healthScore}` : ''}{pick.source === 'guide' ? ' · yours' : ''}</div>
+                    {(analysis[mealPickKey(pick)]?.hazards || pick.hazards || pick.hazardFlags || []).slice(0, 2).map((h) => <div key={h.label} title="All hazard records are listed in the nutrition section above" style={{ fontSize: 9, marginTop: 2, color: h.level === 'high' ? '#E88A7A' : warn, display: 'flex', gap: 3, alignItems: 'center' }}><AlertTriangle size={9} /> {h.label}</div>)}
+                    <button type="button" title="Remove" aria-label={`Remove ${key} meal`} onClick={(e) => { e.stopPropagation(); setPick(key, null); }} style={{ ...iconBtn, position: 'absolute', top: 0, right: 0 }}><X size={12} /></button>
+                  </div>}
+                  {drinks.map((d,i) => <div key={i} style={{ borderTop: pick || i ? `1px solid ${line}` : 0, marginTop: pick || i ? 6 : 0, paddingTop: pick || i ? 5 : 0, fontSize: 10, position: 'relative', paddingRight: 14 }}>
+                    {!fastingDrinkAllowed(cfg,day,s.id,d) && <div style={{color:warn}}>Existing drink conflicts with fast</div>}
+                    <button type="button" onClick={() => { setPicking(key); setDrinkIndex(i); setQuery(typeof d === 'string' ? d : d.name); }} style={{ ...iconBtn, textAlign: 'left', fontSize: 10, gap: 4, alignItems: 'center' }}>{ico(CupSoda, 10)}{typeof d === 'string' ? `${d} · match recipe (nutrition unknown)` : d.name}</button>
+                    {typeof d !== 'string' && <label style={{ display: 'block' }}>Servings <input aria-label={`${key} drink ${i+1} servings`} type="number" min="0.01" step="0.25" value={selectedServings(d)} onChange={(e) => setDrinks(key,drinks.map((x,n) => n===i ? { ...d, servings: Math.max(.01,Number(e.target.value)||1) } : x))} style={{ ...input, width: 55, height: 26, padding: 3 }} /></label>}
+                    <button type="button" aria-label={`Remove ${key} drink ${i+1}`} style={{ ...iconBtn, position: 'absolute', top: 0, right: 0 }} onClick={() => setDrinks(key,drinks.filter((_,n) => n!==i))}><X size={11} /></button>
+                  </div>)}
+                </div> };
+              }),
+              supp.items.length ? { mins: toMins(supp.time), node: <div key="supp" style={{ position: 'relative', marginBottom: 10 }}>
+                {tlNode(TL.supplements, Pill)}
+                <div style={tlHead(TL.supplements)}>{supp.time} · Supplements</div>
+                {supp.items.map((p, i) => <div key={i} style={{ fontSize: 11, marginBottom: 3, overflowWrap: 'anywhere' }}>{typeof p === 'string' ? p : p.name}</div>)}
+              </div> } : null,
+            ].filter(Boolean).sort((a, b) => a!.mins - b!.mins) as Array<{ mins: number; node: React.ReactNode }>;
+            const drinkSlot = periodSlots.find((s) => cfg.plan[`${day}:${s.id}`]) || periodSlots[0];
+            const drinkKey = drinkSlot ? `${day}:${drinkSlot.id}` : '';
+            const drinkFasting = drinkSlot ? mealIsFasting(cfg, day, drinkSlot.id) : false;
+            const active = !!picking && picking.startsWith(`${day}:`) && periodSlots.some((s) => picking === `${day}:${s.id}`);
+            return <div key={`${day}:${period.id}`} aria-label={`${short} ${period.label.toLowerCase()} timeline`} style={{ ...card, padding: '10px 8px 8px 26px', minHeight: 92, borderColor: active ? acid : line, position: 'relative' }}>
+              <span aria-hidden="true" style={{ position: 'absolute', left: 13, top: 12, bottom: 12, width: 2, borderRadius: 2, background: line }} />
+              {entries.length ? entries.map((e) => e.node) : <div style={{ color: muted, fontSize: 10, marginBottom: 8, lineHeight: '14px' }}>Nothing planned yet</div>}
+              {/* One row of add tags: meal (per slot), drink and supplement. */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {periodSlots.filter((s) => !cfg.plan[`${day}:${s.id}`]).map((s) => { const key = `${day}:${s.id}`; const fasting = mealIsFasting(cfg,day,s.id); return <button key={key} type="button" aria-label={`Add ${key} meal`} disabled={fasting} onClick={() => { setPicking(key); setDrinkIndex(null); setQuery(''); }} style={{ ...addTag, opacity: fasting ? .4 : 1 }}>{ico(UtensilsCrossed, 11)}{periodSlots.length > 1 ? s.label : 'Meal'}</button>; })}
+                {drinkSlot && <button type="button" disabled={drinkFasting && cfg.fasting?.type==='dry'} aria-label={`Add ${drinkKey} drink`} onClick={() => { setPicking(drinkKey); setDrinkIndex(mealDrinks(cfg,drinkKey).length); setQuery(drinkFasting?'Water':''); }} style={addTag}>{ico(CupSoda, 11)}{drinkFasting?'Water':'Drink'}</button>}
+                <button type="button" aria-label={`Edit ${short} ${period.id} supplements`} onClick={() => setSuppEditing({ day, period: period.id })} style={addTag}>{ico(Pill, 11)}Supplement</button>
+              </div>
+            </div>;
+          })];
+        })()}
+        {suppEditing?.period === period.id && <SupplementEditor cfg={cfg} setCfg={setCfg} accessToken={accessToken} day={suppEditing.day} period={suppEditing.period} onClose={() => setSuppEditing(null)} />}
         </Fragment>)}
       </div>
     </div>
     </section>
+    </div>
     {ideas.length > 0 && <div style={{ ...card, marginTop: 14 }}>
       <div style={{ ...label, color: acid }}>Recipe ideas for this week's gaps · ingredients ranked by nutrients per kcal, fewest hazards</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 10 }}>{ideas.map((idea) => <div key={idea.title} style={{ border: `1px solid ${line}`, padding: 12 }}>
@@ -287,8 +372,8 @@ export function DietBuilder({ accessToken, ownerId, protocols, recipes, initialP
       </div>)}</div>
     </div>}
     <div style={{ ...card, marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
-      <RulesEditor title="Meal checklist for the week" rules={cfg.rules || []} onChange={(rules) => setCfg((c) => ({ ...c, rules }))} placeholder={'One rule per line, e.g.\nCook with olive oil'} />
-      {slots.map((s) => <RulesEditor key={s.id} title={`${s.label} do-checklist`} rules={cfg.mealRules?.[s.id] || []} onChange={(rules) => setCfg((c) => ({ ...c, mealRules: { ...c.mealRules, [s.id]: rules } }))} placeholder="e.g. Chew slowly" />)}
+      <RulesEditor Icon={ClipboardCheck} title="Meal checklist for the week" rules={cfg.rules || []} onChange={(rules) => setCfg((c) => ({ ...c, rules }))} placeholder={'One rule per line, e.g.\nCook with olive oil'} />
+      {slots.map((s) => <RulesEditor key={s.id} Icon={MEAL_ICON[s.id] || ListChecks} title={`${s.label} do-checklist`} rules={cfg.mealRules?.[s.id] || []} onChange={(rules) => setCfg((c) => ({ ...c, mealRules: { ...c.mealRules, [s.id]: rules } }))} placeholder="e.g. Chew slowly" />)}
     </div>
     {picking && <div style={{ ...card, marginTop: 14 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -319,6 +404,7 @@ export function FitnessBuilder({ accessToken, ownerId, protocols, initialProtoco
   const [protocolId, setProtocolId] = useState<string | null>(null);
   const [meta, setMeta] = useState<SavedMeta>({});
   const [adding, setAdding] = useState<number | null>(null); // session index receiving an exercise
+  const [detail, setDetail] = useState<{ s: number; k: number } | null>(null); // exercise open in the app-style preview
   const [muscle, setMuscle] = useState<MuscleGroupId | null>(null);
   const [review, setReview] = useState<Review | null>(null);
   const [query, setQuery] = useState('');
@@ -326,6 +412,12 @@ export function FitnessBuilder({ accessToken, ownerId, protocols, initialProtoco
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const goal = FITNESS_GOALS.find((g) => g.id === cfg.goal) || FITNESS_GOALS[0];
+  // What the person likes doing; picked sports and training types shape the drafted week.
+  const [sportsList, setSportsList] = useState<ActivityPick[]>([]);
+  const [sportFilter, setSportFilter] = useState('');
+  const likes: FitnessLikes = cfg.likes || { types: [], sports: [] };
+  const setLikes = (next: FitnessLikes) => setCfg((c) => ({ ...c, likes: next }));
+  useEffect(() => { searchActivities(accessToken, { categories: ['Sports'], limit: 120 }).then((list) => setSportsList([...list].sort((a, b) => a.name.localeCompare(b.name)))).catch(() => setSportsList([])); }, [accessToken]);
 
   useEffect(() => { listBuilderMeta(accessToken, ownerId).then(setMeta).catch(() => {}); }, [accessToken, ownerId]);
   useEffect(() => {
@@ -341,7 +433,7 @@ export function FitnessBuilder({ accessToken, ownerId, protocols, initialProtoco
   }, [adding, query, muscle, accessToken]);
 
   const run = async (label: string, work: () => Promise<void>) => { setBusy(true); setMessage(label); try { await work(); } catch (e) { const failedId = (e as { protocolId?: string }).protocolId; if (failedId) setProtocolId(failedId); setMessage(`Failed: ${(e as Error).message}`); setBusy(false); return; } setBusy(false); };
-  const draft = () => run('Building the week from catalog activities…', async () => { setCfg({ ...cfg, sessions: await draftFitnessWeek(accessToken, cfg.goal, cfg.level, cfg.minutes) }); setMessage('Week drafted. Edit sessions, sets and reps below.'); });
+  const draft = () => run('Building the week from catalog activities…', async () => { const sessions = await draftFitnessWeek(accessToken, cfg.goal, cfg.level, cfg.minutes, likes, cfg.schedule); setCfg((c) => ({ ...c, sessions })); setMessage('Week drafted. Edit sessions, sets and reps below.'); });
   const save = () => run('Saving to Protocols…', async () => {
     const { protocol, metaSaved } = await saveFitnessProtocol(accessToken, ownerId, protocolId, name.trim() || `${goal.label} week`, cfg);
     setProtocolId(protocol.id); setMeta((m) => ({ ...m, [protocol.id]: { builder_kind: 'fitness', builder_config: cfg } })); onSaved(protocol);
@@ -352,16 +444,70 @@ export function FitnessBuilder({ accessToken, ownerId, protocols, initialProtoco
   const totalMinutes = cfg.sessions.reduce((sum, s) => sum + (s.minutes || 0), 0);
 
   return <div>
-    <Header Icon={Dumbbell} kicker="Build" title="Fitness" copy="Choose a goal and level for a suggested weekly split, then shape each session with activities from the catalog." />
+    <Header Icon={Dumbbell} kicker="Build" title="Fitness planner" copy="Choose a goal and level for a suggested weekly split, then shape each session with activities from the catalog." />
     <SavedList kind="fitness" protocols={initialProtocolId ? protocols.filter((p) => p.id === initialProtocolId) : protocols} meta={meta} activeId={protocolId} onPick={load} onOpen={onOpen} />
     <div style={{ ...card, marginBottom: 14 }}>
       <span style={label}>Goal</span>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>{FITNESS_GOALS.map((g) => <button key={g.id} type="button" onClick={() => { setCfg({ ...cfg, goal: g.id }); if (!protocolId) setName(`${g.label} week`); }} style={chip(g.id === cfg.goal)}>{g.label}</button>)}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>{FITNESS_GOALS.map((g) => <button key={g.id} type="button" onClick={() => { setCfg((c) => ({ ...c, goal: g.id })); if (!protocolId) setName(`${g.label} week`); }} style={iconChip(g.id === cfg.goal)}><IconLabel Icon={GOAL_ICON[g.id]}>{g.label}</IconLabel></button>)}</div>
       <p style={{ color: muted, fontSize: 12, margin: '10px 0 0' }}>{goal.note} Suggested: {goal.days.length} sessions a week.</p>
     </div>
+    <div style={{ ...card, marginBottom: 14 }}>
+      <span style={label}>What they like to do</span>
+      <div role="group" aria-label="Training types" style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>{TRAINING_TYPES.map((t) => { const on = likes.types.includes(t.id); return <button key={t.id} type="button" aria-pressed={on} onClick={() => setLikes({ ...likes, types: on ? likes.types.filter((x) => x !== t.id) : [...likes.types, t.id] })} style={iconChip(on)}><IconLabel Icon={TYPE_ICON[t.id]}>{t.label}</IconLabel></button>; })}</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', margin: '16px 0 8px' }}>
+        <span style={{ ...label, margin: 0 }}>Sports{likes.sports.length ? ` · ${likes.sports.length} picked` : ''}</span>
+        <div style={{ position: 'relative', width: 200 }}><Search size={12} color={muted} style={{ position: 'absolute', left: 9, top: 10 }} /><input aria-label="Filter sports" placeholder="Filter sports" value={sportFilter} onChange={(e) => setSportFilter(e.target.value)} style={{ ...input, height: 32, fontSize: 12, paddingLeft: 27 }} /></div>
+      </div>
+      <div role="group" aria-label="Sports" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 168, overflowY: 'auto' }}>
+        {!sportsList.length && <span style={{ color: muted, fontSize: 12 }}>Loading sports from the catalog…</span>}
+        {/* Picked sports stay visible even when the filter hides them. */}
+        {[...new Map([...sportsList, ...likes.sports].map((s) => [s.id, s])).values()].sort((a, b) => a.name.localeCompare(b.name)).filter((s) => likes.sports.some((x) => x.id === s.id) || s.name.toLowerCase().includes(sportFilter.trim().toLowerCase())).map((s) => { const on = likes.sports.some((x) => x.id === s.id); return <button key={s.id} type="button" aria-pressed={on} onClick={() => setLikes({ ...likes, sports: on ? likes.sports.filter((x) => x.id !== s.id) : [...likes.sports, s] })} style={{ ...iconChip(on), padding: '5px 10px', fontSize: 10, gap: 5 }}><IconLabel Icon={sportIcon(s.name)} size={12}>{s.name}</IconLabel></button>; })}
+      </div>
+      <p style={{ color: muted, fontSize: 12, margin: '10px 0 0' }}>{[
+        likes.types.some((t) => t !== 'recovery') && 'Sessions use the picked training types where they fit.',
+        likes.sports.length && (goal.pattern.some((p) => p.categories.includes('Cardio') && !p.categories.includes('Hiit')) ? 'Picked sports take over the cardio days.' : 'A sports day is added to the week.'),
+        likes.types.includes('recovery') && 'Harder sessions end with a recovery activity such as an ice bath or sauna.',
+      ].filter(Boolean).join(' ') || 'Pick training types and sports, then draft the week to build from them.'}</p>
+    </div>
+    {(() => {
+      // Training fuel: the same food/supplement catalog as the Diet planner, timed around every session.
+      const fuel: TrainingFuel = cfg.fuel || defaultFuel();
+      const setFuel = (patch: Partial<TrainingFuel>) => setCfg((c) => ({ ...c, fuel: { ...(c.fuel || defaultFuel()), ...patch } }));
+      return <div style={{ ...card, marginBottom: 14 }}>
+        <span style={label}>Training fuel</span>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 14 }}>
+          {(['pre', 'post'] as const).map((when) => <div key={when}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: muted, fontSize: 11, marginBottom: 6 }}>{when === 'pre' ? 'Before each session' : 'After each session'}
+              <input type="number" min={0} step={5} aria-label={`Minutes ${when === 'pre' ? 'before' : 'after'} each session`} value={when === 'pre' ? fuel.preMinutes : fuel.postMinutes} onChange={(e) => setFuel(when === 'pre' ? { preMinutes: Number(e.target.value) || 0 } : { postMinutes: Number(e.target.value) || 0 })} style={{ ...input, height: 28, width: 58, fontSize: 11, padding: '0 6px' }} /> min</label>
+            <SupplementPicker accessToken={accessToken} title={when === 'pre' ? 'pre-workout fuel' : 'post-workout fuel'} items={fuel[when]} onChange={(items) => setFuel({ [when]: items })} />
+          </div>)}
+        </div>
+        <p style={{ color: muted, fontSize: 12, margin: '10px 0 0' }}>Saved as timed items on every training day, linked to the catalog like Diet supplements.</p>
+      </div>;
+    })()}
+    {(() => {
+      // When to train: workdays vs other days, a time of day for each, and rest days. Drafting uses all of it.
+      const sch: FitnessSchedule = cfg.schedule || defaultSchedule();
+      const setSch = (patch: Partial<FitnessSchedule>) => setCfg((c) => ({ ...c, schedule: { ...(c.schedule || defaultSchedule()), ...patch } }));
+      const toggle = (list: number[], day: number) => list.includes(day) ? list.filter((d) => d !== day) : [...list, day].sort();
+      const dayChips = (title: string, value: number[], onChange: (v: number[]) => void) => <div><span style={label}>{title}</span><div role="group" aria-label={title} style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{WEEK.map((w) => <button key={w.day} type="button" aria-pressed={value.includes(w.day)} onClick={() => onChange(toggle(value, w.day))} style={{ ...chip(value.includes(w.day)), padding: '5px 9px', fontSize: 10 }}>{w.short}</button>)}</div></div>;
+      const timeChips = (title: string, value: TrainTime, onChange: (v: TrainTime) => void) => <div><span style={label}>{title}</span><div role="group" aria-label={title} style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{TRAIN_TIMES.map((t) => <button key={t.id} type="button" aria-pressed={value === t.id} onClick={() => onChange(t.id)} style={{ ...iconChip(value === t.id), padding: '5px 10px', fontSize: 10, gap: 5 }}><IconLabel Icon={t.id === 'morning' ? Sunrise : t.id === 'lunch' ? Sun : Moon} size={12}>{t.label} <span style={{ opacity: .7 }}>· {resolveTiming(t.timing)}</span></IconLabel></button>)}</div></div>;
+      const time = (id: TrainTime) => TRAIN_TIMES.find((t) => t.id === id)!.label.toLowerCase();
+      return <div style={{ ...card, marginBottom: 14 }}>
+        <span style={{ ...label, color: acid }}>When to train</span>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 14 }}>
+          {dayChips('Workdays', sch.workdays, (workdays) => setSch({ workdays }))}
+          {timeChips('On workdays', sch.workday, (workday) => setSch({ workday }))}
+          {timeChips('On other days', sch.other, (other) => setSch({ other }))}
+          {dayChips('Rest days', sch.restDays, (restDays) => setSch({ restDays }))}
+        </div>
+        <p style={{ color: muted, fontSize: 12, margin: '10px 0 0' }}>Drafted sessions train in the {time(sch.workday)} on workdays and the {time(sch.other)} on other days{sch.restDays.length ? `, and move off ${sch.restDays.map((d) => WEEK.find((w) => w.day === d)?.short).join(', ')}` : ''}. Every session starts with stretches for the muscles it works.</p>
+      </div>;
+    })()}
+    <LinkedDiet accessToken={accessToken} protocolId={protocolId} fit={cfg} meta={meta} protocols={protocols} onOpen={onOpen} />
     <div style={{ ...card, marginBottom: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, alignItems: 'end' }}>
       <label><span style={label}>Name</span><input style={input} value={name} onChange={(e) => setName(e.target.value)} /></label>
-      <div><span style={label}>Level</span><div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{(['beginner', 'intermediate', 'advanced'] as const).map((l) => <button key={l} type="button" onClick={() => setCfg({ ...cfg, level: l })} style={{ ...chip(cfg.level === l), padding: '6px 9px', fontSize: 10, textTransform: 'capitalize' }}>{l}</button>)}</div></div>
+      <div><span style={label}>Level</span><div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{(['beginner', 'intermediate', 'advanced'] as const).map((l) => <button key={l} type="button" onClick={() => setCfg((c) => ({ ...c, level: l }))} style={{ ...iconChip(cfg.level === l), padding: '6px 9px', fontSize: 10, gap: 5, textTransform: 'capitalize' }}><IconLabel Icon={LEVEL_ICON[l]} size={12}>{l}</IconLabel></button>)}</div></div>
       <label><span style={label}>Minutes / session</span><input style={input} type="number" min={10} step={5} value={cfg.minutes} onChange={(e) => setCfg({ ...cfg, minutes: Number(e.target.value) || 0 })} /></label>
       <div><span style={label}>This week</span><div style={{ fontFamily: serif, fontSize: 22 }}>{cfg.sessions.length} sessions · {totalMinutes} min</div></div>
     </div>
@@ -387,22 +533,24 @@ export function FitnessBuilder({ accessToken, ownerId, protocols, initialProtoco
         {all.some((x) => x === 'Cardio' || x === 'Mobility') && <div style={{ color: muted, fontSize: 10, marginTop: 8 }}>Also {all.filter((x) => x === 'Cardio').length} cardio and {all.filter((x) => x === 'Mobility').length} mobility exercises. Full-body moves count toward every group.</div>}
       </div>;
     })()}
-    <div style={{ overflowX: 'auto' }}>
+    {(() => { const open = detail && cfg.sessions[detail.s]?.exercises[detail.k]; return <div className={`g-fit-split${open ? ' has-detail' : ''}`}>
+    <div style={{ overflowX: 'auto', minWidth: 0 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,minmax(150px,1fr))', gap: 6, minWidth: 1080 }}>
         {WEEK.map(({ day, short }) => {
           const list = cfg.sessions.map((s, i) => ({ s, i })).filter(({ s }) => s.day === day);
           return <div key={day} style={{ border: `1px solid ${line}`, minHeight: 260, padding: 8, background: list.length ? panel : 'transparent' }}>
             <div style={{ ...label, display: 'flex', justifyContent: 'space-between' }}>{short}{!list.length && <span style={{ fontWeight: 400 }}>Rest</span>}</div>
             {list.map(({ s, i }) => <div key={i} style={{ borderTop: `1px solid ${line}`, paddingTop: 8, marginTop: 6 }}>
-              <div style={{ display: 'flex', gap: 4 }}><input style={{ ...input, height: 30, fontSize: 12, padding: '0 7px' }} value={s.title} onChange={(e) => patchSession(i, { title: e.target.value })} /><button type="button" title="Name the day from its muscles (Leg day, Upper body day…)" style={{ ...iconBtn, fontSize: 10 }} onClick={() => { const n = dayNameFor(s.exercises); if (n) patchSession(i, { title: n }); }}>Aa</button><button type="button" title="Remove session" style={iconBtn} onClick={() => setCfg({ ...cfg, sessions: cfg.sessions.filter((_, j) => j !== i) })}><Trash2 size={12} /></button></div>
+              <div style={{ display: 'flex', gap: 4 }}><input style={{ ...input, height: 30, fontSize: 12, padding: '0 7px' }} value={s.title} onChange={(e) => patchSession(i, { title: e.target.value })} /><button type="button" title="Name the day from its muscles (Leg day, Upper body day…)" style={{ ...iconBtn, fontSize: 10 }} onClick={() => { const n = dayNameFor(s.exercises); if (n) patchSession(i, { title: n }); }}>Aa</button><button type="button" title="Remove session" style={iconBtn} onClick={() => { setDetail(null); setCfg({ ...cfg, sessions: cfg.sessions.filter((_, j) => j !== i) }); }}><Trash2 size={12} /></button></div>
               <div style={{ margin: '5px 0 3px' }}><TimingField compact value={sessionTiming(s)} onChange={(t) => patchSession(i, { anchor: t.anchor, time: t.time, offset: t.offset })} /></div>
               <div style={{ display: 'flex', gap: 4, marginBottom: 5, alignItems: 'center', color: muted, fontSize: 10 }}>≈ {resolveTiming(sessionTiming(s))} ·
                 <input style={{ ...input, height: 28, fontSize: 11, padding: '0 5px', width: 52 }} type="number" value={s.minutes} onChange={(e) => patchSession(i, { minutes: Number(e.target.value) || 0 })} title="Minutes" /> min
               </div>
               <select style={{ ...input, height: 28, fontSize: 11, padding: '0 5px', marginBottom: 6 }} value={s.intensity} onChange={(e) => patchSession(i, { intensity: e.target.value as FitnessSession['intensity'] })}><option value="low">Low intensity</option><option value="moderate">Moderate</option><option value="high">High</option></select>
-              {s.exercises.map((e, k) => ({ e, k, g: muscleGroupOf(e) })).sort((a, b) => MUSCLE_ORDER.indexOf(a.g) - MUSCLE_ORDER.indexOf(b.g)).map(({ e, k, g }, idx, arr) => <div key={`${e.id}-${k}`} style={{ fontSize: 11, padding: '5px 0', borderTop: '1px dashed rgba(245,242,234,.12)' }}>
+              {/* Done in order: warm-up stretches, training grouped by muscle, then recovery. */}
+              {s.exercises.map((e, k) => ({ e, k, g: exerciseGroup(e), rank: e.role === 'warmup' ? -1 : e.role === 'recovery' ? 999 : MUSCLE_ORDER.indexOf(muscleGroupOf(e)) })).sort((a, b) => a.rank - b.rank).map(({ e, k, g }, idx, arr) => <div key={`${e.id}-${k}`} style={{ fontSize: 11, padding: '5px 0', borderTop: '1px dashed rgba(245,242,234,.12)', background: detail?.s === i && detail.k === k ? 'rgba(199,216,163,.08)' : undefined }}>
                 {(idx === 0 || arr[idx - 1].g !== g) && <div style={{ color: acid, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', margin: '2px 0 4px' }}>{g}</div>}
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, alignItems: 'center' }}>{e.image ? <img src={e.image} alt="" loading="lazy" style={{ width: 34, height: 34, objectFit: 'cover', flex: 'none', border: `1px solid ${line}` }} /> : <span style={{ width: 34, height: 34, flex: 'none', border: `1px solid ${line}` }} />}<span style={{ flex: 1, minWidth: 0 }}>{e.name}</span><button type="button" style={iconBtn} onClick={() => patchSession(i, { exercises: s.exercises.filter((_, m) => m !== k) })}><X size={11} /></button></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, alignItems: 'center' }}>{e.image ? <img src={e.image} alt="" loading="lazy" style={{ width: 34, height: 34, objectFit: 'cover', flex: 'none', border: `1px solid ${line}` }} /> : <span style={{ width: 34, height: 34, flex: 'none', border: `1px solid ${line}` }} />}<button type="button" title="See it as in the app" aria-pressed={detail?.s === i && detail.k === k} onClick={() => setDetail(detail?.s === i && detail.k === k ? null : { s: i, k })} style={{ flex: 1, minWidth: 0, border: 0, background: 'transparent', color: ink, padding: 0, fontSize: 11, textAlign: 'left', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: 'rgba(245,242,234,.25)', textUnderlineOffset: 3 }}>{e.name}</button><button type="button" aria-label={`Remove ${e.name}`} style={iconBtn} onClick={() => { setDetail(null); patchSession(i, { exercises: s.exercises.filter((_, m) => m !== k) }); }}><X size={11} /></button></div>
                 <div style={{ display: 'flex', gap: 3, marginTop: 3, color: muted, alignItems: 'center' }}>
                   <input style={{ ...input, height: 24, width: 34, fontSize: 10, padding: '0 3px' }} value={e.sets ?? ''} placeholder="sets" onChange={(ev) => patchSession(i, { exercises: s.exercises.map((x, m) => m === k ? { ...x, sets: Number(ev.target.value) || null } : x) })} />×
                   <input style={{ ...input, height: 24, width: 48, fontSize: 10, padding: '0 3px' }} value={e.reps ?? ''} placeholder="reps" onChange={(ev) => patchSession(i, { exercises: s.exercises.map((x, m) => m === k ? { ...x, reps: ev.target.value || null } : x) })} />
@@ -412,11 +560,13 @@ export function FitnessBuilder({ accessToken, ownerId, protocols, initialProtoco
               <div style={{ marginTop: 6 }}><RulesEditor compact title="Do-checklist" rules={s.rules || []} onChange={(rules) => patchSession(i, { rules })} placeholder="e.g. Warm up for 5 minutes" /></div>
               <button type="button" onClick={() => { setAdding(i); setQuery(''); }} style={{ ...iconBtn, fontSize: 10, marginTop: 4, color: adding === i ? acid : muted }}><Plus size={11} /> Exercise</button>
             </div>)}
-            <button type="button" onClick={() => setCfg({ ...cfg, sessions: [...cfg.sessions, { day, time: '07:00', anchor: 'clock', offset: 0, rules: [], title: 'Walk 20 minutes', minutes: cfg.minutes, intensity: 'moderate', exercises: [] }] })} style={{ ...iconBtn, fontSize: 10, marginTop: 8 }}><Plus size={11} /> Session</button>
+            <button type="button" onClick={() => setCfg({ ...cfg, sessions: [...cfg.sessions, { day, ...sessionTimeFor(day, cfg.schedule), rules: [], title: 'Walk 20 minutes', minutes: cfg.minutes, intensity: 'moderate', exercises: [] }] })} style={{ ...iconBtn, fontSize: 10, marginTop: 8 }}><Plus size={11} /> Session</button>
           </div>;
         })}
       </div>
     </div>
+    {open && <div className="g-fit-detail"><ActivityDetailPreview accessToken={accessToken} exercise={open} onClose={() => setDetail(null)} /></div>}
+    </div>; })()}
     <div style={{ ...card, marginTop: 14 }}><RulesEditor title="Fitness checklist for the week" rules={cfg.rules || []} onChange={(rules) => setCfg((c) => ({ ...c, rules }))} placeholder="One rule per line" /></div>
     {adding != null && cfg.sessions[adding] && <div style={{ ...card, marginTop: 14 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}><span style={{ ...label, margin: 0 }}>Add to {WEEK.find((w) => w.day === cfg.sessions[adding].day)?.short} · {cfg.sessions[adding].title}</span><button type="button" style={iconBtn} onClick={() => setAdding(null)}><X size={14} /></button></div>
