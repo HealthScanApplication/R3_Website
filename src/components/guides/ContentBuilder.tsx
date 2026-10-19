@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Clapperboard } from 'lucide-react';
+import { BookOpen, CircleSlash, Clapperboard, Package, Salad } from 'lucide-react';
 import { ContentStudio, type PostBrand, type StudioOffer } from './ContentStudio';
 import { VideoStudio } from './VideoStudio';
 import type { AdminProtocol } from '../../utils/protocolAdmin';
@@ -92,7 +92,7 @@ export function ContentBuilder({ profile, offers, protocols, recipes }: { profil
       <div style={{ borderTop: `1px solid ${line}`, paddingTop: 14 }}>
         <div style={{ ...label, color: acid, marginBottom: 10 }}>03 · Solution</div>
         <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 12 }}>
-          {([['offer', `Offer (${offers.length})`], ['protocol', `Protocol (${protocols.length})`], ['recipe', `Recipe (${recipes.length})`], ['none', 'Nothing specific']] as const).map(([id, text]) => <button key={id} type="button" onClick={() => { setTouched(true); setSource(id); setPickedId(''); }} style={chip(source === id)}>{text}</button>)}
+          {([['offer', `Offer (${offers.length})`, Package], ['protocol', `Protocol (${protocols.length})`, BookOpen], ['recipe', `Recipe (${recipes.length})`, Salad], ['none', 'Nothing specific', CircleSlash]] as const).map(([id, text, Icon]) => <button key={id} type="button" onClick={() => { setTouched(true); setSource(id); setPickedId(''); }} style={{ ...chip(source === id), display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon size={13} strokeWidth={1.8} aria-hidden="true" />{text}</button>)}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
           {source !== 'none' && <label><span style={label}>{source === 'offer' ? 'Offer' : source === 'protocol' ? 'Protocol' : 'Recipe'}{focus && matching.length ? ` · ${matching.length} match ${focus.label.toLowerCase()}` : ''}</span>

@@ -74,6 +74,11 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
  * fits QR alphanumeric mode (5.5 bits a character instead of 8), so the code drops a version or two and the
  * dots get bigger. The site lower-cases /g/<slug> back to /guardians/<slug>. Anything else is encoded as is.
  */
+/** "@john-ferreira" for a Guardian page link, else null. */
+export function guardianHandle(siteUrl: string): string | null {
+  const slug = siteUrl.match(/\/guardians\/([a-z0-9-]+)$/)?.[1];
+  return slug ? `@${slug}` : null;
+}
 export function qrLink(siteUrl: string): string {
   const slug = siteUrl.match(/^(?:https:\/\/routine3\.com)?\/guardians\/([a-z0-9-]+)$/)?.[1];
   if (slug) return `HTTPS://ROUTINE3.COM/G/${slug.toUpperCase()}`;
@@ -312,6 +317,13 @@ export async function drawPost(canvas: HTMLCanvasElement, fmt: { id: FormatId; w
   }
 }
 
+/** A format's shape: a box at its real proportions, fitted inside 26 × 26. */
+export function RatioGlyph({ ratio, on }: { ratio: string; on: boolean }) {
+  const [a, b] = ratio.split(':').map(Number);
+  const w = a >= b ? 26 : Math.round(26 * a / b), h = b >= a ? 26 : Math.round(26 * b / a);
+  return <span aria-hidden="true" style={{ width: 26, height: 26, flex: '0 0 26px', display: 'grid', placeItems: 'center' }}><span style={{ width: w, height: h, border: `1.5px solid ${on ? '#C7D8A3' : 'rgba(245,242,234,0.55)'}`, borderRadius: 2, background: on ? 'rgba(199,216,163,.16)' : 'transparent' }} /></span>;
+}
+
 /** A text-style button's preview: the actual post, drawn small in that style (no QR, so it stays light). */
 export function StyleThumb({ styleId, bg, headline, subline, cta, credit, brand, position, fontsReady }: { styleId: TextStyleId; bg: string; headline: string; subline: string; cta: string; credit: string; brand: PostBrand | null; position: TextPosition; fontsReady: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -355,7 +367,9 @@ export function ContentStudio({ creator, avatar = null, audience, problem, offer
   const fmt = FORMATS.find((f) => f.id === fmtId)!;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const background = bg || autoBg;
-  const credit = creator ? `Guidance by ${creator}` : '';
+  // TikTok-style handle: routine3.com/@<slug> opens the Guardian's page.
+  const handle = guardianHandle(siteUrl);
+  const credit = creator ? `Guidance by ${creator}${handle ? ` · ${handle}` : ''}` : '';
   const fullUrl = siteUrl.startsWith('http') ? siteUrl : `https://routine3.com${siteUrl}`;
   const qrUrl = qrLink(siteUrl);
   useEffect(() => {
@@ -389,7 +403,7 @@ export function ContentStudio({ creator, avatar = null, audience, problem, offer
     <div className="g-split">
       <div style={{ display: 'grid', gap: 12, alignContent: 'start' }}>
         {offers.length > 1 && <label><span style={lab}>Offer</span><select value={offerIndex} onChange={(e) => setOfferIndex(Number(e.target.value))} style={field}>{offers.map((o, i) => <option key={i} value={i}>{String(i + 1).padStart(2, '0')} · {o.title} · {o.free ? 'Free' : o.price}</option>)}</select></label>}
-        <div><span style={lab}>Format</span><div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 6 }}>{FORMATS.map((f) => <button key={f.id} type="button" aria-pressed={fmtId === f.id} onClick={() => setFmtId(f.id)} style={{ minHeight: 44, border: `1px solid ${fmtId === f.id ? acid : line}`, background: fmtId === f.id ? '#20251B' : 'transparent', color: ink, textAlign: 'left', padding: '6px 10px', cursor: 'pointer' }}><strong style={{ display: 'block', fontSize: 12 }}>{f.label}</strong><span style={{ display: 'block', color: muted, fontSize: 9.5 }}>{f.platforms}</span></button>)}</div></div>
+        <div><span style={lab}>Format</span><div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 6 }}>{FORMATS.map((f) => <button key={f.id} type="button" aria-pressed={fmtId === f.id} onClick={() => setFmtId(f.id)} style={{ minHeight: 44, border: `1px solid ${fmtId === f.id ? acid : line}`, background: fmtId === f.id ? '#20251B' : 'transparent', color: ink, textAlign: 'left', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}><RatioGlyph ratio={f.label} on={fmtId === f.id} /><span><strong style={{ display: 'block', fontSize: 12 }}>{f.label}</strong><span style={{ display: 'block', color: muted, fontSize: 9.5 }}>{f.platforms}</span></span></button>)}</div></div>
         <div><span style={lab}>Text style</span><div role="group" aria-label="Text style" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>{TEXT_STYLES.map((t) => <button key={t.id} type="button" aria-pressed={textStyle === t.id} aria-label={`${t.label} text style`} onClick={() => setTextStyle(t.id)} style={{ border: `1px solid ${textStyle === t.id ? acid : line}`, outline: textStyle === t.id ? `1px solid ${acid}` : 'none', background: '#090A08', padding: 4, cursor: 'pointer', display: 'grid', gap: 4 }}>
           <StyleThumb styleId={t.id} bg={bgUrl(background)} headline={headline} subline={subline} cta={cta} credit={credit} brand={brand} position={position} fontsReady={fontsReady} />
           <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: textStyle === t.id ? acid : muted, padding: '1px 0 2px' }}>{t.label}</span></button>)}</div></div>
