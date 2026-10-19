@@ -49,6 +49,8 @@ export interface HomeItem {
   description?: string | null;
   done?: boolean;                // checked off for the day
   children?: string[];           // sub-item descriptions, shown as a faded checklist (like the app)
+  /** Time used to group and sort the item (an indented child takes its parent's); `time` stays what is shown. */
+  slotTime?: string | null;
   indent?: boolean;              // a sub-item of the card above it, drawn indented under its parent (like the app)
 }
 
@@ -101,7 +103,7 @@ function isBed(it: HomeItem): boolean {
 function orderKey(it: HomeItem): number {
   if (isWake(it)) return -1;
   if (isBed(it)) return 1e9;
-  return parseHM(it.time)?.mins ?? 5e8;
+  return parseHM(it.slotTime ?? it.time)?.mins ?? 5e8;
 }
 // An indented sub-item stays with the item above it: it takes that parent's time, slot and list, so grouping by part
 // of the day and sorting by time never separate the two (the stable sorts then keep it right under its parent).
@@ -109,7 +111,7 @@ function inheritParentSlot(items: HomeItem[]): HomeItem[] {
   let parent: HomeItem | undefined;
   return items.map((it) => {
     if (!it.indent) { parent = it; return it; }
-    return parent ? { ...it, time: parent.time, group_name: parent.group_name, category: parent.category, subtype: parent.subtype } : it;
+    return parent ? { ...it, slotTime: parent.slotTime ?? parent.time, group_name: parent.group_name, category: parent.category, subtype: parent.subtype } : it;
   });
 }
 // Book-end any day with grey Sleep anchors when the protocol doesn't supply them.
@@ -131,7 +133,7 @@ function withSleepAnchors(items: HomeItem[]): HomeItem[] {
 
 type Tod = SimpleTod;
 const todForItem = (it: HomeItem, wakeHour: number): Tod =>
-  getItemTod({ group_name: it.group_name, scheduled_time: it.time, display_name: it.display_name, category: it.category }, wakeHour);
+  getItemTod({ group_name: it.group_name, scheduled_time: it.slotTime ?? it.time, display_name: it.display_name, category: it.category }, wakeHour);
 
 interface Band { cat: CatKey; slot: string | null; firstMin: number | null; order: number; time?: string | null; label: string; items: HomeItem[] }
 function buildBands(list: HomeItem[]): Band[] {
@@ -140,7 +142,7 @@ function buildBands(list: HomeItem[]): Band[] {
   for (const it of sorted) {
     const cat = categorizeFull(it);
     const slot = mealSlot(it.group_name);
-    const m = parseHM(it.time)?.mins ?? null;
+    const m = parseHM(it.slotTime ?? it.time)?.mins ?? null;
     const last = bands[bands.length - 1];
     const canMerge = !!last && !last.slot && !slot && last.cat === cat &&
       m != null && last.firstMin != null && m - last.firstMin <= 60;
@@ -188,7 +190,7 @@ function buildSmartBands(list: HomeItem[], tod: string): Band[] {
     const items = byCat.get(c);
     if (!items?.length) continue;
     const sorted = sortItems(items);
-    bands.push({ cat: SMART_TINT[c], slot: "smart", firstMin: parseHM(sorted[0].time)?.mins ?? null, order: orderKey(sorted[0]), time: sorted[0].time, label: `${tod} ${SMART_TITLE[c]}`.toUpperCase(), items: sorted });
+    bands.push({ cat: SMART_TINT[c], slot: "smart", firstMin: parseHM(sorted[0].slotTime ?? sorted[0].time)?.mins ?? null, order: orderKey(sorted[0]), time: sorted[0].slotTime ?? sorted[0].time, label: `${tod} ${SMART_TITLE[c]}`.toUpperCase(), items: sorted });
   }
   // Wake leads the morning; every other sleep band (bedtime, "Sleep in complete darkness") closes
   // the day. Smart groups sit between, in category order.

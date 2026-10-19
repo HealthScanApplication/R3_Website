@@ -49,3 +49,10 @@ describe('guardian-images lib', () => {
     expect(priceLabel(undefined, '1:1', 'high')).toBe('');
   });
 });
+
+import { pickModel, DEFAULT_MODEL } from '../../../supabase/functions/guardian-images/lib';
+it('only accepts the model the price list belongs to', () => {
+  expect(pickModel('gpt-image-1')).toBe('gpt-image-1');
+  expect(pickModel('gpt-image-1.5')).toBe(DEFAULT_MODEL);
+  expect(pickModel(undefined)).toBe(DEFAULT_MODEL);
+});

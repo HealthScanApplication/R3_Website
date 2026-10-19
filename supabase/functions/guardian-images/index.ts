@@ -12,7 +12,7 @@ const service = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABA
 const LIVE = Deno.env.get('GUARDIAN_IMAGES_LIVE') === 'true';
 const ENC = Deno.env.get('GUARDIAN_IMAGES_ENCRYPTION_KEY') || '';
 const HOUSE_KEY = Deno.env.get('OPENAI_API_KEY') || '';
-const MODEL = Deno.env.get('GUARDIAN_IMAGES_MODEL') || gi.DEFAULT_MODEL;
+const MODEL = gi.pickModel(Deno.env.get('GUARDIAN_IMAGES_MODEL'));
 const HOUSE_PER_DAY = Number(Deno.env.get('GUARDIAN_IMAGES_DAILY_LIMIT') || 10);
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
 
   if (action === 'status') {
     const { data } = await service.from('guardian_openai_connections').select('key_hint, connected_at').eq('user_id', user.id).maybeSingle();
-    return json({ live: LIVE, house: !!HOUSE_KEY, house_left: Math.max(0, HOUSE_PER_DAY - await houseUsedToday(user.id)), house_per_day: HOUSE_PER_DAY,
+    return json({ live: LIVE, house: LIVE ? !!HOUSE_KEY : true, house_left: Math.max(0, HOUSE_PER_DAY - await houseUsedToday(user.id)), house_per_day: HOUSE_PER_DAY,
       own: { connected: !!data, key_hint: data?.key_hint ?? null, connected_at: data?.connected_at ?? null, available: !!ENC }, model: MODEL, prices: gi.PRICE_USD });
   }
 
@@ -79,7 +79,8 @@ Deno.serve(async (req) => {
       key = await ownKey(user.id).catch(() => null);
       if (!key) return fail('Connect your OpenAI key first.', 409);
     } else {
-      if (!HOUSE_KEY) return fail('R³ images are not available right now; connect your own OpenAI key instead.', 503);
+      // Test mode never calls OpenAI, so a house key is only needed for live generation.
+      if (LIVE && !HOUSE_KEY) return fail('R³ images are not available right now; connect your own OpenAI key instead.', 503);
       key = HOUSE_KEY;
     }
     const log = { user_id: user.id, source: shaped.source, model: MODEL, aspect_ratio: shaped.aspect, quality: shaped.quality, usd: shaped.usd, prompt: shaped.body.prompt, mock: !LIVE };

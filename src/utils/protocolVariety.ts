@@ -129,9 +129,11 @@ export function planVariety(rows: VRow[], recipes: Recipe[], activities: Activit
       const alts = mealAlternatives(orig, slot, recipes, opts.dietFlags).filter((a) => !isDrinkName(a.name_common));
       if (!alts.length) { plan.notes.push(`${r.display_name}: no other ${slot} recipe fits ${[...flagsOf(orig), ...(opts.dietFlags || [])].join(', ') || 'this diet'} — stays daily`); continue; }
       const pool = alts.slice(0, 12).map((a) => ({ ...a, name: a.name_common }));
-      pin(r);
+      // Choose the first dish BEFORE pinning the slot to day 1: if none fits, the slot stays daily with nothing to undo.
       const first = orig ? null : choose(1, pool, idx);
-      if (!orig) { if (!first) { plan.updates.pop(); continue; } plan.updates[plan.updates.findIndex((u) => u.id === r.id)].set = { day_number: 1, catalog_recipe_id: first.id, display_name: first.name }; }
+      if (!orig && !first) { plan.notes.push(`${r.display_name}: no recipe left for day 1 — stays daily`); continue; }
+      pin(r);
+      if (!orig) plan.updates[plan.updates.findIndex((u) => u.id === r.id)].set = { day_number: 1, catalog_recipe_id: first!.id, display_name: first!.name };
       for (let d = 2; d <= total; d++) {
         // A 7-dish week: the same dish comes back a week later, never two days running.
         const pick = (d - 1) % 7 === 0 && orig ? null : choose(d, pool, idx + d);

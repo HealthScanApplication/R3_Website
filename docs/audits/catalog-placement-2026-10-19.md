@@ -48,6 +48,8 @@ Acesulfame Potassium, Acetic Acid, Allura Red Ac, Amaranth, Anthocyanins, Apple 
 
 **Action:** Set meal_slot = Drink (Black Coffee, Chai Latte, smoothies).
 
+**Exceptions, check by hand (cereal or breakfast dishes that contain milk, not drinks):** Prenatal Fortified Cereal with Milk, Weetabix with milk, Whole Milk + Breakfast. Leave these as meals.
+
 Avocado Spinach Smoothie, Black Coffee, Bubble Tea, Bulletproof Keto Coffee, Chai Latte, Cold Brew Coffee, Collagen Berry Fast-Break Smoothie, Cortado Coffee, Cup of Macchiato Coffee, Filter Coffee, Flat-White Coffee, Fruit Smoothie, Ginger Shot, Glass of Milk Oat, Green Smoothie, Iced Latte Coffee, Irish Coffee, Jug of Drip Filter Coffee, Kid Smoothie Hidden Spinach, Latte Coffee, Multivitamin Juice, Prenatal Banana Spinach Smoothie, Prenatal Fortified Cereal with Milk, Prenatal Orange Juice with Iron Cereal, Ristretto Coffee, Smoothie Acai Bowl, Smoothie Banana, Smoothie Berry, Smoothie Mango, Smoothie Protein, Smoothie Tropical, Soda farl fry, Spirulina Power Smoothie Bowl, Superfood Smoothie, Thai Iced Tea, Turkish Coffee, Vietnamese Coffee, Weetabix with milk, Whole Milk + Breakfast
 
 ## Condiment / pantry item filed as a recipe — 22
