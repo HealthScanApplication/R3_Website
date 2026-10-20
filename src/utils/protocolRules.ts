@@ -12,10 +12,12 @@
  *     dish name, no verb ("Vegetable soup"); a linked meal takes the recipe name only when the
  *     Guardian's title was blank or generic.
  *  5. Vague practices are rewritten to something linkable ("Practice light exercise" → "Walk 20 minutes").
+ *  6. A thing to take is a step, never a rule: a supplement or drink named as a bare item ("Chlorella",
+ *     "Drink Water") that was filed as a rule becomes a step with a time.
  */
 
 export type Anchor = 'wake' | 'bedtime' | 'before_meal' | 'after_meal';
-export interface RuleIssue { code: 'no_time' | 'vague' | 'not_verb' | 'renamed' | 'moved_to_rules'; message: string }
+export interface RuleIssue { code: 'no_time' | 'vague' | 'not_verb' | 'renamed' | 'moved_to_rules' | 'rule_to_step'; message: string }
 
 export const END_SLEEP = 'End Sleep';
 export const START_SLEEP = 'Start Sleep';
@@ -43,8 +45,59 @@ const VAGUE: { re: RegExp; title: string; query: string; minutes: number }[] = [
   { re: /^(relax|unwind|de-?stress|practi[cs]e (relaxation|mindfulness|self[- ]care))$/i, title: 'Breathe slowly', query: 'breath', minutes: 5 },
   { re: /^(get |go )?(outside|fresh air|some sun(light)?)$/i, title: 'Walk outdoors', query: 'walk', minutes: 15 },
 ];
-const AVOID_TITLE = /^(avoid|no|skip|don'?t|do not|cut out|cut|limit|reduce|abstain|refrain|follow the .*diet|practi[cs]e .*abstinence)\b/i;
+export const AVOID_TITLE = /^(avoid|no|skip|don'?t|do not|cut out|cut|limit|reduce|abstain|refrain|follow the .*diet|practi[cs]e .*abstinence)\b/i;
 export const isRuleTitle = (title: string) => AVOID_TITLE.test(title.trim());
+
+/* ───────── a thing to take is a step, never a rule ───────── */
+/** A rule is a constraint ("Avoid X", "Keep binders 2 h from food"); a named supplement or plain drink to take is a step. */
+export const TAKE_VERB = /^(drink|take|have|eat|sip)\s+(a |an |some |your |the )?/i;
+/** Words that make a title a constraint or a piece of guidance rather than a thing to take. */
+export const CONSTRAINT_WORD = /\b(if|when|whenever|while|before|after|during|with|without|within|from|at|on|every|each|per|than|more|less|fewer|only|instead|no|not|never|always|avoid|limit|keep|stay|stop|pause|check|follow|for|until|unless|labels?|rules?|daily|weekly|twice|times|dose|doses|dosage|slowly|plenty)\b/i;
+/** Negations inside a parenthesis ("Gentle Start (no greens yet)"); other parenthetical detail is just a description. */
+export const NEGATION_WORD = /\b(no|not|never|avoid|without|stop|pause|limit|only|instead)\b/i;
+/** Openings of advice, not of a thing to take. */
+export const GUIDANCE_START = /^(quit|eliminate|steer|ditch|minimi[sz]e|prefer|choose|consult|seek|be|store|shake|hydrate|stay|start|try|aim|make sure|ensure|remember|consider|ask|tell|talk|speak|see|read|plan|prepare|wait|rest|reduce|use)\b/i;
+/** Headings and advice words that sit in a supplements list without being a product. */
+export const NOT_A_PRODUCT = /\b(supplements?|medications?|medicines?|drugs?|blood thinners?|binders?|safety|doctors?|clinicians?|physicians?|interactions?|timing|spacing|advice|warnings?|notes?|tips?|brands?|quality)\b/i;
+/** Evidence that a supplement title is a product being dosed: an amount, or a pinch. */
+export const DOSE = /\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|µg|g|iu|ml|l|caps?|capsules?|tablets?|tabs?|softgels?|drops?|scoops?|tsp|tbsp)\b|\bpinch\b/i;
+/** Plain liquids only: "Water", "Lemon water", "Green tea". Not "Choose water over juice", "Extra water", "Herbal tea or water". */
+export const PLAIN_DRINK = /^(?:(?:warm|hot|cold|iced|lemon|sparkling|mineral|coconut|herbal|green|black|white|mint|ginger|chamomile|rooibos|matcha|dandelion|vegetable|celery|bone) )?(?:water|tea|coffee|juice|broth|milk|kefir|kombucha)$/i;
+
+const stripParens = (t: string) => t.replace(/\(.*?\)/g, '').trim();
+/**
+ * "Chlorella", "N-Acetyl Cysteine", "Drink Water", "Pinch of Whole Salt (Celtic / Himalayan)": the bare name of something to
+ * take, with no constraint wording. Filed as a rule it shows as "Do: Chlorella" under that day's rules with no time and
+ * nothing to tick off.
+ */
+export function isBareItemTitle(title: string): boolean {
+  const raw = title.trim().replace(/[’‘]/g, "'");
+  if (!raw || /^(drink|take|have|eat|sip|add)$/i.test(raw) || AVOID_TITLE.test(raw) || GUIDANCE_START.test(raw)) return false;
+  const name = raw.replace(TAKE_VERB, '');
+  const words = stripParens(name);
+  const inParens = (name.match(/\(.*?\)/g) || []).join(' ');
+  return words.length > 0 && words.split(/\s+/).length <= 5 && !CONSTRAINT_WORD.test(words) && !NEGATION_WORD.test(inParens) && !/[.:;!?]/.test(words) && !/\d+\s*[x×]/i.test(words);
+}
+/** What a bare item of a supplements or consume group is. A supplement needs a sign it is a product: "Take …", an amount, or a product link. */
+export function takeGroupOf(title: string, group?: string | null, evidence: { notes?: string | null; linked?: boolean } = {}): 'supplement' | 'drink' | null {
+  if (!isBareItemTitle(title)) return null;
+  const raw = title.trim().replace(/[’‘]/g, "'");
+  const words = stripParens(raw.replace(TAKE_VERB, ''));
+  if (group === 'supplements' || group === 'supplement') {
+    if (NOT_A_PRODUCT.test(words)) return null;
+    return TAKE_VERB.test(raw) || DOSE.test(`${raw} ${evidence.notes || ''}`) || evidence.linked ? 'supplement' : null;
+  }
+  return (group === 'consume' || group === 'meal') && PLAIN_DRINK.test(words) ? 'drink' : null;
+}
+/** Where a step with no time goes: a drink in the morning; a supplement by the meal or bedtime its text names, else the morning. */
+export function itemDefaultTime(text: string, drink: boolean): string {
+  if (drink) return '08:00';
+  const t = text.replace(/\b(?:not|never|avoid|no)\b[^.;]{0,25}\b(?:bed|bedtime|night|evening|dinner|supper|lunch|noon|midday)\b/gi, ' ');
+  if (/\b(bed|bedtime|before sleep|at night)\b/i.test(t)) return '21:30';
+  if (/\b(dinner|supper|evening)\b/i.test(t)) return '18:30';
+  if (/\b(lunch|midday|noon|with (food|meals?))\b/i.test(t)) return '12:30';
+  return '08:00';
+}
 
 const hm = (min: number) => `${String(Math.floor(((min % 1440) + 1440) % 1440 / 60)).padStart(2, '0')}:${String(((min % 60) + 60) % 60).padStart(2, '0')}`;
 const mins = (t: string | null | undefined) => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ''); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
@@ -122,6 +175,17 @@ export function enforceProtocolRules<T extends RuleStep>(steps: T[]): T[] {
       if (!PLAIN_BEDTIME.test(bed.title.trim())) bed.dos.unshift(bed.title);
       note(bed, 'renamed', `Renamed from “${bed.title}”`); bed.title = START_SLEEP;
     }
+  }
+
+  // 6. A supplement or drink named as a bare item and filed as a rule is a step ("Do: Chlorella" has no time and nothing to tick off).
+  // A rule that lists Don'ts is a constraint list, never converted; its Do's become the step's checklist.
+  for (const s of out) {
+    if (s.kind !== 'rule' || s.group === 'sleep' || s.isParent || s.donts.length) continue;
+    const what = takeGroupOf(s.title, s.group, { notes: s.notes });
+    if (!what) continue;
+    s.kind = 'action'; s.ruleGroup = undefined;
+    if (!s.time && !s.anchor) s.time = itemDefaultTime(`${s.title} ${s.notes}`, what === 'drink');
+    note(s, 'rule_to_step', `“${s.title}” is something to take, so it is a step with a time, not a rule`);
   }
 
   for (const s of out) {
