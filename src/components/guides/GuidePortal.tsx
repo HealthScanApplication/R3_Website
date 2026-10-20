@@ -672,6 +672,9 @@ function Brand({ centered = false }: { centered?: boolean }) {
   return <a href="/" aria-label="ROUTINE³ Guardians" style={{ width: 'fit-content', margin: centered ? '0 auto' : undefined, textDecoration: 'none', display: 'block' }}><RoutineMark size={31} textColor={ink} hairline="rgba(245,242,234,0.58)" suffix="Guardians" /></a>;
 }
 
+/** One @, no spaces, and a dotted domain: `guide@@example.com` and `a b@example.com` are rejected. */
+export const isValidContactEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+
 /** A section that opens on demand: its header always shows what is inside (the summary), so closed does not mean hidden. */
 export function Disclosure({ id, title, summary, open, required, onToggle, children }: { id: string; title: string; summary: string; open: boolean; required?: boolean; onToggle: () => void; children: React.ReactNode }) {
   return <section style={{ border: `1px solid ${line}`, marginTop: 14 }}>
@@ -2054,14 +2057,14 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   function goToBrandStage() {
     setError('');
     if (!displayName.trim()) { setError('Add the name people should call you.'); setProfileStage(0); return; }
-    if (!/^\S+@\S+\.\S+$/.test(contactEmail.trim())) { setError('Add a valid contact email.'); setProfileOpen((o) => ({ ...o, contact: true })); setProfileStage(0); return; }
+    if (!isValidContactEmail(contactEmail)) { setError('Add a valid contact email.'); setProfileOpen((o) => ({ ...o, contact: true })); setProfileStage(0); return; }
     setProfileStage(1);
   }
 
   async function continueSetup() {
     setError('');
     if (step === 1 && !displayName.trim()) { setError('Add the name people should call you.'); return; }
-    if (step === 1 && !/^\S+@\S+\.\S+$/.test(contactEmail.trim())) { setError('Add a valid contact email.'); return; }
+    if (step === 1 && !isValidContactEmail(contactEmail)) { setError('Add a valid contact email.'); return; }
     if (step === 2 && !chosen.length) { setError('Choose at least one area you can help with.'); return; }
     if (step === 3 && !audience.length) { setError('Choose at least one audience.'); return; }
     if (step === 1) {
@@ -2149,7 +2152,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     e.preventDefault(); setBusy(true); setError('');
     try {
       if (!displayName.trim()) throw new Error('Add the name people should call you.');
-      if (!/^\S+@\S+\.\S+$/.test(contactEmail.trim())) throw new Error('Add a valid contact email.');
+      if (!isValidContactEmail(contactEmail)) throw new Error('Add a valid contact email.');
       if (!chosen.length) throw new Error('Choose at least one area you can help with.');
       if (brandsLoaded === 'loading') throw new Error('Your saved brands are still loading. Try again in a moment.');
       if (brandsLoaded === 'failed') throw new Error('Your saved brands could not be loaded, so publishing is paused to avoid overwriting them. Reload the page to try again.');
@@ -2530,8 +2533,8 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
 
       {step === 1 && <>
       {/* Progressive disclosure: who you are first; contact, links and booking open on demand; the brand look is its own stage after. */}
-      <div role="list" aria-label="Profile stages" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 0 22px' }}>
-        {['Profile', 'Brand'].map((name, index) => <button type="button" role="listitem" key={name} aria-current={profileStage === index ? 'step' : undefined} onClick={() => (index === 0 ? setProfileStage(0) : goToBrandStage())} style={{ border: 0, background: 'transparent', padding: '4px 0', color: profileStage === index ? ink : muted, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', cursor: 'pointer', borderBottom: `2px solid ${profileStage === index ? acid : 'transparent'}` }}>{index + 1} · {name}</button>)}
+      <div role="group" aria-label="Profile stages" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 0 22px' }}>
+        {['Profile', 'Brand'].map((name, index) => <button type="button" key={name} aria-current={profileStage === index ? 'step' : undefined} onClick={() => (index === 0 ? setProfileStage(0) : goToBrandStage())} style={{ border: 0, background: 'transparent', padding: '4px 0', color: profileStage === index ? ink : muted, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', cursor: 'pointer', borderBottom: `2px solid ${profileStage === index ? acid : 'transparent'}` }}>{index + 1} · {name}</button>)}
       </div>
       {profileStage === 0 && <>
       {/* Brand picker: one quiet line. Most Guardians publish under their own name, so it should not compete with the form. */}
@@ -4012,13 +4015,13 @@ export function SiteProfileForm({ userId, profile, onProfile }: { userId: string
   const goToBrand = () => {
     setStageError('');
     if (!v.name.trim()) { setStageError('Add the name people should call you.'); setStage(0); return; }
-    if (!/^\S+@\S+\.\S+$/.test(v.email.trim())) { setStageError('Add a valid contact email.'); setOpen((x) => ({ ...x, contact: true })); setStage(0); return; }
+    if (!isValidContactEmail(v.email)) { setStageError('Add a valid contact email.'); setOpen((x) => ({ ...x, contact: true })); setStage(0); return; }
     setStage(1);
   };
   return <div style={{ maxWidth: 820 }}>
     {/* Same progressive layout as setup step 01: who you are first; contact, links, booking and about open on demand; the brand look is its own stage. */}
-    <div role="list" aria-label="Profile stages" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 0 22px' }}>
-      {['Profile', 'Brand'].map((name, index) => <button type="button" role="listitem" key={name} aria-current={stage === index ? 'step' : undefined} onClick={() => (index === 0 ? (setStageError(''), setStage(0)) : goToBrand())} style={{ border: 0, background: 'transparent', padding: '4px 0', color: stage === index ? ink : muted, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', cursor: 'pointer', borderBottom: `2px solid ${stage === index ? acid : 'transparent'}` }}>{index + 1} · {name}</button>)}
+    <div role="group" aria-label="Profile stages" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 0 22px' }}>
+      {['Profile', 'Brand'].map((name, index) => <button type="button" key={name} aria-current={stage === index ? 'step' : undefined} onClick={() => (index === 0 ? (setStageError(''), setStage(0)) : goToBrand())} style={{ border: 0, background: 'transparent', padding: '4px 0', color: stage === index ? ink : muted, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', cursor: 'pointer', borderBottom: `2px solid ${stage === index ? acid : 'transparent'}` }}>{index + 1} · {name}</button>)}
     </div>
     {stageError && <p role="alert" style={{ color: '#E8B86A', fontSize: 12, lineHeight: 1.5, margin: '0 0 14px' }}>{stageError}</p>}
     {stage === 0 && <>

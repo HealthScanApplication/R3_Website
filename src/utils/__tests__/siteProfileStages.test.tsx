@@ -53,17 +53,34 @@ it('moves to the brand stage on its own and back, keeping the edits', async () =
   expect(screen.getByDisplayValue('guide@example.com')).toBeTruthy();
 });
 
+it('keeps the stage controls as buttons in a labelled group', async () => {
+  open();
+  await screen.findByDisplayValue('Test Guide');
+  const group = screen.getByRole('group', { name: 'Profile stages' });
+  expect(group.querySelectorAll('button').length).toBe(2);
+  expect(screen.getByRole('button', { name: '1 · Profile' }).getAttribute('aria-current')).toBe('step');
+  expect(screen.getByRole('button', { name: '2 · Brand' }).getAttribute('aria-current')).toBeNull();
+});
+
+it('rejects an address with two @ signs before the brand stage', async () => {
+  open(guide({ contact_email: 'guide@@example.com' }));
+  await screen.findByDisplayValue('Test Guide');
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to brand' }));
+  expect(await screen.findByText('Add a valid contact email.')).toBeTruthy();
+  expect(screen.queryByText(/Brand kit/i)).toBeNull();
+});
+
 it('checks the name and email before the brand stage, and opens Contact when the email is wrong', async () => {
   open(guide({ contact_email: '' }));
   await screen.findByDisplayValue('Test Guide');
   fireEvent.click(screen.getByRole('button', { name: /Contact/ })); // close it, then see that the error reopens it
   expect(screen.getByRole('button', { name: /Contact/ }).getAttribute('aria-expanded')).toBe('false');
-  fireEvent.click(screen.getByText('2 · Brand'));
+  fireEvent.click(screen.getByRole('button', { name: '2 · Brand' }));
   expect((await screen.findByText('Add a valid contact email.')).getAttribute('role')).toBe('alert');
   expect(screen.getByRole('button', { name: /Contact/ }).getAttribute('aria-expanded')).toBe('true');
   expect(screen.queryByText(/Brand kit/i)).toBeNull();
   fireEvent.change(document.querySelector('input[type="email"]') as HTMLInputElement, { target: { value: 'guide@example.com' } });
-  fireEvent.click(screen.getByText('2 · Brand'));
+  fireEvent.click(screen.getByRole('button', { name: '2 · Brand' }));
   await waitFor(() => expect(screen.getByText(/Brand kit/i)).toBeTruthy());
   expect(screen.queryByText('Add a valid contact email.')).toBeNull();
 });
