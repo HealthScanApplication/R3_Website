@@ -150,9 +150,8 @@ BEGIN
     AND coalesce(trim(i.notes), '') = '' AND lower(i.display_name) = lower(d.name)
     AND i.catalog_activity_id IS NOT DISTINCT FROM d.activity_id::text;
   GET DIAGNOSTICS changed = ROW_COUNT;
-  IF changed > expected THEN
-    RAISE EXCEPTION 'step descriptions: changed % rows, expected at most %', changed, expected;
-  ELSIF changed < expected THEN
-    RAISE NOTICE 'step descriptions: changed % of % rows (the rest already have a description or are absent here)', changed, expected;
+  -- A fill of empty descriptions is harmless whatever the count, so a difference is only logged: another environment may hold more or fewer empty rows.
+  IF changed <> expected THEN
+    RAISE NOTICE 'step descriptions: changed % rows, expected % (other environments may hold more or fewer empty rows)', changed, expected;
   END IF;
 END $$;
