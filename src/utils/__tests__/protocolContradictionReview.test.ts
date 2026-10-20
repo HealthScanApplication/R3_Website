@@ -165,27 +165,17 @@ describe('combining: sleep and loose matches', () => {
     return created;
   }
 
-  // "Wake up" / "Go to bed" count as the sleep pair but are not the system's own Start/End Sleep, so a rule's words can reach them.
   const wake = (p: Partial<AdminProtocolItem> = {}) => item({ display_name: 'Wake up', category: 'do', ...p } as Partial<AdminProtocolItem>);
   const bed = (p: Partial<AdminProtocolItem> = {}) => item({ display_name: 'Go to bed', category: 'do', ...p } as Partial<AdminProtocolItem>);
-  it('a sleep step left out by a choice is replaced by a default, not lost', async () => {
-    const w = wake({ scheduled_time: '06:15:00' } as Partial<AdminProtocolItem>); const b = bed({ scheduled_time: '23:15:00' } as Partial<AdminProtocolItem>);
-    const r = rule('Avoid wake up');
-    const cs = conflictsAcross([{ name: 'A', items: [r, w, b] }]);
-    expect(cs.map((c) => c.item)).toEqual(['Wake up']);
-    const created = await run({ A: [r, w, b] }, { [cs[0].id!]: 'rule' });
-    expect(created.filter((t) => t === 'End Sleep')).toHaveLength(1);
-    expect(created.filter((t) => t === 'Start Sleep')).toHaveLength(1);
-    // The wake step that exists is the default (07:00), not the original (06:15); the bed step is the original, renamed.
-    expect(bodies.filter((x) => /Sleep/.test(x.display_name)).map((x) => `${x.display_name} ${x.scheduled_time}`).sort()).toEqual(['End Sleep 07:00:00', 'Start Sleep 23:15:00']);
+  it('the sleep pair (Start / End Sleep, Wake up, Go to bed) is not matched by a rule\'s words, so a choice never has to drop it', () => {
+    expect(clashes([rule('Avoid wake up'), wake(), bed(), rule("Don't sleep with your phone"), item({ display_name: 'Start Sleep', category: 'sleep', subtype: 'sleep' })])).toEqual([]);
   });
-  it('a second sleep pair that a combine would not copy never asks for a decision, nor takes over when the first is left out', async () => {
-    const r = rule('Avoid wake up'); const a1 = wake({ scheduled_time: '06:15:00' } as Partial<AdminProtocolItem>); const b1 = wake({ scheduled_time: '05:45:00' } as Partial<AdminProtocolItem>);
-    const found = reviewCombined([{ name: 'A', items: [a1, bed()] }, { name: 'B', items: [r, b1, bed()] }]);
-    expect(found.conflicts.map((c) => c.itemId)).toEqual([a1.id]); // only the pair that would be copied
-    await run({ A: [a1, bed()], B: [r, b1, bed()] }, { [found.conflicts[0].id!]: 'rule' });
-    // A's wake step is left out and B's is not promoted: the default stands in.
-    expect(bodies.filter((x) => x.display_name === 'End Sleep').map((x) => x.scheduled_time)).toEqual(['07:00:00']);
+  it('a nap is not the sleep pair: "No napping after 3pm" reaches a 16:00 nap', () => {
+    expect(clashes([rule('No napping after 3pm'), item({ display_name: 'Take a nap', category: 'sleep', scheduled_time: '16:00:00' } as Partial<AdminProtocolItem>)])).toHaveLength(1);
+  });
+  it('a hidden sleep pair does not stand in for the real one: the visible pair of the next Protocol is copied', async () => {
+    await run({ A: [wake({ hidden: true } as Partial<AdminProtocolItem>), bed({ hidden: true } as Partial<AdminProtocolItem>)], B: [wake({ scheduled_time: '06:15:00' } as Partial<AdminProtocolItem>), bed({ scheduled_time: '23:15:00' } as Partial<AdminProtocolItem>)] });
+    expect(bodies.filter((x) => /^(End|Start) Sleep$/.test(x.display_name)).map((x) => `${x.display_name} ${x.scheduled_time}`).sort()).toEqual(['End Sleep 06:15:00', 'Start Sleep 23:15:00']);
   });
   it('a loose match can be left alone: combining does not wait for a decision on it', async () => {
     const created = await run({ A: [rule('Avoid canned tuna')], B: [drink('Tuna salad')] });
@@ -309,5 +299,75 @@ describe('combining keeps the shape of the plan', () => {
     const byTitle = Object.fromEntries(created.map((c) => [c.display_name, c]));
     expect(byTitle['Boil eggs'].parent_protocol_item_id).toBe(byTitle['Prepare breakfast'].id);
     expect(byTitle['Prepare breakfast'].parent_protocol_item_id).toBe(byTitle['Morning routine'].id);
+  });
+});
+
+describe('a word stem never makes a clear match, and generic verbs are not stems', () => {
+  it.each([['Avoid eating out', 'Eat a protein breakfast'], ['Eating in front of the TV', 'Eat a protein breakfast'], ['Avoid drinking with meals', 'Drink 2 litres of water'], ['Avoid sitting', 'Sit-ups']])('"%s" vs "%s"', (text, title) => {
+    expect(clashes([rule(text), drink(title)]).filter((c) => c.certainty !== 'maybe')).toEqual([]);
+  });
+  it('"No running on Wednesday" still finds "Run 5k"', () => {
+    expect(clashes([rule('No running on Wednesday'), item({ display_name: 'Run 5k', recurrence_days_of_week: [3] })]).length).toBeGreaterThan(0);
+  });
+});
+
+describe('hours the rule names are only exact when they are one plain time', () => {
+  const coffee = (time: string | null) => drink('Drink coffee', null, { scheduled_time: time } as Partial<AdminProtocolItem>);
+  const cert = (rules: string, time: string | null) => clashes([rule(rules), coffee(time)]).map((c) => c.certainty);
+  it.each([['No coffee from 2pm until 6pm'], ['No coffee between 2 and 4pm'], ['No coffee after lunch'], ['No coffee in the evening'], ['No coffee after 8']])('"%s" is only a maybe', (text) => {
+    expect(cert(text, '08:30:00').every((c) => c === 'maybe')).toBe(true);
+    expect(cert(text, '20:00:00').every((c) => c === 'maybe')).toBe(true);
+  });
+  it('"No coffee after 14:00" is exact', () => {
+    expect(cert('No coffee after 14:00', '15:00:00')).toEqual(['sure']);
+    expect(cert('No coffee after 14:00', '13:00:00')).toEqual([]);
+  });
+  it('two rules about different hours are not a clear contradiction', () => {
+    const found = clashes([rule('Do drink coffee before 10am'), rule('No coffee after 2pm')]);
+    expect(found.every((c) => c.certainty === 'maybe')).toBe(true);
+  });
+  it('a Diet plan (steps have no clock time here) is never blocked by an hours rule', () => {
+    const meal = (id: string, name: string): MealPick => ({ source: 'catalog', id, name, image: null, nutrition: { energy_kcal: 500, protein_g: 20, carbohydrates_g: 60, fats_g: 15 } });
+    const cfg = { framework: 'balanced', kcal: 2000, protein: 20, carbs: 50, fat: 30, slots: ['dinner'], plan: { '1:dinner': meal('c', 'Coffee cake') }, drinks: { dinner: [] }, rules: ['No coffee after 2pm'] } as unknown as DietConfig;
+    expect(reviewDiet(cfg).blocking).toEqual([]);
+  });
+});
+
+describe('rest rules that say more than rest', () => {
+  it.each(['Take Sundays off social media', 'Take weekends off email'])('"%s" is about something else', (text) => {
+    expect(clashes([rule(text), walk([6]), walk([0])])).toEqual([]);
+  });
+  it('"Lift Mon, Wed, Fri; rest days Tue, Thu" is at most a maybe', () => {
+    expect(clashes([rule('Lift Mon, Wed, Fri; rest days Tue, Thu'), walk([1])]).every((c) => c.certainty === 'maybe')).toBe(true);
+  });
+  it.each(['Take Sunday off', 'Wednesday is a rest day'])('"%s" is exact', (text) => {
+    const day = /Sunday/.test(text) ? 0 : 3;
+    expect(clashes([rule(text), walk([day])]).map((c) => c.certainty)).toEqual(['sure']);
+  });
+  it.each(['Evening walk', 'Take a walk after dinner', 'Morning run', 'Short walk'])('"%s" is a session on a rest day', (title) => {
+    expect(clashes([rule('Rest on Wednesday'), item({ display_name: title, subtype: 'wellness', recurrence_days_of_week: [3] })])).toHaveLength(1);
+  });
+});
+
+describe('more look-alikes', () => {
+  it.each([
+    ['Avoid dairy', ['Soya milk latte', 'Butter beans', 'Coconut cream curry'], ['Cream of mushroom soup']],
+    ['Avoid processed meat', ['Grilled chicken salad'], ['Bacon sandwich']],
+    ['Avoid red or processed meat', ['Grilled chicken salad'], ['Beef stew', 'Ham roll']],
+    ['Avoid caffeine', [], ['Green tea with lemon', 'Black tea with mint']],
+  ])('%s', (text, safe, flagged) => {
+    for (const title of safe) expect(clashes([rule(text), drink(title)]), title).toEqual([]);
+    for (const title of flagged) expect(clashes([rule(text), drink(title)]).length, title).toBeGreaterThan(0);
+  });
+});
+
+describe('a rule under a dropped step is dropped with it', () => {
+  it('its contradictions need no decision of their own', () => {
+    const x = item({ display_name: 'Sweet toast', category: 'consume' }); const toast = rule('Avoid toast'); const sugar = rule('Avoid sugar', { parent_protocol_item_id: x.id }); const honey = rule('Do sweeten tea with honey');
+    const cs = clashes([x, toast, sugar, honey]);
+    const vsToast = cs.find((c) => c.itemId === x.id && c.ruleId === toast.id)!;
+    const parentOf = new Map<string, string | null>([[x.id, null], [sugar.id, x.id], [toast.id, null], [honey.id, null]]);
+    const after = resolveDecisions(cs, { [vsToast.id!]: 'rule' }, parentOf);
+    expect(after.undecided.map((c) => c.ruleId)).not.toContain(sugar.id);
   });
 });

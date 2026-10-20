@@ -701,11 +701,12 @@ export interface Review { steps: Record<string, CheckedStep>; notes: ReviewNote[
 // Interim subject tags for flagging only. Replace with the shared resolveConflicts once it is approved and built.
 const SUBJECTS: { tag: string; rule: RegExp; item: RegExp; /** Steps that look like the item but are the safe kind. */ except?: RegExp }[] = [
   { tag: 'sugar', rule: /sugar|sweet/i, item: /\bsugar\b(?! scrub)|\bhoney\b|\bsyrup\b|(?<!rice )(?<!oat )\bcakes?\b|\bcookies?\b|\bbiscuits?\b|\bcandy\b|\bchocolate\b|\bdesserts?\b|\bbrownies?\b|\bjam\b|\bcaramel\b/i },
-  { tag: 'caffeine', rule: /caffeine|coffee/i, item: /\b(coffee|espresso|latte|cappuccino|matcha|cola|energy drinks?|(black|green|iced|chai|earl grey) tea)\b|\btea\b(?! tree)/i, except: /chamomile|peppermint|rooibos|hibiscus|fennel|ginger|mint|lemon|herbal|decaf/i },
+  { tag: 'caffeine', rule: /caffeine|coffee/i, item: /\b(coffee|espresso|latte|cappuccino|matcha|cola|energy drinks?|(black|green|iced|chai|earl grey) tea)\b|\btea\b(?! tree)/i, except: /chamomile|peppermint|rooibos|hibiscus|fennel|ginger tea|mint tea|lemon balm|herbal|decaf/i },
   { tag: 'alcohol', rule: /alcohol|wine|beer/i, item: /\b(wine|beer|cocktails?|spirits|liqueur|gin|vodka|rum|whisky|cider)\b/i, except: /vinegar|\b0\.0\b|\b0(?:\.5)?\s*%/i },
-  { tag: 'red meat', rule: /red meat|\bpork\b|\bbeef\b|\blamb\b/i, item: /\b(beef|pork|lamb|bacon|ham|sausages?|veal|mince|steak|salami|chorizo|faggots?|liver)\b/i },
-  { tag: 'meat', rule: /(?<!red )\bmeat\b|\bpoultry\b/i, item: /\b(beef|pork|lamb|bacon|ham|sausages?|chicken|turkey|veal|mince|steak|faggots?|liver|salami|chorizo)\b/i },
-  { tag: 'dairy', rule: /dairy|milk|cheese/i, item: /(?<!(?:oat|almond|soy|coconut|rice|nut|cashew) )\bmilk\b|\bcheese\b|\byog(?:h)?urt\b|\bcream\b|(?<!(?:peanut|almond|nut|cashew|apple) )\bbutter\b|\bpaneer\b|\bkefir\b/i },
+  { tag: 'red meat', rule: /red (?:or processed )?meat|\bpork\b|\bbeef\b|\blamb\b/i, item: /\b(beef|pork|lamb|bacon|ham|sausages?|veal|mince|steak|salami|chorizo|faggots?|liver)\b/i },
+  { tag: 'processed meat', rule: /processed meat|cured meat|deli meat/i, item: /\b(bacon|ham|sausages?|salami|chorizo|hot dogs?|pepperoni|luncheon)\b/i },
+  { tag: 'meat', rule: /(?<!red )(?<!processed )(?<!red or processed )\bmeat\b|\bpoultry\b/i, item: /\b(beef|pork|lamb|bacon|ham|sausages?|chicken|turkey|veal|mince|steak|faggots?|liver|salami|chorizo)\b/i },
+  { tag: 'dairy', rule: /dairy|milk|cheese/i, item: /(?<!(?:oat|almond|soy|soya|coconut|rice|nut|cashew) )\bmilk\b|\bcheese\b|\byog(?:h)?urt\b|(?<!coconut )\bcream\b|(?<!(?:peanut|almond|nut|cashew|apple) )\bbutter\b(?! beans?)|\bpaneer\b|\bkefir\b/i },
   { tag: 'gluten', rule: /gluten|wheat|bread/i, item: /\b(bread|baguettes?|pasta|wheat|couscous|bulgur|pizza|wraps?|bagels?)\b|(?<!rice )(?<!oat )\bcakes?\b/i },
   { tag: 'fried food', rule: /fried|deep[- ]fr/i, item: /\b(fried|nuggets?|chips|fries|tempura|crispy)\b/i },
   { tag: 'processed food', rule: /processed|ultra[- ]processed|fast food/i, item: /\b(nuggets?|sausages?|bacon|ham|crisps|instant)\b/i },
@@ -742,19 +743,27 @@ const covers = (rule: RuleIn, it: ItemIn) => rule.level === 'activity'
 /** "Rest on Wednesday", "Recover on Sunday", "No training on Monday" ("Training on Monday" once a builder has stripped the "No"). Not "Recover with a protein shake". */
 const REST_RULE = /^(?:do\s+)?(?:rest|recover(?:y)?|take (?:a )?(?:rest|recovery)(?: day)?|no (?:training|exercise|workouts?|gym)|(?:training|exercise|workouts?) (?:is )?off)\b(?!\s+(?:with|after|from|by|using|your|the)\b)/i;
 /** "Wednesday is a rest day", "Take Sunday off": a rest rule that names its days first. */
-const REST_DAY_WORDS = /\b(?:rest|recovery)\s+days?\b|\bdays?\s+off\b|\btake\b[^.]*\boff\b|\bis (?:a )?(?:rest|recovery)\b/i;
-const isRestRule = (r: RuleIn) => {
+const REST_DAY_WORDS = /\b(?:rest|recovery)\s+days?\b|\bdays?\s+off\b|\btake\b[^.;,]*\boff\s*[.!]?$|\bis (?:a )?(?:rest|recovery)\b/i;
+/** 'strict': the rule is about nothing but rest ("Rest on Wednesday", "Take Sunday off", "Wednesday is a rest day"); 'loose': rest is one thing it says ("Lift Mon, Wed, Fri; rest days Tue, Thu"), so it can only be a maybe. */
+const restKind = (r: RuleIn): 'strict' | 'loose' | null => {
   const text = r.text.trim();
-  return REST_RULE.test(text) || (r.isDont && /^(?:training|exercise|workouts?|gym)\b/i.test(text)) || (weekdaysIn(text).length > 0 && REST_DAY_WORDS.test(text));
+  if (REST_RULE.test(text) || (r.isDont && /^(?:training|exercise|workouts?|gym)\b/i.test(text))) return 'strict';
+  if (weekdaysIn(text).length > 0 && REST_DAY_WORDS.test(text)) return /^(?:take\b|rest day\b|(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\b)/i.test(text) && !/;/.test(text) ? 'strict' : 'loose';
+  return null;
 };
 /** "Limit caffeine" allows some, so it does not contradict having some. */
 const LIMITING = /^(limit|reduce|less|cut (?:down|back)|(?:down|back) on|moderate|minimi[sz]e|only)\b/i;
 /** "No coffee after 2pm" only forbids what is at or after 14:00 (before: until 14:00). A step with no time can only be a "maybe". */
-const timeWindowOf = (text: string): { after?: number; before?: number } | null => {
-  const m = text.match(/\b(after|before|from|until|past)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i);
-  if (!m) return null;
+const timeWindowOf = (text: string): { after?: number; before?: number; vague?: boolean } | null => {
+  const times = [...text.matchAll(/\b(after|before|from|until|past|between|by|at)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/gi)];
+  const loose = /\b(after|before|until|from|between|during|around)\s+(lunch|dinner|breakfast|supper|work|bed|bedtime|noon|midnight|sunset|sunrise|waking|meals?)\b|\b(morning|afternoon|evening|night)s?\b|\blate\b/i.test(text);
+  if (!times.length && !loose) return null;
+  // One plain "after 2pm" / "before 10am" is exact; ranges, "at", clock-less words and "after 8" (am or pm?) are only a maybe.
+  const m = times[0];
+  if (times.length !== 1 || loose || !/^(after|before|from|until|past)$/i.test(m[1])) return { vague: true };
   const ap = (m[4] || '').toLowerCase();
   let hour = Number(m[2]) % 24;
+  if (!ap && hour >= 7 && hour <= 11) return { vague: true };
   if (ap === 'pm' && hour < 12) hour += 12;
   else if (ap === 'am' && hour === 12) hour = 0;
   else if (!ap && hour >= 1 && hour <= 6) hour += 12; // "after 2" means the afternoon
@@ -783,9 +792,10 @@ export function findConflicts(rules: RuleIn[], items: ItemIn[]): Conflict[] {
   const avoidLabel = (text: string) => /^(avoid|no|never|skip|don'?t|do not|cut out|cut)\b/i.test(text.trim()) ? text.trim().replace(/^./, (c) => c.toUpperCase()) : `Avoid ${text.trim().replace(/^./, (c) => c.toLowerCase())}`;
   for (const rule of rules) {
     const scoped = items.filter((it) => covers(rule, it));
-    if (isRestRule(rule)) {
+    const rest = restKind(rule);
+    if (rest) {
       const days = ruleDaysOf(rule);
-      if (days.length) for (const it of scoped) if (it.kind === 'session' && meet(days, itemDaysOf(it))) add(rule, it, rule.text, `${it.title} is scheduled on a rest day`);
+      if (days.length) for (const it of scoped) if (it.kind === 'session' && meet(days, itemDaysOf(it))) add(rule, it, rule.text, `${it.title} is scheduled on a rest day`, rest === 'strict' ? 'sure' : 'maybe');
       continue;
     }
     if (!rule.isDont || LIMITING.test(rule.text.trim())) continue;
@@ -797,6 +807,7 @@ export function findConflicts(rules: RuleIn[], items: ItemIn[]): Conflict[] {
     /** null = the step is outside the rule's hours; 'maybe' = it has no time to check. */
     const timing = (it: ItemIn): 'sure' | 'maybe' | null => {
       if (!window) return 'sure';
+      if (window.vague) return 'maybe';
       const t = it.time && /^\d{1,2}:\d{2}/.test(it.time) ? Number(it.time.slice(0, 2)) * 60 + Number(it.time.slice(3, 5)) : null;
       if (t == null) return 'maybe';
       return (window.after != null ? t >= window.after : t < window.before!) ? 'sure' : null;
@@ -806,10 +817,13 @@ export function findConflicts(rules: RuleIn[], items: ItemIn[]): Conflict[] {
       const words = subject.split(/[^a-z]+/).filter((w) => (w.length >= 4 || SHORT_WORDS.has(w)) && !/^(after|before|during|with|from|than|more|less|every|food|foods)$/.test(w));
       // "running" also finds "Run 5k".
       const stem = (w: string) => w.endsWith('ing') && w.length > 5 ? w.slice(0, -3).replace(/(.)\1$/, '$1') : w;
+      const GENERIC = new Set(['eat', 'drink', 'sit', 'take', 'have', 'make', 'use', 'get', 'stand', 'look', 'go', 'do']);
+      const stemRe = (w: string) => { const st = stem(w); return st !== w && st.length >= 3 && !GENERIC.has(st) ? new RegExp(`\\b${st}\\b`, 'i') : null; };
       if (words.length) for (const it of scoped.filter((x) => !x.system)) {
-        const hits = words.filter((w) => new RegExp(`\\b(?:${w}|${stem(w)})`, 'i').test(it.title));
+        const hits = words.filter((w) => new RegExp(`\\b${w}`, 'i').test(it.title));
+        const stemHits = words.filter((w) => !hits.includes(w) && stemRe(w)?.test(it.title));
         const when = timing(it);
-        if (hits.length && when && !FREE_RE.test(it.title)) add(rule, it, avoidLabel(rule.text), `${it.title} matches “${rule.text}” (${rule.scope})`, hits.length === words.length && !soft && when === 'sure' ? 'sure' : 'maybe');
+        if ((hits.length || stemHits.length) && when && !FREE_RE.test(it.title)) add(rule, it, avoidLabel(rule.text), `${it.title} matches “${rule.text}” (${rule.scope})`, hits.length === words.length && !soft && when === 'sure' ? 'sure' : 'maybe');
       }
     }
     for (const tag of SUBJECTS) {
@@ -826,7 +840,7 @@ export function findConflicts(rules: RuleIn[], items: ItemIn[]): Conflict[] {
     for (const doRule of rules.filter((r) => !r.isDont && !(r.id && r.id === dont.id))) {
       const sameActivity = dont.level !== 'activity' || doRule.level !== 'activity' || (!!dont.underId && dont.underId === doRule.underId);
       if (sameActivity && meet(ruleDaysOf(dont), ruleDaysOf(doRule)) && tag.item.test(doRule.text) && !FREE_RE.test(doRule.text) && !tag.except?.test(doRule.text))
-        add(dont, { title: doRule.text, where: doRule.scope, source: doRule.scope, kind: 'item', id: doRule.id }, avoidLabel(dont.text), `“${doRule.text}” asks for ${tag.tag} while “${dont.text}” avoids it`);
+        add(dont, { title: doRule.text, where: doRule.scope, source: doRule.scope, kind: 'item', id: doRule.id }, avoidLabel(dont.text), `“${doRule.text}” asks for ${tag.tag} while “${dont.text}” avoids it`, timeWindowOf(dont.text) || timeWindowOf(doRule.text) ? 'maybe' : 'sure');
     }
   }
   // Stored steps are told apart by id (two "Drink Coffee" steps on different days are two contradictions to settle).
@@ -916,7 +930,7 @@ export function reviewFitness(input: FitnessConfig): Review {
 }
 
 /** The one sleep pair a combine keeps (the first non-linked Protocol's); a later Start/End Sleep is left out. */
-const sleepRoleOf = (it: AdminProtocolItem): 'wake' | 'bed' | null => it.parent_protocol_item_id || it.kind !== 'action' ? null
+const sleepRoleOf = (it: AdminProtocolItem): 'wake' | 'bed' | null => it.hidden || it.parent_protocol_item_id || it.kind !== 'action' ? null
   : isWakeName(it.display_name || '') ? 'wake' : (it.category === 'sleep' || isBedName(it.display_name || '')) ? 'bed' : null;
 /** Steps a combine will not copy anyway (a second sleep pair) cannot be in a contradiction the user has to settle. */
 function withoutRedundantSleep<T extends { items: AdminProtocolItem[]; cloned?: boolean }>(list: T[]): T[] {
@@ -928,7 +942,7 @@ function withoutRedundantSleep<T extends { items: AdminProtocolItem[]; cloned?: 
   });
 }
 // A step that starts with a training word ("Walk 40 minutes", "Go walking", "Gym session"), not "Log workout" or "Run the dishwasher".
-const TRAINING_TITLE = /^(?:go (?:for (?:a )?)?)?(?:\d+\s*(?:min(?:ute)?s?|h(?:ou)?rs?)\s+)?(?:walk(?:ing)?|run(?:ning)?(?! the)|jog(?:ging)?|swim(?:ming)?|cycl(?:e|ing)|bik(?:e|ing)|hik(?:e|ing)|lift(?:ing)?|strength|cardio|workout|gym|hiit|row(?:ing)?|treadmill|training)\b/i;
+const TRAINING_TITLE = /^(?:go (?:for (?:a )?)?|take (?:a )?|do (?:a )?)?(?:(?:morning|evening|afternoon|short|long|brisk|easy|light|quick|daily|gentle)\s+)*(?:\d+\s*(?:min(?:ute)?s?|h(?:ou)?rs?)\s+)?(?:walk(?:ing)?|run(?:ning)?(?! the)|jog(?:ging)?|swim(?:ming)?|cycl(?:e|ing)|bik(?:e|ing)|hik(?:e|ing)|lift(?:ing)?|strength|cardio|workout|gym|hiit|row(?:ing)?|treadmill|training)\b/i;
 const NOT_TRAINING = /\b(log|track|record|pack|plan|book|dishwasher|menstrual|period|bag|app)\b/i;
 
 /** Every rule against every step it covers, across the chosen Protocols (one Protocol is the same call with one entry). Hidden rows are not part of a Protocol. */
@@ -949,7 +963,7 @@ export function conflictsAcross(itemsByProtocol: { name: string; items: AdminPro
   const actions = visible.flatMap(({ name, items }) => items.filter((it) => it.kind === 'action').map((it) => {
     const days = daysOf(items, it);
     const title = it.display_name || '';
-    return { id: it.id, parentId: it.parent_protocol_item_id || null, title, where: days ? `${name} · ${days.map((d) => WEEK.find((w) => w.day === d)?.short).join(', ')}` : name, source: name, days, time: it.scheduled_time?.slice(0, 5) || null, system: it.category === 'sleep',
+    return { id: it.id, parentId: it.parent_protocol_item_id || null, title, where: days ? `${name} · ${days.map((d) => WEEK.find((w) => w.day === d)?.short).join(', ')}` : name, source: name, days, time: it.scheduled_time?.slice(0, 5) || null, system: isWakeName(title) || isBedName(title),
       kind: (it.category === 'consume' ? 'meal' : !it.parent_protocol_item_id && it.category !== 'sleep' && (it.subtype === 'exercise' || (TRAINING_TITLE.test(title) && !NOT_TRAINING.test(title))) ? 'session' : 'item') as 'session' | 'meal' | 'item' };
   }));
   // A side that lives in a linked diet / fitness plan cannot be dropped when combining (told apart by row, not by Protocol name).
@@ -973,7 +987,7 @@ export function resolveDecisions(conflicts: Conflict[], decisions: Decisions, pa
   droppedRules.forEach((id) => dropped.add(id));
   const goneWith = (id: string) => { for (let cur: string | null | undefined = id, n = 0; cur && n < 20; cur = parentOf.get(cur), n++) if (dropped.has(cur)) return true; return false; };
   const inconsistent = conflicts.filter((c) => c.id && ((decisions[c.id] === 'item' && c.itemId && goneWith(c.itemId)) || (decisions[c.id] === 'rule' && c.ruleId && droppedRules.has(c.ruleId))));
-  const undecided = conflicts.filter((c) => c.certainty !== 'maybe' && c.id && !decisions[c.id] && !(c.ruleId && dropped.has(c.ruleId)) && !(c.itemId && goneWith(c.itemId)));
+  const undecided = conflicts.filter((c) => c.certainty !== 'maybe' && c.id && !decisions[c.id] && !(c.ruleId && goneWith(c.ruleId)) && !(c.itemId && goneWith(c.itemId)));
   return { dropped, inconsistent, undecided };
 }
 
