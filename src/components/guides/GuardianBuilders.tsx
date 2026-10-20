@@ -643,23 +643,28 @@ export function CombineProtocols({ accessToken, ownerId, protocols, leads, onSav
   useEffect(() => { listBuilderMeta(accessToken, ownerId).then(setMeta).catch(() => {}).finally(() => setMetaLoaded(true)); }, [accessToken, ownerId]);
   // Choices belong to the set of Protocols they were made for, not to a token refresh or the builder-settings load.
   useEffect(() => { setDecisions({}); }, [chosen]);
+  // Review and combine in the same order: the list's, not the order the buttons were clicked (the first Protocol's sleep pair wins).
+  const orderedKey = protocols.filter((p) => chosen.includes(p.id)).map((p) => p.id).join(',');
+  const ordered = useMemo(() => (orderedKey ? orderedKey.split(',') : []), [orderedKey]); // stable while the set and order are, however often the parent re-renders
   useEffect(() => {
     setCombinedReview(null);
-    if (!chosen.length) { setClashes(null); return; }
+    setMessage('');
+    if (!ordered.length) { setClashes(null); return; }
     if (!metaLoaded) return; // which Protocols are linked diet / fitness plans decides which side of a contradiction can be dropped
     let live = true;
-    Promise.all(chosen.map((id) => listProtocolItems(accessToken, id))).then((lists: AdminProtocolItem[][]) => {
+    Promise.all(ordered.map((id) => listProtocolItems(accessToken, id))).then((lists: AdminProtocolItem[][]) => {
       if (!live) return;
-      setCounts(Object.fromEntries(chosen.map((id, i) => [id, lists[i].filter((it) => !it.parent_protocol_item_id).length])));
+      setCounts(Object.fromEntries(ordered.map((id, i) => [id, lists[i].filter((it) => !it.parent_protocol_item_id).length])));
       setClashes(findClashes(lists));
-      setCombinedReview({ ...reviewCombined(chosen.map((id, i) => ({ name: protocols.find((p) => p.id === id)?.name || 'Protocol', items: lists[i], cloned: meta[id]?.builder_kind === 'diet' || meta[id]?.builder_kind === 'fitness' }))), parentOf: new Map(lists.flat().map((it) => [it.id, it.parent_protocol_item_id || null] as const)) });
+      setCombinedReview({ ...reviewCombined(ordered.map((id, i) => ({ name: protocols.find((p) => p.id === id)?.name || 'Protocol', items: lists[i], cloned: meta[id]?.builder_kind === 'diet' || meta[id]?.builder_kind === 'fitness' }))), parentOf: new Map(lists.flat().map((it) => [it.id, it.parent_protocol_item_id || null] as const)) });
     }).catch(() => { if (live) setMessage('Could not read the chosen protocols to check them. Pick them again to retry.'); });
     return () => { live = false; };
-  }, [chosen, accessToken, meta, metaLoaded]);
-  // Only a clear contradiction has to be settled; a loose match ("maybe") can be left as it is.
-  const undecided = (combinedReview?.conflicts || []).filter((c) => c.certainty !== 'maybe' && c.id && !decisions[c.id]).length;
-  const inconsistent = new Set((combinedReview ? resolveDecisions(combinedReview.conflicts, decisions, combinedReview.parentOf).inconsistent : []).map((c) => c.id!));
-  const decideAll = (choice: 'rule' | 'item') => setDecisions(Object.fromEntries((combinedReview?.conflicts || []).filter((c) => c.id && (choice === 'rule' ? c.canKeepRule !== false : c.canKeepItem !== false)).map((c) => [c.id!, choice])));
+  }, [ordered, accessToken, meta, metaLoaded]);
+  // Only a clear contradiction has to be settled (a loose "maybe" can be left as it is), and a choice can settle others (dropping a rule settles all its contradictions).
+  const resolved = useMemo(() => combinedReview ? resolveDecisions(combinedReview.conflicts, decisions, combinedReview.parentOf) : null, [combinedReview, decisions]);
+  const undecided = resolved?.undecided.length || 0;
+  const inconsistent = new Set((resolved?.inconsistent || []).map((c) => c.id!));
+  const decideAll = (choice: 'rule' | 'item') => setDecisions(Object.fromEntries((combinedReview?.conflicts || []).filter((c) => c.id && c.certainty !== 'maybe' && (choice === 'rule' ? c.canKeepRule !== false : c.canKeepItem !== false)).map((c) => [c.id!, choice])));
 
   const kindOf = (p: AdminProtocol) => meta[p.id]?.builder_kind || null;
   const groups: [string, AdminProtocol[]][] = [
@@ -672,7 +677,7 @@ export function CombineProtocols({ accessToken, ownerId, protocols, leads, onSav
   const create = async () => {
     setBusy(true); setMessage('Combining steps into one Protocol…');
     try {
-      const { protocol } = await combineProtocols(accessToken, ownerId, { name, lead_id: leadId || null }, protocols.filter((p) => chosen.includes(p.id)), decisions);
+      const { protocol } = await combineProtocols(accessToken, ownerId, { name, lead_id: leadId || null }, protocols.filter((p) => ordered.includes(p.id)), decisions);
       onSaved(protocol); onOpen(protocol.id);
     } catch (e) { setMessage(`Failed: ${(e as Error).message}`); }
     setBusy(false);
