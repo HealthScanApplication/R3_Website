@@ -1,0 +1,95 @@
+{
+  "origin": "https://routine3.com",
+  "image": {
+    "width": 1200,
+    "height": 630
+  },
+  "routes": [
+    {
+      "id": "home",
+      "name": "ROUTINE³",
+      "url": "/",
+      "title": "ROUTINE³ - Build a Routine for Any Goal",
+      "description": "Pick your goal and ROUTINE³ builds a personalized routine — daily to-dos, activity tracking, and an AI food scanner built in. For weight loss, clearer skin, fitness, and healthy families.",
+      "paths": [],
+      "page": "index.html",
+      "card": {
+        "lead": "Build a routine\nfor",
+        "emphasis": "any goal"
+      }
+    },
+    {
+      "id": "guardians",
+      "name": "R³ Guardians",
+      "url": "/guardians",
+      "title": "R³ Guardians - Turn what you know into guidance people can follow | ROUTINE³",
+      "description": "Turn what you know into guidance people can follow. Create your public page, build your offers, and publish guides, recipes and interactive Protocols with ROUTINE³.",
+      "paths": [
+        "/guardians",
+        "/guardians/*",
+        "/guides",
+        "/guides/*",
+        "/guide",
+        "/g/*",
+        "/@*"
+      ],
+      "page": "generated",
+      "card": {
+        "lead": "R³",
+        "emphasis": "Guardians"
+      }
+    },
+    {
+      "id": "blog",
+      "name": "R³ Blog",
+      "url": "/?page=blog",
+      "title": "R³ Blog - Routines, food and habits | ROUTINE³",
+      "description": "Notes on building routines that last: food, movement, sleep and the habits around them, from the ROUTINE³ team and its Guardians.",
+      "paths": [
+        "/"
+      ],
+      "query": {
+        "page": "blog"
+      },
+      "page": "generated",
+      "card": {
+        "lead": "R³",
+        "emphasis": "Blog"
+      }
+    },
+    {
+      "id": "join",
+      "name": "Join R³",
+      "url": "/join",
+      "title": "Join on Routine³",
+      "description": "You were invited to share someone's day on Routine³. Open the invite in the R³ app.",
+      "paths": [
+        "/join/*"
+      ],
+      "page": "/join/index.html",
+      "card": {
+        "lead": "Join",
+        "emphasis": "R³"
+      }
+    },
+    {
+      "id": "routine",
+      "name": "R³ Routine",
+      "url": "/routine",
+      "title": "A routine for you · Routine³",
+      "description": "Someone shared a routine with you. Open it in the R³ app to add your own copy.",
+      "paths": [
+        "/routine/*",
+        "/protocol/*"
+      ],
+      "page": [
+        "/routine/index.html",
+        "/protocol/index.html"
+      ],
+      "card": {
+        "lead": "R³",
+        "emphasis": "Routine"
+      }
+    }
+  ]
+}

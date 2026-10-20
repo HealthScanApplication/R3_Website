@@ -1,58 +1,54 @@
 import { useEffect } from 'react';
+import { SHARE_IMAGE_SIZE, SHARE_ORIGIN, shareImageUrl, shareRouteFor } from '../config/shareRoutes';
+
+type MetaDoc = Pick<Document, 'querySelector' | 'createElement' | 'head' | 'title'>;
+const setTag = (doc: MetaDoc, attr: 'property' | 'name', key: string, content: string) => {
+  let tag = doc.querySelector(`meta[${attr}="${key}"]`) as HTMLMetaElement | null;
+  if (!tag) {
+    tag = doc.createElement('meta');
+    tag.setAttribute(attr, key);
+    doc.head.appendChild(tag);
+  }
+  tag.setAttribute('content', content);
+};
+
+/**
+ * Keeps the tab title and the link-preview tags in step with the route being shown. Crawlers read the page the server sends
+ * (scripts/gen-share-pages.mjs writes one per route); this keeps what a browser's own Share button reads the same.
+ * The home route keeps the title index.html ships.
+ */
+export function applyShareMeta(pathname = window.location.pathname, search = window.location.search, doc: MetaDoc = document) {
+  const route = shareRouteFor(pathname, search);
+  const url = `${SHARE_ORIGIN}${route.url}`;
+  const image = shareImageUrl(route);
+  setTag(doc, 'name', 'description', route.description);
+  setTag(doc, 'property', 'og:title', route.title);
+  setTag(doc, 'property', 'og:description', route.description);
+  setTag(doc, 'property', 'og:url', url);
+  setTag(doc, 'property', 'og:image', image);
+  setTag(doc, 'property', 'og:image:width', String(SHARE_IMAGE_SIZE.width));
+  setTag(doc, 'property', 'og:image:height', String(SHARE_IMAGE_SIZE.height));
+  setTag(doc, 'property', 'og:image:alt', `${route.name} on ROUTINE³`);
+  setTag(doc, 'name', 'twitter:title', route.title);
+  setTag(doc, 'name', 'twitter:description', route.description);
+  setTag(doc, 'name', 'twitter:image', image);
+  if (route.id !== 'home') doc.title = route.title;
+}
 
 export function useDocumentSetup() {
   useEffect(() => {
-    // Set up proper meta tags for social sharing and mobile behavior
-    const updateViewportMeta = () => {
-      let viewportTag = document.querySelector('meta[name="viewport"]') as HTMLMetaElement;
-      if (!viewportTag) {
-        viewportTag = document.createElement('meta');
-        viewportTag.setAttribute('name', 'viewport');
-        document.head.appendChild(viewportTag);
-      }
-      // Prevent zoom on input focus while allowing user scaling
-      viewportTag.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover');
-    };
+    // Prevent zoom on input focus while allowing user scaling
+    let viewportTag = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
+    if (!viewportTag) {
+      viewportTag = document.createElement('meta');
+      viewportTag.setAttribute('name', 'viewport');
+      document.head.appendChild(viewportTag);
+    }
+    viewportTag.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover');
 
-    // Add Open Graph meta tags for better Facebook/social sharing
-    const updateMetaTags = () => {
-      const metaTags = [
-        { property: 'og:title', content: 'ROUTINE³ - Know What You Eat Before You Eat It' },
-        { property: 'og:description', content: 'Revolutionary food transparency platform exposing toxin levels, nutrient density, and chemical clearance times. Join the movement for food transparency!' },
-        { property: 'og:url', content: window.location.origin },
-        { property: 'og:type', content: 'website' },
-        { property: 'og:site_name', content: 'ROUTINE³' },
-        { property: 'og:image', content: `${window.location.origin}/healthscan-og-image.png` },
-        { property: 'og:image:width', content: '1200' },
-        { property: 'og:image:height', content: '630' },
-        { property: 'og:image:alt', content: 'ROUTINE³ - Food Transparency Revolution' },
-        { name: 'twitter:card', content: 'summary_large_image' },
-        { name: 'twitter:title', content: 'ROUTINE³ - Know What You Eat Before You Eat It' },
-        { name: 'twitter:description', content: 'Revolutionary food transparency platform exposing toxin levels, nutrient density, and chemical clearance times.' },
-        { name: 'twitter:image', content: `${window.location.origin}/healthscan-og-image.png` },
-        { name: 'description', content: 'Revolutionary food transparency platform exposing toxin levels, nutrient density, and chemical clearance times. Join the movement for food transparency!' }
-      ];
-
-      metaTags.forEach(tag => {
-        const selector = tag.property ? `meta[property="${tag.property}"]` : `meta[name="${tag.name}"]`;
-        let existingTag = document.querySelector(selector) as HTMLMetaElement;
-        
-        if (existingTag) {
-          existingTag.setAttribute('content', tag.content);
-        } else {
-          const metaElement = document.createElement('meta');
-          if (tag.property) metaElement.setAttribute('property', tag.property);
-          if (tag.name) metaElement.setAttribute('name', tag.name);
-          metaElement.setAttribute('content', tag.content);
-          document.head.appendChild(metaElement);
-        }
-      });
-
-      // Ensure proper title
-      document.title = 'ROUTINE³ - Know What You Eat Before You Eat It';
-    };
-
-    updateViewportMeta();
-    updateMetaTags();
+    applyShareMeta();
+    const onNavigate = () => applyShareMeta();
+    window.addEventListener('popstate', onNavigate);
+    return () => window.removeEventListener('popstate', onNavigate);
   }, []);
 }
