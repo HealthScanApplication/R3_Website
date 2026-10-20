@@ -17,7 +17,7 @@ import { PRAL_DISPLAY } from '../../utils/pral';
 import {
   MUSCLE_GROUPS, dayNameFor, muscleGroupOf, type MuscleGroupId, mealDrinks, mealPickKey, selectedServings, fitsSlot, DIET_FRAMEWORKS, FITNESS_GOALS, FRAMEWORK_RULES, mealTiming, resolveTiming, sessionTiming, mealIsFasting, fastingDrinkAllowed, type Anchor, type Timing, MEAL_SLOTS, WEEK, combineProtocols, draftFitnessWeek, TRAINING_TYPES, GOAL_TYPES, likedCategories, planFitnessWeek, type FitnessLikes, defaultFuel, type TrainingFuel, defaultSchedule, TRAIN_TIMES, exerciseGroup, sessionTimeFor, type FitnessSchedule, type TrainTime, findClashes, guideRecipeToPick,
   dietSupportItems, isDrinkPick, SUPPLEMENT_PERIODS, supplementCell, type SupplementPeriod, listBuilderMeta, macroGrams, saveDietProtocol, saveFitnessProtocol, searchActivities, searchDietRecipes, sumNutrition,
-  reviewCombined, reviewDiet, reviewFitness, type Conflict, type Review, type ReviewNote, type ActivityPick, type BuilderKind, type Clash, type DietConfig, type FitnessConfig, type FitnessSession, type MealPick,
+  reviewCombined, reviewDiet, reviewFitness, resolveDecisions, type Decisions, type Conflict, type Review, type ReviewNote, type ActivityPick, type BuilderKind, type Clash, type DietConfig, type FitnessConfig, type FitnessSession, type MealPick,
 } from '../../utils/protocolBuilders';
 
 // Guardian dark tokens (same values as GuidePortal.tsx).
@@ -125,7 +125,7 @@ function TimingField({ value, onChange, compact }: { value: Timing; onChange: (t
 }
 
 /** Shared-checker notes + flagged contradictions, shown before anything is saved. Conflicts are never auto-resolved. */
-function ReviewPanel({ notes, conflicts, blocking = [], onSave, onClose, busy, saveLabel, notesTitle = 'The shared Protocol rules will adjust these on save:', decisions, onDecide }: { notes: ReviewNote[]; conflicts: Conflict[]; blocking?: ReviewNote[]; onSave?: () => void; onClose?: () => void; busy?: boolean; saveLabel?: string; notesTitle?: string; decisions?: Record<string, 'rule' | 'item'>; onDecide?: (id: string, choice: 'rule' | 'item') => void }) {
+function ReviewPanel({ notes, conflicts, blocking = [], onSave, onClose, busy, saveLabel, notesTitle = 'The shared Protocol rules will adjust these on save:', decisions, onDecide, onDecideAll, inconsistent }: { notes: ReviewNote[]; conflicts: Conflict[]; blocking?: ReviewNote[]; onSave?: () => void; onClose?: () => void; busy?: boolean; saveLabel?: string; notesTitle?: string; decisions?: Decisions; onDecide?: (id: string, choice: 'rule' | 'item') => void; onDecideAll?: (choice: 'rule' | 'item') => void; inconsistent?: ReadonlySet<string> }) {
   return <div style={{ ...card, margin: '0 0 14px', borderColor: conflicts.length ? warn : line }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
       <span style={{ ...label, margin: 0, color: conflicts.length ? warn : acid }}>Review · {conflicts.length} conflict{conflicts.length === 1 ? '' : 's'} · {notes.length} rule note{notes.length === 1 ? '' : 's'}</span>
@@ -139,14 +139,18 @@ function ReviewPanel({ notes, conflicts, blocking = [], onSave, onClose, busy, s
         combined the overlap is the user's call: keep the rule or keep the step, and the other is left out of the new Protocol. */}
     {conflicts.length > 0 && onDecide && <div style={{ marginBottom: 10 }}>
       <div style={{ color: warn, fontSize: 12, fontWeight: 700, display: 'flex', gap: 6, alignItems: 'center' }}><AlertTriangle size={13} /> {conflicts.length} contradiction{conflicts.length === 1 ? '' : 's'} to settle. Choose what to keep; the other is left out of the new Protocol.</div>
-      {conflicts.slice(0, 30).map((c, i) => { const chosen = c.id ? decisions?.[c.id] : undefined; return <div key={c.id || i} style={{ fontSize: 12, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${line}` }}>
-        <div><span style={{ color: ink }}>{c.where}: “{c.item}”</span><span style={{ color: muted }}> vs rule “{c.rule}” · {c.reason}</span></div>
+      {onDecideAll && conflicts.length > 1 && <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+        <button type="button" onClick={() => onDecideAll('rule')} style={chip(false)}>Keep every rule</button>
+        <button type="button" onClick={() => onDecideAll('item')} style={chip(false)}>Keep every step</button>
+      </div>}
+      {conflicts.map((c, i) => { const chosen = c.id ? decisions?.[c.id] : undefined; return <div key={c.id || i} style={{ fontSize: 12, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${line}` }}>
+        <div><span style={{ color: ink }}>{c.where}: “{c.item}”</span><span style={{ color: muted }}> vs rule “{c.rule}” · {c.reason}{c.certainty === 'maybe' ? ' · may not be a real clash, your call' : ''}</span></div>
         {c.id && <div style={{ display: 'flex', gap: 6, marginTop: 5, flexWrap: 'wrap' }}>
           <button type="button" aria-pressed={chosen === 'rule'} disabled={c.canKeepRule === false} onClick={() => onDecide(c.id!, 'rule')} style={{ ...chip(chosen === 'rule'), opacity: c.canKeepRule === false ? .4 : 1 }}>Keep the rule · leave out “{c.item}”</button>
           <button type="button" aria-pressed={chosen === 'item'} disabled={c.canKeepItem === false} onClick={() => onDecide(c.id!, 'item')} style={{ ...chip(chosen === 'item'), opacity: c.canKeepItem === false ? .4 : 1 }}>Keep “{c.item}” · leave out the rule</button>
         </div>}
+        {c.id && inconsistent?.has(c.id) && <div style={{ color: '#E88A7A', marginTop: 4 }}>This choice clashes with another one: a rule or step can’t be both kept and left out.</div>}
       </div>; })}
-      {conflicts.length > 30 && <div style={{ color: muted, fontSize: 11, marginTop: 4 }}>+{conflicts.length - 30} more</div>}
     </div>}
     {notes.length > 0 && <div style={{ marginBottom: 10 }}>
       <div style={{ color: muted, fontSize: 11, marginBottom: 3 }}>{notesTitle}</div>
@@ -631,24 +635,31 @@ export function CombineProtocols({ accessToken, ownerId, protocols, leads, onSav
   const [chosen, setChosen] = useState<string[]>([]);
   const [clashes, setClashes] = useState<Clash[] | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
-  const [combinedReview, setCombinedReview] = useState<{ notes: ReviewNote[]; blocking: ReviewNote[]; conflicts: Conflict[] } | null>(null);
-  const [decisions, setDecisions] = useState<Record<string, 'rule' | 'item'>>({});
+  const [combinedReview, setCombinedReview] = useState<{ notes: ReviewNote[]; blocking: ReviewNote[]; conflicts: Conflict[]; parentOf: Map<string, string | null> } | null>(null);
+  const [decisions, setDecisions] = useState<Decisions>({});
+  const [metaLoaded, setMetaLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
-  useEffect(() => { listBuilderMeta(accessToken, ownerId).then(setMeta).catch(() => {}); }, [accessToken, ownerId]);
+  useEffect(() => { listBuilderMeta(accessToken, ownerId).then(setMeta).catch(() => {}).finally(() => setMetaLoaded(true)); }, [accessToken, ownerId]);
+  // Choices belong to the set of Protocols they were made for, not to a token refresh or the builder-settings load.
+  useEffect(() => { setDecisions({}); }, [chosen]);
   useEffect(() => {
-    setDecisions({});
-    if (!chosen.length) { setClashes(null); setCombinedReview(null); return; }
+    setCombinedReview(null);
+    if (!chosen.length) { setClashes(null); return; }
+    if (!metaLoaded) return; // which Protocols are linked diet / fitness plans decides which side of a contradiction can be dropped
     let live = true;
     Promise.all(chosen.map((id) => listProtocolItems(accessToken, id))).then((lists: AdminProtocolItem[][]) => {
       if (!live) return;
       setCounts(Object.fromEntries(chosen.map((id, i) => [id, lists[i].filter((it) => !it.parent_protocol_item_id).length])));
       setClashes(findClashes(lists));
-      setCombinedReview(reviewCombined(chosen.map((id, i) => ({ name: protocols.find((p) => p.id === id)?.name || 'Protocol', items: lists[i], cloned: meta[id]?.builder_kind === 'diet' || meta[id]?.builder_kind === 'fitness' }))));
-    }).catch(() => {});
+      setCombinedReview({ ...reviewCombined(chosen.map((id, i) => ({ name: protocols.find((p) => p.id === id)?.name || 'Protocol', items: lists[i], cloned: meta[id]?.builder_kind === 'diet' || meta[id]?.builder_kind === 'fitness' }))), parentOf: new Map(lists.flat().map((it) => [it.id, it.parent_protocol_item_id || null] as const)) });
+    }).catch(() => { if (live) setMessage('Could not read the chosen protocols to check them. Pick them again to retry.'); });
     return () => { live = false; };
-  }, [chosen, accessToken, meta]);
-  const undecided = (combinedReview?.conflicts || []).filter((c) => c.id && !decisions[c.id]).length;
+  }, [chosen, accessToken, meta, metaLoaded]);
+  // Only a clear contradiction has to be settled; a loose match ("maybe") can be left as it is.
+  const undecided = (combinedReview?.conflicts || []).filter((c) => c.certainty !== 'maybe' && c.id && !decisions[c.id]).length;
+  const inconsistent = new Set((combinedReview ? resolveDecisions(combinedReview.conflicts, decisions, combinedReview.parentOf).inconsistent : []).map((c) => c.id!));
+  const decideAll = (choice: 'rule' | 'item') => setDecisions(Object.fromEntries((combinedReview?.conflicts || []).filter((c) => c.id && (choice === 'rule' ? c.canKeepRule !== false : c.canKeepItem !== false)).map((c) => [c.id!, choice])));
 
   const kindOf = (p: AdminProtocol) => meta[p.id]?.builder_kind || null;
   const groups: [string, AdminProtocol[]][] = [
@@ -681,10 +692,10 @@ export function CombineProtocols({ accessToken, ownerId, protocols, leads, onSav
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 700 }}><AlertTriangle size={13} /> {clashes.length} time clash{clashes.length > 1 ? 'es' : ''}. You can fix them in the editor after combining.</div>
       {clashes.slice(0, 6).map((c) => <div key={`${c.day}${c.time}`} style={{ marginTop: 3 }}>{c.day} {c.time}: {c.names.join(' / ')}</div>)}
     </div> : <p style={{ color: acid, fontSize: 12 }}>No time clashes between the chosen protocols.</p>)}
-    {combinedReview && chosen.length > 1 && <ReviewPanel notes={combinedReview.notes} conflicts={combinedReview.conflicts} blocking={combinedReview.blocking} notesTitle="Fixed by the shared Protocol rules when combining:" decisions={decisions} onDecide={(id, choice) => setDecisions((current) => ({ ...current, [id]: choice }))} />}
+    {combinedReview && chosen.length > 1 && <ReviewPanel notes={combinedReview.notes} conflicts={combinedReview.conflicts} blocking={combinedReview.blocking} notesTitle="Fixed by the shared Protocol rules when combining:" decisions={decisions} onDecide={(id, choice) => setDecisions((current) => ({ ...current, [id]: choice }))} onDecideAll={decideAll} inconsistent={inconsistent} />}
     <div style={{ display: 'flex', gap: 9, alignItems: 'center' }}>
-      <button type="button" style={btn} disabled={busy || !name || chosen.length < 2 || !!combinedReview?.blocking.length || undecided > 0} onClick={create}>Create {name ? `${name}’s` : 'personal'} Protocol</button>
-      <Status busy={busy} message={message || (chosen.length < 2 ? 'Choose at least two protocols.' : 'Steps are copied as they are; one Start Sleep / End Sleep pair is kept or added.') + (undecided ? ` ${undecided} contradiction${undecided === 1 ? '' : 's'} left to settle.` : '')} />
+      <button type="button" style={btn} disabled={busy || !name || chosen.length < 2 || !combinedReview || !!combinedReview.blocking.length || undecided > 0 || inconsistent.size > 0} onClick={create}>Create {name ? `${name}’s` : 'personal'} Protocol</button>
+      <Status busy={busy} message={message || (chosen.length < 2 ? 'Choose at least two protocols.' : 'Steps are copied as they are; one Start Sleep / End Sleep pair is kept or added.') + (undecided ? ` ${undecided} contradiction${undecided === 1 ? '' : 's'} left to settle.` : '') + (inconsistent.size ? ' Some choices clash with each other.' : '')} />
     </div>
   </div>;
 }
