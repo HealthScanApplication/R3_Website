@@ -672,6 +672,18 @@ function Brand({ centered = false }: { centered?: boolean }) {
   return <a href="/" aria-label="ROUTINE³ Guardians" style={{ width: 'fit-content', margin: centered ? '0 auto' : undefined, textDecoration: 'none', display: 'block' }}><RoutineMark size={31} textColor={ink} hairline="rgba(245,242,234,0.58)" suffix="Guardians" /></a>;
 }
 
+/** A section that opens on demand: its header always shows what is inside (the summary), so closed does not mean hidden. */
+export function Disclosure({ id, title, summary, open, required, onToggle, children }: { id: string; title: string; summary: string; open: boolean; required?: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return <section style={{ border: `1px solid ${line}`, marginTop: 14 }}>
+    <button type="button" aria-expanded={open} aria-controls={`${id}-panel`} id={`${id}-button`} onClick={onToggle} style={{ width: '100%', minHeight: 52, display: 'flex', alignItems: 'center', gap: 12, padding: '0 14px', border: 0, background: 'transparent', color: ink, cursor: 'pointer', textAlign: 'left', fontFamily: sans }}>
+      <ChevronRight size={14} aria-hidden="true" style={{ flex: '0 0 auto', transform: open ? 'rotate(90deg)' : undefined, transition: 'transform .15s ease', color: muted }} />
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{title}{required ? <span style={{ color: muted, fontWeight: 400, letterSpacing: '.08em' }}> · required</span> : <span style={{ color: muted, fontWeight: 400, letterSpacing: '.08em' }}> · optional</span>}</span>
+      {!open && <span style={{ marginLeft: 'auto', minWidth: 0, color: muted, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{summary}</span>}
+    </button>
+    {open && <div id={`${id}-panel`} role="region" aria-labelledby={`${id}-button`} style={{ padding: '0 14px 16px' }}>{children}</div>}
+  </section>;
+}
+
 function SocialUrlField({ label: text, value, placeholder, Icon, onChange }: { label: string; value: string; placeholder: string; Icon: typeof Globe2; onChange: (value: string) => void }) {
   return <div>
     <label style={label}>{text} <span style={{ color: muted }}>· optional</span></label>
@@ -1562,7 +1574,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   </div>;
 }
 
-function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasProfile = false, onDone }: { userId: string; accessToken: string; name: string; email: string; accountAvatarUrl?: string | null; hasProfile?: boolean; onDone: (p: GuideProfile) => void }) {
+export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasProfile = false, onDone }: { userId: string; accessToken: string; name: string; email: string; accountAvatarUrl?: string | null; hasProfile?: boolean; onDone: (p: GuideProfile) => void }) {
   const [step, setStep] = useGuardianPage<number>('step', SETUP_STEPS, 1);
   const [displayName, setDisplayName] = useState(name);
   const { signOut } = useAuth();
@@ -1699,6 +1711,10 @@ function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasPro
   const [rampAudience, setRampAudience] = useState('Everyone');
   const [rampProblem, setRampProblem] = useState('Sleep problems');
   const [audienceSetupStage, setAudienceSetupStage] = useState(0);
+  // Step 1 stages: 0 = profile (contact, links and booking open on demand), 1 = the brand look on its own.
+  const [profileStage, setProfileStage] = useState(0);
+  const [profileOpen, setProfileOpen] = useState({ contact: true, links: false, booking: false });
+  useEffect(() => { if (step !== 1) setProfileStage(0); }, [step]);
   const [freeOfferSetupStage, setFreeOfferSetupStage] = useState(0);
   const [showAllEntryOffers, setShowAllEntryOffers] = useState(false);
   const [paidOfferSetupStages, setPaidOfferSetupStages] = useState<Partial<Record<UpsellKind, number>>>({});
@@ -2032,6 +2048,14 @@ function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasPro
     try { setLeadMagnetPath(await uploadGuideFile(userId, file)); }
     catch (e: any) { setError(e.message || 'Could not upload that file.'); }
     finally { setUploadingOffer(false); }
+  }
+
+  /** Profile → Brand: the name and email must be right first; a missing email opens its section. */
+  function goToBrandStage() {
+    setError('');
+    if (!displayName.trim()) { setError('Add the name people should call you.'); setProfileStage(0); return; }
+    if (!/^\S+@\S+\.\S+$/.test(contactEmail.trim())) { setError('Add a valid contact email.'); setProfileOpen((o) => ({ ...o, contact: true })); setProfileStage(0); return; }
+    setProfileStage(1);
   }
 
   async function continueSetup() {
@@ -2505,6 +2529,11 @@ function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasPro
           </header>
 
       {step === 1 && <>
+      {/* Progressive disclosure: who you are first; contact, links and booking open on demand; the brand look is its own stage after. */}
+      <div role="list" aria-label="Profile stages" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 0 22px' }}>
+        {['Profile', 'Brand'].map((name, index) => <button type="button" role="listitem" key={name} aria-current={profileStage === index ? 'step' : undefined} onClick={() => (index === 0 ? setProfileStage(0) : goToBrandStage())} style={{ border: 0, background: 'transparent', padding: '4px 0', color: profileStage === index ? ink : muted, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', cursor: 'pointer', borderBottom: `2px solid ${profileStage === index ? acid : 'transparent'}` }}>{index + 1} · {name}</button>)}
+      </div>
+      {profileStage === 0 && <>
       {/* Brand picker: one quiet line. Most Guardians publish under their own name, so it should not compete with the form. */}
       <div aria-label="Publishing brand" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '0 0 16px', marginBottom: 20, borderBottom: `1px solid ${line}` }}>
         <span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', marginRight: 4 }}>Publishing as</span>
@@ -2531,11 +2560,14 @@ function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasPro
         {importMessage && <p style={{ color: importMessage.startsWith('Imported') ? acid : muted, fontSize: 11, lineHeight: 1.5, margin: '10px 0 0' }}>{importMessage}</p>}
       </div>
       <p style={{ color: muted, fontSize: 10, lineHeight: 1.5, margin: '9px 0 0' }}>Language applies to your page and content. Pricing region sets the currency for every paid stage.</p>
+      <Disclosure id="profile-contact" title="Contact" required summary={contactEmail.trim() || 'Add your email'} open={profileOpen.contact} onToggle={() => setProfileOpen((o) => ({ ...o, contact: !o.contact }))}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12, marginTop: 18 }}>
         <div><label style={label}>Contact email</label><input type="email" style={input} value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="you@example.com" required /></div>
         <div><label style={label}>WhatsApp number <span style={{ color: muted }}>· optional</span></label><input type="tel" inputMode="tel" style={input} value={whatsappPhone} onChange={(e) => setWhatsappPhone(e.target.value)} placeholder="+44 7700 900000" /></div>
       </div>
       <p style={{ color: muted, fontSize: 10, lineHeight: 1.5, margin: '9px 0 0' }}>If you add WhatsApp, include the international country code. These details can be changed before your Guardian page is published.</p>
+      </Disclosure>
+      <Disclosure id="profile-links" title="Links" summary={[instagramUrl && 'Instagram', tiktokUrl && 'TikTok', youtubeUrl && 'YouTube', linktreeUrl && 'Linktree', websiteUrl && 'Website'].filter(Boolean).join(' · ') || 'Optional: so we can learn from your profiles'} open={profileOpen.links} onToggle={() => setProfileOpen((o) => ({ ...o, links: !o.links }))}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12, marginTop: 22 }}>
         <SocialUrlField label="Instagram" Icon={Instagram} value={instagramUrl} onChange={setInstagramUrl} placeholder="https://instagram.com/yourname" />
         <SocialUrlField label="TikTok" Icon={AtSign} value={tiktokUrl} onChange={setTiktokUrl} placeholder="https://tiktok.com/@yourname" />
@@ -2543,10 +2575,10 @@ function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasPro
         <SocialUrlField label="Linktree" Icon={Link2} value={linktreeUrl} onChange={setLinktreeUrl} placeholder="https://linktr.ee/yourname" />
         <SocialUrlField label="Personal website" Icon={Globe2} value={websiteUrl} onChange={setWebsiteUrl} placeholder="https://yourwebsite.com" />
       </div>
-      {/* The selected brand's look: logo, background, typeface and buttons. */}
-      <BrandKitFields userId={userId} brandName={displayName} kit={brandKit} onChange={setBrandKit} logoUrl={logoUrl} onLogo={setLogoUrl} accessToken={accessToken} facts={{ about: intro, tags: expertiseTags, audience: audience.join(', ') }} />
+      </Disclosure>
       {importedProfile?.topics.length ? <div style={{ borderTop: `1px solid ${line}`, paddingTop: 18, marginTop: 24 }}><span style={label}>Detected guidance</span><div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>{importedProfile.topics.map((topic) => <span key={topic} style={{ border: `1px solid ${acid}`, color: acid, padding: '6px 9px', fontSize: 10 }}>{topic}</span>)}</div></div> : null}
-      <div style={{ border: `1px solid ${line}`, background: panel, padding: 14, marginTop: 24 }}>
+      <Disclosure id="profile-booking" title="Booking" summary={bookingUrl.trim() ? (bookingProviders.find((provider) => provider.value === bookingProvider)?.label || 'Booking link') : 'Optional: how clients book with you'} open={profileOpen.booking} onToggle={() => setProfileOpen((o) => ({ ...o, booking: !o.booking }))}>
+      <div>
         <label style={{ ...label, color: ink }}>How should clients book with you? <span style={{ color: muted }}>· optional</span></label>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 7, marginBottom: 10 }}>
           {bookingProviders.map((provider) => <button type="button" key={provider.value} onClick={() => setBookingProvider(provider.value)} style={{ ...pickStyle(bookingProvider === provider.value), whiteSpace: 'nowrap', minWidth: 0 }}>{provider.label}</button>)}
@@ -2554,6 +2586,13 @@ function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasPro
         <input type="url" style={input} value={bookingUrl} onChange={(e) => setBookingUrl(e.target.value)} placeholder={bookingProviders.find((provider) => provider.value === bookingProvider)?.placeholder} />
         <p style={{ color: muted, fontSize: 9, lineHeight: 1.5, margin: '8px 0 0' }}>This becomes the default booking link for live guidance, group calls, 1:1 sessions and in-person offers.</p>
       </div>
+      </Disclosure>
+      </>}
+      {profileStage === 1 && <>
+        <div style={{ border: `1px solid ${line}`, padding: '12px 14px', marginBottom: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span><span style={{ ...label, marginBottom: 3 }}>Profile</span><strong style={{ color: ink, fontSize: 12, fontWeight: 600 }}>{[displayName.trim(), mainLanguage, pricingRegion].filter(Boolean).join(' · ')}</strong></span><button type="button" onClick={() => setProfileStage(0)} style={{ ...btn, minHeight: 36, height: 36, background: 'transparent', color: ink, fontSize: 9 }}>Edit</button></div>
+      {/* The selected brand's look: logo, background, typeface and buttons. */}
+      <BrandKitFields userId={userId} brandName={displayName} kit={brandKit} onChange={setBrandKit} logoUrl={logoUrl} onLogo={setLogoUrl} accessToken={accessToken} facts={{ about: intro, tags: expertiseTags, audience: audience.join(', ') }} />
+      </>}
       </>}
 
       {step === 2 && <div>
@@ -3046,7 +3085,7 @@ function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasPro
       {error && <p style={{ color: '#F0A7A7', fontSize: 12 }}>{error}</p>}
       {step !== 3 && step !== 5 && (step !== 4 || offerPlanStage === 2) && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', alignItems: 'center', gap: 12, marginTop: 34 }}>
         {step > 1 ? <button type="button" onClick={() => { setError(''); if (step === 3) setAudienceSetupStage(1); else if (step === 4) setOfferPlanStage(1); else setStep((current) => current - 1); }} style={{ ...btn, width: '100%', background: 'transparent', color: ink }}>← Back</button> : <span />}
-        {(step !== 4 || offerPlanStage === 2) && (step !== 5 || freeOfferSetupStage === 2) ? step < 5 ? <button type="button" onClick={continueSetup} disabled={importing} style={{ ...btn, width: '100%' }}>{importing ? <><Loader2 size={14} className="animate-spin" /> Reading profiles</> : <>Continue <ArrowRight size={14} /></>}</button> : <button disabled={busy} style={{ ...btn, width: '100%' }}>{busy ? 'Creating your Guardian' : 'Create my Guardian profile'} <ArrowRight size={14} /></button> : <span />}
+        {(step !== 4 || offerPlanStage === 2) && (step !== 5 || freeOfferSetupStage === 2) ? step < 5 ? <button type="button" onClick={step === 1 && profileStage === 0 ? goToBrandStage : continueSetup} disabled={importing} style={{ ...btn, width: '100%' }}>{importing ? <><Loader2 size={14} className="animate-spin" /> Reading profiles</> : <>{step === 1 && profileStage === 0 ? 'Continue to brand' : 'Continue'} <ArrowRight size={14} /></>}</button> : <button disabled={busy} style={{ ...btn, width: '100%' }}>{busy ? 'Creating your Guardian' : 'Create my Guardian profile'} <ArrowRight size={14} /></button> : <span />}
       </div>}
         </section>
       </div>
