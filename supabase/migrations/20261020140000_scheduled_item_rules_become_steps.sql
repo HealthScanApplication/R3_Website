@@ -7,7 +7,8 @@
 -- Water is a drink. Day-2 water carried an import note ("Duplicate of Duplicate name ...") that is replaced with the
 -- same guidance as days 1 and 3. Left alone on purpose: day instructions (e.g. "Milk Thistle dose 2x", "Gentle Start"),
 -- the hidden salt dose, and the standing kit-style supplement rules that have no day and no time.
--- Replay-safe: the match needs kind = 'rule_do', which no longer holds afterwards.
+-- Replay-safe: the match needs kind = 'rule_do', which no longer holds afterwards; fewer than 10 rows (another
+-- environment) only logs a notice.
 DO $$
 DECLARE
   expected CONSTANT int := 10;
@@ -27,7 +28,9 @@ BEGIN
       '423fa61c-5f60-4b1d-b060-1d01fce4000e', 'e053622d-ea2b-4a9d-ada9-83bcd8ea76ad', 'a0a32a72-33c7-4350-888f-15f7436bbd76',
       'b7029a9f-f301-4583-ae8d-5d3cbd0c2017', 'ca6e3ab2-b14a-48b1-ab53-58243c77e1bb', '4c7e2180-3330-47d9-ba10-cfd4d7cfa467', '7decc56b-421e-4333-9a97-a96eb1eaa7c9');
   GET DIAGNOSTICS changed = ROW_COUNT;
-  IF changed NOT IN (0, expected) THEN
-    RAISE EXCEPTION 'scheduled item rules: changed % rows, expected % (or 0 on replay)', changed, expected;
+  IF changed > expected THEN
+    RAISE EXCEPTION 'scheduled item rules: changed % rows, expected at most %', changed, expected;
+  ELSIF changed < expected THEN
+    RAISE NOTICE 'scheduled item rules: changed % of % rows (the rest are already steps or absent here)', changed, expected;
   END IF;
 END $$;

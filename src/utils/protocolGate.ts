@@ -8,15 +8,15 @@
  *  - meals / drinks: dish or drink name without a verb; slot (group_name) Breakfast / Lunch / Dinner / Snack from
  *    the title, else the time; a slot named in the title moves the time into that slot's window
  *  - "Avoid X" / "Limit caffeine" saved as a step becomes a rule (Drinks / Consume / general group rule)
- *  - the reverse: a scheduled "Do: Chlorella" / "Do: Drink Water" rule (a supplement or drink named as a bare item) becomes
- *    the step it was meant to be, with a time
+ *  - the reverse: a "Do: Chlorella" / "Do: Drink Water" rule with a clock time (a supplement or drink named as a bare item)
+ *    becomes the step it was meant to be
  *  - set info filled from the title when the fields are empty
  *  - the old title is kept as "Was" (filter.original_title) when a title is changed by the gate
  * Personal calendar entries, rule rows and Supplements stay untouched. Warnings go to listeners so the editor can
  * show them live.
  */
 import { END_SLEEP, START_SLEEP, PLAIN_BEDTIME, isWakeTitle, mealTitle, ruleGroupFor, ruleRowFields } from './protocolRules';
-import { consumeKind, isCalendarEntry, isRuleLikeTitle, itemRuleFields, parseSetInfo, ruleRowIsItem, slotFromTitle, SLOT_TITLE, SLOT_WINDOW, mealSlotFor } from './routineStandard';
+import { consumeKind, isCalendarEntry, isRuleLikeTitle, itemRuleFields, parseSetInfo, slotFromTitle, SLOT_TITLE, SLOT_WINDOW, mealSlotFor, timedRuleRowIsItem } from './routineStandard';
 
 export interface GateWarning { field: string; message: string }
 type Item = Record<string, any>;
@@ -46,8 +46,9 @@ function gate(patch: Item, existing?: Item): { item: Item; warnings: GateWarning
   const out: Item = { ...patch };
   const warnings: GateWarning[] = [];
   const title = String(row.display_name ?? '').trim();
-  // A scheduled "Do: Chlorella" / "Do: Drink Water" rule is a step that lost its time: save it as the step.
-  if (ruleRowIsItem(row as any)) {
+  // A "Do: Chlorella" / "Do: Drink Water" rule that has a clock time is a step: save it as the step. (A rule with only a day stays:
+  // builders write allowed alternatives like "Herbal tea" as day-1 rules.)
+  if (timedRuleRowIsItem(row as any)) {
     const fields = itemRuleFields(row as any);
     Object.assign(out, fields);
     row = { ...row, ...fields };
