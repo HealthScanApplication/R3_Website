@@ -14,6 +14,10 @@
           {
             "/": "/protocol/????????-????-????-????-????????????",
             "comment": "A printed routine's QR. Shared catalog routines only."
+          },
+          {
+            "/": "/routine/*",
+            "comment": "A Guardian's shared routine, which need not be public. The token is the capability; the app redeems it after sign-in and offers a copy."
           }
         ]
       }

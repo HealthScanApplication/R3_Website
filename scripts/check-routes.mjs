@@ -7,6 +7,8 @@
  *     precedes it (a rule below it is dead: the catch-all answers first);
  *   - the paths that must not move still resolve as before: the apple association
  *     file (200, same path, application/json, no redirect), /protocol/*, /join/*;
+ *   - /routine/<token> (a Guardian's shared routine) is a forced rewrite to a static page that keeps the token out of
+ *     referrers and caches, talks only to the two Supabase projects, and is claimed by the association file;
  *   - the legal redirects are 302 to the Notion pages the app uses;
  *   - /unsubscribe is a rewrite to a static page whose CSP hash, API host and
  *     public key agree with the rest of the repo, and which embeds no secret;
@@ -111,19 +113,63 @@ check(prot && prot.status === 200 && prot.to === '/protocol/index.html' && prot.
 const joinRule = resolve('/join/abcdefghijklmnop');
 check(joinRule && joinRule.status === 200 && joinRule.to === '/join/index.html' && joinRule.force, '/join/<token> must rewrite to /join/index.html (forced)');
 check(headersFor('/join/x')['Referrer-Policy'] === 'no-referrer', '/join/* must keep Referrer-Policy: no-referrer');
-for (const must of ['public/.well-known/apple-app-site-association', 'public/protocol/index.html', 'public/join/index.html']) {
+for (const must of ['public/.well-known/apple-app-site-association', 'public/protocol/index.html', 'public/join/index.html', 'public/routine/index.html']) {
   check(existsSync(abs(must)), `${must} must exist`);
 }
 
 const aasaJson = JSON.parse(read('public/.well-known/apple-app-site-association'));
 const aasaPaths = (aasaJson.applinks?.details ?? []).flatMap((d) => (d.components ?? []).map((c) => c['/']));
 check(aasaPaths.includes('/join/*') && aasaPaths.some((p) => p.startsWith('/protocol/')), 'AASA components must still claim /join/* and /protocol/<uuid>');
+check(aasaPaths.includes('/routine/*'), 'AASA components must claim /routine/* (a Guardian\'s shared routine opens in the app)');
 check(!aasaPaths.some((p) => /privacy|terms|unsubscribe|email/.test(p)), 'AASA must not claim the web-only routes: they would open the app instead of the page');
 
 // the SPA still answers its own routes
 for (const spa of ['/', '/blog', '/admin', '/whatever-the-app-adds']) {
   const r = resolve(spa);
   check(r && r.status === 200 && r.to === '/index.html', `${spa} must still reach the SPA shell`);
+}
+
+// ── 2b. /routine/<token>: a Guardian's shared routine ──
+const TOKEN = '0123456789abcdef0123456789abcdef';
+const routineRule = resolve(`/routine/${TOKEN}`);
+check(routineRule && routineRule.status === 200 && routineRule.to === '/routine/index.html' && routineRule.force, '/routine/<token> must rewrite to /routine/index.html (forced)');
+check(routineRule && routineRule.index < catchAllAt, '/routine/*: must sit above the catch-all');
+const rh = headersFor(`/routine/${TOKEN}`);
+check(rh['Referrer-Policy'] === 'no-referrer', '/routine/*: Referrer-Policy must be no-referrer (the token is in the URL)');
+check(/noindex/.test(rh['X-Robots-Tag'] || ''), '/routine/*: must be noindex');
+check(rh['Cache-Control'] === 'no-store', '/routine/*: must be no-store');
+if (existsSync(abs('public/routine/index.html'))) {
+  const page = read('public/routine/index.html');
+  const csp = rh['Content-Security-Policy'] || '';
+  const scripts = [...page.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
+  check(scripts.length === 1 && !/<script[^>]*\ssrc=/i.test(page), '/routine: exactly one inline <script> and no external script (the CSP hash covers one)');
+  const hash = scripts.length ? createHash('sha256').update(scripts[0][1]).digest('base64') : '';
+  check(csp.includes(`'sha256-${hash}'`), `/routine: CSP script-src hash does not match the inline script (any edit to the script, comments included, changes it). Set netlify.toml to 'sha256-${hash}' (a stale hash blocks the script silently)`);
+  check(/default-src 'none'/.test(csp) && /form-action 'none'/.test(csp) && /frame-ancestors 'none'/.test(csp) && /base-uri 'none'/.test(csp), '/routine: CSP must keep default-src/base-uri/form-action/frame-ancestors locked');
+  // Only the two projects that can mint a token; keys must be the anon keys already in the repo.
+  const envText = read('src/utils/supabase/environments.ts');
+  const envKeys = ['staging', 'production'].map((name) => envText.match(new RegExp(`${name}:\\s*\\{\\s*projectId:\\s*'([a-z0-9]+)',\\s*publicAnonKey:\\s*'([^']+)'`)));
+  check(envKeys.every(Boolean), 'could not read the staging and production entries of src/utils/supabase/environments.ts');
+  if (envKeys.every(Boolean)) {
+    const hosts = envKeys.map((m) => `https://${m[1]}.supabase.co`);
+    check(csp.includes(`connect-src ${hosts.join(' ')};`), `/routine: CSP connect-src must be exactly ${hosts.join(' ')}`);
+    for (const [ref, anon] of envKeys.map((m) => [m[1], m[2]])) {
+      check(page.includes(`'${anon}'`), `/routine: key for ${ref} differs from the anon key in environments.ts`);
+      check(page.includes(`https://${ref}.supabase.co`), `/routine: must read from ${ref}`);
+      const role = JSON.parse(Buffer.from(anon.split('.')[1], 'base64url').toString()).role;
+      check(role === 'anon', `/routine: embedded key for ${ref} has role "${role}", only the anon key may ever be in a public page`);
+    }
+  }
+  const jwts = page.match(/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g) || [];
+  check(jwts.length === 2, `/routine: expected exactly two JWTs (the two anon keys), found ${jwts.length}`);
+  check(!/service_role|sb_secret|RESEND_API/i.test(page), '/routine: names a secret');
+  const rpcs = [...page.matchAll(/call\(source, '([a-z_]+)'/g)].map((m) => m[1]).sort();
+  check(page.includes("'/rest/v1/rpc/'") && JSON.stringify(rpcs) === JSON.stringify(['record_routine_share_click', 'routine_share_preview']), `/routine: must call exactly routine_share_preview and record_routine_share_click, never a table (found: ${rpcs.join(', ') || 'none'})`);
+  check(!/\/rest\/v1\/(?!rpc\/)/.test(page), '/routine: must not query a table directly');
+  check(!/innerHTML|document\.write|eval\(|insertAdjacentHTML/.test(page), '/routine: must not write markup (the routine name is untrusted input)');
+  check(!/localStorage|sessionStorage|document\.cookie/.test(page), '/routine: must not store the token');
+  check(!/fonts\.googleapis|fonts\.gstatic|<img\b|<link\b[^>]*rel=["']?stylesheet/i.test(page), '/routine: no third-party or image requests (the token is in the URL)');
+  check(page.includes('healthscan://routine/') && page.includes('https://apps.apple.com/app/id6740406583'), '/routine: needs the app-scheme button and the App Store button');
 }
 
 // ── 3. legal redirects ──
