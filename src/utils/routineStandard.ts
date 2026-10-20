@@ -13,7 +13,7 @@
  * a peg to wake/bedtime lives in `filter.anchor = { to: 'wake'|'bedtime', offset_minutes }` and is resolved to
  * scheduled_time here (mobile reads scheduled_time today; live re-pegging on mobile is a follow-up).
  */
-import { END_SLEEP, START_SLEEP, PLAIN_BEDTIME, isWakeTitle, mealTitle, ruleGroupFor, ruleRowFields } from './protocolRules';
+import { END_SLEEP, START_SLEEP, PLAIN_BEDTIME, DRINK_NAME, isWakeTitle, mealTitle, ruleGroupFor, ruleRowFields, takeGroupOf } from './protocolRules';
 
 export type Mode = 'cleanup' | 'new';
 export type SmartList = 'hygiene' | 'drinks' | 'wellness' | 'fitness' | 'supplements' | 'meal' | 'work' | 'home' | 'tasks' | 'sleep';
@@ -42,7 +42,7 @@ export const isCalendarEntry = (title: string) => CALENDAR.test(title);
 
 /* ───────── consume: slot vs dish vs drink ───────── */
 const SLOT_ONLY = /^(eat |have |enjoy )?(a |your )?(breakfast|brunch|lunch|dinner|supper|snack|meal|main meal|light meal)$/i;
-const DRINK = /^(water|warm water|lemon water|sparkling water|coconut water|(green|black|white|herbal|mint|ginger|chamomile|rooibos|matcha|dandelion( root)?) tea|tea|coffee|black coffee|espresso|decaf( coffee)?|americano|latte|kombucha|kefir|milk|(almond|oat|soy) milk|juice|.* juice|electrolytes?( drink)?|bone broth|broth|cacao|hot chocolate|.*\bwater)$/i;
+const DRINK = DRINK_NAME;
 /** Smoothies and shakes are meals (they replace food); plain liquids are drinks. */
 export function consumeKind(title: string): 'slot' | 'drink' | 'meal' {
   const t = title.trim().replace(/^(drink|sip|have)\s+(a |some |your )?/i, '');
@@ -125,6 +125,37 @@ export function smartListOf(r: Row): SmartList {
 /* ───────── titles that are really rules ───────── */
 const RULE_TITLE = /^(avoid|no|don'?t|do not|never|limit|skip|cut out|abstain|refrain)\b|\brule\b|\b(=|commit fully)\b|elimination rules|^lights (fully )?off$|^sleep \d+\s*-\s*\d+\s*h(ou)?rs?$|^wind[- ]?down$/i;
 export const isRuleLikeTitle = (t: string) => RULE_TITLE.test(t.trim());
+
+/* ───────── rules that are really items ───────── */
+const groupOfRow = (r: Row) => r.category === 'supplement' || r.item_type === 'supplement' || r.scope === 'supplement' ? 'supplements' : r.category === 'consume' || r.scope === 'consume' ? 'consume' : null;
+/**
+ * A scheduled top-level "Do:" rule (a day or a time set) that only names a supplement or a drink: "Do: Chlorella",
+ * "Do: Drink Water". It was meant to be a step and lost its time. Standing rules with no day and no time stay
+ * rules (Guardians use them as a kit list: "Activated charcoal — food poisoning / gas"), and children are checklists.
+ */
+export function ruleRowIsItem(r: Row): boolean {
+  const title = (r.display_name || '').trim();
+  if (r.kind !== 'rule_do' || r.parent_protocol_item_id || r.hidden || !title || isCalendarEntry(title) || isRuleLikeTitle(title)) return false;
+  if (r.day_number == null && !r.scheduled_time) return false;
+  return takeGroupOf(title, groupOfRow(r)) != null;
+}
+/** When "with food" or a meal is named the step goes to lunch, bedtime to the evening, else the morning. */
+function itemTime(r: Row, drink: boolean): string {
+  if (r.scheduled_time) return r.scheduled_time;
+  const text = `${r.display_name || ''} ${r.notes || ''}`;
+  if (drink) return SLOT_WINDOW.breakfast.default;
+  if (/\b(bed|bedtime|before sleep|at night)\b/i.test(text)) return '21:30:00';
+  if (/\b(dinner|supper|evening)\b/i.test(text)) return SLOT_WINDOW.dinner.default;
+  if (/\b(lunch|midday|noon|with (food|meals?))\b/i.test(text)) return SLOT_WINDOW.lunch.default;
+  return SLOT_WINDOW.breakfast.default;
+}
+/** The fields that turn such a rule into a step. Group name, notes, links and day are kept. */
+export function itemRuleFields(r: Row): Partial<Row> {
+  const drink = takeGroupOf((r.display_name || '').trim(), groupOfRow(r)) === 'drink';
+  return drink
+    ? { kind: 'action', scope: null, item_type: 'consume', category: 'consume', subtype: 'drink', scheduled_time: itemTime(r, true) }
+    : { kind: 'action', scope: null, item_type: 'supplement', category: 'supplement', subtype: 'supplement', scheduled_time: itemTime(r, false) };
+}
 
 /* ───────── Polish names for standard titles (others are flagged for translation) ───────── */
 export const PL: Record<string, string> = {
@@ -211,6 +242,15 @@ export function standardiseProtocol(rows: Row[], mode: Mode = 'cleanup', theme?:
     const group = ruleGroupFor(t, smartListOf(r) === 'drinks' ? 'meal' : smartListOf(r) === 'meal' ? 'meal' : smartListOf(r));
     const groupFields = !host && group !== 'general' ? ruleRowFields(group) : null;
     changes.push({ item_id: `rule:${r.id}`, action: 'insert', reason: host ? 'Attached to the item it governs' : groupFields ? `Group rule on ${group === 'drinks' ? 'Drinks' : group === 'consume' ? 'Consume' : 'Supplements'} for the day` : 'Top-level rule for the day', insert: { parent_ref: host || undefined, display_name: t, kind: /^(avoid|no|don'?t|do not|never|skip)\b/i.test(t) ? 'rule_dont' : 'rule_do', notes: r.notes || '', ...(groupFields ? { scope: groupFields.scope, subtype: groupFields.subtype, category: groupFields.category } : {}) } });
+  }
+
+  // A supplement or drink filed as a scheduled rule ("Do: Chlorella") is a step: it keeps its day and group and gets a time.
+  for (const r of live) {
+    if (!ruleRowIsItem(r)) continue;
+    for (const [field, to] of Object.entries(itemRuleFields(r))) {
+      const from = (r as any)[field] ?? null;
+      if (from !== to) changes.push({ item_id: r.id, action: 'update', field, from, to, reason: `“${r.display_name}” is something to take: a step, not a rule` });
+    }
   }
 
   // Meals live in their consume slot (Breakfast / Lunch / Dinner / Snack), meal and drinks as separate items.

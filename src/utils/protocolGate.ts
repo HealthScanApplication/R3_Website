@@ -8,13 +8,15 @@
  *  - meals / drinks: dish or drink name without a verb; slot (group_name) Breakfast / Lunch / Dinner / Snack from
  *    the title, else the time; a slot named in the title moves the time into that slot's window
  *  - "Avoid X" / "Limit caffeine" saved as a step becomes a rule (Drinks / Consume / general group rule)
+ *  - the reverse: a scheduled "Do: Chlorella" / "Do: Drink Water" rule (a supplement or drink named as a bare item) becomes
+ *    the step it was meant to be, with a time
  *  - set info filled from the title when the fields are empty
  *  - the old title is kept as "Was" (filter.original_title) when a title is changed by the gate
  * Personal calendar entries, rule rows and Supplements stay untouched. Warnings go to listeners so the editor can
  * show them live.
  */
 import { END_SLEEP, START_SLEEP, PLAIN_BEDTIME, isWakeTitle, mealTitle, ruleGroupFor, ruleRowFields } from './protocolRules';
-import { consumeKind, isCalendarEntry, isRuleLikeTitle, parseSetInfo, slotFromTitle, SLOT_TITLE, SLOT_WINDOW, mealSlotFor } from './routineStandard';
+import { consumeKind, isCalendarEntry, isRuleLikeTitle, itemRuleFields, parseSetInfo, ruleRowIsItem, slotFromTitle, SLOT_TITLE, SLOT_WINDOW, mealSlotFor } from './routineStandard';
 
 export interface GateWarning { field: string; message: string }
 type Item = Record<string, any>;
@@ -40,10 +42,17 @@ export function gateProtocolItem(patch: Item, existing?: Item): { item: Item; wa
 export function checkProtocolItem(patch: Item, existing?: Item) { return gate(patch, existing); }
 
 function gate(patch: Item, existing?: Item): { item: Item; warnings: GateWarning[] } {
-  const row = { ...(existing || {}), ...patch };
+  let row = { ...(existing || {}), ...patch };
   const out: Item = { ...patch };
   const warnings: GateWarning[] = [];
   const title = String(row.display_name ?? '').trim();
+  // A scheduled "Do: Chlorella" / "Do: Drink Water" rule is a step that lost its time: save it as the step.
+  if (ruleRowIsItem(row as any)) {
+    const fields = itemRuleFields(row as any);
+    Object.assign(out, fields);
+    row = { ...row, ...fields };
+    warnings.push({ field: 'kind', message: `“${title}” is something to take: saved as a step at ${String(fields.scheduled_time).slice(0, 5)}, not a rule` });
+  }
   const kind = row.kind || 'action';
   if (!title || kind !== 'action' || isCalendarEntry(title)) return { item: out, warnings };
   const isChild = Boolean(row.parent_protocol_item_id);

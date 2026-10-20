@@ -483,7 +483,23 @@ const PROTOCOL_ITEM_RULES = `Item rules (strict):
 - Action titles are an imperative verb + noun, with a measurable amount when it fits: "Walk 20 minutes", "Run 5 km", "Practise yoga 30 minutes". Never vague ("Practice light exercise", "Be active", "Self-care").
 - Meal and food items are titled with the dish name only, no verb: "Vegetable soup", "Boiled potatoes", "Tofu scramble".
 - Sleep is exactly two items: "End Sleep" (wake, first) and "Start Sleep" (bedtime, last). Put any other sleep advice (darkness, cool room, screens) in Start Sleep's notes and its "tips"/"donts".
+- A supplement, food or drink the person takes is always a step ("kind":"action") with a time, never "kind":"rule": "Chlorella", "Milk Thistle" and "Drink Water" are steps in category supplement or consume. "kind":"rule" is only for a constraint ("Avoid alcohol", "Limit caffeine", "Keep binders 2 hours from food").
 - Do and don't guidance is never a step of its own. Guidance about one step goes on that step as "tips" (do) and "donts" (don't). Guidance about a whole category of food or drink ("Limit caffeine", "No added sugar", "Avoid alcohol") is a group rule: return it as an item with "kind":"rule", "category":"consume", title naming the rule, entries in "tips"/"donts", never attached to a single meal or drink. Other whole-day guidance is also "kind":"rule".`
+
+// A supplement or drink named as a bare item is a step, never a rule ("Do: Chlorella" has no time and nothing to tick off).
+// Keep these patterns identical to src/utils/protocolRules.ts (isBareItemTitle / takeGroupOf): a test compares them.
+const AVOID_TITLE = /^(avoid|no|skip|don'?t|do not|cut out|cut|limit|reduce|abstain|refrain|follow the .*diet|practi[cs]e .*abstinence)\b/i
+const TAKE_VERB = /^(drink|take|have|eat|sip|use)\s+(a |an |some |your |the )?/i
+const CONSTRAINT_WORD = /\b(if|when|whenever|while|before|after|during|with|without|within|from|at|on|every|each|per|than|more|less|fewer|only|instead|no|not|never|always|avoid|limit|keep|stay|stop|pause|check|follow|for|until|unless|labels?|rules?|daily|weekly|twice|times|dose|doses|dosage|slowly|plenty)\b/i
+const DRINK_NAME = /^(water|warm water|lemon water|sparkling water|coconut water|(green|black|white|herbal|mint|ginger|chamomile|rooibos|matcha|dandelion( root)?) tea|tea|coffee|black coffee|espresso|decaf( coffee)?|americano|latte|kombucha|kefir|milk|(almond|oat|soy) milk|juice|.* juice|electrolytes?( drink)?|bone broth|broth|cacao|hot chocolate|.*\bwater)$/i
+function isTakeItemStep(title: string, category: string): boolean {
+  const raw = title.trim()
+  if (!raw || /^(drink|take|have|eat|sip|use|add)$/i.test(raw) || AVOID_TITLE.test(raw)) return false
+  const name = raw.replace(TAKE_VERB, '')
+  const words = name.replace(/\(.*?\)/g, '').trim()
+  const bare = words.length > 0 && words.split(/\s+/).length <= 5 && !CONSTRAINT_WORD.test(name) && !/[.:;!?]/.test(name) && !/\d+\s*[x×]/i.test(name)
+  return bare && (category === 'supplement' || (category === 'consume' && DRINK_NAME.test(words)))
+}
 
 /** Real catalog names so the model picks titles we can link. */
 async function catalogNameHints(): Promise<string> {
@@ -542,7 +558,7 @@ Personalise to the selected life stage (for example premenopause, perimenopause,
       duration_minutes: step.duration_minutes == null ? null : Math.max(1, Math.min(240, Number(step.duration_minutes))),
       anchor: ['wake', 'bedtime', 'before_meal', 'after_meal'].includes(step.anchor) ? step.anchor : null,
       offset_minutes: Number.isFinite(Number(step.offset_minutes)) ? Math.max(-720, Math.min(720, Number(step.offset_minutes))) : 0,
-      kind: step.kind === 'rule' ? 'rule' : 'action',
+      kind: step.kind === 'rule' && !isTakeItemStep(String(step.title || ''), String(step.category || '')) ? 'rule' : 'action',
       tips: Array.isArray(step.tips) ? step.tips.map((t: unknown) => String(t).slice(0, 80)).slice(0, 12) : [],
       donts: Array.isArray(step.donts) ? step.donts.map((t: unknown) => String(t).slice(0, 80)).slice(0, 12) : [],
     })) : []
