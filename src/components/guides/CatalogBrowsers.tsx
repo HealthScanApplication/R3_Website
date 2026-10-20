@@ -283,6 +283,17 @@ export function StepPrefix({ target, image, list, onOpen }: { target: StepTarget
   if (list === 'Meals' || list === 'Fitness') return <span aria-hidden="true" style={{ ...box, opacity: 0.5 }}><Icon size={12} /></span>;
   return <span aria-hidden="true" style={{ display: 'inline-block', width: 26, marginRight: 8, verticalAlign: 'middle' }} />;
 }
+/** A step's description (what to do and why) under it: two lines, with a toggle when it is longer. */
+export function StepNote({ text, indent = 34 }: { text: string | null | undefined; indent?: number }) {
+  const [open, setOpen] = useState(false);
+  const body = (text || '').trim();
+  if (!body) return null;
+  const long = body.length > 150 || body.split('\n').length > 2;
+  return <div style={{ padding: `3px 0 0 ${indent}px` }}>
+    <p style={{ color: muted, fontSize: 11, lineHeight: 1.5, margin: 0, whiteSpace: 'pre-line', ...(open || !long ? {} : { display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }) }}>{body}</p>
+    {long && <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} style={{ border: 0, background: 'transparent', color: acid, fontSize: 10, fontWeight: 600, padding: '2px 0 0', cursor: 'pointer' }}>{open ? 'Less' : 'More'}</button>}
+  </div>;
+}
 /** Detail modal for a catalogue activity (steps, benefits, rules) or recipe (nutrients, hazards, ingredients). */
 export function StepModal({ accessToken, target, onClose }: { accessToken: string; target: StepTarget; onClose: () => void }) {
   const [activity, setActivity] = useState<ActivityDetail | null | undefined>(undefined);
@@ -497,7 +508,8 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
               <div style={{ color: muted, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', margin: '0 0 4px' }}>{list}</div>
               <div style={{ display: 'grid', gridTemplateColumns: acts.length && rules.length ? 'minmax(0,3fr) minmax(0,2fr)' : 'minmax(0,1fr)', gap: 14, alignItems: 'start' }}>
                 {acts.length > 0 && <ol style={{ margin: '0 0 0 4px', paddingLeft: 12, borderLeft: `1px solid ${line}`, listStyle: 'none', display: 'grid', gap: 4, fontSize: 12 }}>{acts.map((s, i) => <li key={i}><StepPrefix {...stepTarget(s, list, media, suggestions)} list={list} onOpen={setModal} /><span style={{ color: acid }}>{s.time}</span>{s.time ? ' · ' : ''}{s.name}{[s.sets && s.reps ? `${s.sets} × ${s.reps}` : null, s.weight, s.minutes ? `${s.minutes} min` : null].filter(Boolean).map((x) => <span key={x} style={{ color: acid }}> · {x}</span>)}{s.group ? <span style={{ color: muted }}> · {s.group}</span> : null}
-                  {tree.kids(s).filter((k) => !isRule(k)).length > 0 && <ul style={{ listStyle: 'none', margin: '2px 0', paddingLeft: 14, borderLeft: `1px solid ${line}`, display: 'grid', gap: 1 }}>{tree.kids(s).filter((k) => !isRule(k)).map((k, j) => <li key={j} style={{ fontSize: 11 }}>{k.name}{k.time && k.time !== s.time ? <span style={{ color: acid }}> · {k.time}</span> : null}</li>)}</ul>}
+                  <StepNote text={s.notes} />
+                  {tree.kids(s).filter((k) => !isRule(k)).length > 0 && <ul style={{ listStyle: 'none', margin: '2px 0', paddingLeft: 14, borderLeft: `1px solid ${line}`, display: 'grid', gap: 1 }}>{tree.kids(s).filter((k) => !isRule(k)).map((k, j) => <li key={j} style={{ fontSize: 11 }}>{k.name}{k.time && k.time !== s.time ? <span style={{ color: acid }}> · {k.time}</span> : null}<StepNote text={k.notes} indent={0} /></li>)}</ul>}
                   {s.id && suggestions[s.id] && <button type="button" onClick={() => setModal({ kind: 'recipe', id: suggestions[s.id!].id, name: suggestions[s.id!].name })} style={{ display: 'block', border: 0, background: 'transparent', color: acid, fontSize: 11, padding: '2px 0 0 34px', cursor: 'pointer', textAlign: 'left' }}>Suggested: {suggestions[s.id].name}{suggestions[s.id].healthScore != null ? ` · ♥ ${Math.round(suggestions[s.id].healthScore!)}` : ''}</button>}</li>)}</ol>}
                 {rules.length > 0 && <ul aria-label={`${list} rules`} style={{ listStyle: 'none', margin: 0, padding: acts.length ? '0 0 0 10px' : 0, borderLeft: acts.length ? `1px dashed ${line}` : 0, display: 'grid', gap: 3, fontSize: 11 }}>{rules.map((x, k) => <li key={k} style={{ color: warn }}>{x.dont ? 'Don’t: ' : 'Do: '}<span style={{ color: ink }}>{x.name}</span>{x.on.length ? <span style={{ color: muted }}> · {x.on.join(', ')}</span> : null}</li>)}</ul>}
               </div>
