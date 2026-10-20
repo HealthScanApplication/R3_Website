@@ -31,6 +31,7 @@ import { computeSleepWindow, isWakeName, isBedName } from '../../utils/sleepWind
 import { descriptiveMealSlot } from '../../protocolDomain/mealSlot';
 import { smartListOf, slotFromGroupName, mealSlotFor, SLOT_TITLE, type Row as StandardRow } from '../../utils/routineStandard';
 import { checkProtocolItem, onGateWarnings, type GateWarning } from '../../utils/protocolGate';
+import { findProtocolConflicts } from '../../utils/protocolBuilders';
 import { LENGTH_OPTIONS, DEFAULT_LENGTH } from '../../utils/protocolVariety';
 import {
   listProtocols, listProtocolItems, updateProtocol,
@@ -2213,6 +2214,18 @@ export function ProtocolEditor({ accessToken, onOpenCatalogRecord, initialProtoc
                           <strong>Checker</strong> — last saves: {gateLog.slice(0, 3).map((g) => `${g.title}: ${g.warnings.map((w) => w.message).join('; ')}`).join(' · ')}
                         </div>
                       )}
+                      {(() => {
+                        // A Protocol has no contradictions: every rule is checked against the steps it covers (an activity, a weekday, or the week).
+                        const conflicts = findProtocolConflicts(form.name || 'This Protocol', items);
+                        const sure = conflicts.filter((c) => c.certainty !== 'maybe').length;
+                        return conflicts.length > 0 && (
+                          <div role="alert" style={{ border: '1px solid #D9705F', background: 'rgba(217,112,95,.10)', padding: '8px 10px', fontSize: 12 }}>
+                            <strong>{sure ? `${sure} contradiction${sure === 1 ? '' : 's'}` : `${conflicts.length} possible contradiction${conflicts.length === 1 ? '' : 's'}`}</strong> — a Protocol can’t contradict itself. Remove or edit one side of each:
+                            {conflicts.slice(0, 8).map((c, i) => <div key={c.id || i} style={{ marginTop: 3 }}>“{c.item}” vs rule “{c.rule}” · {c.reason}{c.certainty === 'maybe' ? ' (may not be a real clash)' : ''}</div>)}
+                            {conflicts.length > 8 && <div style={{ marginTop: 3 }}>+{conflicts.length - 8} more</div>}
+                          </div>
+                        );
+                      })()}
                       {dayRules.length > 0 && (
                         <section style={{ border: '1px dashed ' + C.ink, background: C.panel, padding: 8 }}>
                           <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 6 }}>Rules on this level</div>

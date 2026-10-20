@@ -22,6 +22,7 @@ import { cloneProtocolChild, ensureGuideRecipeCatalog, syncProtocolChild } from 
 import { isBedName, isWakeName } from './sleepWindow';
 import { MEAL_SLOT_DEFAULT_TIMES, mealSlotName } from '../protocolDomain/mealSlot';
 import { END_SLEEP, START_SLEEP, enforceProtocolRules, isRuleTitle, ruleGroupFor, ruleRowFields, type RuleIssue, type RuleStep } from './protocolRules';
+import { ruleLevelOf } from './routineStandard';
 
 const rest = () => `https://${projectId}.supabase.co/rest/v1`;
 const headers = (accessToken: string, extra: Record<string, string> = {}) => ({
@@ -691,47 +692,166 @@ export function splitRules(lines: string[]): RuleList {
   return out;
 }
 
-export interface Conflict { rule: string; item: string; where: string; reason: string }
+export interface Conflict { rule: string; item: string; where: string; reason: string; /** 'sure' contradictions block saving and must be settled when combining; a 'maybe' (loose word match) never does. */ certainty?: 'sure' | 'maybe'; id?: string; ruleId?: string; itemId?: string; ruleSource?: string; itemSource?: string; canKeepRule?: boolean; canKeepItem?: boolean }
 export interface ReviewNote { where: string; message: string }
 export interface CheckedStep extends RuleStep { key: string }
-/** notes = auto-fixes applied on save; blocking = must be fixed before saving (the hard gate); conflicts = contradictions, flagged only. */
+/** notes = auto-fixes applied on save; blocking = must be fixed before saving (the hard gate, which includes any contradiction inside the plan); conflicts = the contradictions, for display. */
 export interface Review { steps: Record<string, CheckedStep>; notes: ReviewNote[]; blocking: ReviewNote[]; conflicts: Conflict[]; weekRules: RuleList }
 
 // Interim subject tags for flagging only. Replace with the shared resolveConflicts once it is approved and built.
-const SUBJECTS: { tag: string; rule: RegExp; item: RegExp }[] = [
-  { tag: 'sugar', rule: /sugar|sweet/i, item: /sugar|honey|syrup|cake|cookie|biscuit|candy|chocolate|dessert|brownie|jam|caramel/i },
-  { tag: 'caffeine', rule: /caffeine|coffee/i, item: /coffee|espresso|latte|cappuccino|\btea\b|matcha|cola|energy drink/i },
-  { tag: 'alcohol', rule: /alcohol|wine|beer/i, item: /\b(wine|beer|cocktails?|spirits|liqueur|gin|vodka|rum|whisky|cider)\b/i },
-  { tag: 'meat', rule: /\bmeat|red meat|pork|beef/i, item: /\b(beef|pork|lamb|bacon|ham|sausages?|chicken|turkey|veal|mince|steak|faggots?|liver|salami|chorizo)\b/i },
-  { tag: 'dairy', rule: /dairy|milk|cheese/i, item: /milk|cheese|yog(h)?urt|cream|butter|paneer|kefir/i },
-  { tag: 'gluten', rule: /gluten|wheat|bread/i, item: /bread|baguette|pasta|wheat|couscous|bulgur|pizza|wrap|bagel|cake/i },
-  { tag: 'fried food', rule: /fried|deep[- ]fr/i, item: /fried|nugget|chips|fries|tempura|crispy/i },
+const SUBJECTS: { tag: string; rule: RegExp; item: RegExp; /** Steps that look like the item but are the safe kind. */ except?: RegExp }[] = [
+  { tag: 'sugar', rule: /sugar|sweet/i, item: /\bsugar\b(?! scrub)|\bhoney\b|\bsyrup\b|(?<!rice )(?<!oat )\bcakes?\b|\bcookies?\b|\bbiscuits?\b|\bcandy\b|\bchocolate\b|\bdesserts?\b|\bbrownies?\b|\bjam\b|\bcaramel\b/i },
+  { tag: 'caffeine', rule: /caffeine|coffee/i, item: /\b(coffee|espresso|latte|cappuccino|matcha|cola|energy drinks?|(black|green|iced|chai|earl grey) tea)\b|\btea\b(?! tree)/i, except: /chamomile|peppermint|rooibos|hibiscus|fennel|ginger tea|mint tea|lemon balm|herbal|decaf/i },
+  { tag: 'alcohol', rule: /alcohol|wine|beer/i, item: /\b(wine|beer|cocktails?|spirits|liqueur|gin|vodka|rum|whisky|cider)\b/i, except: /vinegar|\b0\.0\b|\b0(?:\.5)?\s*%/i },
+  { tag: 'red meat', rule: /red (?:or processed )?meat|\bpork\b|\bbeef\b|\blamb\b/i, item: /\b(beef|pork|lamb|bacon|ham|sausages?|veal|mince|steak|salami|chorizo|faggots?|liver)\b/i },
+  { tag: 'processed meat', rule: /processed meat|cured meat|deli meat/i, item: /\b(bacon|ham|sausages?|salami|chorizo|hot dogs?|pepperoni|luncheon)\b/i },
+  { tag: 'meat', rule: /(?<!red )(?<!processed )(?<!red or processed )\bmeat\b|\bpoultry\b/i, item: /\b(beef|pork|lamb|bacon|ham|sausages?|chicken|turkey|veal|mince|steak|faggots?|liver|salami|chorizo)\b/i },
+  { tag: 'dairy', rule: /dairy|milk|cheese/i, item: /(?<!(?:oat|almond|soy|soya|coconut|rice|nut|cashew) )\bmilk\b|\bcheese\b|\byog(?:h)?urt\b|(?<!coconut )\bcream\b|(?<!(?:peanut|almond|nut|cashew|apple) )\bbutter\b(?! beans?)|\bpaneer\b|\bkefir\b/i },
+  { tag: 'gluten', rule: /gluten|wheat|bread/i, item: /\b(bread|baguettes?|pasta|wheat|couscous|bulgur|pizza|wraps?|bagels?)\b|(?<!rice )(?<!oat )\bcakes?\b/i },
+  { tag: 'fried food', rule: /fried|deep[- ]fr/i, item: /\b(fried|nuggets?|chips|fries|tempura|crispy)\b/i },
   { tag: 'processed food', rule: /processed|ultra[- ]processed|fast food/i, item: /\b(nuggets?|sausages?|bacon|ham|crisps|instant)\b/i },
 ];
-const DAYS_RE: [RegExp, number][] = [[/\bmon(day)?s?\b/i, 1], [/\btue(s(day)?)?s?\b/i, 2], [/\bwed(nesday)?s?\b/i, 3], [/\bthu(rs(day)?)?s?\b/i, 4], [/\bfri(day)?s?\b/i, 5], [/\bsat(urday)?s?\b/i, 6], [/\bsun(day)?s?\b/i, 7]];
+// "sun" and "sat" on their own are "sun exposure" and "sat down", not days.
+const DAYS_RE: [RegExp, number][] = [[/\bmon(day)?s?\b/i, 1], [/\btue(s(day)?)?s?\b/i, 2], [/\bwed(nesday)?s?\b/i, 3], [/\bthu(rs(day)?)?s?\b/i, 4], [/\bfri(day)?s?\b/i, 5], [/\bsaturdays?\b/i, 6], [/\bsundays?\b/i, 7]];
+const DAY_NAMES = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
-/** A don't (or a "rest on Sunday" do) that an item in the same plan breaks. Flags only — the Guardian decides. */
-export function findConflicts(rules: { text: string; scope: string; isDont: boolean }[], items: { title: string; where: string; day?: number; kind: 'meal' | 'session' | 'item' }[]): Conflict[] {
+/** What a rule covers: one activity (its steps), the listed weekdays (day), or the whole plan (week). days = the weekdays covered (none listed = the whole week); underId = the step an activity rule hangs under. */
+export interface RuleCoverage { id?: string; level?: 'activity' | 'day' | 'week'; days?: number[]; underId?: string }
+type RuleIn = { text: string; scope: string; isDont: boolean } & RuleCoverage;
+type ItemIn = { title: string; where: string; /** The Protocol it lives in (where adds the weekday for display). */ source?: string; day?: number; /** Weekdays of a stored step; none = every day. */ days?: number[]; kind: 'meal' | 'session' | 'item'; id?: string; parentId?: string | null; /** "HH:MM" when the step has a time. */ time?: string | null; /** Start / End Sleep: a rule's words ("don't sleep with your phone") are not about them. */ system?: boolean };
+
+/** The weekdays a sentence names: "Wednesday", "Mon-Fri", "weekdays", "weekends". */
+const weekdaysIn = (text: string): number[] => {
+  const found = new Set(DAYS_RE.filter(([re]) => re.test(text)).map(([, d]) => d));
+  for (const m of text.matchAll(/\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*\s*(?:-|–|—|to|through|thru)\s*(mon|tue|wed|thu|fri|sat|sun)[a-z]*\b/gi)) {
+    const to = DAY_NAMES.indexOf(m[2].toLowerCase()) + 1;
+    for (let d = DAY_NAMES.indexOf(m[1].toLowerCase()) + 1, n = 0; n < 7; n++, d = (d % 7) + 1) { found.add(d); if (d === to) break; }
+  }
+  if (/\bweekdays?\b/i.test(text)) [1, 2, 3, 4, 5].forEach((d) => found.add(d));
+  if (/\bweekends?\b/i.test(text)) { found.add(6); found.add(7); }
+  return [...found].sort((x, y) => x - y);
+};
+/** Two weekday sets meet when they share a day; no days listed means every day. */
+const meet = (a?: number[], b?: number[]) => !a?.length || !b?.length || a.some((d) => b.includes(d));
+const ruleDaysOf = (rule: { text: string } & RuleCoverage) => rule.days?.length ? rule.days : weekdaysIn(rule.text);
+const itemDaysOf = (it: ItemIn) => it.days?.length ? it.days : it.day != null ? [it.day] : undefined;
+/** A rule only conflicts with what it covers: an activity rule with that activity's steps, a day or week rule with the steps on its weekdays. */
+const covers = (rule: RuleIn, it: ItemIn) => rule.level === 'activity'
+  ? !!rule.underId && (it.parentId === rule.underId || it.id === rule.underId)
+  : meet(ruleDaysOf(rule), itemDaysOf(it));
+
+/** "Rest on Wednesday", "Recover on Sunday", "No training on Monday" ("Training on Monday" once a builder has stripped the "No"). Not "Recover with a protein shake". */
+const REST_RULE = /^(?:do\s+)?(?:rest|recover(?:y)?|take (?:a )?(?:rest|recovery)(?: day)?|no (?:training|exercise|workouts?|gym)|(?:training|exercise|workouts?) (?:is )?off)\b(?!\s+(?:with|after|from|by|using|your|the)\b)/i;
+/** "Wednesday is a rest day", "Take Sunday off": a rest rule that names its days first. */
+const REST_DAY_WORDS = /\b(?:rest|recovery)\s+days?\b|\bdays?\s+off\b|\btake\b[^.;,]*\boff\s*[.!]?$|\bis (?:a )?(?:rest|recovery)\b/i;
+/** 'strict': the rule is about nothing but rest ("Rest on Wednesday", "Take Sunday off", "Wednesday is a rest day"); 'loose': rest is one thing it says ("Lift Mon, Wed, Fri; rest days Tue, Thu"), so it can only be a maybe. */
+const restKind = (r: RuleIn): 'strict' | 'loose' | null => {
+  const text = r.text.trim();
+  if (REST_RULE.test(text) || (r.isDont && /^(?:training|exercise|workouts?|gym)\b/i.test(text))) return 'strict';
+  if (weekdaysIn(text).length > 0 && REST_DAY_WORDS.test(text)) return /^(?:take\b|rest day\b|(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\b)/i.test(text) && !/;/.test(text) ? 'strict' : 'loose';
+  return null;
+};
+/** "Limit caffeine" allows some, so it does not contradict having some. */
+const LIMITING = /^(limit|reduce|less|cut (?:down|back)|(?:down|back) on|moderate|minimi[sz]e|only)\b/i;
+/** "No coffee after 2pm" only forbids what is at or after 14:00 (before: until 14:00). A step with no time can only be a "maybe". */
+const timeWindowOf = (text: string): { after?: number; before?: number; vague?: boolean } | null => {
+  const times = [...text.matchAll(/\b(after|before|from|until|past|between|by|at)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/gi)];
+  const loose = /\b(after|before|until|from|between|during|around)\s+(lunch|dinner|breakfast|supper|work|bed|bedtime|noon|midnight|sunset|sunrise|waking|meals?)\b|\b(morning|afternoon|evening|night)s?\b|\blate\b/i.test(text);
+  if (!times.length && !loose) return null;
+  // One plain "after 2pm" / "before 10am" is exact; ranges, "at", clock-less words and "after 8" (am or pm?) are only a maybe.
+  const m = times[0];
+  if (times.length !== 1 || loose || !/^(after|before|from|until|past)$/i.test(m[1])) return { vague: true };
+  const ap = (m[4] || '').toLowerCase();
+  let hour = Number(m[2]) % 24;
+  if (!ap && hour >= 7 && hour <= 11) return { vague: true };
+  if (ap === 'pm' && hour < 12) hour += 12;
+  else if (ap === 'am' && hour === 12) hour = 0;
+  else if (!ap && hour >= 1 && hour <= 6) hour += 12; // "after 2" means the afternoon
+  const minutes = hour * 60 + Number(m[3] || 0);
+  return /^(after|from|past)$/i.test(m[1]) ? { after: minutes } : { before: minutes };
+};
+const SHORT_WORDS = new Set(['gym', 'run', 'row', 'abs']);
+/** A step that says it is the safe version ("Decaf coffee", "Herbal tea", "Sugar-free jam") is not what the rule avoids. */
+const FREE_RE = /\b(free|decaf|herbal|unsweetened|non[- ]?alcoholic|zero)\b|-free\b/i;
+/** The thing a don't rule avoids: "No coffee after 2pm" → "coffee"; null for a double negative ("Don't skip breakfast"). */
+const subjectOf = (text: string): string | null => {
+  const rest = text.toLowerCase().trim().replace(/^(avoid|no|skip|don'?t|do not|never|cut out|cut|abstain from|refrain from)\s+/, '');
+  if (/^(skip|miss|forget|stop|quit|neglect)\b/.test(rest)) return null;
+  return rest.replace(/\b(before|after|during|until|at|while|when|in|on|by|to|for|with|within|around|than)\b.*$/, '').trim();
+};
+
+/**
+ * A rule that something it covers breaks: a "don't" (or a "rest on Sunday" do) against a step, or a do and a don't about
+ * the same thing. A Protocol must have none; when Protocols are combined each one is the user's choice to make.
+ * A loose word match ("Avoid fried chicken" vs "Chicken salad") is only "maybe": shown, but it never blocks.
+ */
+export function findConflicts(rules: RuleIn[], items: ItemIn[]): Conflict[] {
   const out: Conflict[] = [];
+  const add = (rule: RuleIn, it: ItemIn, ruleLabel: string, reason: string, certainty: 'sure' | 'maybe' = 'sure') => out.push({ rule: ruleLabel, item: it.title, where: it.where, reason, certainty, ruleId: rule.id, itemId: it.id, ruleSource: rule.scope, itemSource: it.source ?? it.where, id: rule.id && it.id ? `${rule.id}>${it.id}` : undefined });
+  // A rule already worded as a don't ("Don't treadmill", "No coffee after 2pm") keeps its words; a bare subject ("Added sugar") reads as "Avoid added sugar".
+  const avoidLabel = (text: string) => /^(avoid|no|never|skip|don'?t|do not|cut out|cut)\b/i.test(text.trim()) ? text.trim().replace(/^./, (c) => c.toUpperCase()) : `Avoid ${text.trim().replace(/^./, (c) => c.toLowerCase())}`;
   for (const rule of rules) {
+    const scoped = items.filter((it) => covers(rule, it));
+    const rest = restKind(rule);
+    if (rest) {
+      const days = ruleDaysOf(rule);
+      if (days.length) for (const it of scoped) if (it.kind === 'session' && meet(days, itemDaysOf(it))) add(rule, it, rule.text, `${it.title} is scheduled on a rest day`, rest === 'strict' ? 'sure' : 'maybe');
+      continue;
+    }
+    if (!rule.isDont || LIMITING.test(rule.text.trim())) continue;
+    const subject = subjectOf(rule.text);
+    if (subject === null) continue;
+    // "Skip breakfast" is what a builder keeps of "Don't skip breakfast": a loose match at best.
+    const soft = /^(skip|miss|forget|stop|quit|neglect)\b/i.test(rule.text.trim());
+    const window = timeWindowOf(rule.text);
+    /** null = the step is outside the rule's hours; 'maybe' = it has no time to check. */
+    const timing = (it: ItemIn): 'sure' | 'maybe' | null => {
+      if (!window) return 'sure';
+      if (window.vague) return 'maybe';
+      const t = it.time && /^\d{1,2}:\d{2}/.test(it.time) ? Number(it.time.slice(0, 2)) * 60 + Number(it.time.slice(3, 5)) : null;
+      if (t == null) return 'maybe';
+      return (window.after != null ? t >= window.after : t < window.before!) ? 'sure' : null;
+    };
     // Any other don't: its own words against item names ("Avoid treadmill" vs "Treadmill Walk").
-    const known = SUBJECTS.some((x) => x.rule.test(rule.text));
-    if (rule.isDont && !known) {
-      const words = rule.text.toLowerCase().replace(/^(avoid|no|skip|don'?t|do not|cut out|cut|limit|reduce)\s+/, '').split(/[^a-z]+/).filter((w) => w.length >= 4 && !/^(after|before|during|with|from|than|more|less|every|food|foods)$/.test(w));
-      for (const it of items) if (words.some((w) => new RegExp(`\\b${w}`, 'i').test(it.title))) out.push({ rule: `Avoid ${rule.text.replace(/^avoid\s+/i, '').replace(/^./, (c) => c.toLowerCase())}`, item: it.title, where: it.where, reason: `${it.title} matches “${rule.text}” (${rule.scope})` });
+    if (!SUBJECTS.some((x) => x.rule.test(rule.text))) {
+      const words = subject.split(/[^a-z]+/).filter((w) => (w.length >= 4 || SHORT_WORDS.has(w)) && !/^(after|before|during|with|from|than|more|less|every|food|foods)$/.test(w));
+      // "running" also finds "Run 5k".
+      const stem = (w: string) => w.endsWith('ing') && w.length > 5 ? w.slice(0, -3).replace(/(.)\1$/, '$1') : w;
+      const GENERIC = new Set(['eat', 'drink', 'sit', 'take', 'have', 'make', 'use', 'get', 'stand', 'look', 'go', 'do']);
+      const stemRe = (w: string) => { const st = stem(w); return st !== w && st.length >= 3 && !GENERIC.has(st) ? new RegExp(`\\b${st}\\b`, 'i') : null; };
+      if (words.length) for (const it of scoped.filter((x) => !x.system)) {
+        const hits = words.filter((w) => new RegExp(`\\b${w}`, 'i').test(it.title));
+        const stemHits = words.filter((w) => !hits.includes(w) && stemRe(w)?.test(it.title));
+        const when = timing(it);
+        if ((hits.length || stemHits.length) && when && !FREE_RE.test(it.title)) add(rule, it, avoidLabel(rule.text), `${it.title} matches “${rule.text}” (${rule.scope})`, hits.length === words.length && !soft && when === 'sure' ? 'sure' : 'maybe');
+      }
     }
-    if (rule.isDont) for (const subject of SUBJECTS) {
-      if (!subject.rule.test(rule.text)) continue;
-      for (const it of items) if (subject.item.test(it.title)) out.push({ rule: `Avoid ${rule.text.replace(/^avoid\s+/i, '').replace(/^./, (c) => c.toLowerCase())}`, item: it.title, where: it.where, reason: `${it.title} may contain ${subject.tag} (${rule.scope})` });
-    }
-    if (/\b(rest|recover|no (training|exercise|workout))\b/i.test(rule.text)) {
-      const days = DAYS_RE.filter(([re]) => re.test(rule.text)).map(([, d]) => d);
-      for (const it of items) if (it.kind === 'session' && it.day && days.includes(it.day)) out.push({ rule: rule.text, item: it.title, where: it.where, reason: `${it.title} is scheduled on a rest day` });
+    for (const tag of SUBJECTS) {
+      if (!tag.rule.test(rule.text)) continue;
+      for (const it of scoped) {
+        const when = timing(it);
+        if (when && tag.item.test(it.title) && !FREE_RE.test(it.title) && !tag.except?.test(it.title)) add(rule, it, avoidLabel(rule.text), `${it.title} may contain ${tag.tag} (${rule.scope})`, when);
+      }
     }
   }
-  return out.filter((c, i) => out.findIndex((x) => x.rule === c.rule && x.item === c.item && x.where === c.where) === i);
+  // A do and a don't about the same thing, both covering the same steps ("Avoid sugar" and "Sweeten with honey").
+  for (const dont of rules.filter((r) => r.isDont && !LIMITING.test(r.text.trim()))) for (const tag of SUBJECTS) {
+    if (!tag.rule.test(dont.text)) continue;
+    for (const doRule of rules.filter((r) => !r.isDont && !(r.id && r.id === dont.id))) {
+      const sameActivity = dont.level !== 'activity' || doRule.level !== 'activity' || (!!dont.underId && dont.underId === doRule.underId);
+      if (sameActivity && meet(ruleDaysOf(dont), ruleDaysOf(doRule)) && tag.item.test(doRule.text) && !FREE_RE.test(doRule.text) && !tag.except?.test(doRule.text))
+        add(dont, { title: doRule.text, where: doRule.scope, source: doRule.scope, kind: 'item', id: doRule.id }, avoidLabel(dont.text), `“${doRule.text}” asks for ${tag.tag} while “${dont.text}” avoids it`, timeWindowOf(dont.text) || timeWindowOf(doRule.text) ? 'maybe' : 'sure');
+    }
+  }
+  // Stored steps are told apart by id (two "Drink Coffee" steps on different days are two contradictions to settle).
+  const keyOf = (c: Conflict) => c.id || `${c.rule}|${c.item}|${c.where}`;
+  return out.filter((c, i) => out.findIndex((x) => keyOf(x) === keyOf(c)) === i);
 }
 
+/** Inside one Protocol a contradiction is not a note: it blocks saving until one side is removed. */
+const isSure = (c: Conflict) => c.certainty !== 'maybe';
+// The fasting window is the user's own schedule choice and stays "kept for review" (it is listed, not a block).
+const conflictBlocks = (conflicts: Conflict[]): ReviewNote[] => conflicts.filter((c) => isSure(c) && c.rule !== 'Fasting window').map((c) => ({ where: c.where, message: `“${c.item}” contradicts “${c.rule}” (${c.reason}). A Protocol can't contradict itself: remove one of them.` }));
 const ruleRows = (list: RuleList, scope: string) => [...list.dos.map((text) => ({ text, scope, isDont: false })), ...list.donts.map((text) => ({ text, scope, isDont: true }))];
 const notesOf = (steps: CheckedStep[], where: (s: CheckedStep) => string): ReviewNote[] =>
   steps.flatMap((s) => (s.issues || []).filter((i) => i.code !== 'not_verb').map((i: RuleIssue) => ({ where: where(s), message: i.code === 'renamed' || i.code === 'vague' ? `${i.message} → “${s.title}”` : i.message })));
@@ -783,7 +903,7 @@ export function reviewDiet(cfg: DietConfig): Review {
   const placement = mealPlacementIssues(checked.map((x) => ({ display_name: x.title, category: 'consume', item_type: 'recipe', group_name: MEAL_SLOTS.find((m) => m.id === x.key.split(':')[1])?.label || null, scheduled_time: x.time })))
     .map((i) => ({ rule: 'Meal slots', item: i.item, where: 'Meal placement', reason: i.message }));
   return { steps: Object.fromEntries(checked.map((s) => [s.key, s])), notes: notesOf(checked, label),
-    blocking: [...blockingOf(checked, label),
+    blocking: [...blockingOf(checked, label), ...conflictBlocks(conflicts),
       ...(cfg.fasting && cfg.fasting.type !== 'none' && !cfg.fasting.fullDay && (!validClock(cfg.fasting.start) || !validClock(cfg.fasting.end) || cfg.fasting.start === cfg.fasting.end) ? [{where:'Fasting',message:'Choose valid, different start/end times or select a full-day fast.'}] : []),
       ...dietSupportItems(cfg).filter(i => !validClock(i.time)).map(i => ({where:i.title,message:'Choose a valid supplement/fasting time.'})),
       ...placement.map((p) => ({ where: p.item, message: `${p.reason}. Swap the meal or move it to its slot.` })),
@@ -806,11 +926,73 @@ export function reviewFitness(input: FitnessConfig): Review {
     ...findConflicts(ruleRows(weekRules, 'week Fitness checklist'), items),
     ...cfg.sessions.flatMap((s) => findConflicts(ruleRows(splitRules(s.rules || []), `${s.title} checklist`), items.filter((i) => i.day === s.day))),
   ];
-  return { steps: Object.fromEntries(checked.map((s) => [s.key, s])), notes: [...notesOf(checked, label), ...setNotes], blocking: blockingOf(checked, label), conflicts, weekRules };
+  return { steps: Object.fromEntries(checked.map((s) => [s.key, s])), notes: [...notesOf(checked, label), ...setNotes], blocking: [...blockingOf(checked, label), ...conflictBlocks(conflicts)], conflicts, weekRules };
+}
+
+/** The one sleep pair a combine keeps (the first non-linked Protocol's); a later Start/End Sleep is left out. */
+const sleepRoleOf = (it: AdminProtocolItem): 'wake' | 'bed' | null => it.hidden || it.parent_protocol_item_id || it.kind !== 'action' ? null
+  : isWakeName(it.display_name || '') ? 'wake' : (it.category === 'sleep' || isBedName(it.display_name || '')) ? 'bed' : null;
+/** Steps a combine will not copy anyway (a second sleep pair) cannot be in a contradiction the user has to settle. */
+function withoutRedundantSleep<T extends { items: AdminProtocolItem[]; cloned?: boolean }>(list: T[]): T[] {
+  const have = new Set<string>();
+  return list.map((p) => {
+    const keep = p.cloned ? p.items : p.items.filter((it) => { const role = sleepRoleOf(it); return !role || !have.has(role); });
+    if (!p.cloned) p.items.forEach((it) => { const role = sleepRoleOf(it); if (role) have.add(role); });
+    return { ...p, items: keep };
+  });
+}
+// A step that starts with a training word ("Walk 40 minutes", "Go walking", "Gym session"), not "Log workout" or "Run the dishwasher".
+const TRAINING_TITLE = /^(?:go (?:for (?:a )?)?|take (?:a )?|do (?:a )?)?(?:(?:morning|evening|afternoon|short|long|brisk|easy|light|quick|daily|gentle)\s+)*(?:\d+\s*(?:min(?:ute)?s?|h(?:ou)?rs?)\s+)?(?:walk(?:ing)?|run(?:ning)?(?! the)|jog(?:ging)?|swim(?:ming)?|cycl(?:e|ing)|bik(?:e|ing)|hik(?:e|ing)|lift(?:ing)?|strength|cardio|workout|gym|hiit|row(?:ing)?|treadmill|training)\b/i;
+const NOT_TRAINING = /\b(log|track|record|pack|plan|book|dishwasher|menstrual|period|bag|app)\b/i;
+
+/** Every rule against every step it covers, across the chosen Protocols (one Protocol is the same call with one entry). Hidden rows are not part of a Protocol. */
+export function conflictsAcross(itemsByProtocol: { name: string; items: AdminProtocolItem[]; cloned?: boolean }[]): Conflict[] {
+  const visible = itemsByProtocol.map((p) => ({ ...p, items: p.items.filter((it) => !it.hidden) }));
+  const weekdays = (dows?: number[] | null) => {
+    const days = (dows || []).map((dow) => WEEK.find((w) => w.dow === dow)?.day).filter((d): d is number => d != null);
+    return days.length > 0 && days.length < 7 ? days : undefined;
+  };
+  const parentOf = (items: AdminProtocolItem[], it: AdminProtocolItem) => it.parent_protocol_item_id ? items.find((x) => x.id === it.parent_protocol_item_id) : undefined;
+  const daysOf = (items: AdminProtocolItem[], it: AdminProtocolItem) => weekdays(it.recurrence_days_of_week) ?? weekdays(parentOf(items, it)?.recurrence_days_of_week);
+  const rules = visible.flatMap(({ name, items }) => items.filter((it) => it.kind === 'rule_dont' || it.kind === 'rule_do').map((it) => {
+    const level = ruleLevelOf(it);
+    return { id: it.id, text: it.display_name || '', scope: name, isDont: it.kind === 'rule_dont' || isRuleTitle(it.display_name || ''), level,
+      days: level === 'day' ? weekdays(it.recurrence_days_of_week) : level === 'activity' ? weekdays(parentOf(items, it)?.recurrence_days_of_week) : undefined,
+      underId: level === 'activity' ? it.parent_protocol_item_id || undefined : undefined };
+  }));
+  const actions = visible.flatMap(({ name, items }) => items.filter((it) => it.kind === 'action').map((it) => {
+    const days = daysOf(items, it);
+    const title = it.display_name || '';
+    return { id: it.id, parentId: it.parent_protocol_item_id || null, title, where: days ? `${name} · ${days.map((d) => WEEK.find((w) => w.day === d)?.short).join(', ')}` : name, source: name, days, time: it.scheduled_time?.slice(0, 5) || null, system: isWakeName(title) || isBedName(title),
+      kind: (it.category === 'consume' ? 'meal' : !it.parent_protocol_item_id && it.category !== 'sleep' && (it.subtype === 'exercise' || (TRAINING_TITLE.test(title) && !NOT_TRAINING.test(title))) ? 'session' : 'item') as 'session' | 'meal' | 'item' };
+  }));
+  // A side that lives in a linked diet / fitness plan cannot be dropped when combining (told apart by row, not by Protocol name).
+  const linked = new Map(itemsByProtocol.flatMap((p) => p.items.map((it) => [it.id, !!p.cloned] as const)));
+  return findConflicts(rules, actions).map((c) => ({ ...c, canKeepRule: !linked.get(c.itemId || ''), canKeepItem: !linked.get(c.ruleId || '') }));
+}
+/** Contradictions inside one stored Protocol (rule vs step, rule vs rule), for the editor. A Protocol should have none. */
+export const findProtocolConflicts = (name: string, items: AdminProtocolItem[]) => conflictsAcross([{ name, items }]);
+
+export type Decisions = Record<string, 'rule' | 'item'>;
+/**
+ * What the user's choices leave out of the combined Protocol, and what is still open. "Keep the step" drops the rule, which
+ * also settles every other contradiction that rule is in; "keep the rule" drops the step and its children, which settles the
+ * step's other contradictions. Choices that cannot all hold (keep a rule here and drop it there, keep a step whose parent is
+ * dropped) come back as inconsistent. Only a clear ("sure") contradiction has to be settled.
+ */
+export function resolveDecisions(conflicts: Conflict[], decisions: Decisions, parentOf: ReadonlyMap<string, string | null> = new Map()): { dropped: Set<string>; inconsistent: Conflict[]; undecided: Conflict[] } {
+  const dropped = new Set<string>();
+  const droppedRules = new Set(conflicts.filter((c) => c.id && decisions[c.id] === 'item' && c.ruleId).map((c) => c.ruleId!));
+  conflicts.forEach((c) => { if (c.id && decisions[c.id] === 'rule' && c.itemId) dropped.add(c.itemId); });
+  droppedRules.forEach((id) => dropped.add(id));
+  const goneWith = (id: string) => { for (let cur: string | null | undefined = id, n = 0; cur && n < 20; cur = parentOf.get(cur), n++) if (dropped.has(cur)) return true; return false; };
+  const inconsistent = conflicts.filter((c) => c.id && ((decisions[c.id] === 'item' && c.itemId && goneWith(c.itemId)) || (decisions[c.id] === 'rule' && c.ruleId && droppedRules.has(c.ruleId))));
+  const undecided = conflicts.filter((c) => c.certainty !== 'maybe' && c.id && !decisions[c.id] && !(c.ruleId && goneWith(c.ruleId)) && !(c.itemId && goneWith(c.itemId)));
+  return { dropped, inconsistent, undecided };
 }
 
 /** Combine review: the chosen protocols' top-level steps through the checker (notes only, nothing rewritten) plus rule-vs-item conflicts across protocols. */
-export function reviewCombined(itemsByProtocol: { name: string; items: AdminProtocolItem[] }[]): { notes: ReviewNote[]; blocking: ReviewNote[]; conflicts: Conflict[]; fixes: Record<string, { title: string; time: string | null }> } {
+export function reviewCombined(itemsByProtocol: { name: string; items: AdminProtocolItem[]; cloned?: boolean }[]): { notes: ReviewNote[]; blocking: ReviewNote[]; conflicts: Conflict[]; fixes: Record<string, { title: string; time: string | null }> } {
   const groupOf = (it: AdminProtocolItem) => it.category === 'sleep' ? 'sleep' : it.category === 'consume' ? 'meal' : it.subtype === 'exercise' ? 'fitness' : it.category || 'do';
   const steps: CheckedStep[] = itemsByProtocol.flatMap(({ name, items }) => items.filter((it) => !it.parent_protocol_item_id && it.kind === 'action').map((it) => ({
     key: `${name}|${it.id}`, title: it.display_name || '', group: groupOf(it), time: it.scheduled_time?.slice(0, 5) || null, notes: '', dos: [], donts: [], windowKey: name,
@@ -819,15 +1001,17 @@ export function reviewCombined(itemsByProtocol: { name: string; items: AdminProt
   // Sleep is checked across the combined plan (one window) so duplicate wake/bed items show up.
   const checked = enforceProtocolRules(steps.map((s) => s.group === 'sleep' ? { ...s, windowKey: 'all' } : s));
   const notes = notesOf(checked, (s) => s.key.split('|')[0]);
-  const rules = itemsByProtocol.flatMap(({ name, items }) => items.filter((it) => it.kind === 'rule_dont' || it.kind === 'rule_do').map((it) => ({ text: it.display_name || '', scope: name, isDont: it.kind === 'rule_dont' || isRuleTitle(it.display_name || '') })));
-  const actions = itemsByProtocol.flatMap(({ name, items }) => items.filter((it) => it.kind === 'action').map((it) => ({ title: it.display_name || '', where: name, day: it.recurrence_days_of_week?.length === 1 ? (WEEK.find((w) => w.dow === it.recurrence_days_of_week![0])?.day) : undefined, kind: (it.subtype === 'exercise' && !it.parent_protocol_item_id ? 'session' : it.category === 'consume' ? 'meal' : 'item') as 'session' | 'meal' | 'item' })));
   const placement = itemsByProtocol.flatMap(({ name, items }) => mealPlacementIssues(items.filter((it) => !it.parent_protocol_item_id))
     .map((i) => ({ where: name, message: `${i.item}: ${i.message}${i.fix ? ' (moved on combine)' : ''}` })));
   const fixes = Object.fromEntries(checked.map((c) => [c.key.split('|')[1], { title: c.title, time: c.time }]));
   // Sources are existing Protocols: the shared verb list is closed ("Pay bills", "Reflect…" read as not verb-first), so a
   // missing verb is a note to fix in the editor here, not a block. Builder-authored titles stay hard-gated.
   const verbNotes = blockingOf(checked, (s) => s.key.split('|')[0]).map((b) => ({ ...b, message: `${b.message.replace(' must start', ' should start')} (check in the editor)` }));
-  return { notes: [...placement, ...notes, ...verbNotes], blocking: [], conflicts: findConflicts(rules, actions), fixes };
+  // Each contradiction is the user's to settle: keep the rule (drop the step) or keep the step (drop the rule). A side that lives in
+  // a linked diet / fitness plan cannot be dropped here; when neither side can, the plan itself has to change first.
+  const conflicts = conflictsAcross(withoutRedundantSleep(itemsByProtocol));
+  const stuck = conflicts.filter((c) => isSure(c) && !c.canKeepRule && !c.canKeepItem).map((c) => ({ where: c.where, message: `“${c.item}” contradicts “${c.rule}” and both sit in linked diet or fitness plans. Change one of those plans first, then combine.` }));
+  return { notes: [...placement, ...notes, ...verbNotes], blocking: stuck, conflicts, fixes };
 }
 
 /** Do's as checkable rule_do items: under a parent item (its do-checklist) or top-level in a group (that group's checklist). */
@@ -972,21 +1156,31 @@ export function findClashes(itemsByProtocol: AdminProtocolItem[][]): Clash[] {
 const COPY_SKIP = new Set(['id', 'protocol_id', 'parent_protocol_item_id', 'created_at', 'updated_at']);
 
 /** One personal Protocol that holds a copy of every chosen protocol's steps (children keep their parent). */
-export async function combineProtocols(accessToken: string, ownerId: string, person: { name: string; lead_id?: string | null }, sources: AdminProtocol[]) {
+/** decisions: conflict id → 'rule' (keep the rule, drop the step) or 'item' (keep the step, drop the rule). Every contradiction needs one. */
+export async function combineProtocols(accessToken: string, ownerId: string, person: { name: string; lead_id?: string | null }, sources: AdminProtocol[], decisions: Record<string, 'rule' | 'item'> = {}) {
   const builderMeta = await listBuilderMeta(accessToken, ownerId);
   // Hard gate: the combined steps pass the shared checker (fixes applied below) or nothing is created.
-  const sourceItems = await Promise.all(sources.map(async (s) => ({ name: s.name, items: await listProtocolItems(accessToken, s.id) })));
+  const sourceItems = await Promise.all(sources.map(async (s) => ({ name: s.name, items: await listProtocolItems(accessToken, s.id), cloned: builderMeta[s.id]?.builder_kind === 'diet' || builderMeta[s.id]?.builder_kind === 'fitness' })));
   const gate = reviewCombined(sourceItems);
   if (gate.blocking.length) throw new Error(`Fix before combining: ${gate.blocking.map((b) => `${b.where}: ${b.message}`).join('; ')}`);
+  // A Protocol has no contradictions: every overlap between the chosen Protocols is settled by the user before anything is created.
+  for (const c of gate.conflicts) {
+    const choice = c.id ? decisions[c.id] : undefined;
+    if (choice === 'rule' && c.canKeepRule === false) throw new Error(`“${c.item}” sits in a linked plan and cannot be removed here`);
+    if (choice === 'item' && c.canKeepItem === false) throw new Error(`“${c.rule}” sits in a linked plan and cannot be removed here`);
+  }
+  const parentOf = new Map(sourceItems.flatMap((p) => p.items.map((it) => [it.id, it.parent_protocol_item_id || null] as const)));
+  const { dropped, inconsistent, undecided } = resolveDecisions(gate.conflicts, decisions, parentOf);
+  if (undecided.length) throw new Error(`Decide ${undecided.length} contradiction${undecided.length === 1 ? '' : 's'} before combining: ${undecided.slice(0, 3).map((c) => `“${c.item}” vs “${c.rule}”`).join('; ')}`);
+  if (inconsistent.length) throw new Error(`Your choices contradict each other: ${inconsistent.slice(0, 3).map((c) => `“${c.item}” vs “${c.rule}”`).join('; ')}`);
   const protocol = await createProtocol(accessToken, {
     user_id: ownerId, name: `${person.name} · Personal Protocol`, category: 'Health', total_days: Math.max(7, ...sources.map((s) => s.total_days || 7)),
     description: `Combined from ${sources.map((s) => s.name).join(' + ')}`,
   });
   let order = 0;
   // One sleep pair: the first protocol's Start/End sleep wins; later ones (and their rules) are skipped.
-  const sleepRole = (it: AdminProtocolItem) => it.parent_protocol_item_id || it.kind !== 'action' ? null
-    : isWakeName(it.display_name || '') ? 'wake' : (it.category === 'sleep' || isBedName(it.display_name || '')) ? 'bed' : null;
-  const haveSleep = new Set<string>();
+  const haveSleep = new Set<string>(); // roles an earlier Protocol had, copied or left out by a choice: a later pair is not copied
+  const madeSleep = new Set<string>(); // roles actually copied; whatever is missing gets the default below
   for (const source of sources) {
     const kind = builderMeta[source.id]?.builder_kind;
     if (kind === 'diet' || kind === 'fitness') {
@@ -997,10 +1191,12 @@ export async function combineProtocols(accessToken: string, ownerId: string, per
     const items = sourceItems[sources.indexOf(source)].items;
     const idMap = new Map<string, string>();
     const skipped = new Set<string>();
-    const parentsFirst = [...items].sort((a, b) => Number(!!a.parent_protocol_item_id) - Number(!!b.parent_protocol_item_id));
-    const sourceRoles = new Set(items.map(sleepRole).filter(Boolean) as string[]);
+    const depthOf = (it: AdminProtocolItem) => { let d = 0; for (let cur: string | null | undefined = it.parent_protocol_item_id; cur && d < 20; cur = parentOf.get(cur)) d++; return d; };
+    const parentsFirst = [...items].sort((a, b) => depthOf(a) - depthOf(b));
+    const sourceRoles = new Set(items.map(sleepRoleOf).filter(Boolean) as string[]);
     for (const it of parentsFirst) {
-      const role = sleepRole(it);
+      if (dropped.has(it.id)) { skipped.add(it.id); continue; } // the user's choice on a contradiction
+      const role = sleepRoleOf(it);
       if (role && haveSleep.has(role)) { skipped.add(it.id); continue; }
       if (it.parent_protocol_item_id && skipped.has(it.parent_protocol_item_id)) { skipped.add(it.id); continue; }
       const copy: Record<string, unknown> = {};
@@ -1014,6 +1210,7 @@ export async function combineProtocols(accessToken: string, ownerId: string, per
         sort_order: order++, // unique per protocol (idx_protocol_items_no_dupes includes sort_order)
       } as Partial<AdminProtocolItem>);
       idMap.set(it.id, created.id);
+      if (role) madeSleep.add(role);
     }
     sourceRoles.forEach((role) => haveSleep.add(role));
   }
@@ -1021,8 +1218,8 @@ export async function combineProtocols(accessToken: string, ownerId: string, per
     protocol_id: protocol.id, display_name: name, kind: 'action', item_type: 'activity', category: 'sleep', subtype: 'sleep', scheduled_time: hhmmss(time),
     day_number: 1, sort_order: order++, has_children: false, enabled: true, hidden: false, notes: '', recurrence_type: 'daily',
   } as Partial<AdminProtocolItem>);
-  if (!haveSleep.has('wake')) await sleepItem(END_SLEEP, DEFAULT_WAKE);
-  if (!haveSleep.has('bed')) await sleepItem(START_SLEEP, DEFAULT_BED);
+  if (!madeSleep.has('wake')) await sleepItem(END_SLEEP, DEFAULT_WAKE);
+  if (!madeSleep.has('bed')) await sleepItem(START_SLEEP, DEFAULT_BED);
   const metaSaved = await saveBuilderMeta(accessToken, protocol.id, { builder_kind: 'personal', builder_config: { person }, source_protocol_ids: sources.map((s) => s.id) });
   return { protocol, metaSaved };
 }
