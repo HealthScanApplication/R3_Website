@@ -1,6 +1,5 @@
 import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
-import * as rules from '../protocolRules';
 import { enforceProtocolRules, isBareItemTitle, takeGroupOf, type RuleStep } from '../protocolRules';
 import { gateProtocolItem } from '../protocolGate';
 import { itemRuleFields, ruleRowIsItem, standardiseProtocol, timedRuleRowIsItem, type Row } from '../routineStandard';
@@ -49,6 +48,7 @@ const step = (over: Partial<RuleStep>): RuleStep => ({ title: '', group: 'wellne
 
 describe('AI draft: a bare supplement or drink saved as a rule becomes a step', () => {
   const out = enforceProtocolRules([
+    step({ title: 'Magnesium (400 mg)', group: 'supplements', kind: 'rule', notes: 'Take at bedtime.' }),
     step({ title: 'Chlorella', group: 'supplements', kind: 'rule', notes: 'Split into 3 × 1 g doses with meals.' }),
     step({ title: 'Milk Thistle', group: 'supplements', kind: 'rule', notes: '200–400 mg standardised to 70–80% silymarin.' }),
     step({ title: 'Drink Water', group: 'consume', kind: 'rule', notes: 'Increase water to 3+ litres.' }),
@@ -64,6 +64,9 @@ describe('AI draft: a bare supplement or drink saved as a rule becomes a step', 
     expect(by('Chlorella')).toMatchObject({ kind: 'action', time: '12:30' });
     expect(by('Chlorella').issues!.map((i) => i.code)).toContain('rule_to_step');
     expect(by('Milk Thistle')).toMatchObject({ kind: 'action', time: '08:00' });
+  });
+  it('an untimed supplement is placed by the time its note names, not a generic default', () => {
+    expect(by('Magnesium (400 mg)')).toMatchObject({ kind: 'action', time: '21:30' });
   });
   it('Drink Water becomes the step "Water", in the breakfast slot at 08:00', () => {
     const water = out.find((s) => s.title === 'Water')!;
@@ -150,34 +153,12 @@ describe('the standard reports the rows that are already saved', () => {
   });
 });
 
-/** The edge function cannot import from src/, so it carries a copy. Same patterns, same answers. */
-describe('the AI builder function keeps the same logic and tells the model', () => {
+/** The edge function only tells the model; the shared checker (above) does the correcting, with the right time. */
+describe('the AI builder function', () => {
   const server = readFileSync('supabase/functions/make-server-ed0fe4c2/index.tsx', 'utf8');
-  const literal = (name: string) => new RegExp(`^const ${name} = /(.*)/i$`, 'm').exec(server)?.[1];
-  const names = ['AVOID_TITLE', 'TAKE_VERB', 'CONSTRAINT_WORD', 'NEGATION_WORD', 'GUIDANCE_START', 'NOT_A_PRODUCT', 'DOSE', 'PLAIN_DRINK'] as const;
-  it.each(names)('%s is identical on the server', (name) => {
-    expect(literal(name)).toBe((rules as any)[name].source);
-  });
-  // Run the server's function itself: pull its source, drop the type annotations, give it the same patterns.
-  const start = server.indexOf('function isTakeItemStep(');
-  let depth = 0, end = start;
-  for (let i = server.indexOf('{', start); i < server.length; i++) { if (server[i] === '{') depth++; if (server[i] === '}' && --depth === 0) { end = i + 1; break; } }
-  const body = server.slice(start, end).replace('(title: string, category: string, notes: string, hasDonts: boolean): boolean', '(title, category, notes, hasDonts)');
-  // eslint-disable-next-line no-new-func
-  const isTakeItemStep = new Function(...names, `${body}; return isTakeItemStep;`)(...names.map((n) => (rules as any)[n])) as (t: string, c: string, n: string, d: boolean) => boolean;
-  const table: [string, string, string, boolean][] = [
-    ['Chlorella', 'supplement', 'Split into 3 × 1 g doses with meals.', false], ['Chlorella', 'supplement', '', false], ['Take magnesium', 'supplement', '', false], ['Supplements', 'supplement', 'Aspirin 81 mg', false],
-    ['Blood thinners', 'supplement', 'Aspirin 81 mg', false], ['Chlorella', 'supplement', '1 g', true], ['Drink Water', 'consume', '', false], ['Water (3 L)', 'consume', '', false], ['Drink Water (3 L)', 'consume', '', false],
-    ['Green tea (2 cups)', 'consume', '', false], ['Bone broth (1 cup)', 'consume', '', false], ['Choose water over juice', 'consume', '', false], ['Extra water', 'consume', '', false], ['Limit caffeine', 'consume', '', false],
-    ['Don’t take iron', 'supplement', '1 mg', false], ['Pinch of Whole Salt (Celtic / Himalayan)', 'supplement', '', false], ['Sauna', 'do', '', false], ['Coffee', 'consume', '', true],
-  ];
-  it.each(table)('agrees with the TypeScript version on %s (%s)', (title, category, notes, hasDonts) => {
-    const group = category === 'supplement' ? 'supplements' : category;
-    const ts = !hasDonts && takeGroupOf(title, group, { notes }) != null;
-    expect(isTakeItemStep(title, category, notes, hasDonts)).toBe(ts);
-  });
-  it('the prompt says a thing to take is never a rule, and the response is corrected when the model does it anyway', () => {
+  it('tells the model a thing to take is never a rule, and leaves the correction to the shared checker', () => {
     expect(server).toMatch(/A supplement, food or drink the person takes is always a step/);
-    expect(server).toMatch(/kind: step\.kind === 'rule' && !isTakeItemStep\(/);
+    expect(server).toMatch(/kind: step\.kind === 'rule' \? 'rule' : 'action'/);
+    expect(server).not.toMatch(/isTakeItemStep/);
   });
 });

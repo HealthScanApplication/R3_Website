@@ -486,30 +486,6 @@ const PROTOCOL_ITEM_RULES = `Item rules (strict):
 - A supplement, food or drink the person takes is always a step ("kind":"action") with a time, never "kind":"rule": "Chlorella", "Milk Thistle" and "Drink Water" are steps (category supplement or consume). "kind":"rule" is only for a constraint ("Avoid alcohol", "Limit caffeine", "Keep binders 2 hours from food").
 - Do and don't guidance is never a step of its own. Guidance about one step goes on that step as "tips" (do) and "donts" (don't). Guidance about a whole category of food or drink ("Limit caffeine", "No added sugar", "Avoid alcohol") is a group rule: return it as an item with "kind":"rule", "category":"consume", title naming the rule, entries in "tips"/"donts", never attached to a single meal or drink. Other whole-day guidance is also "kind":"rule".`
 
-// A supplement or drink named as a bare item is a step, never a rule ("Do: Chlorella" has no time and nothing to tick off).
-// Keep these patterns and isTakeItemStep identical to src/utils/protocolRules.ts (isBareItemTitle / takeGroupOf): a test
-// compares the patterns and runs this function against the TypeScript one.
-const AVOID_TITLE = /^(avoid|no|skip|don'?t|do not|cut out|cut|limit|reduce|abstain|refrain|follow the .*diet|practi[cs]e .*abstinence)\b/i
-const TAKE_VERB = /^(drink|take|have|eat|sip)\s+(a |an |some |your |the )?/i
-const CONSTRAINT_WORD = /\b(if|when|whenever|while|before|after|during|with|without|within|from|at|on|every|each|per|than|more|less|fewer|only|instead|no|not|never|always|avoid|limit|keep|stay|stop|pause|check|follow|for|until|unless|labels?|rules?|daily|weekly|twice|times|dose|doses|dosage|slowly|plenty)\b/i
-const NEGATION_WORD = /\b(no|not|never|avoid|without|stop|pause|limit|only|instead)\b/i
-const GUIDANCE_START = /^(quit|eliminate|steer|ditch|minimi[sz]e|prefer|choose|consult|seek|be|store|shake|hydrate|stay|start|try|aim|make sure|ensure|remember|consider|ask|tell|talk|speak|see|read|plan|prepare|wait|rest|reduce|use)\b/i
-const NOT_A_PRODUCT = /\b(supplements?|medications?|medicines?|drugs?|blood thinners?|binders?|safety|doctors?|clinicians?|physicians?|interactions?|timing|spacing|advice|warnings?|notes?|tips?|brands?|quality)\b/i
-const DOSE = /\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|µg|g|iu|ml|l|caps?|capsules?|tablets?|tabs?|softgels?|drops?|scoops?|tsp|tbsp)\b|\bpinch\b/i
-const PLAIN_DRINK = /^(?:(?:warm|hot|cold|iced|lemon|sparkling|mineral|coconut|herbal|green|black|white|mint|ginger|chamomile|rooibos|matcha|dandelion|vegetable|celery|bone) )?(?:water|tea|coffee|juice|broth|milk|kefir|kombucha)$/i
-function isTakeItemStep(title: string, category: string, notes: string, hasDonts: boolean): boolean {
-  if (hasDonts) return false
-  const raw = title.trim().replace(/[’‘]/g, "'")
-  if (!raw || /^(drink|take|have|eat|sip|add)$/i.test(raw) || AVOID_TITLE.test(raw) || GUIDANCE_START.test(raw)) return false
-  const name = raw.replace(TAKE_VERB, '')
-  const words = name.replace(/\(.*?\)/g, '').trim()
-  const inParens = (name.match(/\(.*?\)/g) || []).join(' ')
-  const bare = words.length > 0 && words.split(/\s+/).length <= 5 && !CONSTRAINT_WORD.test(words) && !NEGATION_WORD.test(inParens) && !/[.:;!?]/.test(words) && !/\d+\s*[x×]/i.test(words)
-  if (!bare) return false
-  if (category === 'supplement') return !NOT_A_PRODUCT.test(words) && (TAKE_VERB.test(raw) || DOSE.test(`${raw} ${notes}`))
-  return category === 'consume' && PLAIN_DRINK.test(words)
-}
-
 /** Real catalog names so the model picks titles we can link. */
 async function catalogNameHints(): Promise<string> {
   const [activities, recipes] = await Promise.all([
@@ -567,7 +543,7 @@ Personalise to the selected life stage (for example premenopause, perimenopause,
       duration_minutes: step.duration_minutes == null ? null : Math.max(1, Math.min(240, Number(step.duration_minutes))),
       anchor: ['wake', 'bedtime', 'before_meal', 'after_meal'].includes(step.anchor) ? step.anchor : null,
       offset_minutes: Number.isFinite(Number(step.offset_minutes)) ? Math.max(-720, Math.min(720, Number(step.offset_minutes))) : 0,
-      kind: step.kind === 'rule' && !isTakeItemStep(String(step.title || ''), ['consume', 'do', 'sleep', 'supplement'].includes(step.category) ? step.category : 'do', String(step.notes || ''), Array.isArray(step.donts) && step.donts.length > 0) ? 'rule' : 'action',
+      kind: step.kind === 'rule' ? 'rule' : 'action', // a bare supplement or drink filed as a rule is corrected, with its time, by the client's enforceProtocolRules
       tips: Array.isArray(step.tips) ? step.tips.map((t: unknown) => String(t).slice(0, 80)).slice(0, 12) : [],
       donts: Array.isArray(step.donts) ? step.donts.map((t: unknown) => String(t).slice(0, 80)).slice(0, 12) : [],
     })) : []
