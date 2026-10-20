@@ -672,6 +672,9 @@ function Brand({ centered = false }: { centered?: boolean }) {
   return <a href="/" aria-label="ROUTINE³ Guardians" style={{ width: 'fit-content', margin: centered ? '0 auto' : undefined, textDecoration: 'none', display: 'block' }}><RoutineMark size={31} textColor={ink} hairline="rgba(245,242,234,0.58)" suffix="Guardians" /></a>;
 }
 
+/** One @, no spaces, and a dotted domain: `guide@@example.com` and `a b@example.com` are rejected. */
+export const isValidContactEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+
 /** A section that opens on demand: its header always shows what is inside (the summary), so closed does not mean hidden. */
 export function Disclosure({ id, title, summary, open, required, onToggle, children }: { id: string; title: string; summary: string; open: boolean; required?: boolean; onToggle: () => void; children: React.ReactNode }) {
   return <section style={{ border: `1px solid ${line}`, marginTop: 14 }}>
@@ -2054,14 +2057,14 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   function goToBrandStage() {
     setError('');
     if (!displayName.trim()) { setError('Add the name people should call you.'); setProfileStage(0); return; }
-    if (!/^\S+@\S+\.\S+$/.test(contactEmail.trim())) { setError('Add a valid contact email.'); setProfileOpen((o) => ({ ...o, contact: true })); setProfileStage(0); return; }
+    if (!isValidContactEmail(contactEmail)) { setError('Add a valid contact email.'); setProfileOpen((o) => ({ ...o, contact: true })); setProfileStage(0); return; }
     setProfileStage(1);
   }
 
   async function continueSetup() {
     setError('');
     if (step === 1 && !displayName.trim()) { setError('Add the name people should call you.'); return; }
-    if (step === 1 && !/^\S+@\S+\.\S+$/.test(contactEmail.trim())) { setError('Add a valid contact email.'); return; }
+    if (step === 1 && !isValidContactEmail(contactEmail)) { setError('Add a valid contact email.'); return; }
     if (step === 2 && !chosen.length) { setError('Choose at least one area you can help with.'); return; }
     if (step === 3 && !audience.length) { setError('Choose at least one audience.'); return; }
     if (step === 1) {
@@ -2149,7 +2152,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     e.preventDefault(); setBusy(true); setError('');
     try {
       if (!displayName.trim()) throw new Error('Add the name people should call you.');
-      if (!/^\S+@\S+\.\S+$/.test(contactEmail.trim())) throw new Error('Add a valid contact email.');
+      if (!isValidContactEmail(contactEmail)) throw new Error('Add a valid contact email.');
       if (!chosen.length) throw new Error('Choose at least one area you can help with.');
       if (brandsLoaded === 'loading') throw new Error('Your saved brands are still loading. Try again in a moment.');
       if (brandsLoaded === 'failed') throw new Error('Your saved brands could not be loaded, so publishing is paused to avoid overwriting them. Reload the page to try again.');
@@ -2530,8 +2533,8 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
 
       {step === 1 && <>
       {/* Progressive disclosure: who you are first; contact, links and booking open on demand; the brand look is its own stage after. */}
-      <div role="list" aria-label="Profile stages" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 0 22px' }}>
-        {['Profile', 'Brand'].map((name, index) => <button type="button" role="listitem" key={name} aria-current={profileStage === index ? 'step' : undefined} onClick={() => (index === 0 ? setProfileStage(0) : goToBrandStage())} style={{ border: 0, background: 'transparent', padding: '4px 0', color: profileStage === index ? ink : muted, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', cursor: 'pointer', borderBottom: `2px solid ${profileStage === index ? acid : 'transparent'}` }}>{index + 1} · {name}</button>)}
+      <div role="group" aria-label="Profile stages" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 0 22px' }}>
+        {['Profile', 'Brand'].map((name, index) => <button type="button" key={name} aria-current={profileStage === index ? 'step' : undefined} onClick={() => (index === 0 ? setProfileStage(0) : goToBrandStage())} style={{ border: 0, background: 'transparent', padding: '4px 0', color: profileStage === index ? ink : muted, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', cursor: 'pointer', borderBottom: `2px solid ${profileStage === index ? acid : 'transparent'}` }}>{index + 1} · {name}</button>)}
       </div>
       {profileStage === 0 && <>
       {/* Brand picker: one quiet line. Most Guardians publish under their own name, so it should not compete with the form. */}
@@ -3933,7 +3936,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
  * brand edits the profile; a business brand edits its own guide_brands row. Save writes the profile and all brands.
  */
 type SiteBrand = Omit<GuideBrand, 'id' | 'guide_id'> & { key: string };
-function SiteProfileForm({ userId, profile, onProfile }: { userId: string; profile: GuideProfile; onProfile: (p: GuideProfile) => void }) {
+export function SiteProfileForm({ userId, profile, onProfile }: { userId: string; profile: GuideProfile; onProfile: (p: GuideProfile) => void }) {
   const { accessToken } = useAuth();
   const links = profile.social_links || {};
   const setLinks = (patch: Record<string, string>) => onProfile({ ...profile, social_links: { ...links, ...patch } });
@@ -3945,6 +3948,9 @@ function SiteProfileForm({ userId, profile, onProfile }: { userId: string; profi
   const [active, setActive] = useState('personal');
   const [busy, setBusy] = useState<'save' | 'upload' | null>(null);
   const [message, setMessage] = useState('');
+  const [stage, setStage] = useState(0);
+  const [open, setOpen] = useState({ contact: true, links: false, booking: false, about: false });
+  const [stageError, setStageError] = useState('');
   // Saving replaces every brand row, so it waits until the saved brands have loaded; a failed load blocks it.
   const [brandsLoaded, setBrandsLoaded] = useState<'loading' | 'ok' | 'failed'>('loading');
   useEffect(() => {
@@ -4005,7 +4011,20 @@ function SiteProfileForm({ userId, profile, onProfile }: { userId: string; profi
     finally { setBusy(null); }
   };
   const isPersonal = !biz;
+  /** Profile → Brand: the name and email must be right first; a missing email opens its section. */
+  const goToBrand = () => {
+    setStageError('');
+    if (!v.name.trim()) { setStageError('Add the name people should call you.'); setStage(0); return; }
+    if (!isValidContactEmail(v.email)) { setStageError('Add a valid contact email.'); setOpen((x) => ({ ...x, contact: true })); setStage(0); return; }
+    setStage(1);
+  };
   return <div style={{ maxWidth: 820 }}>
+    {/* Same progressive layout as setup step 01: who you are first; contact, links, booking and about open on demand; the brand look is its own stage. */}
+    <div role="group" aria-label="Profile stages" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 0 22px' }}>
+      {['Profile', 'Brand'].map((name, index) => <button type="button" key={name} aria-current={stage === index ? 'step' : undefined} onClick={() => (index === 0 ? (setStageError(''), setStage(0)) : goToBrand())} style={{ border: 0, background: 'transparent', padding: '4px 0', color: stage === index ? ink : muted, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', cursor: 'pointer', borderBottom: `2px solid ${stage === index ? acid : 'transparent'}` }}>{index + 1} · {name}</button>)}
+    </div>
+    {stageError && <p role="alert" style={{ color: '#E8B86A', fontSize: 12, lineHeight: 1.5, margin: '0 0 14px' }}>{stageError}</p>}
+    {stage === 0 && <>
     <div aria-label="Publishing brand" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '0 0 16px', marginBottom: 20, borderBottom: `1px solid ${line}` }}>
       <span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', marginRight: 4 }}>Publishing as</span>
       {[{ key: 'personal', name: profile.display_name || 'Personal brand', img: profile.avatar_url }, ...brands.map((b) => ({ key: b.key, name: b.name || 'Untitled brand', img: b.logo_url }))].map((b) => <button key={b.key} type="button" aria-pressed={active === b.key} onClick={() => setActive(b.key)} style={{ border: `1px solid ${active === b.key ? ink : line}`, background: 'transparent', color: active === b.key ? ink : muted, padding: '5px 9px', fontFamily: sans, fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
@@ -4027,10 +4046,13 @@ function SiteProfileForm({ userId, profile, onProfile }: { userId: string; profi
       </label>
     </div>
     <p style={{ color: muted, fontSize: 10, lineHeight: 1.5, margin: '9px 0 0' }}>Language applies to your page and content. Pricing region sets the currency for every paid stage.</p>
+    <Disclosure id="site-contact" title="Contact" required summary={v.email.trim() || 'Add your email'} open={open.contact} onToggle={() => setOpen((x) => ({ ...x, contact: !x.contact }))}>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12, marginTop: 18 }}>
       <div><label style={label}>Contact email</label><input type="email" style={input} value={v.email} onChange={(e) => set.email(e.target.value)} /></div>
       <div><label style={label}>WhatsApp number <span style={{ color: muted }}>· optional</span></label><input type="tel" inputMode="tel" style={input} value={v.whatsapp} onChange={(e) => set.whatsapp(e.target.value)} placeholder="+44 7700 900000" /></div>
     </div>
+    </Disclosure>
+    <Disclosure id="site-links" title="Links" summary={[v.social.instagram && 'Instagram', v.social.tiktok && 'TikTok', v.social.youtube && 'YouTube', v.social.linktree && 'Linktree', v.social.website && 'Website'].filter(Boolean).join(' · ') || 'Optional: your social profiles'} open={open.links} onToggle={() => setOpen((x) => ({ ...x, links: !x.links }))}>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12, marginTop: 22 }}>
       <SocialUrlField label="Instagram" Icon={Instagram} value={v.social.instagram || ''} onChange={(x) => set.social('instagram', x)} placeholder="https://instagram.com/yourname" />
       <SocialUrlField label="TikTok" Icon={AtSign} value={v.social.tiktok || ''} onChange={(x) => set.social('tiktok', x)} placeholder="https://tiktok.com/@yourname" />
@@ -4038,9 +4060,10 @@ function SiteProfileForm({ userId, profile, onProfile }: { userId: string; profi
       <SocialUrlField label="Linktree" Icon={Link2} value={v.social.linktree || ''} onChange={(x) => set.social('linktree', x)} placeholder="https://linktr.ee/yourname" />
       <SocialUrlField label={isPersonal ? 'Personal website' : 'Website'} Icon={Globe2} value={v.social.website || ''} onChange={(x) => set.social('website', x)} placeholder="https://yourwebsite.com" />
     </div>
-    <BrandKitFields userId={userId} brandName={v.name} kit={v.kit} onChange={set.kit} logoUrl={v.logo} onLogo={set.logo} accessToken={accessToken} facts={{ about: isPersonal ? profile.bio || profile.headline : '', tags: isPersonal ? parseExpertiseTags(links.expertise_tags) : [] }} />
+    </Disclosure>
     {isPersonal && <>
-      <div style={{ border: `1px solid ${line}`, background: panel, padding: 14, marginTop: 24 }}>
+    <Disclosure id="site-booking" title="Booking" summary={links.booking_url ? (bookingProviders.find((p) => p.value === (links.booking_provider || 'ROUTINE³ Booking'))?.label || 'Booking link') : 'Optional: how clients book with you'} open={open.booking} onToggle={() => setOpen((x) => ({ ...x, booking: !x.booking }))}>
+      <div>
         <label style={{ ...label, color: ink }}>How should clients book with you? <span style={{ color: muted }}>· optional</span></label>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(135px,1fr))', gap: 7, marginBottom: 10 }}>
           {bookingProviders.map((p) => { const on = (links.booking_provider || 'ROUTINE³ Booking') === p.value; return <button type="button" key={p.value} onClick={() => setLinks({ booking_provider: p.value })} style={{ ...btn, height: 38, padding: '0 9px', background: on ? acid : 'transparent', color: on ? black : ink, borderColor: on ? acid : line, fontSize: 8, whiteSpace: 'nowrap', minWidth: 0 }}>{p.label}</button>; })}
@@ -4048,13 +4071,22 @@ function SiteProfileForm({ userId, profile, onProfile }: { userId: string; profi
         <label style={label}>Booking page URL</label>
         <input type="url" style={input} value={links.booking_url || ''} onChange={(e) => setLinks({ booking_url: e.target.value })} placeholder={bookingProviders.find((p) => p.value === (links.booking_provider || 'ROUTINE³ Booking'))?.placeholder} />
       </div>
+    </Disclosure>
+    <Disclosure id="site-about" title="About" summary={profile.headline.trim() || 'Headline, expertise tags and bio'} open={open.about} onToggle={() => setOpen((x) => ({ ...x, about: !x.about }))}>
       <label style={{ ...label, marginTop: 18 }}>Headline</label><input style={input} value={profile.headline} onChange={(e) => onProfile({ ...profile, headline: e.target.value })} />
       <label style={{ ...label, marginTop: 18 }}>Expertise tags <span style={{ color: muted }}>· separate with commas</span></label><input style={input} value={links.expertise_tags || ''} onChange={(e) => setLinks({ expertise_tags: e.target.value })} placeholder="Hypnosis, compassionate care, equity" />
       <div style={{ marginTop: 8 }}><ExpertiseTags tags={parseExpertiseTags(links.expertise_tags)} color={acid} compact /></div>
       <label style={{ ...label, marginTop: 18 }}>Bio</label><textarea style={{ ...input, height: 150, paddingTop: 12 }} value={profile.bio} onChange={(e) => onProfile({ ...profile, bio: e.target.value })} />
+    </Disclosure>
+    </>}
+    </>}
+    {stage === 1 && <>
+      <div style={{ border: `1px solid ${line}`, padding: '12px 14px', marginBottom: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span><span style={{ ...label, marginBottom: 3 }}>{isPersonal ? 'Profile' : 'Brand'}</span><strong style={{ color: ink, fontSize: 12, fontWeight: 600 }}>{[v.name.trim(), v.language, v.region].filter(Boolean).join(' · ')}</strong></span><button type="button" onClick={() => setStage(0)} style={{ ...btn, minHeight: 36, height: 36, background: 'transparent', color: ink, fontSize: 9 }}>Edit</button></div>
+    <BrandKitFields userId={userId} brandName={v.name} kit={v.kit} onChange={set.kit} logoUrl={v.logo} onLogo={set.logo} accessToken={accessToken} facts={{ about: isPersonal ? profile.bio || profile.headline : '', tags: isPersonal ? parseExpertiseTags(links.expertise_tags) : [] }} />
     </>}
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18 }}>
       <button type="button" onClick={save} disabled={busy === 'save' || brandsLoaded !== 'ok'} style={{ ...btn, opacity: brandsLoaded === 'ok' ? 1 : .5 }}>{busy === 'save' ? 'Saving…' : brandsLoaded === 'loading' ? 'Loading brands…' : 'Save profile and brands'}</button>
+      {stage === 0 && <button type="button" onClick={goToBrand} style={{ ...btn, background: 'transparent', color: ink }}>Continue to brand</button>}
       {brandsLoaded === 'failed' && <span role="alert" style={{ color: '#E8B86A', fontSize: 12 }}>Your saved brands could not be loaded, so saving is paused to avoid overwriting them. Reload the page to try again.</span>}
       {message && <span role={message.startsWith('Could not') ? 'alert' : 'status'} style={{ color: message.startsWith('Could not') ? '#E8B86A' : acid, fontSize: 12 }}>{message}</span>}
     </div>

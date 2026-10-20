@@ -37,3 +37,13 @@ it('moves to the brand stage on its own and back, after checking the email', asy
   fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
   expect((screen.getByPlaceholderText('you@example.com') as HTMLInputElement).value).toBe('guide@example.com');
 });
+
+it('rejects an address with two @ signs, and the stage controls are buttons in a labelled group', async () => {
+  setup('guide@@example.com');
+  await screen.findByDisplayValue('Test Guide');
+  expect(screen.getByRole('group', { name: 'Profile stages' }).querySelectorAll('button').length).toBe(2);
+  expect(screen.getByRole('button', { name: '1 · Profile' }).getAttribute('aria-current')).toBe('step');
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to brand' }));
+  expect(await screen.findByText('Add a valid contact email.')).toBeTruthy();
+  expect(screen.queryByText(/Brand kit/i)).toBeNull();
+});
