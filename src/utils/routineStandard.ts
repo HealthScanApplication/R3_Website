@@ -385,6 +385,15 @@ export function standardiseProtocol(rows: Row[], mode: Mode = 'cleanup', theme?:
   return changes;
 }
 
+/* ───────── where a rule applies: one activity, one or more weekdays, or the whole plan ───────── */
+export type RuleLevel = 'activity' | 'day' | 'week';
+/** A rule under an item belongs to that activity; one limited to some weekdays is a day rule; anything else covers the week. */
+export function ruleLevelOf(rule: { parent_protocol_item_id?: string | null; recurrence_days_of_week?: number[] | null }): RuleLevel {
+  if (rule.parent_protocol_item_id) return 'activity';
+  const days = rule.recurrence_days_of_week;
+  return days && days.length > 0 && days.length < 7 ? 'day' : 'week';
+}
+
 /* ───────── rule contradictions between Protocols (detection only; resolution per proposal §4) ───────── */
 const SUBJECTS: Record<string, RegExp> = {
   caffeine: /\b(caffeine|coffee|espresso|pre-?workout|black tea|green tea|matcha|energy drink)\b/i,
