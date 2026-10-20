@@ -77,6 +77,8 @@
     "dev": "vite",
     "prebuild": "node scripts/check-routes.mjs && node scripts/check-unsubscribe-page.mjs",
     "build": "vite build",
+    "postbuild": "node scripts/gen-share-pages.mjs",
+    "share:cards": "node scripts/gen-share-cards.mjs",
     "check:routes": "node scripts/check-routes.mjs",
     "check:unsubscribe": "node scripts/check-unsubscribe-page.mjs",
     "test": "vitest run",

@@ -57,22 +57,31 @@ function parseToml(text) {
 const toml = parseToml(read('netlify.toml'));
 const rules = toml.redirects;
 
-function matchRule(rule, path) {
+/** `query = {page = "blog"}` in a rule: it only matches a request that carries those parameters. */
+const queryOf = (rule) => (typeof rule.query === 'string' ? Object.fromEntries([...rule.query.matchAll(/([A-Za-z0-9_-]+)\s*=\s*"([^"]*)"/g)].map((m) => [m[1], m[2]])) : null);
+
+function matchRule(rule, path, query = null) {
   const from = rule.from;
   if (/^https?:\/\//.test(from)) return null; // host-scoped rules never match a bare path
+  const wanted = queryOf(rule);
+  if (wanted && !(query && Object.entries(wanted).every(([k, v]) => query[k] === v))) return null;
   const norm = (p) => (p.length > 1 ? p.replace(/\/+$/, '') : p);
   if (from.endsWith('/*')) {
     const base = from.slice(0, -2);
     if (path === base || path.startsWith(base + '/')) return { splat: path.slice(base.length + 1) };
     return null;
   }
+  if (from.endsWith('*')) { // "/@*": a prefix, not a path segment
+    const base = from.slice(0, -1);
+    return path.startsWith(base) ? { splat: path.slice(base.length) } : null;
+  }
   return norm(from) === norm(path) ? { splat: '' } : null;
 }
 
 /** First matching rule, as Netlify would answer `path`. */
-function resolve(path) {
+function resolve(path, query = null) {
   for (let i = 0; i < rules.length; i++) {
-    const m = matchRule(rules[i], path);
+    const m = matchRule(rules[i], path, query);
     if (m) {
       const r = rules[i];
       return { index: i, status: r.status, to: String(r.to).replace(':splat', m.splat), force: r.force === true, rule: r };
@@ -250,17 +259,64 @@ function jpegSize(buf) {
   return null;
 }
 
+// ── 5b. share previews: what a shared link to each route looks like ──
+// src/config/shareRoutes.json is the one list. Every route has a committed card, a rewrite above the catch-all to the page that
+// carries its tags (a build-generated one, or a static page that already exists), and the tags themselves.
+const shareTable = JSON.parse(read('src/config/shareRoutes.json'));
+const sharePass = resolve('/share/guardians.jpg');
+check(sharePass && sharePass.status === 200 && sharePass.to === '/share/guardians.jpg' && sharePass.force && sharePass.index < catchAllAt, '/share/*: must be a forced pass-through to the real card files, above the catch-all');
+check(/max-age/.test(headersFor('/share/guardians.jpg')['Cache-Control'] || ''), '/share/*: cards need a Cache-Control max-age');
+check(/gen-share-pages\.mjs/.test(JSON.parse(read('package.json')).scripts.postbuild || ''), 'package.json: postbuild must run scripts/gen-share-pages.mjs (crawlers read the route pages it writes)');
+function jpegDims(buf) {
+  for (let i = 2; i < buf.length;) {
+    if (buf[i] !== 0xff) { i++; continue; }
+    const m = buf[i + 1];
+    if (m >= 0xc0 && m <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(m)) return { h: buf.readUInt16BE(i + 5), w: buf.readUInt16BE(i + 7) };
+    i += 2 + buf.readUInt16BE(i + 2);
+  }
+  return null;
+}
+for (const route of shareTable.routes) {
+  const imageUrl = `${shareTable.origin}/share/${route.id}.jpg`;
+  const file = abs(`public/share/${route.id}.jpg`);
+  if (existsSync(file)) {
+    const buf = readFileSync(file);
+    const dim = jpegDims(buf);
+    check(buf[0] === 0xff && buf[1] === 0xd8, `public/share/${route.id}.jpg is not a JPEG`);
+    check(dim && dim.w === shareTable.image.width && dim.h === shareTable.image.height, `public/share/${route.id}.jpg must be ${shareTable.image.width}x${shareTable.image.height} (is ${dim ? dim.w + 'x' + dim.h : 'unreadable'})`);
+    check(buf.length <= 300 * 1024, `public/share/${route.id}.jpg is ${Math.round(buf.length / 1024)} KB; WhatsApp drops previews over 300 KB`);
+  } else check(false, `public/share/${route.id}.jpg is missing (node scripts/gen-share-cards.mjs ${route.id})`);
+  const pages = route.page === 'generated' ? [] : [].concat(route.page);
+  if (route.page === 'generated') {
+    for (const pattern of route.paths) {
+      const example = pattern.replace(/\/\*$/, '/example').replace(/\*$/, 'example');
+      const r = resolve(example, route.query || null);
+      check(r && r.status === 200 && r.to === `/share/${route.id}.html` && r.force && r.index < catchAllAt, `${pattern}${route.query ? ' ?' + Object.entries(route.query).map(([k, v]) => k + '=' + v).join('&') : ''}: must be a forced rewrite to /share/${route.id}.html above the catch-all (the page that carries ${route.name}'s tags)`);
+    }
+  }
+  for (const page of pages) {
+    const file2 = page === 'index.html' ? abs('index.html') : abs(`public${page}`);
+    const html = existsSync(file2) ? readFileSync(file2, 'utf8') : '';
+    check(!!html, `${page}: missing (share route ${route.id})`);
+    for (const [key, want] of [['og:image', imageUrl], ['twitter:image', imageUrl], ['og:image:width', String(shareTable.image.width)], ['og:image:height', String(shareTable.image.height)], ['og:title', route.title]]) {
+      const m = html.match(new RegExp(`<meta\\s+(?:property|name)="${key}"\\s+content="([^"]*)"`));
+      check(m && m[1].replace(/&amp;/g, '&') === want, `${page}: ${key} must be ${want} (share route ${route.id})`);
+    }
+    check(/<meta\s+name="twitter:card"\s+content="summary_large_image"/.test(html), `${page}: twitter:card must be summary_large_image`);
+  }
+}
+
 // ── 6. home page text ──
 const home = read('index.html');
-if (existsSync(abs('public/og.jpg'))) {
-  const dim = jpegSize(readFileSync(abs('public/og.jpg')));
+if (existsSync(abs('public/share/home.jpg'))) {
+  const dim = jpegSize(readFileSync(abs('public/share/home.jpg')));
   const w = home.match(/og:image:width" content="(\d+)"/), h = home.match(/og:image:height" content="(\d+)"/);
-  check(dim && w && h && Number(w[1]) === dim.w && Number(h[1]) === dim.h, `index.html: og:image:width/height (${w && w[1]}x${h && h[1]}) must match public/og.jpg (${dim ? dim.w + 'x' + dim.h : 'unreadable'})`);
+  check(dim && w && h && Number(w[1]) === dim.w && Number(h[1]) === dim.h, `index.html: og:image:width/height (${w && w[1]}x${h && h[1]}) must match public/share/home.jpg (${dim ? dim.w + 'x' + dim.h : 'unreadable'})`);
 }
 check(/check-unsubscribe-page\.mjs/.test(JSON.parse(read('package.json')).scripts.prebuild || ''), 'package.json: prebuild must run scripts/check-unsubscribe-page.mjs (the page behaviour is otherwise unguarded)');
 check(home.includes('<link rel="canonical" href="https://routine3.com/" />'), 'index.html: canonical must be https://routine3.com/');
-check(home.includes('<meta property="og:image" content="https://routine3.com/og.jpg" />'), 'index.html: og:image must be https://routine3.com/og.jpg');
-check(home.includes('<meta name="twitter:image" content="https://routine3.com/og.jpg" />'), 'index.html: twitter:image must be https://routine3.com/og.jpg');
+check(home.includes('<meta property="og:image" content="https://routine3.com/share/home.jpg" />'), 'index.html: og:image must be https://routine3.com/share/home.jpg (the home card)');
+check(home.includes('<meta name="twitter:image" content="https://routine3.com/share/home.jpg" />'), 'index.html: twitter:image must be https://routine3.com/share/home.jpg (the home card)');
 const OLD = /healthscan\.live/g;
 // social handles on other platforms are accounts, not our domain
 const stripHandles = (t) => t.replace(/instagram\.com\/healthscan\.live\/?/g, '').replace(/tiktok\.com\/@healthscan\.live/g, '');

@@ -55,6 +55,65 @@
   status = 200
   force = true
 
+# Share previews: link crawlers do not run the app, so each shareable route is served a page with its own tags (title,
+# description, card image). scripts/gen-share-pages.mjs writes /share/<route>.html after the build; the same list of routes
+# is in src/config/shareRoutes.json and scripts/check-routes.mjs fails the build if the two drift. These sit above the
+# catch-all, and the blog (?page=blog) rule above the home rule.
+[[redirects]]
+  from = "/share/*"
+  to = "/share/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/guardians"
+  to = "/share/guardians.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/guardians/*"
+  to = "/share/guardians.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/guides"
+  to = "/share/guardians.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/guides/*"
+  to = "/share/guardians.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/guide"
+  to = "/share/guardians.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/g/*"
+  to = "/share/guardians.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/@*"
+  to = "/share/guardians.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/"
+  query = {page = "blog"}
+  to = "/share/blog.html"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/join/*"
   to = "/join/index.html"
@@ -191,6 +250,11 @@
     X-Robots-Tag = "noindex, nofollow"
     Cache-Control = "no-store"
     Content-Security-Policy = "default-src 'none'; script-src 'sha256-MtHRxFEPPJoBnPs/gIVcxku3sclRd7qLt4FBcoA8pDs='; style-src 'unsafe-inline'; connect-src https://ermbkttsyvpenjjxaxcf.supabase.co; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+
+[[headers]]
+  for = "/share/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
 
 [[headers]]
   for = "/og.jpg"
