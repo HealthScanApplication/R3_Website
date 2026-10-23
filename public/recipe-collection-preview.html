@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ROUTINE³ — World Table Preview</title>
+  <style>
+    :root { --ink:#f5f1e8; --muted:#aaa69e; --acid:#c8ff32; --panel:#1c1c1b; --line:#343431; --bg:#10100f; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:var(--bg); font-family:Inter,ui-sans-serif,system-ui,sans-serif; }
+    header { max-width:1480px; margin:auto; padding:72px 42px 38px; display:grid; grid-template-columns:1.25fr .75fr; gap:40px; align-items:end; }
+    .eyebrow { color:var(--acid); font-size:11px; font-weight:800; letter-spacing:.18em; text-transform:uppercase; }
+    h1 { font-family:Georgia,serif; font-weight:400; font-size:clamp(52px,7vw,104px); line-height:.92; letter-spacing:-.055em; margin:14px 0 0; }
+    .intro { color:var(--muted); font-size:15px; line-height:1.7; max-width:54ch; margin:0 0 8px; }
+    .filters { max-width:1480px; margin:auto; padding:0 42px 28px; display:flex; gap:8px; flex-wrap:wrap; }
+    .pill { border:1px solid var(--line); color:var(--ink); background:#171716; border-radius:99px; padding:9px 13px; font-size:11px; }
+    .pill:first-child { color:#111; background:var(--acid); border-color:var(--acid); font-weight:800; }
+    .planner { max-width:1396px; margin:0 auto 28px; padding:34px; border:1px solid var(--line); border-radius:26px; background:linear-gradient(135deg,#20201e,#171716); }
+    .planner-head { display:grid; grid-template-columns:1fr .9fr; gap:34px; align-items:end; }
+    .planner h2 { font-size:clamp(34px,4vw,56px); margin:8px 0 12px; }
+    .planner-copy { max-width:62ch; }
+    .planner-controls { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
+    button { appearance:none; border:1px solid #4a4a45; border-radius:99px; padding:10px 15px; color:var(--ink); background:#121211; font:700 11px/1 Inter,system-ui; cursor:pointer; }
+    button.active { color:#10100f; background:var(--acid); border-color:var(--acid); }
+    .guidance { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:28px 0 18px; }
+    .guide { min-height:118px; padding:18px; border:1px solid var(--line); border-radius:15px; background:#151514; }
+    .guide b { display:block; color:var(--acid); font-size:11px; letter-spacing:.1em; text-transform:uppercase; margin-bottom:10px; }
+    .plan-note { padding:13px 15px; border-left:3px solid var(--acid); background:#141413; color:#bab6ae; font-size:12px; line-height:1.55; margin:18px 0; }
+    .week { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:8px; }
+    .day { border:1px solid var(--line); border-radius:14px; background:#121211; overflow:hidden; }
+    .day h3 { margin:0; padding:11px 12px; color:var(--acid); border-bottom:1px solid var(--line); font-size:10px; text-transform:uppercase; letter-spacing:.1em; }
+    .meal { padding:12px; min-height:82px; }
+    .meal + .meal { border-top:1px solid var(--line); }
+    .meal small { color:#77746d; display:block; margin-bottom:5px; text-transform:uppercase; letter-spacing:.09em; font-size:8px; }
+    .meal span { display:block; font-family:Georgia,serif; font-size:14px; line-height:1.25; }
+    main { max-width:1480px; margin:auto; padding:0 42px 84px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+    article { background:var(--panel); border:1px solid var(--line); border-radius:22px; overflow:hidden; min-width:0; }
+    .photo { aspect-ratio:16/10; overflow:hidden; background:#252522; }
+    img { display:block; width:100%; height:100%; object-fit:cover; object-position:50% 50%; transition:transform .45s ease; }
+    article:hover img { transform:scale(1.025); }
+    .body { padding:22px 24px 25px; }
+    .meta { display:flex; justify-content:space-between; gap:16px; align-items:center; color:var(--acid); font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.12em; }
+    h2 { font-family:Georgia,serif; font-size:31px; font-weight:400; letter-spacing:-.025em; margin:9px 0 8px; }
+    p { color:var(--muted); font-size:13px; line-height:1.55; margin:0; }
+    .nutrition { display:flex; gap:15px; padding-top:18px; margin-top:18px; border-top:1px solid var(--line); color:#d7d2c8; font-size:11px; }
+    .nutrition b { color:var(--ink); font-size:15px; margin-right:3px; }
+    footer { border-top:1px solid var(--line); color:#77746d; padding:25px 42px 40px; text-align:center; font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
+    @media(max-width:1050px) { .week { grid-template-columns:repeat(2,1fr); } .guidance { grid-template-columns:repeat(2,1fr); } }
+    @media(max-width:800px) { header { grid-template-columns:1fr; padding:48px 20px 26px; } .filters { padding:0 20px 22px; } .planner { margin:0 20px 24px; padding:24px; } .planner-head { grid-template-columns:1fr; } .planner-controls { justify-content:flex-start; } main { grid-template-columns:1fr; padding:0 20px 60px; } h2 { font-size:27px; } }
+    @media(max-width:520px) { .week,.guidance { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div><div class="eyebrow">ROUTINE³ · World table / 01</div><h1>Plants worth<br />travelling for.</h1></div>
+    <p class="intro">Forty culturally rooted recipes selected where award-level flavour meets practical nutrition. Food-first, measured in grams, photographed in hand—and linked through ingredient records to the nutrition system.</p>
+  </header>
+  <div class="filters"><span class="pill">All 40</span><span class="pill">33 vegan</span><span class="pill">7 vegetarian</span><span class="pill">22 traditions</span><span class="pill">Junction-linked nutrition</span></div>
+  <section class="planner" id="planner">
+    <div class="planner-head">
+      <div><div class="eyebrow">Diet planner guidance</div><h2>Build variety first.<br />Close gaps second.</h2><p class="planner-copy">The planner rotates distinct dishes before repeating one, calculates nutrition from each gram-linked ingredient, and reviews the complete plan—not a single plate—against the selected essential-nutrient depth.</p></div>
+      <div class="planner-controls" aria-label="Planner options">
+        <button class="diet active" data-diet="vegan">Vegan</button><button class="diet" data-diet="vegetarian">Vegetarian</button>
+        <button class="depth" data-depth="15">15 essentials</button><button class="depth active" data-depth="30">30 essentials</button><button class="depth" data-depth="90">90+ essentials</button>
+      </div>
+    </div>
+    <div class="guidance">
+      <div class="guide"><b>01 · Rotate</b><p>Use a different main recipe in every visible lunch and dinner slot.</p></div>
+      <div class="guide"><b>02 · Calculate</b><p>Amounts flow through recipe → ingredient → nutrient junctions.</p></div>
+      <div class="guide"><b>03 · Balance</b><p>Review energy, protein, fibre, fats and micronutrients across the plan.</p></div>
+      <div class="guide"><b>04 · Escalate carefully</b><p>Prefer food and drink; flag unresolved gaps for qualified review before supplements.</p></div>
+    </div>
+    <div class="plan-note" id="plan-note"></div>
+    <div class="week" id="week" aria-live="polite"></div>
+  </section>
+  <main id="recipes"></main>
+  <footer>Nutrition values are planning estimates, not medical advice or laboratory analyses.</footer>
+  <script>
+    const recipes = [
+      ['Egyptian Ta\'ameya','Egypt · Vegan','egyptian-taameya.webp','Herb-bright fava patties with tomato-cucumber salad.',390,19,14,92],
+      ['Ethiopian Misir Wat','Ethiopia · Vegan','ethiopian-misir-wat.webp','Berbere red lentils, slow onion, tomato, ginger and lemon.',430,22,18,95],
+      ['Levantine Mujaddara','Levant · Vegan','levantine-mujaddara.webp','Brown lentils and rice under deeply caramelised onions.',535,21,19,93],
+      ['Ethiopian Shiro Wat','Ethiopia & Eritrea · Vegan','ethiopian-shiro-wat.webp','Silky roasted chickpea-flour stew with berbere.',385,16,12,91],
+      ['Georgian Badrijani','Georgia · Vegan','georgian-badrijani.webp','Roasted eggplant rolls, walnut-garlic cream and pomegranate.',370,9,9,86],
+      ['Greek Lentil Yemista','Greece · Vegan','greek-lentil-yemista.webp','Roasted tomatoes and peppers filled with lentils and herbed rice.',465,15,13,94],
+      ['Antalya-Style Piyaz','Türkiye · Vegan','turkish-antalya-piyaz.webp','White beans, lemon tahini, tomato, red onion and sumac.',455,21,16,94],
+      ['Roman Pasta e Ceci','Italy · Vegan','roman-pasta-e-ceci.webp','Whole-wheat pasta and chickpeas in rosemary tomato broth.',575,23,17,91],
+      ['Tunisian Shakshuka','Tunisia · Vegetarian','tunisian-shakshuka.webp','Soft eggs in a smoky harissa tomato-pepper sauce.',335,18,7,86],
+      ['Lighter Palak Paneer','North India · Vegetarian','indian-palak-paneer.webp','Seared paneer in vivid spiced spinach with yogurt and lemon.',475,30,8,82],
+      ['Algerian Karantika','Algeria · Vegetarian','algerian-karantika.webp','Custardy chickpea bake with cumin, harissa, egg and lemon.',410,22,11,89],
+      ['Masala Dosa','South India · Vegan','indian-masala-dosa.webp','Fermented rice-lentil crepe with bright spiced potato.',485,15,10,91],
+      ['Ful Medames','Egypt · Vegan','egyptian-ful-medames.webp','Slow fava beans with tahini, tomato, cumin and lemon.',440,21,16,94],
+      ['Kanda Poha','Maharashtra · Vegan','indian-kanda-poha.webp','Turmeric-fluffed rice, onion, peas, peanuts and lime.',425,13,8,88],
+      ['Aloo Paratha','Punjab · Vegetarian','indian-aloo-paratha.webp','Wholegrain flatbread filled with spiced potato and peas.',505,18,11,86],
+      ['Dal Tadka','India · Vegan','indian-dal-tadka.webp','Golden lentils under a cumin, garlic and chilli tempering.',465,24,17,95],
+      ['Gado-Gado','Indonesia · Vegetarian','indonesian-gado-gado.webp','Vegetables, tofu, tempeh and egg with peanut-lime sauce.',520,28,13,91],
+      ['Kısır','Türkiye · Vegan','turkish-kisir.webp','Peppery bulgur, tomato, herbs, lemon and pomegranate.',430,13,12,92],
+      ['Chickpea Fattoush','Lebanon · Vegan','lebanese-chickpea-fattoush.webp','Sumac-bright salad with chickpeas and toasted pita.',455,17,14,94],
+      ['Moroccan Zaalouk','Morocco · Vegan','moroccan-zaalouk.webp','Smoky eggplant and tomato with cumin, paprika and lemon.',360,11,12,92],
+      ['Shahi Paneer','North India · Vegetarian','indian-shahi-paneer.webp','Paneer in a saffron-cashew tomato gravy.',560,28,7,80],
+      ['Tofu Phanaeng','Thailand · Vegan','thai-tofu-phanaeng.webp','Crisp tofu and peppers in a fragrant red coconut curry.',535,24,10,90],
+      ['Youpo Mian','Xi’an · Vegan','xian-youpo-mian.webp','Broad noodles, garlic, chilli oil, greens and edamame.',585,24,11,89],
+      ['Pav Bhaji','Mumbai · Vegetarian','indian-pav-bhaji.webp','Spiced vegetable mash with toasted wholegrain pav.',525,18,13,88],
+      ['Pomodorini & Cannellini','Italy · Vegan','italian-pomodorini-cannellini.webp','Pasta with blistered tomatoes, basil and white beans.',570,23,14,92],
+      ['Zeytoon Parvardeh','Iran · Vegan','iranian-zeytoon-parvardeh.webp','Olives with walnut, herbs and pomegranate molasses.',275,6,5,84],
+      ['Pitaroudia','Rhodes · Vegan','rhodian-pitaroudia.webp','Crisp chickpea, tomato and mint fritters.',330,13,10,90],
+      ['Guacamole & Pepitas','Mexico · Vegan','mexican-guacamole-pepitas.webp','Chunky avocado, lime and pepitas with crisp vegetables.',315,8,12,91],
+      ['Cannellini Bruschetta','Italy · Vegan','italian-cannellini-bruschetta.webp','Wholegrain toast with tomato, basil and white beans.',345,13,10,92],
+      ['Sunomono with Edamame','Japan · Vegan','japanese-sunomono-edamame.webp','Cucumber, wakame and edamame in sesame-rice vinegar.',190,12,7,94],
+      ['Citrus Collards','Southern US · Vegan','citrus-collards.webp','Tender collards with orange, raisins and toasted pecans.',0,0,0,90],
+      ['Gumbo Z','Louisiana Creole · Vegan','gumbo-z.webp','Okra, kidney beans and peppers in a dark roux with brown rice.',0,0,0,90],
+      ['Root-Vegetable Ital Stew','Caribbean · Vegan','root-vegetable-ital-stew.webp','Sweet roots and greens in a thyme-scented coconut broth.',0,0,0,90],
+      ['Garlicky Lima-Bean Spread','Southern US · Vegan','lima-bean-spread.webp','Lima beans, roasted garlic and lemon with crisp vegetables.',0,0,0,90],
+      ['Baingan Bharta','North India · Vegan','baingan-bharta.webp','Smoky eggplant folded through tomato, onion and peas.',0,0,0,90],
+      ['Palak Chana Dal','India · Vegan','palak-chana-dal.webp','Chickpeas and spinach with tomato and cumin-garlic tempering.',0,0,0,90],
+      ['Kale-Tofu Pulao','India · Vegan','kale-tofu-pulao.webp','Brown rice, seared tofu, kale and peas with whole spices.',0,0,0,90],
+      ['Matar Tofu Curry','North India · Vegan','matar-tofu-curry.webp','Tofu and green peas in a ginger-rich tomato masala.',0,0,0,90],
+      ['Coconut Tempeh','Contemporary · Vegan','coconut-tempeh.webp','Crisp coconut tempeh with mango and red-cabbage slaw.',0,0,0,90],
+      ['Marrakesh Stew','Morocco · Vegan','marrakesh-stew.webp','Chickpeas, sweet potato, apricot and warm spices.',0,0,0,90]
+    ];
+    const plans = {
+      vegan: ['Ful Medames','Citrus Collards','Masala Dosa','Ethiopian Misir Wat','Kanda Poha','Levantine Mujaddara','Egyptian Ta\'ameya','Roman Pasta e Ceci','Kısır','Tofu Phanaeng','Chickpea Fattoush','Kale-Tofu Pulao','Palak Chana Dal','Marrakesh Stew'],
+      vegetarian: ['Tunisian Shakshuka','Lighter Palak Paneer','Algerian Karantika','Gado-Gado','Aloo Paratha','Shahi Paneer','Pav Bhaji','Greek Lentil Yemista','Antalya-Style Piyaz','Matar Tofu Curry','Pomodorini & Cannellini','Baingan Bharta','Coconut Tempeh','Gumbo Z']
+    };
+    let selectedDiet = 'vegan', selectedDepth = 30;
+    const renderPlan = () => {
+      const meals = plans[selectedDiet];
+      document.querySelector('#plan-note').innerHTML = `<b>${selectedDiet === 'vegan' ? 'Vegan' : 'Vegetarian'} · ${selectedDepth === 90 ? '90+' : selectedDepth} essentials:</b> this is a seven-day lunch-and-dinner guidance preview using 14 unique recipes. A full two-week, three-meal plan requires 42 distinct eligible recipes per diet; the catalog must pass completeness checks before the planner promises that coverage.`;
+      document.querySelector('#week').innerHTML = Array.from({length:7},(_,i)=>`<div class="day"><h3>Day ${i+1}</h3><div class="meal"><small>Lunch</small><span>${meals[i*2]}</span></div><div class="meal"><small>Dinner</small><span>${meals[i*2+1]}</span></div></div>`).join('');
+    };
+    document.querySelectorAll('button.diet').forEach(button=>button.addEventListener('click',()=>{ document.querySelectorAll('button.diet').forEach(b=>b.classList.remove('active')); button.classList.add('active'); selectedDiet=button.dataset.diet; renderPlan(); }));
+    document.querySelectorAll('button.depth').forEach(button=>button.addEventListener('click',()=>{ document.querySelectorAll('button.depth').forEach(b=>b.classList.remove('active')); button.classList.add('active'); selectedDepth=Number(button.dataset.depth); renderPlan(); }));
+    renderPlan();
+    document.querySelector('#recipes').innerHTML = recipes.map(([name,meta,image,copy,kcal,protein,fibre,score]) => `
+      <article><div class="photo"><img src="/images/recipes/world/${image}" alt="${name}" /></div><div class="body">
+      <div class="meta"><span>${meta}</span><span>${score}/100</span></div><h2>${name}</h2><p>${copy}</p>
+      <div class="nutrition">${kcal ? `<span><b>${kcal}</b> kcal</span><span><b>${protein}</b>g protein</span><span><b>${fibre}</b>g fibre</span>` : '<span><b>Live</b> ingredient-linked nutrition</span>'}</div>
+      </div></article>`).join('');
+  </script>
+</body>
+</html>
