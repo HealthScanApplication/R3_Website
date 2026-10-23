@@ -65,7 +65,7 @@ it('lists every-day steps of a multi-day routine once, before the numbered days,
   expect(g.map((x) => x.label)).toEqual(['Week rules', 'Every day · Morning', 'Day 1 · Morning', 'Day 2 · Morning']);
 });
 import { routinePeriod } from '../protocolBuilders';
-import { routineCategoryLabel, descriptionParagraphs } from '../../components/guides/CatalogBrowsers';
+import { routineCategoryLabel, routineGroupLabel, descriptionParagraphs } from '../../components/guides/CatalogBrowsers';
 it('tags each routine with the span it covers and its section', () => {
   const p = (name: string, extra: object = {}) => routinePeriod({ name, description: null, tags: [], ...extra });
   expect(p('K-Beauty • Midday')).toBe('Midday');
@@ -78,6 +78,12 @@ it('tags each routine with the span it covers and its section', () => {
   expect(routineCategoryLabel('skin & face')).toBe('Beauty');
   expect(routineCategoryLabel('Strength')).toBe('Fitness');
   expect(descriptionParagraphs('A reset. ### The steps A mist. **Morning SPF wears off.** Done')).toEqual(['A reset.', 'The steps A mist. Morning SPF wears off. Done']);
+});
+it('removes redundant AM and PM session wording from workout groups', () => {
+  expect(routineGroupLabel('AM Session — Chest & Back')).toBe('Chest & Back');
+  expect(routineGroupLabel('PM Session - Shoulders & Arms')).toBe('Shoulders & Arms');
+  expect(routineGroupLabel('AM Session')).toBeNull();
+  expect(routineGroupLabel('Mobility')).toBe('Mobility');
 });
 import { byPeriod } from '../../components/guides/CatalogBrowsers';
 it('groups routines by span in day order', () => {

@@ -395,6 +395,11 @@ export function routineCategoryLabel(category: string | null): string | null {
   const hit = (Object.values(ROUTINE_SECTIONS) as Array<{ kicker: string; categories: readonly string[] }>).find((x) => x.categories.includes(c));
   return hit ? hit.kicker : c.replace(/\b\w/g, (m) => m.toUpperCase());
 }
+/** Remove redundant clock-period wording from workout labels; the UI already shows Morning/Evening and a time. */
+export function routineGroupLabel(group?: string | null): string | null {
+  const label = (group || '').trim().replace(/^(?:AM|PM)\s+Session\s*(?:[—–-]\s*)?/i, '').trim();
+  return label || null;
+}
 /** Routines grouped by the span they cover, in day order: Morning … Night, Day, N days, Week, N weeks, Month, N months. */
 export function byPeriod<T extends FitnessRoutine>(items: T[]): Array<[string, T[]]> {
   const groups = new Map<string, T[]>();
@@ -473,7 +478,7 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
   }, [steps, open]); // eslint-disable-line react-hooks/exhaustive-deps
   // Like the app: a step's rules are notes on its card, its sub-steps are indented cards under it.
   const dayItems = tree.top.filter((s) => (!s.day || s.day === day) && !isRule(s)).flatMap((s) => {
-    const base = { item_type: s.itemType || undefined, kind: s.kind, scope: s.scope, time: s.time, group_name: s.group, category: s.category, subtype: s.subtype };
+    const base = { item_type: s.itemType || undefined, kind: s.kind, scope: s.scope, time: s.time, group_name: routineGroupLabel(s.group), category: s.category, subtype: s.subtype };
     const kids = tree.kids(s);
     const sug = s.id ? suggestions[s.id] : undefined;
     return [{ ...base, display_name: s.name, duration_minutes: s.minutes, children: kids.filter(isRule).map((k) => k.name), ...(sug ? { image_url: sug.image, description: `Suggested: ${sug.name}` } : {}) },
@@ -517,7 +522,7 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
             {smartListBlocks(g.steps, tree.kids).map(([list, acts, rules]) => <div key={list} style={{ marginLeft: 12, borderLeft: `2px solid ${line}`, paddingLeft: 10, marginBottom: 8 }}>
               <div style={{ color: muted, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', margin: '0 0 4px' }}>{list}</div>
               <div style={{ display: 'grid', gridTemplateColumns: acts.length && rules.length ? 'minmax(0,3fr) minmax(0,2fr)' : 'minmax(0,1fr)', gap: 14, alignItems: 'start' }}>
-                {acts.length > 0 && <ol style={{ margin: '0 0 0 4px', paddingLeft: 12, borderLeft: `1px solid ${line}`, listStyle: 'none', display: 'grid', gap: 4, fontSize: 12 }}>{acts.map((s, i) => <li key={i}><StepPrefix {...stepTarget(s, list, media, suggestions)} list={list} onOpen={setModal} /><span style={{ color: acid }}>{s.time}</span>{s.time ? ' · ' : ''}{s.name}{[s.sets && s.reps ? `${s.sets} × ${s.reps}` : null, s.weight, s.minutes ? `${s.minutes} min` : null].filter(Boolean).map((x) => <span key={x} style={{ color: acid }}> · {x}</span>)}{s.group ? <span style={{ color: muted }}> · {s.group}</span> : null}
+                {acts.length > 0 && <ol style={{ margin: '0 0 0 4px', paddingLeft: 12, borderLeft: `1px solid ${line}`, listStyle: 'none', display: 'grid', gap: 4, fontSize: 12 }}>{acts.map((s, i) => <li key={i}><StepPrefix {...stepTarget(s, list, media, suggestions)} list={list} onOpen={setModal} /><span style={{ color: acid }}>{s.time}</span>{s.time ? ' · ' : ''}{s.name}{[s.sets && s.reps ? `${s.sets} × ${s.reps}` : null, s.weight, s.minutes ? `${s.minutes} min` : null].filter(Boolean).map((x) => <span key={x} style={{ color: acid }}> · {x}</span>)}{routineGroupLabel(s.group) ? <span style={{ color: muted }}> · {routineGroupLabel(s.group)}</span> : null}
                   <StepNote text={s.notes} />
                   {tree.kids(s).filter((k) => !isRule(k)).length > 0 && <ul style={{ listStyle: 'none', margin: '2px 0', paddingLeft: 14, borderLeft: `1px solid ${line}`, display: 'grid', gap: 1 }}>{tree.kids(s).filter((k) => !isRule(k)).map((k, j) => <li key={j} style={{ fontSize: 11 }}>{k.name}{k.time && k.time !== s.time ? <span style={{ color: acid }}> · {k.time}</span> : null}<StepNote text={k.notes} indent={0} /></li>)}</ul>}
                   {s.id && suggestions[s.id] && <button type="button" onClick={() => setModal({ kind: 'recipe', id: suggestions[s.id!].id, name: suggestions[s.id!].name })} style={{ display: 'block', border: 0, background: 'transparent', color: acid, fontSize: 11, padding: '2px 0 0 34px', cursor: 'pointer', textAlign: 'left' }}>Suggested: {suggestions[s.id].name}{suggestions[s.id].healthScore != null ? ` · ♥ ${Math.round(suggestions[s.id].healthScore!)}` : ''}</button>}</li>)}</ol>}
