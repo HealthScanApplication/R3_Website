@@ -1310,13 +1310,17 @@ export function mealSlotOf(name: string, group: string | null, time: string | nu
   const m = /^(\d\d):/.exec(time || ''); if (!m) return null;
   const h = +m[1]; return h < 11 ? 'Breakfast' : h < 15 ? 'Lunch' : h < 17 ? 'Snack' : 'Dinner';
 }
-export async function browseRecipes(accessToken: string, f: { ids?: string[]; offset?: number; query?: string; cuisine?: string; meal?: string; diet?: string; limit?: number }): Promise<CatalogFood[]> {
+export type RecipeCatalogGroup = 'all' | 'meals' | 'drinks' | 'condiments';
+export async function browseRecipes(accessToken: string, f: { ids?: string[]; offset?: number; query?: string; cuisine?: string; meal?: string; diet?: string; group?: RecipeCatalogGroup; limit?: number }): Promise<CatalogFood[]> {
   const p = ['select=id,name_common,image_primary_url,image_url,meal_slot,cuisine,description_simple,description,health_score,prep_time,cook_time,servings,nutrition_per_100g,elements_hazardous,dietary_info', 'is_published=is.true', 'order=health_score.desc.nullslast,name_common.asc,id.asc', `limit=${f.limit || 60}`, `offset=${f.offset || 0}`];
   if (f.ids?.length) p.push(`id=in.(${f.ids.map((i) => `"${i.replace(/"/g, '')}"`).join(',')})`);
   if (f.query?.trim()) p.push(`name_common=ilike.*${q(f.query)}*`);
   if (f.cuisine) p.push(`cuisine=eq.${encodeURIComponent(f.cuisine)}`);
   if (f.meal) p.push(`meal_slot=ilike.${encodeURIComponent(f.meal)}`);
   if (f.diet) p.push(`dietary_info->>${f.diet}=eq.true`);
+  if (f.group === 'meals') p.push('category=in.(Meal,Dessert,Snack)');
+  if (f.group === 'drinks') p.push('category=eq.Drink');
+  if (f.group === 'condiments') p.push('category=eq.Condiment');
   const res = await fetch(`${rest()}/catalog_recipes?${p.join('&')}`, { headers: headers(accessToken) });
   if (!res.ok) throw new Error(`Could not load recipes (${res.status})`);
   return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name_common, image: r.image_primary_url || r.image_url || null, category: r.meal_slot || null, description: txt(r.description_simple) || txt(r.description), healthScore: num(r.health_score), per100: per100Of(r.nutrition_per_100g), hazards: hazardsOf(r.elements_hazardous), diets: dietsOf(r.dietary_info),

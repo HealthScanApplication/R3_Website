@@ -8,7 +8,7 @@
  */
 import { Fragment, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { AlertTriangle, Dumbbell, Heart, Loader2, Search, Utensils, Wheat, X } from 'lucide-react';
-import { RECIPE_DIETS, browseIngredients, browseRecipes, listFitnessRoutines, listMyDietPlans, mealSlotOf, protocolDiet, recipeIngredientNames, routinePeriod, routineSteps, stepMedia, getActivityDetail, type ActivityDetail, type CatalogFood, type FitnessRoutine, type RoutineStep } from '../../utils/protocolBuilders';
+import { RECIPE_DIETS, browseIngredients, browseRecipes, listFitnessRoutines, listMyDietPlans, mealSlotOf, protocolDiet, recipeIngredientNames, routinePeriod, routineSteps, stepMedia, getActivityDetail, type ActivityDetail, type CatalogFood, type FitnessRoutine, type RecipeCatalogGroup, type RoutineStep } from '../../utils/protocolBuilders';
 import { ProtocolHomeScreen } from '../mockups/ProtocolHomeScreen';
 import { PhoneFrame } from '../mockups/PhoneFrame';
 import { NUTRIENTS } from '../../utils/recipeNutrients';
@@ -106,18 +106,28 @@ function Ingredients({ accessToken, id }: { accessToken: string; id: string }) {
 
 const CUISINES = ['International', 'American', 'Australian', 'British', 'Canadian', 'Polish', 'New Zealand', 'Irish', 'Italian', 'Japanese', 'French', 'Indian', 'Mexican', 'Chinese'];
 const MEALS = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Drink'];
+const RECIPE_GROUPS: Array<{ id: RecipeCatalogGroup; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'meals', label: 'Meals' },
+  { id: 'drinks', label: 'Drinks' },
+  { id: 'condiments', label: 'Garnishes & condiments' },
+];
 
 /** Published ROUTINE³ recipes, below the Guardian's own on the Recipes page. */
 export function CatalogRecipes({ accessToken }: { accessToken: string }) {
+  const [group, setGroup] = useState<RecipeCatalogGroup>('all');
   const [query, setQuery] = useState(''), [cuisine, setCuisine] = useState(''), [meal, setMeal] = useState(''), [diet, setDiet] = useState('');
   const [page, setPage] = useState(0);
-  useEffect(() => { setPage(0); }, [query, cuisine, meal, diet]);
+  useEffect(() => { setPage(0); }, [group, query, cuisine, meal, diet]);
   // One extra row says whether there is a next page.
-  const { items: got, busy, error } = useLoad(() => browseRecipes(accessToken, { query, cuisine, meal, diet, limit: PAGE + 1, offset: page * PAGE }), [accessToken, query, cuisine, meal, diet, page], query ? 250 : 0);
+  const { items: got, busy, error } = useLoad(() => browseRecipes(accessToken, { group, query, cuisine, meal, diet, limit: PAGE + 1, offset: page * PAGE }), [accessToken, group, query, cuisine, meal, diet, page], query ? 250 : 0);
   const items = got.slice(0, PAGE);
   return <section aria-label="ROUTINE³ recipes" style={{ marginTop: 34 }}>
     <div style={{ ...kicker, margin: '0 0 4px' }}>ROUTINE³ recipes</div>
     <p style={{ color: muted, fontSize: 12, margin: '0 0 12px' }}>The published recipe database: filter by region, meal and diet, and open one for its health score, nutrients, hazards and ingredients.</p>
+    <div role="tablist" aria-label="Recipe type" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+      {RECIPE_GROUPS.map((g) => <button key={g.id} type="button" role="tab" aria-selected={group === g.id} onClick={() => setGroup(g.id)} style={{ border: `1px solid ${group === g.id ? acid : line}`, background: group === g.id ? ink : 'transparent', color: group === g.id ? '#090A08' : ink, minHeight: 40, padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{g.label}</button>)}
+    </div>
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
       <Search_ value={query} onChange={setQuery} placeholder="Search ROUTINE³ recipes" />
       <select aria-label="Region" value={cuisine} onChange={(e) => setCuisine(e.target.value)} style={field}><option value="">All regions</option>{CUISINES.map((c) => <option key={c} value={c}>{c}</option>)}</select>
