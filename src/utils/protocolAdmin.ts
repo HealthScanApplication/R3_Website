@@ -311,6 +311,27 @@ export async function listProtocols(accessToken: string, ownerId?: string | null
   return (await handle(res, 'List protocols')) || [];
 }
 
+/** Every active public protocol, including system and other Guardian protocols. */
+export async function listPublicProtocols(accessToken: string): Promise<AdminProtocol[]> {
+  const pageSize = 1000;
+  const rows: AdminProtocol[] = [];
+
+  for (let offset = 0; ; offset += pageSize) {
+    const suffix = `&is_public=eq.true&is_active=not.is.false&order=is_suggested.desc.nullslast,sort_order.asc.nullslast,name.asc&limit=${pageSize}&offset=${offset}`;
+    let res = await fetch(`${rest()}/protocols?select=${legacyProtocolColumns ? LEGACY_PROTOCOL_COLS : PROTOCOL_COLS}${suffix}`, { headers: headers(accessToken) });
+    if (!res.ok && !legacyProtocolColumns) {
+      const failure = await res.clone().json().catch(() => null) as { code?: string } | null;
+      if (failure?.code === '42703') {
+        legacyProtocolColumns = true;
+        res = await fetch(`${rest()}/protocols?select=${LEGACY_PROTOCOL_COLS}${suffix}`, { headers: headers(accessToken) });
+      }
+    }
+    const page = ((await handle(res, 'List public protocols')) || []) as AdminProtocol[];
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+  }
+}
+
 const protocolNameKey = (name: string) => name.replace(/^R3\s+Protocol\s*>\s*/i, '').trim().toLowerCase();
 
 /**

@@ -33,7 +33,7 @@ import { GuardianProducts, GuardianShop } from './GuardianProducts';
 import { ActivitiesLibrary } from './ActivitiesLibrary';
 import { CookingEquipment, CookingTechniques } from './CookingLibrary';
 import { CatalogIngredients, CatalogRecipes, FitnessRoutines } from './CatalogBrowsers';
-import { buildProtocolWithAI, foldSleepSteps, saveDraftStep, updateProtocolWithAI, listProtocolItems, createProtocol, findOrCreateProtocol, createProtocolItem, listProtocols, type AdminProtocol } from '../../utils/protocolAdmin';
+import { buildProtocolWithAI, foldSleepSteps, saveDraftStep, updateProtocolWithAI, listProtocolItems, createProtocol, findOrCreateProtocol, createProtocolItem, listProtocols, listPublicProtocols, type AdminProtocol } from '../../utils/protocolAdmin';
 import {
   recoverUpsellPayment, createGuideLead, createGuideOffer, createGuideRecipe, createGuideValueRamp, getGuideProfile, getGuideProfileBySlug,
   importGuideProfile, listGuideLeads, listGuideOffers, listGuideRecipes, listGuideValueRamps, listRoutineOwners, upsertGuideOffer, upsertGuideValueRamp, listPublicGuideProfiles, saveGuideProfile, listGuardianReviews, listGuardianReviewRequests, createGuardianReviewRequest, submitGuardianReview, setGuardianReviewStatus, createOfferPayment, confirmOfferPayment, buyUpsellOneClick, getFreeOfferDownload, requestGuardianReview, decideGuardianSite, listAllGuideProfiles, listGuardianSuggestions, setGuardianSuggestionStatus, listPublicGuardianOffers, listReviewSummaries, type AdminGuideProfile, type GuardianSuggestionRow, type GuardianReview, type GuardianReviewRequest, submitGuardianSuggestion, submitGuardianOptIn,
@@ -3755,6 +3755,9 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
   const [offers, setOffers] = useState<GuideOffer[]>([]);
   const [recipes, setRecipes] = useState<GuideRecipe[]>([]);
   const [protocols, setProtocols] = useState<AdminProtocol[]>([]);
+  const [publicProtocols, setPublicProtocols] = useState<AdminProtocol[]>([]);
+  const [publicProtocolsLoading, setPublicProtocolsLoading] = useState(false);
+  const [publicProtocolsError, setPublicProtocolsError] = useState('');
   const [combining, setCombining] = useState(false);
   const [valueRamps, setValueRamps] = useState<GuideValueRamp[]>([]);
   const [routineOwners, setRoutineOwners] = useState<Map<string, { name: string; avatarUrl: string | null; relation: string | null }>>(new Map());
@@ -3796,6 +3799,17 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
   const [selectedLibraryIds, setSelectedLibraryIds] = useState<string[]>([]);
   const [builderLibrarySources, setBuilderLibrarySources] = useState<GuideLibraryItem[]>([]);
   useEffect(() => { if (!user) return; Promise.all([listGuideLeads(user.id), listGuideOffers(user.id), listGuideRecipes(user.id), accessToken ? listProtocols(accessToken, user.id) : Promise.resolve([])]).then(([l,o,r,p]) => { setLeads(l); setOffers(o); setRecipes(r); setProtocols(p); }).catch(() => {}); listGuideValueRamps(user.id).then(setValueRamps).catch(() => setValueRamps([])); listRoutineOwners(user.id, profile.display_name, profile.avatar_url).then(setRoutineOwners).catch(() => {}); }, [user?.id, accessToken]);
+  useEffect(() => {
+    if (!accessToken || tab !== 'protocols') return;
+    let live = true;
+    setPublicProtocolsLoading(true);
+    setPublicProtocolsError('');
+    listPublicProtocols(accessToken)
+      .then((rows) => { if (live) setPublicProtocols(rows); })
+      .catch((error) => { if (live) setPublicProtocolsError((error as Error).message || 'Could not load public protocols.'); })
+      .finally(() => { if (live) setPublicProtocolsLoading(false); });
+    return () => { live = false; };
+  }, [accessToken, tab]);
   const metric = useMemo(() => [{ n: leads.length, l: 'Leads' }, { n: valueRamps.length, l: 'Offers' }, { n: offers.length + recipes.length + protocols.length, l: 'Items' }, { n: protocols.length, l: 'R3 Protocols' }], [leads.length, offers.length, recipes.length, protocols.length, valueRamps.length]);
   async function quickAdd() {
     if (!user || !newTitle.trim() || creating) return;
@@ -3905,7 +3919,19 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
               {personal.map(({ x, child }) => { const owner = routineOwners.get(x.id); const row = <Row key={x.id} image={owner?.avatarUrl || x.image_url} title={owner && /^your routine$/i.test(x.name.trim()) ? `${owner.name}’s routine` : x.name} meta={`${owner ? `${child && owner.relation ? `${owner.relation.charAt(0).toUpperCase()}${owner.relation.slice(1)} · ` : ''}Personal routine · ` : ''}${x.total_days || 1} days · ${x.is_public ? 'Published' : 'Draft'} · PDF + app twin`} action="Open R3 builder" onClick={() => setProtocolId(x.id)} />;
               return child ? <div key={x.id} style={{ marginLeft: 40, paddingLeft: 16, borderLeft: `1px solid ${line}` }}>{row}</div> : row; })}
             </>;
-          })() : <Empty image={guidePlates.protocols} title="No Protocol drafts yet" copy="Build against the full Routine database with timings, quantities, linked records and PDF export." />)}</div></>}
+          })() : <Empty image={guidePlates.protocols} title="No Protocol drafts yet" copy="Build against the full Routine database with timings, quantities, linked records and PDF export." />)}
+          {tab === 'protocols' && <section aria-labelledby="public-protocols-title" style={{ marginTop: 56, paddingTop: 34, borderTop: `1px solid ${line}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+              <div><div id="public-protocols-title" style={{ ...label, color: acid, margin: 0 }}>All public protocols</div><p style={{ color: muted, fontSize: 12, margin: '6px 0 0' }}>{publicProtocolsLoading ? 'Loading the public library…' : `${publicProtocols.length} active public Protocol${publicProtocols.length === 1 ? '' : 's'} from ROUTINE³ and its Guardians.`}</p></div>
+            </div>
+            {publicProtocolsError && <p role="alert" style={{ color: '#E8B86A', fontSize: 12 }}>{publicProtocolsError}</p>}
+            {!publicProtocolsLoading && !publicProtocolsError && publicProtocols.length === 0 && <p style={{ color: muted, fontSize: 12 }}>No public protocols are available yet.</p>}
+            {publicProtocols.length > 0 && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18 }}>{publicProtocols.map((protocol) => {
+              const description = (protocol.description || '').replace(/\s+/g, ' ').trim();
+              return <ProductCard key={protocol.id} kind="routine" imageUrl={protocol.image_url} eyebrow={[protocol.category || 'Protocol', `${protocol.total_days || 1} days`, 'Public'].join(' · ')} title={protocol.name.replace(/^R3 Protocol\s*>\s*/i, '')} copy={description.length > 110 ? `${description.slice(0, 110).replace(/\s+\S*$/, '')}…` : description || undefined} name={protocol.creator || 'ROUTINE³'} accent={acid} cta="View public protocol" href={`/protocol/${encodeURIComponent(protocol.id)}`} />;
+            })}</div>}
+          </section>}
+        </div></>}
         {tab === 'content' && <ContentBuilder profile={profile} offers={offers} protocols={protocols} recipes={recipes} />}
         {parentContext && <button type="button" onClick={returnToParent} style={{ ...btn, marginBottom: 16 }}>← Back to parent Protocol</button>}
         {copyError && <p role="alert">{copyError}</p>}
