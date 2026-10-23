@@ -1263,7 +1263,7 @@ export async function listKitchenEquipment(accessToken: string): Promise<Kitchen
 
 /* ── catalogue browsing: ROUTINE³ recipes, ingredients, fitness routines ── */
 export interface CatalogHazard { key: string; level: string }
-export interface CatalogFood { form?: 'raw' | 'processed' | null; processing?: string | null; id: string; name: string; image: string | null; category: string | null; description: string | null; healthScore: number | null; per100: Record<string, number>; hazards: CatalogHazard[]; meta: Array<[string, string | null]>; diets: string[] }
+export interface CatalogFood { form?: 'raw' | 'processed' | null; processing?: string | null; id: string; name: string; image: string | null; category: string | null; description: string | null; healthScore: number | null; per100: Record<string, number>; nutritionBasis?: 'per100g' | 'serving'; hazards: CatalogHazard[]; meta: Array<[string, string | null]>; diets: string[] }
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 /** Flat numeric keys of a nutrition_per_100g record (provenance keys starting with "_" are skipped). */
 export function per100Of(v: unknown): Record<string, number> {
@@ -1312,7 +1312,7 @@ export function mealSlotOf(name: string, group: string | null, time: string | nu
 }
 export type RecipeCatalogGroup = 'all' | 'meals' | 'drinks' | 'condiments';
 export async function browseRecipes(accessToken: string, f: { ids?: string[]; offset?: number; query?: string; cuisine?: string; meal?: string; diet?: string; group?: RecipeCatalogGroup; limit?: number }): Promise<CatalogFood[]> {
-  const p = ['select=id,name_common,image_primary_url,image_url,meal_slot,cuisine,description_simple,description,health_score,prep_time,cook_time,servings,nutrition_per_100g,elements_hazardous,dietary_info', 'is_published=is.true', 'order=health_score.desc.nullslast,name_common.asc,id.asc', `limit=${f.limit || 60}`, `offset=${f.offset || 0}`];
+  const p = ['select=id,name_common,image_primary_url,image_url,meal_slot,cuisine,description_simple,description,health_score,prep_time,cook_time,servings,nutrition_per_100g,nutrition_per_serving,elements_hazardous,dietary_info', 'is_published=is.true', 'order=health_score.desc.nullslast,name_common.asc,id.asc', `limit=${f.limit || 60}`, `offset=${f.offset || 0}`];
   if (f.ids?.length) p.push(`id=in.(${f.ids.map((i) => `"${i.replace(/"/g, '')}"`).join(',')})`);
   if (f.query?.trim()) p.push(`name_common=ilike.*${q(f.query)}*`);
   if (f.cuisine) p.push(`cuisine=eq.${encodeURIComponent(f.cuisine)}`);
@@ -1323,8 +1323,12 @@ export async function browseRecipes(accessToken: string, f: { ids?: string[]; of
   if (f.group === 'condiments') p.push('category=eq.Condiment');
   const res = await fetch(`${rest()}/catalog_recipes?${p.join('&')}`, { headers: headers(accessToken) });
   if (!res.ok) throw new Error(`Could not load recipes (${res.status})`);
-  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name_common, image: r.image_primary_url || r.image_url || null, category: r.meal_slot || null, description: txt(r.description_simple) || txt(r.description), healthScore: num(r.health_score), per100: per100Of(r.nutrition_per_100g), hazards: hazardsOf(r.elements_hazardous), diets: dietsOf(r.dietary_info),
-    meta: [['Cuisine', txt(r.cuisine)], ['Meal', txt(r.meal_slot)], ['Prep', r.prep_time ? `${r.prep_time} min` : null], ['Cook', r.cook_time ? `${r.cook_time} min` : null], ['Serves', r.servings ? String(r.servings) : null]] }));
+  return ((await res.json()) as any[]).map((r) => {
+    const per100 = per100Of(r.nutrition_per_100g), serving = per100Of(r.nutrition_per_serving);
+    const hasPer100 = Object.keys(per100).length > 0;
+    return { id: r.id, name: r.name_common, image: r.image_primary_url || r.image_url || null, category: r.meal_slot || null, description: txt(r.description_simple) || txt(r.description), healthScore: num(r.health_score), per100: hasPer100 ? per100 : serving, nutritionBasis: hasPer100 ? 'per100g' as const : 'serving' as const, hazards: hazardsOf(r.elements_hazardous), diets: dietsOf(r.dietary_info),
+      meta: [['Cuisine', txt(r.cuisine)], ['Meal', txt(r.meal_slot)], ['Prep', txt(r.prep_time)], ['Cook', txt(r.cook_time)], ['Serves', r.servings ? String(r.servings) : null]] };
+  });
 }
 export async function recipeIngredientNames(accessToken: string, recipeId: string): Promise<Array<{ name: string; grams: number | null }>> {
   const res = await fetch(`${rest()}/catalog_recipe_ingredients?select=ingredient_name,amount_g,sort_order&recipe_id=eq.${recipeId}&order=sort_order.asc.nullslast`, { headers: headers(accessToken) });

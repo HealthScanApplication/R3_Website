@@ -19,4 +19,16 @@ describe('recipe catalog groups', () => {
     if (expected) expect(url).toContain(expected);
     else expect(url).not.toContain('category=');
   });
+
+  it('uses per-serving nutrition when per-100g values are unavailable', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => [{
+      id: 'recipe', name_common: 'Recipe', nutrition_per_100g: {},
+      nutrition_per_serving: { energy_kcal: 455, protein_g: 17 }, dietary_info: {},
+    }] })));
+
+    const [recipe] = await browseRecipes('token', {});
+
+    expect(recipe.nutritionBasis).toBe('serving');
+    expect(recipe.per100).toMatchObject({ energy_kcal: 455, protein_g: 17 });
+  });
 });
