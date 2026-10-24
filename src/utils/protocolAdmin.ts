@@ -29,6 +29,9 @@ export interface AdminProtocol {
   category: string | null;
   type: string | null;
   target_gender: string | null;
+  target_age_min?: number | null;
+  target_age_max?: number | null;
+  tags?: string[] | null;
   creator: string | null;
   source: string | null;
   image_url: string | null;
@@ -261,9 +264,9 @@ export async function updateProtocolWithAI(
 }
 
 const PROTOCOL_COLS =
-  'id,user_id,name,description,category,type,target_gender,creator,source,image_url,health_score,total_days,is_suggested,is_active,is_public,start_time,sort_order,updated_at,profile_role,profile_name,profile_image_url,schedule_basis';
+  'id,user_id,name,description,category,type,target_gender,creator,source,image_url,health_score,total_days,is_suggested,is_active,is_public,start_time,sort_order,updated_at,profile_role,profile_name,profile_image_url,schedule_basis,target_age_min,target_age_max,tags';
 let legacyProtocolColumns = false;
-const LEGACY_PROTOCOL_COLS = PROTOCOL_COLS.split(',').filter((column) => !['profile_role', 'profile_name', 'profile_image_url', 'schedule_basis'].includes(column)).join(',');
+const LEGACY_PROTOCOL_COLS = PROTOCOL_COLS.split(',').filter((column) => !['profile_role', 'profile_name', 'profile_image_url', 'schedule_basis', 'target_age_min', 'target_age_max', 'tags'].includes(column)).join(',');
 const ITEM_COLS =
   'id,protocol_id,display_name,item_type,kind,scope,scheduled_time,duration_minutes,group_name,day_number,sort_order,parent_protocol_item_id,has_children,category,subtype,hidden,enabled,notes,media_image_url,media_audio_url,amount,amount_unit,frequency_override,catalog_recipe_id,catalog_product_id,catalog_activity_id,catalog_ingredient_id,supplement_id,recurrence_type,recurrence_days_of_week,recurrence_interval_days,recurrence_interval_unit,recurrence_start_date,recurrence_end_date,scheduled_date,notifications_enabled,notification_lead_minutes,sets,reps,reps_display,weight_value,weight_unit,weight_display,rest_seconds,work_seconds,rounds,intensity,distance_value,distance_unit,load_type,intensity_variants,selected_intensity,filter';
 const LEGACY_ITEM_COLS = ITEM_COLS.split(',').filter((column) => !column.startsWith('media_')).join(',');

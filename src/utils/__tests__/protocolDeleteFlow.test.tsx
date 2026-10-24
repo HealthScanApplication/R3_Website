@@ -105,3 +105,23 @@ it('a cancelled dialog changes nothing', async () => {
   expect(api.deleteProtocol).not.toHaveBeenCalled();
   expect(screen.getByRole('heading', { level: 3, name: 'Sleep reset' })).toBeTruthy();
 });
+
+it('the cards say what each protocol is and who it is for, from data it actually has', async () => {
+  store.protocols = [
+    store.row('t1', 'Teen routine', { category: 'Hygiene', total_days: 1, target_gender: 'female', target_age_min: 13, target_age_max: 19 }),
+    store.row('t2', 'Slow start', { is_public: true, category: 'Morning', tags: ['morning', 'Wellness'], total_days: 14, target_gender: null }),
+    store.row('t3', 'Your Routine'),
+  ];
+  render(<Workspace profile={store.profile as any} onProfile={() => {}} />);
+  await screen.findByRole('heading', { level: 3, name: 'Teen routine' });
+  const cardOf = (title: string, kicker: RegExp) => screen.getAllByRole('heading', { level: 3, name: title }).map((h) => h.closest('.r3-pcard') as HTMLElement).find((c) => kicker.test(c.querySelector('.r3-pcard-kicker')!.textContent || ''))!;
+  const tagsOf = (card: HTMLElement) => [...card.querySelectorAll('.r3-pcard-tag')].map((t) => t.textContent);
+  // General list, already grouped by theme (the heading says Hygiene): who it is for only, and "1 day" not "1 days"
+  const teen = cardOf('Teen routine', /Draft/);
+  expect(teen.querySelector('.r3-pcard-kicker')!.textContent).toBe('1 day · Draft');
+  expect(tagsOf(teen)).toEqual(['Women', 'Ages 13–19']);
+  // Public list: the part of the day on the top line, the category from its tags, no audience made up
+  const slow = cardOf('Slow start', /Public$/);
+  expect(slow.querySelector('.r3-pcard-kicker')!.textContent).toBe('Morning · 14 days · Public');
+  expect(tagsOf(slow)).toEqual(['Wellness']);
+});
