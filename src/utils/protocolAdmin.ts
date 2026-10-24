@@ -275,14 +275,17 @@ let protocolColumns = PROTOCOL_COLS.split(',');
  */
 async function selectProtocols(accessToken: string, suffix: string): Promise<Response> {
   for (;;) {
-    const res = await fetch(`${rest()}/protocols?select=${protocolColumns.join(',')}${suffix}`, { headers: headers(accessToken) });
+    // The Protocols tab asks for two lists at once, so another request may be dropping columns while this one is in flight: judge the answer by what this request sent.
+    const sent = protocolColumns;
+    const res = await fetch(`${rest()}/protocols?select=${sent.join(',')}${suffix}`, { headers: headers(accessToken) });
     if (res.ok) return res;
     const failure = await res.clone().json().catch(() => null) as { code?: string; message?: string } | null;
     if (failure?.code !== '42703') return res;
     const named = /column (?:\w+\.)?(\w+) does not exist/i.exec(failure.message || '')?.[1];
-    const drop = named ? (OPTIONAL_PROTOCOL_COLUMNS.includes(named) && protocolColumns.includes(named) ? [named] : []) : protocolColumns.filter((column) => OPTIONAL_PROTOCOL_COLUMNS.includes(column));
-    if (!drop.length) return res;
-    protocolColumns = protocolColumns.filter((column) => !drop.includes(column));
+    const missing = named ? (OPTIONAL_PROTOCOL_COLUMNS.includes(named) && sent.includes(named) ? [named] : []) : sent.filter((column) => OPTIONAL_PROTOCOL_COLUMNS.includes(column));
+    if (!missing.length) return res;
+    // If another request has already dropped it, asking again with the current list is all that is needed.
+    protocolColumns = protocolColumns.filter((column) => !missing.includes(column));
   }
 }
 const ITEM_COLS =
