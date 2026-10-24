@@ -10,6 +10,7 @@ import { RoutineMark } from '../Header';
 import { ContentStudio } from './ContentStudio';
 import { CombineProtocols, DietBuilder, FitnessBuilder } from './GuardianBuilders';
 import { ProtocolCard, ProtocolCardGrid, clipCopy } from './ProtocolCard';
+import { OfferProtocolItems } from './OfferProtocolItems';
 import { ProtocolRemovalDialog, type ProtocolRemoval } from './ProtocolRemoval';
 import { PROTOCOL_THEMES, daysLabel, protocolTags, protocolTheme, protocolWhen } from '../../utils/protocolTags';
 import { defaultAvatarKeyFor } from '../../utils/memberAvatar';
@@ -1264,7 +1265,7 @@ function GuardianFunnel({ profile, offers, ramp, accent, headingFont, reviews = 
   </>;
 }
 
-type SiteHeroCard = { key: string; eyebrow?: string; title: string; copy?: string; href?: string; onClick?: () => void; kind?: string; price?: string };
+type SiteHeroCard = { key: string; offerTitle?: string; eyebrow?: string; title: string; copy?: string; href?: string; onClick?: () => void; kind?: string; price?: string };
 const productArt = (kind?: string): TagArt | undefined => kind ? (offerTypeArt as Record<string, TagArt>)[kind] || (freeOfferArt as Record<string, TagArt>)[kind] : undefined;
 // Light version of the dashboard offer card (art, author, title, value stars, price) for the public site and funnel.
 // Review stats for offer cards: average + count of published reviews, or nothing when there are none.
@@ -1448,7 +1449,7 @@ function ReviewsPanel({ userId, slug }: { userId: string; slug: string }) {
     {reviews.length > 0 && <div style={{ display: 'grid', gap: 6, marginTop: 14 }}><span style={label}>Received</span>{reviews.map((r) => <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, borderTop: `1px solid ${line}`, paddingTop: 8, fontSize: 11, opacity: r.status === 'hidden' ? .5 : 1 }}><span style={{ color: acid }}>{'★'.repeat(r.rating)}</span><span style={{ flex: 1, color: ink }}>{r.body} <span style={{ color: muted }}>· {r.reviewer_name}</span></span><button type="button" onClick={() => toggle(r)} style={small}>{r.status === 'published' ? 'Hide' : 'Show'}</button></div>)}</div>}
   </section>;
 }
-function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, accent, headingFont, background, backgroundIsVideo = false, greyscale = false, cards, headlineStyle = 'editorial', reviewSummary = {}, audience }: { audience?: string; reviewSummary?: { rating?: number; reviewCount?: number }; headlineStyle?: HeadlineStyle; name: string; avatarUrl?: string | null; specialties: string[]; headline: string; tags: string[]; bio: string; accent: string; headingFont: string; background?: string | null; backgroundIsVideo?: boolean; greyscale?: boolean; cards: SiteHeroCard[] }) {
+function GuardianSiteHero({ guideId, name, avatarUrl, specialties, headline, tags, bio, accent, headingFont, background, backgroundIsVideo = false, greyscale = false, cards, headlineStyle = 'editorial', reviewSummary = {}, audience }: { guideId?: string; audience?: string; reviewSummary?: { rating?: number; reviewCount?: number }; headlineStyle?: HeadlineStyle; name: string; avatarUrl?: string | null; specialties: string[]; headline: string; tags: string[]; bio: string; accent: string; headingFont: string; background?: string | null; backgroundIsVideo?: boolean; greyscale?: boolean; cards: SiteHeroCard[] }) {
   return <section style={{ position: 'relative', overflow: 'hidden', minHeight: 'min(720px,calc(100vh - 64px))', display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', alignItems: 'center', backgroundImage: background && !backgroundIsVideo ? `linear-gradient(rgba(242,239,231,.66),rgba(242,239,231,.66)),url(${background})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: greyscale ? 'luminosity' : 'normal', color: '#11120F' }}>
     {background && backgroundIsVideo && <><video src={background} autoPlay muted loop playsInline aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'none' }} /><span aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'rgba(242,239,231,.66)' }} /></>}
     <div style={{ position: 'relative', zIndex: 2, width: '100%', maxWidth: 1240, margin: '0 auto', boxSizing: 'border-box', padding: 'clamp(40px,7cqw,96px) clamp(24px,6cqw,84px)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,300px),1fr))', gap: 'clamp(28px,5cqw,72px)', alignItems: 'center' }}>
@@ -1464,7 +1465,11 @@ function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, a
       </div>
       <div style={{ display: 'grid', gap: 12 }}>
         <span style={{ fontFamily: APP.font, color: APP.greenDark, fontSize: 15, fontWeight: 600 }}>Explore my offers</span>
-        {cards.map((card) => <ProductCard key={card.key} {...reviewSummary} audience={audience} kind={card.kind} eyebrow={card.eyebrow} title={card.title} copy={card.copy} price={card.price} name={name} avatarUrl={avatarUrl} accent={accent} href={card.href} onClick={card.onClick} />)}
+        {cards.map((card) => <Fragment key={card.key}>
+          <ProductCard {...reviewSummary} audience={audience} kind={card.kind} eyebrow={card.eyebrow} title={card.title} copy={card.copy} price={card.price} name={name} avatarUrl={avatarUrl} accent={accent} href={card.href} onClick={card.onClick} />
+          {/* A routine offer shows the routine it delivers, step by step, under its card. */}
+          {guideId && card.offerTitle && (card.kind === 'routine' || card.kind === 'routine_guidance') && <OfferProtocolItems guideId={guideId} offerTitle={card.offerTitle} />}
+        </Fragment>)}
       </div>
     </div>
   </section>;
@@ -1527,8 +1532,8 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
     </header>}
     <main>
       {/* Shared with the builder preview, so what Guardians build is what they publish. */}
-      <GuardianSiteHero audience={audienceLabel(profile.social_links?.audience_details)} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={profile.display_name} avatarUrl={profile.avatar_url} specialties={profile.specialties} headline={profile.headline || profile.display_name} tags={publicExpertiseTags} bio={profile.bio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} greyscale={publicGreyscale}
-        cards={valueRamps.filter((ramp) => ramp.status === 'published').length ? valueRamps.filter((ramp) => ramp.status === 'published').map((ramp) => ({ key: ramp.id, eyebrow: ramp.problem || undefined, title: customerFacingOfferTitle(offers.find((offer) => offer.id === ramp.offer_ids[0])?.title || ramp.name), copy: offers.find((offer) => offer.id === ramp.offer_ids[0])?.description || '', kind: offers.find((offer) => offer.id === ramp.offer_ids[0])?.kind, price: offers.find((offer) => offer.id === ramp.offer_ids[0])?.access_model === 'free' ? 'Free' : undefined, href: pathSlug === encodeURIComponent(ramp.slug) ? '#offers' : `/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}` })) : freeOffers.slice(0, 1).map((offer) => ({ key: offer.id, eyebrow: profile.specialties.slice(0, 2).join(' · '), title: customerFacingOfferTitle(offer.title), copy: offer.description || '', kind: offer.kind, price: 'Free', href: '#start' }))} />
+      <GuardianSiteHero guideId={profile.user_id} audience={audienceLabel(profile.social_links?.audience_details)} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={profile.display_name} avatarUrl={profile.avatar_url} specialties={profile.specialties} headline={profile.headline || profile.display_name} tags={publicExpertiseTags} bio={profile.bio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} greyscale={publicGreyscale}
+        cards={valueRamps.filter((ramp) => ramp.status === 'published').length ? valueRamps.filter((ramp) => ramp.status === 'published').map((ramp) => ({ key: ramp.id, offerTitle: offers.find((offer) => offer.id === ramp.offer_ids[0])?.title || ramp.name, eyebrow: ramp.problem || undefined, title: customerFacingOfferTitle(offers.find((offer) => offer.id === ramp.offer_ids[0])?.title || ramp.name), copy: offers.find((offer) => offer.id === ramp.offer_ids[0])?.description || '', kind: offers.find((offer) => offer.id === ramp.offer_ids[0])?.kind, price: offers.find((offer) => offer.id === ramp.offer_ids[0])?.access_model === 'free' ? 'Free' : undefined, href: pathSlug === encodeURIComponent(ramp.slug) ? '#offers' : `/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}` })) : freeOffers.slice(0, 1).map((offer) => ({ key: offer.id, offerTitle: offer.title, eyebrow: profile.specialties.slice(0, 2).join(' · '), title: customerFacingOfferTitle(offer.title), copy: offer.description || '', kind: offer.kind, price: 'Free', href: '#start' }))} />
       {reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}
       <GuardianFunnel key={selectedRamp?.id || 'default'} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={offers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} />
       <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} />

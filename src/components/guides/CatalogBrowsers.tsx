@@ -423,6 +423,87 @@ export const phaseOf = (phases: ReturnType<typeof routinePhases>, day: number) =
 /** Description text stored as light markdown ("### The steps …", "**bold**"): paragraphs at each heading, markers removed. */
 export const descriptionParagraphs = (text: string) => text.split(/\s*#{2,}\s*/).map((p) => p.replace(/\*\*(.+?)\*\*/g, '$1').trim()).filter(Boolean);
 
+/**
+ * What the routine browser works out from a routine's raw steps: the week view, the tree of sub-steps, the images of the
+ * steps that link to a catalogue activity or recipe, and (for a builder, `suggest`) a catalogue recipe for each generic meal.
+ */
+export function useRoutineView({ accessToken, steps, section, totalDays, description, suggest = true }: { accessToken: string; steps: RoutineStep[] | null; section: string; totalDays?: number | null; description?: string | null; suggest?: boolean }) {
+  // Only the routine's own steps; daily basics (hygiene, sleep) are suggested beside it, not part of it.
+  const basics = (steps || []).filter((s) => isBasicFor(s, section));
+  const basicIds = new Set(basics.map((s) => s.id));
+  const weekView = expandWeekly(mergeHygieneSets((steps || []).filter((s) => !isBasicFor(s, section) && !(s.parentId && basicIds.has(s.parentId)))));
+  const own = weekView.steps, weekdays = weekView.weekdays;
+  // A repeating week is a 7-day view (Mon–Sun); a numbered cycle uses its Length (total_days) or its last numbered day.
+  const days = !steps ? 1 : weekdays ? 7 : Math.max(1, totalDays || 1, ...steps.map((s) => s.day || 1));
+  const dayName = (d: number) => (weekdays ? WEEKDAYS_FULL[d - 1] : `Day ${d}`);
+  const tree = stepTree(own);
+  const isRule = (s: RoutineStep) => !!s.kind?.startsWith('rule');
+  // A generic meal slot ("Breakfast", "Lunch") gets a suggested catalogue recipe that follows this Protocol's diet rules.
+  const [suggestions, setSuggestions] = useState<Record<string, CatalogFood>>({});
+  // Images for the steps that link to a catalogue activity or recipe, and the one whose modal is open.
+  const [media, setMedia] = useState<Record<string, { name: string; image: string | null }>>({});
+  const [modal, setModal] = useState<StepTarget | null>(null);
+  useEffect(() => {
+    setMedia({}); setModal(null);
+    if (!steps?.length) return;
+    let live = true;
+    Promise.all([stepMedia(accessToken, 'activity', steps.map((x) => x.activityId || '')), stepMedia(accessToken, 'recipe', steps.map((x) => x.recipeId || ''))]).then(([a, r]) => { if (live) setMedia({ ...a, ...r }); });
+    return () => { live = false; };
+  }, [steps]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setSuggestions({});
+    if (!steps?.length || !suggest) return;
+    const slots = own.filter((s) => !isRule(s) && !s.recipeId && GENERIC_MEAL.test(s.name.trim()) && s.id).map((s) => ({ s, slot: mealSlotOf(s.name, s.group, s.time) })).filter((x) => x.slot);
+    if (!slots.length) return;
+    const { diet, avoid } = protocolDiet(own.filter(isRule).map((x) => x.name), description || '');
+    let live = true;
+    (async () => {
+      const out: Record<string, CatalogFood> = {};
+      for (const slot of [...new Set(slots.map((x) => x.slot!))]) {
+        const pool = (await browseRecipes(accessToken, { meal: slot === 'Snack' ? 'Snack' : slot, diet: diet || undefined, limit: 40 }).catch(() => [])).filter((f) => f.image && !(avoid && avoid.test(f.name)));
+        slots.filter((x) => x.slot === slot).forEach((x, k) => { if (pool.length) out[x.s.id!] = pool[k % pool.length]; });
+      }
+      if (live) setSuggestions(out);
+    })();
+    return () => { live = false; };
+  }, [steps, suggest]); // eslint-disable-line react-hooks/exhaustive-deps
+  return { basics, own, weekdays, days, dayName, tree, isRule, media, suggestions, modal, setModal };
+}
+export type RoutineView = ReturnType<typeof useRoutineView>;
+
+/** A routine's steps by day and part of the day, each smart list with its steps on the left and its rules on the right: the right side of the routine browser. */
+export function RoutineStepsList({ view, steps, description, day = 1, listRef }: { view: RoutineView; steps: RoutineStep[] | null; description?: string | null; day?: number; listRef?: React.Ref<HTMLDivElement> }) {
+  const { basics, own, weekdays, days, dayName, tree, isRule, media, suggestions, setModal } = view;
+  return <>
+          <div style={kicker}>Steps{steps ? ` · ${own.length}` : ''}</div>
+          {!steps ? <span style={{ color: muted, fontSize: 11 }}>Loading…</span> : <div ref={listRef} style={{ display: 'grid', gap: 10, ...(days > 1 ? { maxHeight: '78vh', overflowY: 'auto', paddingRight: 6, position: 'relative' } : {}) }}>{partsOfDay(tree.top, dayName).map((g, gi, all) => <section key={g.key} aria-label={g.label} data-day={g.day > 0 && all[gi - 1]?.day !== g.day ? g.day : undefined} style={g.day > 0 && all[gi - 1]?.day !== g.day ? { borderTop: `1px solid ${g.day === day ? acid : line}`, paddingTop: 10 } : undefined}>{g.day > 0 && all[gi - 1]?.day !== g.day && <div style={{ fontSize: 13, fontWeight: 700, color: g.day === day ? acid : ink, margin: '0 0 6px' }}>{!weekdays && days > 7 ? `Week ${Math.ceil(g.day / 7)} · ` : ''}{dayName(g.day)}{!weekdays && phaseOf(routinePhases(description || null), g.day) ? <span style={{ color: muted, fontWeight: 400 }}> · {phaseOf(routinePhases(description || null), g.day)}</span> : null}</div>}
+            <div style={{ ...kicker, color: g.rules ? warn : muted, margin: '0 0 4px' }}>{g.label} <span style={{ opacity: .7 }}>· {g.steps.length}</span></div>
+            {/* Each smart list: its steps on the left, every rule for it (its own and its steps') on the right. */}
+            {smartListBlocks(g.steps, tree.kids).map(([list, acts, rules]) => <div key={list} style={{ marginLeft: 12, borderLeft: `2px solid ${line}`, paddingLeft: 10, marginBottom: 8 }}>
+              <div style={{ color: muted, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', margin: '0 0 4px' }}>{list}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: acts.length && rules.length ? 'minmax(0,3fr) minmax(0,2fr)' : 'minmax(0,1fr)', gap: 14, alignItems: 'start' }}>
+                {acts.length > 0 && <ol style={{ margin: '0 0 0 4px', paddingLeft: 12, borderLeft: `1px solid ${line}`, listStyle: 'none', display: 'grid', gap: 4, fontSize: 12 }}>{acts.map((s, i) => <li key={i}><StepPrefix {...stepTarget(s, list, media, suggestions)} list={list} onOpen={setModal} /><span style={{ color: acid }}>{s.time}</span>{s.time ? ' · ' : ''}{s.name}{[s.sets && s.reps ? `${s.sets} × ${s.reps}` : null, s.weight, s.minutes ? `${s.minutes} min` : null].filter(Boolean).map((x) => <span key={x} style={{ color: acid }}> · {x}</span>)}{routineGroupLabel(s.group) ? <span style={{ color: muted }}> · {routineGroupLabel(s.group)}</span> : null}
+                  <StepNote text={s.notes} />
+                  {tree.kids(s).filter((k) => !isRule(k)).length > 0 && <ul style={{ listStyle: 'none', margin: '2px 0', paddingLeft: 14, borderLeft: `1px solid ${line}`, display: 'grid', gap: 1 }}>{tree.kids(s).filter((k) => !isRule(k)).map((k, j) => <li key={j} style={{ fontSize: 11 }}>{k.name}{k.time && k.time !== s.time ? <span style={{ color: acid }}> · {k.time}</span> : null}<StepNote text={k.notes} indent={0} /></li>)}</ul>}
+                  {s.id && suggestions[s.id] && <button type="button" onClick={() => setModal({ kind: 'recipe', id: suggestions[s.id!].id, name: suggestions[s.id!].name })} style={{ display: 'block', border: 0, background: 'transparent', color: acid, fontSize: 11, padding: '2px 0 0 34px', cursor: 'pointer', textAlign: 'left' }}>Suggested: {suggestions[s.id].name}{suggestions[s.id].healthScore != null ? ` · ♥ ${Math.round(suggestions[s.id].healthScore!)}` : ''}</button>}</li>)}</ol>}
+                {rules.length > 0 && <ul aria-label={`${list} rules`} style={{ listStyle: 'none', margin: 0, padding: acts.length ? '0 0 0 10px' : 0, borderLeft: acts.length ? `1px dashed ${line}` : 0, display: 'grid', gap: 3, fontSize: 11 }}>{rules.map((x, k) => <li key={k} style={{ color: warn }}>{x.dont ? 'Don’t: ' : 'Do: '}<span style={{ color: ink }}>{x.name}</span>{x.on.length ? <span style={{ color: muted }}> · {x.on.join(', ')}</span> : null}</li>)}</ul>}
+              </div>
+            </div>)}</section>)}
+            {basics.length > 0 && <details style={{ borderTop: `1px solid ${line}`, paddingTop: 8 }}><summary style={{ cursor: 'pointer', color: muted, fontSize: 11 }}>Suggested daily basics · {basics.length} <span style={{ opacity: .7 }}>(hygiene and sleep: not part of this routine)</span></summary>
+              <ul style={{ margin: '6px 0 0', paddingLeft: 18, display: 'grid', gap: 2, fontSize: 11, color: muted }}>{basics.map((s, i) => <li key={i}>{s.time ? `${s.time} · ` : ''}{s.name}</li>)}</ul></details>}
+          </div>}
+  </>;
+}
+
+/** The same list for a page with no phone beside it: the steps, and the catalogue card a step opens. */
+export function RoutineStepsPanel({ accessToken, steps, description, section = 'fitness', totalDays }: { accessToken: string; steps: RoutineStep[] | null; description?: string | null; section?: string; totalDays?: number | null }) {
+  const view = useRoutineView({ accessToken, steps, section, totalDays, description, suggest: false });
+  return <div style={{ minWidth: 0 }}>
+    <RoutineStepsList view={view} steps={steps} description={description} day={0} />
+    {view.modal && <StepModal accessToken={accessToken} target={view.modal} onClose={() => view.setModal(null)} />}
+  </div>;
+}
+
 export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbbell }: { accessToken: string; section?: RoutineSection; Icon?: typeof Dumbbell }) {
   const cfg = ROUTINE_SECTIONS[section];
   const names: string[] = 'names' in cfg ? [...cfg.names] : [];
@@ -445,46 +526,8 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
   useEffect(() => { if (!open) return; let live = true; setSteps(null); setDay(1); routineSteps(accessToken, open).then((s) => { if (live) setSteps(s); }); return () => { live = false; }; }, [accessToken, open]);
   // The cycle length is the routine's Length (total_days: Day / Week / 2 weeks / Month), or its last numbered day.
   // The app shows one day: every-day items (no day_number) plus that day's.
-  // Only the routine's own steps; daily basics (hygiene, sleep) are suggested beside it, not part of it.
-  const basics = (steps || []).filter((s) => isBasicFor(s, section));
-  const basicIds = new Set(basics.map((s) => s.id));
-  const weekView = expandWeekly(mergeHygieneSets((steps || []).filter((s) => !isBasicFor(s, section) && !(s.parentId && basicIds.has(s.parentId)))));
-  const own = weekView.steps, weekdays = weekView.weekdays;
-  // A repeating week is a 7-day view (Mon–Sun); a numbered cycle uses its Length (total_days) or its last numbered day.
-  const days = !steps ? 1 : weekdays ? 7 : Math.max(1, items.find((r) => r.id === open)?.totalDays || 1, ...steps.map((s) => s.day || 1));
-  const dayName = (d: number) => (weekdays ? WEEKDAYS_FULL[d - 1] : `Day ${d}`);
-  const tree = stepTree(own);
-  const isRule = (s: RoutineStep) => !!s.kind?.startsWith('rule');
-  // A generic meal slot ("Breakfast", "Lunch") gets a suggested catalogue recipe that follows this Protocol's diet rules.
-  const [suggestions, setSuggestions] = useState<Record<string, CatalogFood>>({});
-  const openRoutine = items.find((x) => x.id === open);
-  // Images for the steps that link to a catalogue activity or recipe, and the one whose modal is open.
-  const [media, setMedia] = useState<Record<string, { name: string; image: string | null }>>({});
-  const [modal, setModal] = useState<StepTarget | null>(null);
-  useEffect(() => {
-    setMedia({}); setModal(null);
-    if (!steps?.length) return;
-    let live = true;
-    Promise.all([stepMedia(accessToken, 'activity', steps.map((x) => x.activityId || '')), stepMedia(accessToken, 'recipe', steps.map((x) => x.recipeId || ''))]).then(([a, r]) => { if (live) setMedia({ ...a, ...r }); });
-    return () => { live = false; };
-  }, [steps]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    setSuggestions({});
-    if (!steps?.length || !openRoutine) return;
-    const slots = own.filter((s) => !isRule(s) && !s.recipeId && GENERIC_MEAL.test(s.name.trim()) && s.id).map((s) => ({ s, slot: mealSlotOf(s.name, s.group, s.time) })).filter((x) => x.slot);
-    if (!slots.length) return;
-    const { diet, avoid } = protocolDiet(own.filter(isRule).map((x) => x.name), openRoutine.description || '');
-    let live = true;
-    (async () => {
-      const out: Record<string, CatalogFood> = {};
-      for (const slot of [...new Set(slots.map((x) => x.slot!))]) {
-        const pool = (await browseRecipes(accessToken, { meal: slot === 'Snack' ? 'Snack' : slot, diet: diet || undefined, limit: 40 }).catch(() => [])).filter((f) => f.image && !(avoid && avoid.test(f.name)));
-        slots.filter((x) => x.slot === slot).forEach((x, k) => { if (pool.length) out[x.s.id!] = pool[k % pool.length]; });
-      }
-      if (live) setSuggestions(out);
-    })();
-    return () => { live = false; };
-  }, [steps, open]); // eslint-disable-line react-hooks/exhaustive-deps
+  const view = useRoutineView({ accessToken, steps, section, totalDays: items.find((r) => r.id === open)?.totalDays, description: items.find((r) => r.id === open)?.description });
+  const { basics, own, weekdays, days, dayName, tree, isRule, media, suggestions, modal, setModal } = view;
   // Like the app: a step's rules are notes on its card, its sub-steps are indented cards under it.
   const dayItems = tree.top.filter((s) => (!s.day || s.day === day) && !isRule(s)).flatMap((s) => {
     const base = { item_type: s.itemType || undefined, kind: s.kind, scope: s.scope, time: s.time, group_name: routineGroupLabel(s.group), category: s.category, subtype: s.subtype };
@@ -526,23 +569,7 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
           <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 17, fontWeight: 600 }}>{r.name}</div>
           {r.description && descriptionParagraphs(r.description).map((t, k) => <p key={k} style={{ color: muted, fontSize: 12, lineHeight: 1.55, maxWidth: 760, margin: '0 0 8px' }}>{t}</p>)}
-          <div style={kicker}>Steps{steps ? ` · ${own.length}` : ''}</div>
-          {!steps ? <span style={{ color: muted, fontSize: 11 }}>Loading…</span> : <div ref={listRef} style={{ display: 'grid', gap: 10, ...(days > 1 ? { maxHeight: '78vh', overflowY: 'auto', paddingRight: 6, position: 'relative' } : {}) }}>{partsOfDay(tree.top, dayName).map((g, gi, all) => <section key={g.key} aria-label={g.label} data-day={g.day > 0 && all[gi - 1]?.day !== g.day ? g.day : undefined} style={g.day > 0 && all[gi - 1]?.day !== g.day ? { borderTop: `1px solid ${g.day === day ? acid : line}`, paddingTop: 10 } : undefined}>{g.day > 0 && all[gi - 1]?.day !== g.day && <div style={{ fontSize: 13, fontWeight: 700, color: g.day === day ? acid : ink, margin: '0 0 6px' }}>{!weekdays && days > 7 ? `Week ${Math.ceil(g.day / 7)} · ` : ''}{dayName(g.day)}{!weekdays && phaseOf(routinePhases(r.description), g.day) ? <span style={{ color: muted, fontWeight: 400 }}> · {phaseOf(routinePhases(r.description), g.day)}</span> : null}</div>}
-            <div style={{ ...kicker, color: g.rules ? warn : muted, margin: '0 0 4px' }}>{g.label} <span style={{ opacity: .7 }}>· {g.steps.length}</span></div>
-            {/* Each smart list: its steps on the left, every rule for it (its own and its steps') on the right. */}
-            {smartListBlocks(g.steps, tree.kids).map(([list, acts, rules]) => <div key={list} style={{ marginLeft: 12, borderLeft: `2px solid ${line}`, paddingLeft: 10, marginBottom: 8 }}>
-              <div style={{ color: muted, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', margin: '0 0 4px' }}>{list}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: acts.length && rules.length ? 'minmax(0,3fr) minmax(0,2fr)' : 'minmax(0,1fr)', gap: 14, alignItems: 'start' }}>
-                {acts.length > 0 && <ol style={{ margin: '0 0 0 4px', paddingLeft: 12, borderLeft: `1px solid ${line}`, listStyle: 'none', display: 'grid', gap: 4, fontSize: 12 }}>{acts.map((s, i) => <li key={i}><StepPrefix {...stepTarget(s, list, media, suggestions)} list={list} onOpen={setModal} /><span style={{ color: acid }}>{s.time}</span>{s.time ? ' · ' : ''}{s.name}{[s.sets && s.reps ? `${s.sets} × ${s.reps}` : null, s.weight, s.minutes ? `${s.minutes} min` : null].filter(Boolean).map((x) => <span key={x} style={{ color: acid }}> · {x}</span>)}{routineGroupLabel(s.group) ? <span style={{ color: muted }}> · {routineGroupLabel(s.group)}</span> : null}
-                  <StepNote text={s.notes} />
-                  {tree.kids(s).filter((k) => !isRule(k)).length > 0 && <ul style={{ listStyle: 'none', margin: '2px 0', paddingLeft: 14, borderLeft: `1px solid ${line}`, display: 'grid', gap: 1 }}>{tree.kids(s).filter((k) => !isRule(k)).map((k, j) => <li key={j} style={{ fontSize: 11 }}>{k.name}{k.time && k.time !== s.time ? <span style={{ color: acid }}> · {k.time}</span> : null}<StepNote text={k.notes} indent={0} /></li>)}</ul>}
-                  {s.id && suggestions[s.id] && <button type="button" onClick={() => setModal({ kind: 'recipe', id: suggestions[s.id!].id, name: suggestions[s.id!].name })} style={{ display: 'block', border: 0, background: 'transparent', color: acid, fontSize: 11, padding: '2px 0 0 34px', cursor: 'pointer', textAlign: 'left' }}>Suggested: {suggestions[s.id].name}{suggestions[s.id].healthScore != null ? ` · ♥ ${Math.round(suggestions[s.id].healthScore!)}` : ''}</button>}</li>)}</ol>}
-                {rules.length > 0 && <ul aria-label={`${list} rules`} style={{ listStyle: 'none', margin: 0, padding: acts.length ? '0 0 0 10px' : 0, borderLeft: acts.length ? `1px dashed ${line}` : 0, display: 'grid', gap: 3, fontSize: 11 }}>{rules.map((x, k) => <li key={k} style={{ color: warn }}>{x.dont ? 'Don’t: ' : 'Do: '}<span style={{ color: ink }}>{x.name}</span>{x.on.length ? <span style={{ color: muted }}> · {x.on.join(', ')}</span> : null}</li>)}</ul>}
-              </div>
-            </div>)}</section>)}
-            {basics.length > 0 && <details style={{ borderTop: `1px solid ${line}`, paddingTop: 8 }}><summary style={{ cursor: 'pointer', color: muted, fontSize: 11 }}>Suggested daily basics · {basics.length} <span style={{ opacity: .7 }}>(hygiene and sleep: not part of this routine)</span></summary>
-              <ul style={{ margin: '6px 0 0', paddingLeft: 18, display: 'grid', gap: 2, fontSize: 11, color: muted }}>{basics.map((s, i) => <li key={i}>{s.time ? `${s.time} · ` : ''}{s.name}</li>)}</ul></details>}
-          </div>}
+          <RoutineStepsList view={view} steps={steps} description={r.description} day={day} listRef={listRef} />
           </div>
         </div>}
       </Fragment>)}
