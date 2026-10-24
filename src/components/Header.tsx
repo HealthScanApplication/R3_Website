@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, type CSSProperties } from 'react';
 import { Button } from './ui/button';
 import { useAuth } from '../contexts/AuthContext';
 import { AuthModal } from './auth/AuthModal';
@@ -13,8 +13,6 @@ import {
   LogOut, 
   ChevronDown,
   Shield,
-  MoreHorizontal,
-  X,
   Share2,
   Compass
 } from 'lucide-react';
@@ -29,6 +27,8 @@ import {
 } from './ui/dropdown-menu';
 import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
 import { PageType } from '../types/app';
+import { HeaderMenu, R3_MENU_CSS, type MenuItemSpec } from './header/HeaderMenu';
+import { HEADER_GAP, HEADER_LINK_GAP, parked, useHeaderLayout } from './header/useHeaderLayout';
 
 // ROUTINE³ lockup — a square, single-bordered box joining the wordmark to the BETA tag,
 // same joined-seam treatment as the email/Subscribe container.
@@ -59,6 +59,18 @@ export function RoutineMark({ size = 28, textColor = '#16140F', hairline = '#161
   );
 }
 
+/**
+ * The header's links. `dropOrder`: the lower, the earlier a link moves into the menu when the bar is narrow.
+ * Guardians is last to go: it is the way into the Guardian portal.
+ */
+const NAV_LINKS: { key: string; label: string; section?: string; href?: string; dropOrder: number }[] = [
+  { key: 'routines', label: 'Routines', section: 'routines', dropOrder: 4 },
+  { key: 'features', label: 'Features', section: 'features', dropOrder: 3 },
+  { key: 'how', label: 'How It Works', section: 'how-it-works', dropOrder: 2 },
+  { key: 'faq', label: 'FAQ', section: 'faq', dropOrder: 1 },
+  { key: 'guardians', label: 'Guardians', href: '/guardians', dropOrder: 99 },
+];
+
 interface HeaderProps {
   onNavigateToProfile?: () => void;
   onNavigateToSettings?: () => void;
@@ -88,7 +100,6 @@ export function Header({
 }: HeaderProps) {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showWaitlistModal, setShowWaitlistModal] = useState(false);
   const [showReferralModal, setShowReferralModal] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
@@ -103,6 +114,8 @@ export function Header({
   
   // Use prop user if provided, otherwise fall back to context user
   const user = propUser || contextUser;
+  // What the bar shows at the width it has: links that fit, the rest (and the account actions on a narrow bar) in the menu.
+  const { layout, rowRef, logoRef, authRef, setLinkRef } = useHeaderLayout(NAV_LINKS, [user?.id, user?.email, waitlistPosition]);
   
   // FIXED: Use proper admin detection functions
   const adminInfo = getAdminUserInfo(user);
@@ -124,21 +137,35 @@ export function Header({
     });
   }
 
+  // The dialogs below are opened from buttons, not from a DialogTrigger, so Radix does not return focus when they close:
+  // remember what had focus when one opened and put focus back there (or on the menu button when that row is gone).
+  const dialogOpener = useRef<HTMLElement | null>(null);
+  const rememberOpener = () => { dialogOpener.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null; };
+  const restoreFocus = () => setTimeout(() => {
+    const el = dialogOpener.current;
+    dialogOpener.current = null;
+    if (el && document.contains(el) && getComputedStyle(el).visibility !== 'hidden') el.focus();
+  }, 0);
+
   const handleSignIn = () => {
+    rememberOpener();
     setAuthMode('signin');
     setShowAuthModal(true);
   };
 
   const handleSignUp = () => {
+    rememberOpener();
     setAuthMode('signup');
     setShowAuthModal(true);
   };
 
   const handleWaitlistModal = () => {
+    rememberOpener();
     setShowWaitlistModal(true);
   };
 
   const handleReferralModal = () => {
+    rememberOpener();
     setShowReferralModal(true);
   };
 
@@ -215,7 +242,6 @@ export function Header({
 
   const handleSignOut = async () => {
     await signOut();
-    setMobileMenuOpen(false);
   };
 
   const getUserInitials = (name: string) => {
@@ -228,7 +254,6 @@ export function Header({
   };
 
   const handleNavClick = (callback?: () => void) => {
-    setMobileMenuOpen(false);
     if (callback) {
       callback();
     } else {
@@ -237,8 +262,6 @@ export function Header({
   };
 
   const handleSectionScroll = (sectionId: string) => {
-    setMobileMenuOpen(false);
-    
     // If we're not on home page, navigate to home first
     if (currentPage !== 'home') {
       // Navigate to home and then scroll to section after a delay
@@ -314,6 +337,20 @@ export function Header({
   // Determine if admin button should be shown
   const showAdminButton = isAdmin || userIsAdmin || adminInfo.isAdmin;
 
+  // The menu: the links that did not fit, then (only when the account actions are not in the bar) the account.
+  const menuLinks: MenuItemSpec[] = NAV_LINKS.filter((l) => layout.overflow.includes(l.key)).map((l) => ({ key: l.key, label: l.label, href: l.href, onSelect: l.section ? () => handleSectionScroll(l.section!) : undefined }));
+  const menuAccount: MenuItemSpec[] = layout.authInline ? [] : user ? [
+    { key: 'dashboard', label: 'Dashboard', onSelect: () => handleNavClick(onNavigateToProfile) },
+    { key: 'guardian', label: 'Guardian workspace', href: '/guardians/workspace' },
+    { key: 'settings', label: 'Settings', onSelect: () => handleNavClick(onNavigateToSettings) },
+    { key: 'refer', label: 'Refer a friend', onSelect: handleReferralModal, opensDialog: true },
+    ...(showAdminButton ? [{ key: 'admin', label: 'Admin', tag: adminInfo.level?.toUpperCase() || 'ADMIN', onSelect: handleAdminClick }] : []),
+    { key: 'signout', label: 'Sign out', onSelect: handleSignOut },
+  ] : [
+    { key: 'signin', label: 'Sign in', onSelect: handleSignIn, opensDialog: true },
+    { key: 'subscribe', label: 'Subscribe', tone: 'primary' as const, onSelect: handleWaitlistModal, opensDialog: true },
+  ];
+
   // Enhanced header animation classes with email banner awareness
   const getHeaderAnimationClasses = () => {
     if (animationState === 'hiding') {
@@ -345,7 +382,7 @@ export function Header({
   // Shared cell for the joined header lockups (Sign in | Subscribe, Dashboard | Sign out).
   const lockupCell: React.CSSProperties = { height: 32, padding: '0 14px', border: 0, background: 'transparent', color: navText, fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 600, fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap', transition: 'color 350ms ease, border-color 350ms ease' };
   const navStrong = '#16140F';
-  const navHover = oura.forest;
+  const navLink: CSSProperties = { fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 600, fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.13em', color: navText, background: 'transparent', border: 'none', borderRadius: 2, cursor: 'pointer', whiteSpace: 'nowrap', padding: '8px 16px', textDecoration: 'none', transition: 'color 300ms cubic-bezier(0.4,0,0.2,1)' };
   const capsule = overHero
     // pure, neutral frosted blur — no dark tone
     ? { background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(30px) saturate(1.3)', WebkitBackdropFilter: 'blur(30px) saturate(1.3)', border: '1px solid rgba(255,255,255,0.24)', boxShadow: '0 12px 40px -24px rgba(0,0,0,0.28)' }
@@ -355,6 +392,7 @@ export function Header({
 
   return (
     <>
+      <style>{R3_MENU_CSS}</style>
       <header
         style={{ background: 'transparent', paddingTop: 14 }}
         className={`fixed left-0 right-0 z-40 header-transition ${
@@ -372,87 +410,26 @@ export function Header({
               transition: 'background 350ms ease, backdrop-filter 350ms ease, border-color 350ms ease, box-shadow 350ms ease',
             }}
           >
-          <div className="flex justify-between items-center h-16 md:flex-row">
-            {/* Logo & App Name */}
-            <div className="flex items-center cursor-pointer flex-shrink-0 md:justify-start justify-center md:flex-none flex-1" onClick={handleHomeNavigation}>
+          <div ref={rowRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: HEADER_GAP, height: 64 }}>
+            {/* Lockup */}
+            <div ref={logoRef as React.RefObject<HTMLDivElement>} className="flex items-center cursor-pointer flex-shrink-0" onClick={handleHomeNavigation}>
               <RoutineMark size={28} textColor={navStrong} />
             </div>
 
-            {/* Desktop Navigation - Centered and Optimized */}
-            <nav aria-label="Main navigation" className="hs-hdr-wide items-center justify-center flex-1 space-x-1">
-              <button
-                onClick={() => handleSectionScroll('routines')}
-                className="px-4 py-2"
-                style={{ fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.13em', color: navText, background: 'transparent', border: 'none', borderRadius: 999, cursor: 'pointer', whiteSpace: 'nowrap', transition: 'color 300ms cubic-bezier(0.4,0,0.2,1)' }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = navHover; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = navText; }}
-              >
-                <span style={{ fontSize: 14 }}>Routines</span>
-              </button>
-              <button
-                onClick={() => handleSectionScroll('features')}
-                className="px-4 py-2"
-                style={{ fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.13em', color: navText, background: 'transparent', border: 'none', borderRadius: 999, cursor: 'pointer', whiteSpace: 'nowrap', transition: 'color 300ms cubic-bezier(0.4,0,0.2,1)' }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = navHover; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = navText; }}
-              >
-                <span style={{ fontSize: 14 }}>Features</span>
-              </button>
-              <button
-                onClick={() => handleSectionScroll('how-it-works')}
-                className="px-4 py-2"
-                style={{ fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.13em', color: navText, background: 'transparent', border: 'none', borderRadius: 999, cursor: 'pointer', whiteSpace: 'nowrap', transition: 'color 300ms cubic-bezier(0.4,0,0.2,1)' }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = navHover; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = navText; }}
-              >
-                <span style={{ fontSize: 14 }}>How It Works</span>
-              </button>
-              <button
-                onClick={() => handleSectionScroll('faq')}
-                className="px-4 py-2"
-                style={{ fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.13em', color: navText, background: 'transparent', border: 'none', borderRadius: 999, cursor: 'pointer', whiteSpace: 'nowrap', transition: 'color 300ms cubic-bezier(0.4,0,0.2,1)' }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = navHover; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = navText; }}
-              >
-                <span style={{ fontSize: 14 }}>FAQ</span>
-              </button>
-              <a
-                href="/guardians"
-                className="px-4 py-2"
-                style={{ fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 600, fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.13em', color: navText, textDecoration: 'none', whiteSpace: 'nowrap', transition: 'color 300ms cubic-bezier(0.4,0,0.2,1)' }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = navHover; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = navText; }}
-              >
-                Guardians
-              </a>
+            {/* The links that fit. The rest are in the menu: Guardians is the last to go. A link that is not shown is parked
+                (kept in the page, off screen) so its width stays known. */}
+            <nav aria-label="Main navigation" aria-hidden={layout.inline.length ? undefined : true} style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: HEADER_LINK_GAP }}>
+              {NAV_LINKS.map((link) => {
+                const style: React.CSSProperties = { ...navLink, ...(layout.inline.includes(link.key) ? {} : parked) };
+                return link.href
+                  ? <a key={link.key} ref={setLinkRef(link.key)} className="r3-navlink" href={link.href} style={style}>{link.label}</a>
+                  : <button key={link.key} ref={setLinkRef(link.key)} className="r3-navlink" type="button" onClick={() => handleSectionScroll(link.section!)} style={style}><span style={{ fontSize: 14 }}>{link.label}</span></button>;
+              })}
             </nav>
 
-            {/* Mobile menu button */}
-            <div className="hs-hdr-narrow absolute right-4">
-              {user ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                  className="p-1"
-                  style={{ color: oura.body }}
-                >
-                  {mobileMenuOpen ? <X className="w-5 h-5" /> : <MoreHorizontal className="w-5 h-5" />}
-                </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                  style={{ color: oura.body }}
-                >
-                  {mobileMenuOpen ? <X className="w-5 h-5" /> : <MoreHorizontal className="w-5 h-5" />}
-                </Button>
-              )}
-            </div>
-
-            {/* User Authentication - Desktop */}
-            <div className="hs-hdr-wide items-center space-x-4 flex-shrink-0">
+            {/* Account actions: in the bar while they fit, otherwise in the menu. */}
+            <div ref={authRef as React.RefObject<HTMLDivElement>} style={layout.authInline ? { display: 'flex', alignItems: 'center', flexShrink: 0 } : parked}>
+            
               {user ? (
                 <div className="flex items-center space-x-3">
                   {/* User Information - Moved to left */}
@@ -463,7 +440,7 @@ export function Header({
                       className="flex items-center gap-2 h-auto p-2 hover:bg-gray-100"
                     >
                       <div className="hidden lg:flex flex-col items-end">
-                        <span className="text-sm font-medium text-right" style={{ color: navStrong, transition: 'color 350ms ease' }}>
+                        <span className="text-sm font-medium text-right" style={{ color: navStrong, transition: 'color 350ms ease', display: 'block', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {user.user_metadata?.full_name || user.user_metadata?.name || user.email}
                         </span>
                       </div>
@@ -480,8 +457,6 @@ export function Header({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56 r3-menu">
-                    {/* Hairline, uppercase menu to match the header lockups (scoped CSS: index.css is prebuilt). */}
-                    <style>{`.r3-menu{background:#FFFFFF!important;border:1px solid #16140F!important;border-radius:2px!important;padding:0!important;box-shadow:0 14px 34px rgba(22,20,15,.14)!important}.r3-menu [role=menuitem]{border-radius:0!important;padding:11px 14px!important;font-family:"Archivo","Inter",sans-serif!important;font-size:11px!important;font-weight:600!important;letter-spacing:.12em!important;text-transform:uppercase!important;color:#16140F!important}.r3-menu [role=menuitem]+[role=menuitem]{border-top:1px solid rgba(22,20,15,.12)}.r3-menu [role=menuitem]:focus,.r3-menu [role=menuitem]:hover{background:#F2EFE7!important}.r3-menu [role=separator]{margin:0!important;background:#16140F!important}.r3-menu svg{color:#16140F!important}`}</style>
                     <DropdownMenuItem onClick={handleReferralModal}>
                       <Share2 className="mr-2 h-4 w-4" />
                       <span>Refer a friend</span>
@@ -535,142 +510,9 @@ export function Header({
                 </div>
               )}
             </div>
+
+            {layout.menu && <HeaderMenu color={navText} groups={[menuLinks, menuAccount]} />}
           </div>
-
-          {/* Mobile Menu */}
-          {mobileMenuOpen && (
-            <div
-              className="hs-hdr-narrow"
-              style={{ borderTop: `1px solid ${oura.hairline}`, background: oura.cream }}
-            >
-              <div className="py-4">
-                {/* Navigation Section */}
-                <div className="px-4 mb-4">
-                  <h3 className="text-xs uppercase tracking-wider mb-3" style={{ color: oura.muted, fontWeight: 600 }}>
-                    Navigation
-                  </h3>
-                  <div className="space-y-1">
-                    <button
-                      onClick={() => handleSectionScroll('routines')}
-                      className="block w-full text-left px-3 py-3 rounded-lg font-medium transition-colors"
-                      style={{ color: oura.body }}
-                    >
-                      Routines
-                    </button>
-                    <button
-                      onClick={() => handleSectionScroll('features')}
-                      className="block w-full text-left px-3 py-3 rounded-lg font-medium transition-colors"
-                      style={{ color: oura.body }}
-                    >
-                      Features
-                    </button>
-                    <button
-                      onClick={() => handleSectionScroll('how-it-works')}
-                      className="block w-full text-left px-3 py-3 rounded-lg font-medium transition-colors"
-                      style={{ color: oura.body }}
-                    >
-                      How It Works
-                    </button>
-                    <button
-                      onClick={() => handleSectionScroll('faq')}
-                      className="block w-full text-left px-3 py-3 rounded-lg font-medium transition-colors"
-                      style={{ color: oura.body }}
-                    >
-                      FAQ
-                    </button>
-                    <a
-                      href="/guardians"
-                      className="block w-full text-left px-3 py-3 rounded-lg font-medium transition-colors"
-                      style={{ color: oura.body, textDecoration: 'none' }}
-                    >
-                      Guardians
-                    </a>
-                  </div>
-                </div>
-
-                {user ? (
-                  <>
-                    {/* User Account Section */}
-                    <div className="px-4 mb-4">
-                      <h3 className="text-xs uppercase tracking-wider mb-3" style={{ color: oura.muted, fontWeight: 600 }}>
-                        Account
-                      </h3>
-
-                      <div className="space-y-1">
-                        <button
-                          onClick={() => handleNavClick(onNavigateToProfile)}
-                          className="block w-full text-left px-3 py-3 rounded-lg font-medium transition-colors"
-                          style={{ color: oura.body }}
-                        >
-                          Profile
-                        </button>
-                        <button
-                          onClick={() => handleNavClick(onNavigateToSettings)}
-                          className="block w-full text-left px-3 py-3 rounded-lg font-medium transition-colors"
-                          style={{ color: oura.body }}
-                        >
-                          Settings
-                        </button>
-                        <button
-                          onClick={handleSignOut}
-                          className="block w-full text-left px-3 py-3 rounded-lg font-medium transition-colors"
-                          style={{ color: oura.body }}
-                        >
-                          Sign Out
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Admin Section (if applicable) */}
-                    {showAdminButton && (
-                      <div className="px-4 mb-4">
-                        <h3 className="text-xs font-semibold text-red-500 uppercase tracking-wider mb-3">
-                          Admin Tools
-                        </h3>
-                        <button 
-                          onClick={handleAdminClick}
-                          className="block w-full text-left px-3 py-3 text-red-700 hover:text-red-800 hover:bg-red-50 rounded-lg font-medium transition-colors"
-                        >
-                          Admin Panel
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Action Section */}
-                    <div className="px-4">
-                      <h3 className="text-xs uppercase tracking-wider mb-3" style={{ color: oura.muted, fontWeight: 600 }}>
-                        Actions
-                      </h3>
-                      {/* Mobile Refer Friends — unified outlined CTA */}
-                      <div className={`w-full ${isShaking ? 'animate-button-shake' : ''}`}>
-                        <button onClick={handleReferralModal} className="ed-cta" style={{ width: '100%' }}>
-                          <Share2 className="w-4 h-4" />
-                          Refer Friends
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {/* Guest Actions Section */}
-                    <div className="px-4">
-                      <h3 className="text-xs uppercase tracking-wider mb-3" style={{ color: oura.muted, fontWeight: 600 }}>
-                        Get Started
-                      </h3>
-                      <div className={isShaking ? 'animate-button-shake' : ''} style={{ display: 'flex', border: `1px solid ${oura.ink}`, borderRadius: 2 }}>
-                        <button onClick={handleSignIn} style={{ flex: 1, height: 46, border: 0, background: 'transparent', color: oura.ink, fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer' }}>
-                          Sign in
-                        </button>
-                        <button onClick={handleWaitlistModal} style={{ flex: 1, height: 46, border: 0, borderLeft: `1px solid ${oura.ink}`, background: 'transparent', color: oura.ink, fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer' }}>
-                          Subscribe
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
           </div>
         </div>
       </header>
@@ -678,12 +520,12 @@ export function Header({
       {/* Auth Modal */}
       <AuthModal 
         open={showAuthModal} 
-        onOpenChange={setShowAuthModal}
+        onOpenChange={(open) => { setShowAuthModal(open); if (!open) restoreFocus(); }}
         defaultTab={authMode === 'signin' ? 'login' : 'signup'}
       />
 
       {/* Waitlist Modal */}
-      <Dialog open={showWaitlistModal} onOpenChange={setShowWaitlistModal}>
+      <Dialog open={showWaitlistModal} onOpenChange={(open) => { setShowWaitlistModal(open); if (!open) restoreFocus(); }}>
         <DialogContent className="max-w-2xl">
           <DialogTitle className="sr-only">Subscribe to ROUTINE³</DialogTitle>
           <DialogDescription className="sr-only">
@@ -698,7 +540,7 @@ export function Header({
       {/* Referral Modal */}
       <SocialSharingModal 
         open={showReferralModal}
-        onOpenChange={setShowReferralModal}
+        onOpenChange={(open) => { setShowReferralModal(open); if (!open) restoreFocus(); }}
         userEmail={user?.email}
         referralCode={user ? generateConsistentReferralCode(user.email) : undefined}
         userName={user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || ''}

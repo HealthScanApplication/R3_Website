@@ -237,14 +237,6 @@
       .editorial-email-input.editorial-email-input::placeholder { color: #16140F !important; opacity: 1 !important; }
       /* desktop nav links — small, uppercase, letter-spaced (out-specifies the global button anti-zoom rule) */
       nav[aria-label="Main navigation"] button { font-size: 12px !important; font-weight: 600 !important; letter-spacing: 0.12em; text-transform: uppercase; }
-      /* header: collapse the inline nav + right actions into the 3-dots menu before they
-         overflow the rounded pill. Custom breakpoint because Tailwind's xl: isn't compiled. */
-      .hs-hdr-wide { display: flex; }
-      .hs-hdr-narrow { display: none; }
-      @media (max-width: 1199px) {
-        .hs-hdr-wide { display: none !important; }
-        .hs-hdr-narrow { display: block !important; }
-      }
     </style>
   </head>
 
