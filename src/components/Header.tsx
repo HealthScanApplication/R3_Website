@@ -1,4 +1,4 @@
-import { useState, useEffect, type CSSProperties } from 'react';
+import { useState, useEffect, useRef, type CSSProperties } from 'react';
 import { Button } from './ui/button';
 import { useAuth } from '../contexts/AuthContext';
 import { AuthModal } from './auth/AuthModal';
@@ -137,21 +137,35 @@ export function Header({
     });
   }
 
+  // The dialogs below are opened from buttons, not from a DialogTrigger, so Radix does not return focus when they close:
+  // remember what had focus when one opened and put focus back there (or on the menu button when that row is gone).
+  const dialogOpener = useRef<HTMLElement | null>(null);
+  const rememberOpener = () => { dialogOpener.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null; };
+  const restoreFocus = () => setTimeout(() => {
+    const el = dialogOpener.current;
+    dialogOpener.current = null;
+    if (el && document.contains(el) && getComputedStyle(el).visibility !== 'hidden') el.focus();
+  }, 0);
+
   const handleSignIn = () => {
+    rememberOpener();
     setAuthMode('signin');
     setShowAuthModal(true);
   };
 
   const handleSignUp = () => {
+    rememberOpener();
     setAuthMode('signup');
     setShowAuthModal(true);
   };
 
   const handleWaitlistModal = () => {
+    rememberOpener();
     setShowWaitlistModal(true);
   };
 
   const handleReferralModal = () => {
+    rememberOpener();
     setShowReferralModal(true);
   };
 
@@ -329,12 +343,12 @@ export function Header({
     { key: 'dashboard', label: 'Dashboard', onSelect: () => handleNavClick(onNavigateToProfile) },
     { key: 'guardian', label: 'Guardian workspace', href: '/guardians/workspace' },
     { key: 'settings', label: 'Settings', onSelect: () => handleNavClick(onNavigateToSettings) },
-    { key: 'refer', label: 'Refer a friend', onSelect: handleReferralModal },
+    { key: 'refer', label: 'Refer a friend', onSelect: handleReferralModal, opensDialog: true },
     ...(showAdminButton ? [{ key: 'admin', label: 'Admin', tag: adminInfo.level?.toUpperCase() || 'ADMIN', onSelect: handleAdminClick }] : []),
     { key: 'signout', label: 'Sign out', onSelect: handleSignOut },
   ] : [
-    { key: 'signin', label: 'Sign in', onSelect: handleSignIn },
-    { key: 'subscribe', label: 'Subscribe', tone: 'primary' as const, onSelect: handleWaitlistModal },
+    { key: 'signin', label: 'Sign in', onSelect: handleSignIn, opensDialog: true },
+    { key: 'subscribe', label: 'Subscribe', tone: 'primary' as const, onSelect: handleWaitlistModal, opensDialog: true },
   ];
 
   // Enhanced header animation classes with email banner awareness
@@ -368,7 +382,6 @@ export function Header({
   // Shared cell for the joined header lockups (Sign in | Subscribe, Dashboard | Sign out).
   const lockupCell: React.CSSProperties = { height: 32, padding: '0 14px', border: 0, background: 'transparent', color: navText, fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 600, fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap', transition: 'color 350ms ease, border-color 350ms ease' };
   const navStrong = '#16140F';
-  const navHover = oura.forest;
   const navLink: CSSProperties = { fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 600, fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.13em', color: navText, background: 'transparent', border: 'none', borderRadius: 2, cursor: 'pointer', whiteSpace: 'nowrap', padding: '8px 16px', textDecoration: 'none', transition: 'color 300ms cubic-bezier(0.4,0,0.2,1)' };
   const capsule = overHero
     // pure, neutral frosted blur — no dark tone
@@ -405,13 +418,12 @@ export function Header({
 
             {/* The links that fit. The rest are in the menu: Guardians is the last to go. A link that is not shown is parked
                 (kept in the page, off screen) so its width stays known. */}
-            <nav aria-label="Main navigation" style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: HEADER_LINK_GAP }}>
+            <nav aria-label="Main navigation" aria-hidden={layout.inline.length ? undefined : true} style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: HEADER_LINK_GAP }}>
               {NAV_LINKS.map((link) => {
                 const style: React.CSSProperties = { ...navLink, ...(layout.inline.includes(link.key) ? {} : parked) };
-                const hover = { onMouseEnter: (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.color = navHover; }, onMouseLeave: (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.color = navText; } };
                 return link.href
-                  ? <a key={link.key} ref={setLinkRef(link.key)} href={link.href} style={style} {...hover}>{link.label}</a>
-                  : <button key={link.key} ref={setLinkRef(link.key)} type="button" onClick={() => handleSectionScroll(link.section!)} style={style} {...hover}><span style={{ fontSize: 14 }}>{link.label}</span></button>;
+                  ? <a key={link.key} ref={setLinkRef(link.key)} className="r3-navlink" href={link.href} style={style}>{link.label}</a>
+                  : <button key={link.key} ref={setLinkRef(link.key)} className="r3-navlink" type="button" onClick={() => handleSectionScroll(link.section!)} style={style}><span style={{ fontSize: 14 }}>{link.label}</span></button>;
               })}
             </nav>
 
@@ -428,7 +440,7 @@ export function Header({
                       className="flex items-center gap-2 h-auto p-2 hover:bg-gray-100"
                     >
                       <div className="hidden lg:flex flex-col items-end">
-                        <span className="text-sm font-medium text-right" style={{ color: navStrong, transition: 'color 350ms ease' }}>
+                        <span className="text-sm font-medium text-right" style={{ color: navStrong, transition: 'color 350ms ease', display: 'block', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {user.user_metadata?.full_name || user.user_metadata?.name || user.email}
                         </span>
                       </div>
@@ -508,12 +520,12 @@ export function Header({
       {/* Auth Modal */}
       <AuthModal 
         open={showAuthModal} 
-        onOpenChange={setShowAuthModal}
+        onOpenChange={(open) => { setShowAuthModal(open); if (!open) restoreFocus(); }}
         defaultTab={authMode === 'signin' ? 'login' : 'signup'}
       />
 
       {/* Waitlist Modal */}
-      <Dialog open={showWaitlistModal} onOpenChange={setShowWaitlistModal}>
+      <Dialog open={showWaitlistModal} onOpenChange={(open) => { setShowWaitlistModal(open); if (!open) restoreFocus(); }}>
         <DialogContent className="max-w-2xl">
           <DialogTitle className="sr-only">Subscribe to ROUTINE³</DialogTitle>
           <DialogDescription className="sr-only">
@@ -528,7 +540,7 @@ export function Header({
       {/* Referral Modal */}
       <SocialSharingModal 
         open={showReferralModal}
-        onOpenChange={setShowReferralModal}
+        onOpenChange={(open) => { setShowReferralModal(open); if (!open) restoreFocus(); }}
         userEmail={user?.email}
         referralCode={user ? generateConsistentReferralCode(user.email) : undefined}
         userName={user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || ''}
