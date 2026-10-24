@@ -2,7 +2,7 @@ import { useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ArrowRight } from 'lucide-react';
 
 /**
- * Protocol card: the Guardian profile card (dark picture on top, small-caps kicker, serif title, one line of copy,
+ * Protocol card: the Guardian profile card (dark picture on top, small-caps kicker, serif title, a short description,
  * "VIEW →") with two moves on the picture. Resting, it is a tilt-shift photograph in black and white: sharp across the
  * middle, the top and bottom blurred as if the scene were a miniature. On hover, focus, or when the card is open, the
  * colour comes in and the blur eases off, and the card lifts and leans a few degrees toward the pointer.
@@ -29,7 +29,7 @@ export const PROTOCOL_CARD_CSS = `
 .r3-pcard-plate{position:absolute;left:50%;top:50%;width:150px;height:150px;object-fit:contain;transform:translate(-50%,-50%);filter:grayscale(1) brightness(.95);transition:filter 800ms var(--ease)}
 .r3-pcard:hover .r3-pcard-img,.r3-pcard:focus-visible .r3-pcard-img,.r3-pcard[data-pressed=true] .r3-pcard-img{filter:${COLOUR};transform:scale(1.035)}
 .r3-pcard:hover .r3-pcard-blur,.r3-pcard:focus-visible .r3-pcard-blur,.r3-pcard[data-pressed=true] .r3-pcard-blur{filter:${COLOUR} blur(3.5px);transform:scale(1.09)}
-.r3-pcard:hover .r3-pcard-plate,.r3-pcard:focus-visible .r3-pcard-plate{filter:grayscale(0) brightness(1.05)}
+.r3-pcard:hover .r3-pcard-plate,.r3-pcard:focus-visible .r3-pcard-plate,.r3-pcard[data-pressed=true] .r3-pcard-plate{filter:grayscale(0) brightness(1.05)}
 .r3-pcard-body{display:flex;flex:1;flex-direction:column;padding:20px}
 .r3-pcard-kicker{color:#667245;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
 .r3-pcard-title{font-family:${serif};font-size:28px;font-weight:300;line-height:1.02;margin:12px 0 8px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
@@ -81,8 +81,9 @@ export interface ProtocolCardProps {
 
 export function ProtocolCard({ title, kicker, copy, imageUrl, by, cta = 'View protocol', href, onClick, pressed }: ProtocolCardProps) {
   const ref = useRef<HTMLElement | null>(null);
-  const [broken, setBroken] = useState(false);
-  const photo = imageUrl && !broken ? imageUrl : null;
+  // The picture that failed, not a flag: a card that later gets a different picture tries it.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const photo = imageUrl && imageUrl !== failedUrl ? imageUrl : null;
   // The lean is written straight to CSS variables: no render per pointer move across a grid of cards.
   const lean = (event: React.PointerEvent<HTMLElement>) => {
     const el = ref.current;
@@ -96,7 +97,7 @@ export function ProtocolCard({ title, kicker, copy, imageUrl, by, cta = 'View pr
   const inner = <>
     <div className="r3-pcard-media">
       {photo ? <>
-        <img className="r3-pcard-img" src={photo} alt="" loading="lazy" onError={() => setBroken(true)} />
+        <img className="r3-pcard-img" src={photo} alt="" loading="lazy" onError={() => setFailedUrl(photo)} />
         <img className="r3-pcard-blur top" src={photo} alt="" aria-hidden="true" loading="lazy" />
         <img className="r3-pcard-blur bottom" src={photo} alt="" aria-hidden="true" loading="lazy" />
       </> : <img className="r3-pcard-plate" src={PROTOCOL_PLATE} alt="" loading="lazy" />}
