@@ -13,10 +13,12 @@ type GuardianModalProps = {
   footerStyle?: React.CSSProperties;
   closeLabel?: string;
   zIndex?: number;
+  /** A short confirmation: 520px wide and as tall as its content, not the full 640 × 760 frame. */
+  compact?: boolean;
 };
 
 /** Guardian-owned dialogs share one viewport-safe frame; only their body scrolls. */
-export function GuardianModal({ label, onClose, header, footer, children, panelStyle, headerStyle, bodyStyle, footerStyle, closeLabel = 'Close', zIndex = 1000 }: GuardianModalProps) {
+export function GuardianModal({ label, onClose, header, footer, children, panelStyle, headerStyle, bodyStyle, footerStyle, closeLabel = 'Close', zIndex = 1000, compact = false }: GuardianModalProps) {
   const panel = useRef<HTMLElement>(null);
   const close = useRef(onClose);
   close.current = onClose;
@@ -39,7 +41,7 @@ export function GuardianModal({ label, onClose, header, footer, children, panelS
   }
 
   return <div style={{ position: 'fixed', inset: 0, zIndex, background: 'rgba(0,0,0,.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 16, boxSizing: 'border-box', overflow: 'hidden' }}>
-    <section ref={panel} role="dialog" aria-modal="true" aria-label={label} onKeyDown={handleKeys} style={{ background: '#fff', color: '#111827', borderRadius: 16, boxShadow: '0 24px 80px rgba(0,0,0,.3)', ...panelStyle, width: 640, height: 760, maxWidth: '100%', maxHeight: '100%', minWidth: 0, minHeight: 0, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <section ref={panel} role="dialog" aria-modal="true" aria-label={label} onKeyDown={handleKeys} style={{ background: '#fff', color: '#111827', borderRadius: 16, boxShadow: '0 24px 80px rgba(0,0,0,.3)', ...panelStyle, width: compact ? 520 : 640, height: compact ? 'auto' : 760, maxWidth: '100%', maxHeight: '100%', minWidth: 0, minHeight: 0, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <header style={{ padding: 24, ...headerStyle, flexShrink: 0, position: 'relative', paddingRight: 64 }}>
         {header}
         <button type="button" aria-label={closeLabel} onClick={onClose} style={{ position: 'absolute', top: 16, right: 16, width: 32, height: 32, display: 'grid', placeItems: 'center', background: 'transparent', border: 0, borderRadius: 4, color: 'inherit', cursor: 'pointer' }}><X size={20} /></button>

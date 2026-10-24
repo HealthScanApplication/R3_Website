@@ -40,3 +40,12 @@ it('keeps the protocol builder primary action in the shared fixed footer', () =>
   expect(dialog.style.width).toBe('640px');
   expect(footer?.parentElement).toBe(dialog);
 });
+
+it('a compact confirmation is 520px wide and as tall as its content; the default frame is unchanged', () => {
+  const { rerender } = render(<GuardianModal compact label="Confirm" onClose={() => {}}><p>Sure?</p></GuardianModal>);
+  expect(screen.getByRole('dialog').style.width).toBe('520px');
+  expect(screen.getByRole('dialog').style.height).toBe('auto');
+  rerender(<GuardianModal label="Confirm" onClose={() => {}}><p>Sure?</p></GuardianModal>);
+  expect(screen.getByRole('dialog').style.width).toBe('640px');
+  expect(screen.getByRole('dialog').style.height).toBe('760px');
+});

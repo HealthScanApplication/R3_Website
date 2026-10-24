@@ -25,7 +25,7 @@ it('is a link when it goes to a page, and a toggle (aria-pressed, ink border) wh
   rerender(<ProtocolCard title="Open one" pressed onClick={() => {}} />);
   const card = screen.getByRole('button', { name: /Open one/ });
   expect(card.getAttribute('aria-pressed')).toBe('true');
-  expect(card.getAttribute('data-pressed')).toBe('true');
+  expect(card.closest('.r3-pcard')!.getAttribute('data-pressed')).toBe('true');
   rerender(<ProtocolCard title="Plain action" onClick={() => {}} />);
   expect(screen.getByRole('button', { name: /Plain action/ }).hasAttribute('aria-pressed')).toBe(false);
 });
@@ -66,7 +66,7 @@ it('an open card brings the colour into the fallback plate as it does into a pic
 
 it('leans toward the mouse and settles when it leaves; touch and zero-size boxes do nothing', () => {
   render(<ProtocolCard title="Leaning" />);
-  const card = screen.getByRole('button', { name: /Leaning/ });
+  const card = screen.getByRole('button', { name: /Leaning/ }).closest('.r3-pcard') as HTMLElement;
   card.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 400, right: 200, bottom: 400, x: 0, y: 0, toJSON: () => ({}) });
   // jsdom has no PointerEvent: a mouse event that carries a pointerType stands in for one.
   const move = (pointerType: string, clientX: number, clientY: number) => fireEvent(card, Object.assign(new MouseEvent('pointermove', { clientX, clientY, bubbles: true }), { pointerType }));
@@ -86,8 +86,8 @@ it('the stylesheet keeps the effect: black and white tilt-shift at rest, colour 
   expect(css).toMatch(/\.r3-pcard-blur\.top\{[^}]*mask-image:linear-gradient\(to bottom/);
   expect(css).toMatch(/\.r3-pcard-blur\.bottom\{[^}]*mask-image:linear-gradient\(to top/);
   expect(css).toMatch(/\.r3-pcard:hover \.r3-pcard-img[^{]*\{filter:grayscale\(0\)/);
-  expect(css).toMatch(/\.r3-pcard:focus-visible \.r3-pcard-img/);
-  expect(css).toMatch(/@media \(hover:none\)\{ \.r3-pcard-img\{filter:grayscale\(0\)/);
+  expect(css).toMatch(/\.r3-pcard:focus-within \.r3-pcard-img/);
+  expect(css).toMatch(/@media \(hover:none\),\(pointer:coarse\)\{[^@]*\.r3-pcard-img\{filter:grayscale\(0\)/);
   expect(css).toMatch(/@media \(prefers-reduced-motion:reduce\)\{[^@]*transform:none!important/);
 });
 
@@ -100,4 +100,33 @@ it('clipCopy cuts at a word and leaves short text alone', () => {
   expect(cut.length).toBeLessThanOrEqual(31);
   expect(cut.endsWith('…')).toBe(true);
   expect(cut).not.toMatch(/wor…$/);
+});
+
+it('an owner\'s card carries Edit and Delete beside the main control, not inside it', () => {
+  const onEdit = vi.fn(); const onDelete = vi.fn(); const open = vi.fn();
+  render(<ProtocolCard title="Mine" onClick={open} onEdit={onEdit} onDelete={onDelete} />);
+  const main = screen.getByRole('button', { name: /^Mine/ });
+  const edit = screen.getByRole('button', { name: 'Edit Mine' });
+  const del = screen.getByRole('button', { name: 'Delete Mine' });
+  expect(main.contains(edit)).toBe(false);
+  expect(main.contains(del)).toBe(false);
+  expect(main.closest('.r3-pcard')!.contains(edit) && main.closest('.r3-pcard')!.contains(del)).toBe(true);
+  fireEvent.click(edit); fireEvent.click(del);
+  expect(onEdit).toHaveBeenCalledTimes(1);
+  expect(onDelete).toHaveBeenCalledTimes(1);
+  expect(open).not.toHaveBeenCalled(); // the icon buttons do not also open the card
+});
+
+it('a card the viewer does not own has no Edit or Delete', () => {
+  render(<ProtocolCard title="Public one" href="/protocol/x" />);
+  expect(screen.queryByRole('button', { name: /Delete/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: /Edit/ })).toBeNull();
+});
+
+it('the action buttons show on hover and focus, always on touch, and the delete one turns red', () => {
+  const css = PROTOCOL_CARD_CSS.replace(/\s+/g, ' ');
+  expect(css).toMatch(/\.r3-pcard-actions\{[^}]*opacity:0;pointer-events:none/); // invisible buttons cannot be hit by a first tap or a stray click
+  expect(css).toMatch(/\.r3-pcard:hover \.r3-pcard-actions,\.r3-pcard:focus-within \.r3-pcard-actions\{opacity:1;pointer-events:auto/);
+  expect(css).toMatch(/@media \(hover:none\),\(pointer:coarse\)\{ \.r3-pcard-actions\{opacity:1;pointer-events:auto/);
+  expect(css).toMatch(/\.r3-pcard-act\.danger:hover\{background:#B4472F/);
 });

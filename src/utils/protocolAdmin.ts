@@ -397,6 +397,91 @@ export async function updateProtocol(
   return first(await handle(res, 'Update protocol'));
 }
 
+/* ───────── removing a protocol ───────── */
+/**
+ * What deleting a protocol takes with it, read fresh before the owner decides (never from a list that may be stale).
+ * Deleting cascades in the database: its steps, its place in offers, its share link and who added it from it, the steps
+ * it copied into a parent protocol, the owner's own logs, enabled/pinned/active rows. What the client CANNOT see is other
+ * people's enabled/pinned rows and logs (RLS), so the dialog always says that too. A count is null when it could not be read.
+ */
+export interface ProtocolImpact {
+  /** The name as it is now in the database. */
+  name: string;
+  isPublic: boolean;
+  isSuggested: boolean;
+  steps: number | null;
+  offers: number | null;
+  /** A live share link exists. */
+  shareLink: boolean | null;
+  /** People who added a copy from its share link. */
+  adds: number | null;
+  /** Steps of this protocol that were copied into a parent protocol: they are deleted from the parent too. */
+  copiedIntoParents: number | null;
+  /** Parent protocols this one is attached to as a child plan. */
+  attachedTo: number | null;
+  /** Child plans attached to this protocol: detached, they stay as protocols of their own. */
+  childPlans: number | null;
+  /** The owner's own use of it, readable under their own account. */
+  own: { active: number | null; enabled: number | null; pinned: number | null; logs: number | null };
+  /** Some count could not be read. */
+  unreadable: boolean;
+}
+
+async function countRows(accessToken: string, table: string, filter: string, column: string): Promise<number | null> {
+  try {
+    const res = await fetch(`${rest()}/${table}?${filter}&select=${column}&limit=1`, { headers: headers(accessToken, { Prefer: 'count=exact' }) });
+    if (!res.ok) return null;
+    const total = Number((res.headers.get('content-range') || '').split('/')[1]);
+    return Number.isFinite(total) ? total : null;
+  } catch { return null; }
+}
+
+export async function protocolImpact(accessToken: string, id: string): Promise<ProtocolImpact> {
+  const { getRoutineShareLink, getRoutineShareStats } = await import('./routineShare');
+  const rowRes = await fetch(`${rest()}/protocols?id=eq.${id}&select=id,name,user_id,is_public,is_suggested,is_active`, { headers: headers(accessToken) });
+  const rows = (await handle(rowRes, 'Read protocol')) as { name: string | null; is_public: boolean | null; is_suggested: boolean | null }[] | null;
+  const row = Array.isArray(rows) ? rows[0] : undefined;
+  if (!row) throw new Error('This protocol no longer exists, or it is not yours.');
+  const eq = `protocol_id=eq.${id}`;
+  const [steps, offers, link, stats, copied, attachedTo, childPlans, active, enabled, pinned, logs] = await Promise.all([
+    countRows(accessToken, 'protocol_items', eq, 'id'),
+    countRows(accessToken, 'guide_offer_routines', eq, 'offer_id'),
+    getRoutineShareLink(id).then((token) => token !== null, () => null),
+    getRoutineShareStats(id).then((x) => (typeof x?.adds === 'number' ? x.adds : null), () => null),
+    countRows(accessToken, 'protocol_items', `source_child_protocol_id=eq.${id}`, 'id'),
+    countRows(accessToken, 'protocol_children', `child_protocol_id=eq.${id}`, 'child_protocol_id'),
+    countRows(accessToken, 'protocol_children', `parent_protocol_id=eq.${id}`, 'parent_protocol_id'),
+    countRows(accessToken, 'user_active_protocol', eq, 'id'),
+    countRows(accessToken, 'user_enabled_protocols', eq, 'id'),
+    countRows(accessToken, 'user_routine_pins', eq, 'id'),
+    countRows(accessToken, 'protocol_logs', eq, 'id'),
+  ]);
+  const own = { active, enabled, pinned, logs };
+  const all = [steps, offers, link, stats, copied, attachedTo, childPlans, active, enabled, pinned, logs];
+  return { name: row.name || '', isPublic: Boolean(row.is_public), isSuggested: Boolean(row.is_suggested), steps, offers, shareLink: link, adds: stats, copiedIntoParents: copied, attachedTo, childPlans, own, unreadable: all.some((x) => x === null) };
+}
+
+/** Delete a protocol for good. The database lets only its owner do this and answers with the deleted row; an empty answer means nothing was deleted. */
+export async function deleteProtocol(accessToken: string, id: string): Promise<void> {
+  const res = await fetch(`${rest()}/protocols?id=eq.${id}`, { method: 'DELETE', headers: headers(accessToken, { Prefer: 'return=representation' }) });
+  let rows: unknown;
+  try { rows = await handle(res, 'Delete protocol'); } catch (error) {
+    // A database error is not for the dialog: say what it means.
+    throw new Error(/\((409|23503)\)|23503/.test((error as Error).message) ? 'Something still depends on this protocol, so it cannot be deleted. Archive it instead.' : 'Could not delete this protocol. Try again, or archive it instead.');
+  }
+  if (!Array.isArray(rows) || !rows.length) throw new Error('Nothing was deleted: this protocol is not yours, or it is already gone.');
+}
+
+/** Take a protocol out of the owner's list and off the public list, keeping everything. The owner's list hides is_active = false. */
+export async function archiveProtocol(accessToken: string, id: string): Promise<void> {
+  if (!(await updateProtocol(accessToken, id, { is_active: false, is_public: false }))) throw new Error('Nothing changed: this protocol is not yours, or it is gone.');
+}
+
+/** Undo an archive. It comes back unpublished: publishing is a choice. */
+export async function restoreProtocol(accessToken: string, id: string): Promise<void> {
+  if (!(await updateProtocol(accessToken, id, { is_active: true }))) throw new Error('Nothing changed: this protocol is not yours, or it is gone.');
+}
+
 export async function updateProtocolItem(
   accessToken: string,
   id: string,
