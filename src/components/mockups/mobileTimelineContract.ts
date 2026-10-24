@@ -18,7 +18,7 @@ export const MOBILE_TIMELINE = {
   groupItemInset: 8,
   itemOriginX: 78,
   nodeWidth: 32,
-  railWidth: 2.5,
+  railWidth: 1.5,
   groupRadius: 14,
   itemRadius: 12,
   groupHeaderPadY: 10,

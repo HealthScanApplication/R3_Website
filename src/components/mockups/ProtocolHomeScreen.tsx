@@ -12,10 +12,10 @@
  *
  * No-JIT: every style is inline (the site ships prebuilt static CSS).
  */
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import {
   User, ChartNoAxesCombined, ShoppingBasket, ListChecks, Plus, Repeat, Check, Sparkles,
-  Timer, Apple, Ellipsis, SlidersHorizontal, RefreshCw, Sun,
+  Timer, Apple, Ellipsis, SlidersHorizontal, RefreshCw, Sun, Info, NotebookPen, Droplet,
 } from "lucide-react";
 import {
   CATEGORY_TINTS, itemIcon, type CatKey, type ProtocolItem as CatItem,
@@ -25,7 +25,7 @@ import { getItemTod, parseHM, type SimpleTod } from "../../protocolDomain/timeOf
 import { mealSlotName } from "../../protocolDomain/mealSlot";
 import { isSleepItemByName } from "../../protocolDomain/category";
 import { claimsBedAnchor, claimsWakeAnchor } from "../../protocolDomain/sleepAnchorClaim";
-import { MOBILE_CATEGORY_TINTS, MOBILE_TIMELINE as MT } from "./mobileTimelineContract";
+import { MOBILE_TIMELINE as MT } from "./mobileTimelineContract";
 
 const POPPINS = '"Poppins", system-ui, -apple-system, sans-serif';
 const JOHN_AVATAR = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=160&h=160&q=85";
@@ -125,9 +125,9 @@ function withSleepAnchors(items: HomeItem[]): HomeItem[] {
   const toHM = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
   const wakeTime = mins.length ? toHM(mins[0]) : "06:00";
   return [
-    ...(hasEnd ? [] : [{ display_name: "End Sleep", item_type: "activity", category: "sleep", sleep_anchor: "wake", time: wakeTime } as HomeItem]),
+    ...(hasEnd ? [] : [{ display_name: "Wake", item_type: "activity", category: "sleep", sleep_anchor: "wake", time: wakeTime } as HomeItem]),
     ...items,
-    ...(hasStart ? [] : [{ display_name: "Start Sleep", item_type: "activity", category: "sleep", sleep_anchor: "bed", time: "22:00" } as HomeItem]),
+    ...(hasStart ? [] : [{ display_name: "Sleep", item_type: "activity", category: "sleep", sleep_anchor: "bed", time: "22:00" } as HomeItem]),
   ];
 }
 
@@ -135,7 +135,7 @@ type Tod = SimpleTod;
 const todForItem = (it: HomeItem, wakeHour: number): Tod =>
   getItemTod({ group_name: it.group_name, scheduled_time: it.slotTime ?? it.time, display_name: it.display_name, category: it.category }, wakeHour);
 
-interface Band { cat: CatKey; slot: string | null; firstMin: number | null; order: number; time?: string | null; label: string; items: HomeItem[] }
+interface Band { cat: CatKey; slot: string | null; firstMin: number | null; order: number; time?: string | null; label: string; items: HomeItem[]; smart?: SmartCategory; parentLabel?: string }
 function buildBands(list: HomeItem[]): Band[] {
   const sorted = [...list].sort((a, b) => orderKey(a) - orderKey(b));
   const bands: Band[] = [];
@@ -161,11 +161,14 @@ function buildBands(list: HomeItem[]): Band[] {
 
 
 /* ───────── smart lists (mirrors mobile timeline/smartGroups.ts) ─────────
-   A group is a function of (time-of-day phase, subtype): "Morning Hygiene",
-   "Evening Meal". Sleep anchors stay their own unprefixed "Sleep" group. */
+   A group is a function of (time-of-day phase, subtype): the card says what it holds ("Hygiene", "Fitness") under the
+   phase header, and in parent mode the folded row reads "Morning Hygiene". Sleep anchors stay their own headerless group. */
 type SmartCategory = "hygiene" | "wellness" | "fitness" | "supplements" | "meal" | "work" | "home" | "tasks";
 const SMART_ORDER: SmartCategory[] = ["hygiene", "wellness", "fitness", "supplements", "meal", "work", "home", "tasks"];
-const SMART_TITLE: Record<SmartCategory, string> = { hygiene: "Hygiene", wellness: "Wellness", fitness: "Fitness", supplements: "Supplements", meal: "Meal", work: "Work", home: "Home", tasks: "Tasks" };
+/** The card's heading (the app's protocols.timeline.band.*). */
+const SMART_TITLE: Record<SmartCategory, string> = { hygiene: "Hygiene", wellness: "Wellness", fitness: "Fitness", supplements: "Supplements", meal: "Meal & Drink", work: "Work", home: "Home", tasks: "Tasks" };
+/** The folded parent row's name, with the phase in front (the app's protocol:smartGroup.<band>.<category>). */
+const SMART_PARENT_TITLE: Record<SmartCategory, string> = { hygiene: "Hygiene", wellness: "Wellness", fitness: "Fitness", supplements: "Supplements", meal: "Meal", work: "Work", home: "Home", tasks: "Tasks" };
 const SUBTYPE_TO_SMART: Record<string, SmartCategory> = { hygiene: "hygiene", wellness: "wellness", reflection: "wellness", finance: "home", planning: "tasks", work: "work", home: "home", tasks: "tasks", exercise: "fitness", supplement: "supplements", meal: "meal", beverage: "meal", drink: "meal", snack: "meal" };
 const SMART_CATEGORY_FALLBACK: Record<string, SmartCategory> = { supplement: "supplements", supplements: "supplements", consume: "meal", do: "wellness" };
 const SMART_TYPE_FALLBACK: Record<string, SmartCategory> = { supplement: "supplements", consume: "meal", recipe: "meal", product: "supplements", activity: "wellness", rule: "wellness" };
@@ -190,13 +193,61 @@ function buildSmartBands(list: HomeItem[], tod: string): Band[] {
     const items = byCat.get(c);
     if (!items?.length) continue;
     const sorted = sortItems(items);
-    bands.push({ cat: SMART_TINT[c], slot: "smart", firstMin: parseHM(sorted[0].slotTime ?? sorted[0].time)?.mins ?? null, order: orderKey(sorted[0]), time: sorted[0].slotTime ?? sorted[0].time, label: `${tod} ${SMART_TITLE[c]}`.toUpperCase(), items: sorted });
+    bands.push({ cat: SMART_TINT[c], slot: "smart", smart: c, firstMin: parseHM(sorted[0].slotTime ?? sorted[0].time)?.mins ?? null, order: orderKey(sorted[0]), time: sorted[0].slotTime ?? sorted[0].time, label: SMART_TITLE[c].toUpperCase(), parentLabel: `${tod} ${SMART_PARENT_TITLE[c]}`, items: sorted });
   }
   // Wake leads the morning; every other sleep band (bedtime, "Sleep in complete darkness") closes
   // the day. Smart groups sit between, in category order.
-  const rank = (b: Band) => b.cat === "sleep" ? (b.items.some(isWake) ? -1 : 1000) : SMART_ORDER.indexOf(b.label.split(" ").pop()!.toLowerCase() as SmartCategory);
+  const rank = (b: Band) => b.cat === "sleep" ? (b.items.some(isWake) ? -1 : 1000) : SMART_ORDER.indexOf(b.smart!);
   return bands.sort((a, b) => rank(a) - rank(b));
 }
+
+/* ───────── a row and its sub-steps ───────── */
+interface Block { it: HomeItem; kids: HomeItem[] }
+/** A step and the indented sub-steps that follow it. */
+function toBlocks(items: HomeItem[]): Block[] {
+  const out: Block[] = [];
+  for (const it of items) {
+    if (it.indent && out.length) out[out.length - 1].kids.push(it);
+    else out.push({ it, kids: [] });
+  }
+  return out;
+}
+const titleCase = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+/** "20min", "1h20min": the app's durationLabel. */
+function durLabel(m: number): string {
+  if (m < 60) return `${m}min`;
+  const h = Math.floor(m / 60), r = Math.round(m % 60);
+  return r ? `${h}h${r}min` : `${h}h`;
+}
+/** "5HRS FREE": the app's compactDurationLabel, then the word. */
+function freeLabel(min: number): string {
+  if (min < 60) return `${Math.round(min)}MIN FREE`;
+  const h = Math.round((min / 60) * 10) / 10;
+  return `${h}${h === 1 ? "HR" : "HRS"} FREE`;
+}
+// The part-of-day windows the app measures free time in: morning from wake, afternoon 12–17, evening 17–24.
+function bandWindow(tod: Tod, wakeHour: number): [number, number] {
+  return tod === "Morning" ? [Math.min(wakeHour * 60, 12 * 60), 12 * 60] : tod === "Afternoon" ? [12 * 60, 17 * 60] : [17 * 60, 24 * 60];
+}
+function freeMinutes(items: HomeItem[], tod: Tod, wakeHour: number): number {
+  const [s, e] = bandWindow(tod, wakeHour);
+  const spans = items.map((i) => { const m = parseHM(i.time)?.mins; return m == null ? null : [m, m + (i.duration_minutes || 5)] as const; })
+    .filter((x): x is readonly [number, number] => !!x).sort((a, b) => a[0] - b[0]);
+  let taken = 0, cursor = s;
+  for (const [a, b] of spans) { const from = Math.max(a, cursor, s), to = Math.min(b, e); if (to > from) { taken += to - from; cursor = to; } }
+  return Math.max(0, e - s - taken);
+}
+
+/** The app's twelve-colour item wheel (src/design-system/utils/listHue.ts): a done row, rail and capsule take the next hue in day order. */
+const LIST_HUES = ["#8B5CC7", "#B953A3", "#D65378", "#E85555", "#E3753D", "#C3881F", "#A39425", "#74A02E", "#3BA764", "#269E8E", "#2B94B8", "#477DCE", "#6868D8"];
+const luminance = (hex: string) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+/** White ink on a hue when it reads (contrast >= 3), else the app's dark ink. */
+const tickInkOn = (hex: string) => (1.05 / (luminance(hex) + 0.05) >= 3 ? "#FFFFFF" : "#10161D");
+const withAlpha = (hex: string, a: number) => `${hex}${Math.round(a * 255).toString(16).padStart(2, "0")}`;
+const DOTTED = (color: string) => `repeating-linear-gradient(180deg, ${color} 0 5px, transparent 5px 10px)`;
 
 /* ───────── date helpers for header + week strip ───────── */
 const WD = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -211,33 +262,90 @@ function isoWeek(d: Date): number {
 }
 function sameDay(a: Date, b: Date) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
 
+/** The app's semantic colours (src/design-system/theme/palettes.ts), light and dark. */
+function makeUi(dark: boolean) {
+  return dark ? {
+    page: "#000000", surface: "#1C1C1E", panel: "#2A2A2D", row: "#000000", itemBorder: "#34343A",
+    text: "#FFFFFF", muted: "#9E9EA4", faint: "#6C6C71", border: "#2E2E31", divider: "#242426",
+    checkBorder: "#FFFFFF", selected: "#FFFFFF", onSelected: "#111827", itemSurface: "#1C1C1E",
+    pill: "rgba(255,255,255,0.239)", tab: "rgba(255,255,255,0.078)", subWash: "rgba(0,0,0,0.5)", addWash: "rgba(0,0,0,0.22)",
+    section: "#FFFFFF", dock: "#1C1C1E", plus: "#FFFFFF", plusInk: "#000000", rowShadow: "none",
+  } : {
+    page: "#F2F4F7", surface: "#FFFFFF", panel: "#F6F8FA", row: "#FFFFFF", itemBorder: "#E5E7EB",
+    text: "#111827", muted: "#6B7280", faint: "#9CA3AF", border: "#E5E7EB", divider: "#EEF1F4",
+    checkBorder: "#E5E7EB", selected: "#111827", onSelected: "#FFFFFF", itemSurface: "#FFFFFF",
+    pill: "rgba(0,0,0,0.11)", tab: "rgba(0,0,0,0.035)", subWash: "rgba(255,255,255,0.6)", addWash: "rgba(255,255,255,0.28)",
+    section: "#374151", dock: "#FFFFFF", plus: "#111827", plusInk: "#F2F4F7", rowShadow: "0 1px 2px rgba(0,0,0,0.05)",
+  };
+}
+type Ui = ReturnType<typeof makeUi>;
+
+const Tick = ({ size, ink }: { size: number; ink: string }) => <Check size={size} color={ink} strokeWidth={3} />;
+
+/** A sub-step (a child of a block): the app's TimelineSubStep. */
+function SubStepRow({ it, ui, hue }: { it: HomeItem; ui: Ui; hue: string }) {
+  const Ico = iconFor(it).Icon;
+  const done = !!it.done;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 48, padding: "4px 12px", marginLeft: 10, borderRadius: 12, background: ui.subWash, boxSizing: "border-box" }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+          <Ico size={14} strokeWidth={1.75} color={ui.muted} style={{ flexShrink: 0 }} />
+          <span title={it.display_name} style={{ fontSize: 13, fontWeight: 500, color: ui.text, lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "break-word" }}>{it.display_name}</span>
+        </div>
+        {it.time && <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2, fontSize: 11, color: ui.muted, fontVariantNumeric: "tabular-nums" }}>{fmtTime(it.time)}{it.repeat && <Repeat size={11} strokeWidth={2} color={ui.faint} />}</div>}
+      </div>
+      {!done && <span style={{ width: 26, height: 26, borderRadius: 13, border: `1px solid ${ui.border}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxSizing: "border-box" }}><Timer size={13} strokeWidth={2.2} color={ui.muted} /></span>}
+      <span style={{ width: 18, height: 18, borderRadius: 6, border: `2px solid ${done ? hue : ui.muted}`, background: done ? hue : "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxSizing: "border-box" }}>
+        {done && <Check size={10} color={ui.surface} strokeWidth={3} />}
+      </span>
+    </div>
+  );
+}
+
+/** The dashed "Add" row at the end of a block (the app shows it on a block you can add to). */
+function AddRow({ ui }: { ui: Ui }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 48, padding: "4px 12px", marginLeft: 10, borderRadius: 12, border: `1px dashed ${ui.border}`, background: ui.addWash, boxSizing: "border-box" }}>
+      <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: ui.faint }}>Add</span>
+      <Plus size={18} strokeWidth={2.5} color={ui.faint} />
+    </div>
+  );
+}
+
 /* ───────── the screen ───────── */
 export function ProtocolHomeScreen({
   protocolName,
   items,
   date = new Date(),
   done = 0,
-  scale = 0.85,
+  scale: scaleProp = "fit",
   anchors = true,
   imageUrl = JOHN_AVATAR,
   showDetails: showDetailsProp = true,
   theme = "light",
   profileName = "John Ferreira",
   grouping = "smart",
+  smartListMode = "card",
+  addRows = false,
   dayMarks,
 }: {
   /** Per-date marks under the week strip, as the app draws them (cycle) plus an optional moon glyph. */
   dayMarks?: (date: Date) => { cycle?: "period" | "fertile" | "ovulation" | null; moon?: string | null };
   /** 'smart' groups by phase + category like the mobile smart lists. */
   grouping?: "time" | "smart";
+  /** The app's smart-list preference: 'card' keeps each group a card of rows; 'parent' folds a group of two or more into one parent row with its steps under it. */
+  smartListMode?: "card" | "parent";
+  /** Draw the dashed "Add" row under a step that has sub-steps, as the app does where you can edit. */
+  addRows?: boolean;
   protocolName: string;
   items: HomeItem[];
   date?: Date;
   done?: number;
   /** Protocol cover image, shown as the header avatar. */
   imageUrl?: string | null;
-  /** Shrink the whole app UI to fit the device frame more naturally (1 = real-phone size). */
-  scale?: number;
+  /** How big the app UI is drawn. "fit" (the default) lays it out at a real phone's 393px width and shrinks it to the frame, so rows wrap exactly as in the app; a number sets the scale directly (1 = real-phone size). */
+  scale?: number | "fit";
   /** Book-end the day with the grey Sleep anchors (off for a clean checked-off demo). */
   anchors?: boolean;
   /** Initial state of the in-frame "Details" toggle (each step's description + child checklist). */
@@ -246,8 +354,24 @@ export function ProtocolHomeScreen({
   theme?: "light" | "dark";
   profileName?: string;
 }) {
-  // In-frame toggle for per-step descriptions + child do/don't lines (mirrors the app's showDetails).
+  // "fit": measure the frame this sits in and scale a 393px-wide phone to it.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [fitScale, setFitScale] = useState(0.8);
+  useLayoutEffect(() => {
+    if (scaleProp !== "fit") return;
+    const el = rootRef.current;
+    if (!el) return;
+    const measure = () => { const w = el.clientWidth; if (w > 0) setFitScale(Math.min(1.2, Math.max(0.4, w / 393))); };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [scaleProp]);
+  const scale = scaleProp === "fit" ? fitScale : scaleProp;
+  // In-frame toggle for per-step descriptions + child do/don't lines (mirrors the app's showDetails), and each group's own Info toggle.
   const [showDetails, setShowDetails] = useState(showDetailsProp);
+  const [groupDetails, setGroupDetails] = useState<Record<string, boolean>>({});
   // book-end the day with grey Sleep anchors (End Sleep / Start Sleep), like the app
   const allItems = anchors ? withSleepAnchors(inheritParentSlot(items)) : inheritParentSlot(items);
   // sleep window (hours slept = bedtime → wake) — shown on the anchor cards
@@ -270,10 +394,26 @@ export function ProtocolHomeScreen({
   const todOrder: Tod[] = ["Morning", "Afternoon", "Evening"];
   const byTod: Record<Tod, HomeItem[]> = { Morning: [], Afternoon: [], Evening: [] };
   for (const it of allItems) byTod[todForItem(it, wakeHour)].push(it);
-  const sections = todOrder
-    .map((tod) => ({ tod, bands: grouping === "smart" ? buildSmartBands(byTod[tod], tod) : buildBands(byTod[tod]) }))
-    // All three day parts always show; an empty one gets an "Add" slot (as in the app).
-    ;
+
+  // Each item takes the next hue of the wheel in day order (the wake row is first, so it is purple).
+  const hueOf = new Map<HomeItem, string>();
+  [...allItems].sort((a, b) => orderKey(a) - orderKey(b)).forEach((it, i) => hueOf.set(it, LIST_HUES[i % LIST_HUES.length]));
+  const hue = (it: HomeItem) => hueOf.get(it) ?? LIST_HUES[0];
+
+  // Parent mode: a smart group of two or more steps (none of them already holding sub-steps, none a sleep anchor) becomes one parent row.
+  const sections = todOrder.map((tod) => {
+    const bands = (grouping === "smart" ? buildSmartBands(byTod[tod], tod) : buildBands(byTod[tod])).map((band) => {
+      const blocks = toBlocks(band.items);
+      const foldable = smartListMode === "parent" && band.slot === "smart" && band.cat !== "sleep" && blocks.length >= 2 && blocks.every((b) => !b.kids.length);
+      if (!foldable) return { band, blocks, folded: false };
+      const starts = band.items.map((i) => parseHM(i.slotTime ?? i.time)?.mins).filter((m): m is number => m != null);
+      const ends = band.items.map((i) => { const m = parseHM(i.slotTime ?? i.time)?.mins; return m == null ? null : m + (i.duration_minutes || 5); }).filter((m): m is number => m != null);
+      const first = band.items[0];
+      const parent: HomeItem = { ...first, display_name: titleCase(band.parentLabel || band.label.toLowerCase()), duration_minutes: starts.length ? Math.max(...ends) - Math.min(...starts) : null, description: null, children: undefined, indent: false, image_url: null, repeat: false, done: band.items.every((i) => i.done) };
+      return { band, blocks: [{ it: parent, kids: band.items.map((i) => ({ ...i, indent: true })) }], folded: true };
+    });
+    return { tod, bands };
+  });
 
   // The current mobile strip begins on the selected day, keeping the selected
   // circle on the shared avatar/timeline axis (Tue→Mon in the reference).
@@ -281,22 +421,19 @@ export function ProtocolHomeScreen({
   const today = new Date();
 
   const weekLine = `WEEK ${isoWeek(date)}`;
-  const headerDate = `${WD_FULL[date.getDay()]} · ${date.getDate()} ${MON[date.getMonth()]}`;
   const dark = theme === "dark";
-  const ui = dark ? {
-    outside: "#000000", surface: "#1C1C1E", panel: "#29292C", card: "#000000",
-    text: "#F7F7F8", muted: "#98989F", faint: "#5D5D63", border: "#343438",
-    dayPill: "#FFFFFF", dayPillText: "#111827", dock: "#1C1C1E", plus: "#FFFFFF", plusInk: "#111827",
-  } : {
-    outside: "#EEEEEF", surface: "#FFFFFF", panel: "#F4F6F8", card: "#FFFFFF",
-    text: "#101827", muted: "#6B7280", faint: "#A5ADBA", border: "#E2E6EB",
-    dayPill: "#101827", dayPillText: "#FFFFFF", dock: "rgba(255,255,255,0.96)", plus: "#101827", plusInk: "#FFFFFF",
-  };
-  const purple = "#8C55D6";
+  const ui = makeUi(dark);
+  const wake = allItems.find(isWake);
+  const nightDone = !!wake?.done;
+  // The night container: a hollow column drawn in the text colour until the night is confirmed, then filled from the wake row's hue.
+  const nightHue = wake ? hue(wake) : LIST_HUES[0];
+  const nightStyle = nightDone
+    ? { background: `linear-gradient(180deg, ${nightHue}, ${nightHue})`, border: `2px solid ${nightHue}` }
+    : { background: "transparent", border: `2px solid ${ui.text}` };
 
   return (
-    <div style={{ position: "absolute", inset: 0, overflow: "hidden", background: ui.outside }}>
-    <div style={{ position: "absolute", top: 0, left: 0, width: `${100 / scale}%`, height: `${100 / scale}%`, transform: `scale(${scale})`, transformOrigin: "top left", display: "flex", flexDirection: "column", fontFamily: POPPINS, color: ui.text, overflow: "hidden", background: ui.outside }}>
+    <div ref={rootRef} style={{ position: "absolute", inset: 0, overflow: "hidden", background: ui.page }}>
+    <div style={{ position: "absolute", top: 0, left: 0, width: `${100 / scale}%`, height: `${100 / scale}%`, transform: `scale(${scale})`, transformOrigin: "top left", display: "flex", flexDirection: "column", fontFamily: POPPINS, color: ui.text, overflow: "hidden", background: ui.page }}>
       {/* status bar */}
       <div style={{ padding: "18px 22px 10px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0, color: ui.muted }}>
         <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 1.1 }}>{WD[date.getDay()]} {date.getDate()} {MON[date.getMonth()]}</span>
@@ -304,44 +441,49 @@ export function ProtocolHomeScreen({
       </div>
 
       {/* Fixed profile/calendar header with an independently scrolling timeline. */}
-      <div style={{ flex: 1, minHeight: 0, overflow: "hidden", margin: `0 ${MT.screenCardInset}px`, borderRadius: "22px 22px 0 0", background: ui.surface, display: "flex", flexDirection: "column" }}>
-        <div style={{ position: "relative", zIndex: 10, flexShrink: 0, paddingTop: 13, background: ui.surface, boxShadow: dark ? "0 5px 12px rgba(0,0,0,0.2)" : "0 5px 12px rgba(15,23,42,0.06)" }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: "hidden", margin: `0 ${MT.screenCardInset}px`, borderRadius: "20px 20px 0 0", background: ui.surface, display: "flex", flexDirection: "column" }}>
+        <div style={{ position: "relative", zIndex: 10, flexShrink: 0, paddingTop: 12, background: ui.surface, boxShadow: dark ? "0 5px 12px rgba(0,0,0,0.2)" : "0 5px 12px rgba(15,23,42,0.06)" }}>
         {/* The selected-day column terminates at the fixed day header. */}
-        <span aria-hidden="true" style={{ position: "absolute", left: MT.axisX - MT.nodeWidth / 2, top: 85, bottom: 0, width: MT.nodeWidth, background: `linear-gradient(180deg, ${purple} 0%, #965BD2 54%, #A96EAE 100%)`, borderLeft: `1.5px solid ${purple}`, borderRight: `1.5px solid ${purple}`, boxSizing: "border-box", opacity: 0.96, zIndex: 0 }} />
+        <span aria-hidden="true" style={{ position: "absolute", left: MT.axisX - MT.nodeWidth / 2, top: 84, bottom: 0, width: MT.nodeWidth, borderBottom: 0, borderRadius: `${MT.nodeWidth / 2}px ${MT.nodeWidth / 2}px 0 0`, boxSizing: "border-box", zIndex: 0, ...nightStyle, borderBottomWidth: 0 }} />
         {/* HEADER */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 44, padding: `0 ${MT.headerPadX}px`, marginBottom: 6, gap: 8, flexShrink: 0, position: "relative", zIndex: 2 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 44, padding: `0 ${MT.headerPadX}px`, marginBottom: 2, gap: 8, flexShrink: 0, position: "relative", zIndex: 2 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, paddingLeft: MT.headerLeadPad, flexShrink: 1, minWidth: 0 }}>
             <span style={{ width: MT.avatarSize, height: MT.avatarSize, borderRadius: MT.avatarSize / 2, background: "#E5E7EB", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
               {imageUrl
                 ? <img src={imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 : <User size={13} color="#4B5563" strokeWidth={1.5} />}
             </span>
-            <div style={{ display: "flex", flexDirection: "column", gap: 1, alignItems: "flex-start", minWidth: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: ui.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 126 }}>{profileName}</span>
-              <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 1.1, color: ui.muted, whiteSpace: "nowrap" }}>{weekLine}</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-start", minWidth: 0 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: ui.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 126 }}>{profileName}</span>
+              <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.8, color: ui.muted, whiteSpace: "nowrap" }}>{weekLine}</span>
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             {[
               { Icon: Timer, label: "Timer" },
               { Icon: Apple, label: "Nutrition" },
-            ].map(({ Icon, label }) => <button key={label} type="button" title={label} style={{ width: 34, height: 34, borderRadius: 9, border: `1px solid ${ui.border}`, background: ui.panel, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", color: ui.muted }}><Icon size={15} strokeWidth={2} /></button>)}
-            <button type="button" title="Protocol menu" onClick={() => setShowDetails((v) => !v)} style={{ width: 34, height: 34, borderRadius: 9, border: `1px solid ${ui.border}`, background: ui.panel, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", color: ui.muted }}><Ellipsis size={16} strokeWidth={2} /></button>
+            ].map(({ Icon, label }) => <button key={label} type="button" title={label} style={{ width: 36, height: 36, borderRadius: 8, border: `1px solid ${ui.border}`, background: ui.panel, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", color: ui.muted }}><Icon size={15} strokeWidth={2} /></button>)}
+            <button type="button" title="Details" aria-pressed={showDetails} onClick={() => setShowDetails((v) => !v)} style={{ width: 36, height: 36, borderRadius: 8, border: `1px solid ${ui.border}`, background: ui.panel, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", color: ui.faint }}><Ellipsis size={16} strokeWidth={2} /></button>
           </div>
         </div>
 
         {/* WEEK STRIP */}
-        <div style={{ display: "flex", justifyContent: "flex-start", padding: "2px 0 10px 14px", overflow: "hidden", flexShrink: 0, minHeight: 53, position: "relative", zIndex: 3 }}>
+        <div style={{ display: "flex", justifyContent: "flex-start", padding: "2px 0 2px 12px", overflow: "hidden", flexShrink: 0, minHeight: 64, position: "relative", zIndex: 3 }}>
+          {/* the thin connector the circles thread along */}
+          <span aria-hidden="true" style={{ position: "absolute", left: 36, right: 0, top: 38, height: 1.5, background: ui.divider, zIndex: 0 }} />
           {week.map((d, i) => {
             const isToday = sameDay(d, today);
             const isSelected = sameDay(d, date);
-            const circleBg = isToday || isSelected ? (dark ? "#F7F7F8" : "#101827") : ui.panel;
-            const filled = isToday || isSelected;
+            const strong = isToday || isSelected;
             return (
-              <div key={i} style={{ width: 44, flex: "0 0 44px", display: "flex", flexDirection: "column", alignItems: "center", padding: "4px 0", position: "relative", zIndex: isSelected ? 2 : 1 }}>
-                <span style={{ fontSize: 9.5, fontWeight: filled ? 700 : 600, letterSpacing: 0.6, textTransform: "uppercase", color: filled ? ui.text : ui.muted, marginBottom: 4 }}>{WD[d.getDay()]}</span>
-                <span style={{ width: 32, height: 32, borderRadius: 16, background: circleBg, border: isSelected ? `3px solid ${purple}` : `2px solid ${ui.border}`, display: "inline-flex", alignItems: "center", justifyContent: "center", boxSizing: "border-box", position: "relative", zIndex: 2 }}>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: filled ? (dark ? "#111827" : "#FFFFFF") : ui.text, fontVariantNumeric: "tabular-nums" }}>{d.getDate()}</span>
+              <div key={i} style={{ width: 48, flex: "0 0 48px", display: "flex", flexDirection: "column", alignItems: "center", padding: "2px 0", position: "relative", zIndex: isSelected ? 2 : 1 }}>
+                <span style={{ fontSize: 10, fontWeight: strong ? 600 : 500, letterSpacing: 0.6, textTransform: "uppercase", color: strong || i > 0 ? ui.text : ui.muted, marginBottom: 4 }}>{WD[d.getDay()]}</span>
+                <span style={{ width: 32, height: 32, borderRadius: 16, background: isSelected || isToday ? ui.surface : (i > 0 ? ui.panel : ui.surface), border: isSelected ? "none" : `2px solid ${ui.divider}`, display: "inline-flex", alignItems: "center", justifyContent: "center", boxSizing: "border-box", position: "relative", zIndex: 2 }}>
+                  {isSelected && <>
+                    <span aria-hidden="true" style={{ position: "absolute", left: -2, top: -2, width: 36, height: 36, borderRadius: 18, border: `2px solid ${nightDone ? nightHue : ui.text}`, boxSizing: "border-box" }} />
+                    <span aria-hidden="true" style={{ position: "absolute", inset: 3, borderRadius: 13, background: ui.selected }} />
+                  </>}
+                  <span style={{ position: "relative", fontSize: 14, fontWeight: strong ? 600 : 500, color: isSelected ? ui.onSelected : ui.text, fontVariantNumeric: "tabular-nums" }}>{d.getDate()}</span>
                 </span>
                 {dayMarks && (() => { const m = dayMarks(d); return (
                   // Mark row (mobile CycleDayMark): period bar, fertile dots, ovulation sparkle; moon glyph beside.
@@ -357,117 +499,139 @@ export function ProtocolHomeScreen({
           })}
         </div>
 
-        <div style={{ margin: `0 15px 10px ${MT.rowContentX}px`, borderRadius: 18, background: ui.dayPill, color: ui.dayPillText, padding: "10px 14px", fontSize: 10.5, fontWeight: 700, letterSpacing: 1.2, textAlign: "center", flexShrink: 0, position: "relative", zIndex: 1 }}>{headerDate} · TODAY</div>
+        {/* the day's divider: the selected day, left-aligned, as the app draws it */}
+        <div style={{ margin: `6px 16px 12px ${MT.rowContentX}px`, borderRadius: 14, background: ui.selected, color: ui.onSelected, padding: "8px 12px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0, position: "relative", zIndex: 1 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.9 }}>{WD_FULL[date.getDay()]} • {date.getDate()} {MON[date.getMonth()]}</span>
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8 }}>TODAY</span>
+        </div>
         </div>
 
         <div className="phone-scroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 0 108px", position: "relative" }}>
-        {/* One day spine, matching mobile. Per-row colour segments paint over
-            this base rail, but section and group gaps can no longer break it. */}
-        <span aria-hidden="true" style={{ position: "absolute", left: MT.axisX - MT.railWidth / 2, top: 0, bottom: 0, width: MT.railWidth, background: dark ? "#5D5D63" : "#9CA3AF", opacity: 0.62, zIndex: 0 }} />
+        {/* One day spine, matching mobile: a thin dotted line (a future day), broken only by the row capsules. */}
+        <span aria-hidden="true" style={{ position: "absolute", left: MT.axisX - MT.railWidth / 2, top: 0, bottom: 0, width: MT.railWidth, background: DOTTED(dark ? ui.muted : ui.faint), opacity: 0.8, zIndex: 0 }} />
 
         {/* SECTIONS */}
         {sections.length === 0 && (
           <div style={{ textAlign: "center", color: "#9CA3AF", fontSize: 12, padding: "48px 0" }}>No steps scheduled</div>
         )}
-        {sections.map(({ tod, bands }) => (
-          <div key={tod} style={{ position: "relative", zIndex: 1 }}>
-            <div style={{ padding: `8px 16px 7px ${MT.itemOriginX}px`, minHeight: 24, display: "flex", alignItems: "baseline" }}>
-              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.2, color: "#374151", textTransform: "uppercase" }}>{tod}</span>
+        {sections.map(({ tod, bands }, si) => {
+          const free = bands.every(({ band }) => band.cat === "sleep") ? freeMinutes(byTod[tod], tod, wakeHour) : 0;
+          return (
+          <div key={tod} style={{ position: "relative", zIndex: 1, marginTop: si > 0 ? 16 : 0 }}>
+            {si > 0 && <span aria-hidden="true" style={{ position: "absolute", top: -9, left: 0, right: 0, height: 1.5, backgroundImage: `repeating-linear-gradient(90deg, ${ui.faint} 0 5px, transparent 5px 10px)`, opacity: 0.5 }} />}
+            <div style={{ padding: `2px 16px 4px ${MT.itemOriginX}px`, minHeight: 22, display: "flex", alignItems: "center" }}>
+              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.2, color: ui.section, textTransform: "uppercase" }}>{tod}</span>
             </div>
 
-            {bands.every((band) => band.cat === "sleep") && (
-              <div style={{ position: "relative", padding: `0 16px 10px ${MT.rowContentX}px` }}>
-                <div style={{ minHeight: 48, border: `1.5px dashed ${ui.faint}`, borderRadius: dark ? 12 : MT.groupRadius, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, color: ui.muted, fontSize: 12, fontWeight: 600 }}>
-                  <Plus size={13} strokeWidth={2} /> Add to {tod.toLowerCase()}
+            {bands.every(({ band }) => band.cat === "sleep") && (
+              <div style={{ position: "relative", padding: `0 16px 8px ${MT.rowContentX}px` }}>
+                {/* the free-time slot: how long this part of the day is unplanned, with a plus to add into it */}
+                <span aria-hidden="true" style={{ position: "absolute", left: 28, top: 33, width: 16, height: 16, borderRadius: 8, border: `1.5px solid ${ui.muted}`, background: ui.surface, display: "inline-flex", alignItems: "center", justifyContent: "center", boxSizing: "border-box", zIndex: 3 }}><Plus size={8} strokeWidth={2.5} color={ui.muted} /></span>
+                <div style={{ borderRadius: MT.groupRadius, background: ui.panel, padding: "8px 8px 8px" }}>
+                  <div style={{ position: "relative", height: 50, border: `1px dashed ${ui.itemBorder}`, borderRadius: 14, background: ui.itemSurface, display: "flex", alignItems: "center", padding: "0 14px", boxSizing: "border-box" }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.4, color: ui.muted, textTransform: "uppercase" }}>{freeLabel(free)}</span>
+                    <Plus size={18} strokeWidth={2.5} color={ui.text} style={{ position: "absolute", right: 14 }} />
+                  </div>
                 </div>
               </div>
             )}
-            {bands.map((band, bi) => {
-              const tint = CATEGORY_TINTS[band.cat];
-              const GroupIcon = tint.Icon;
-              const complete = band.items.length > 0 && band.items.every((item) => item.done);
-              const showHeader = band.items.length > 1 || band.cat === "sleep" || !!band.slot;
-              const bandTint = MOBILE_CATEGORY_TINTS[dark ? "dark" : "light"][band.cat];
-              const darkPurple = "#9A5BE1";
-              const darkPurpleSurface = "#352446";
-              const completedSleepSurface = dark ? "#352446" : "#F0E8FA";
-              const completedFg = band.cat === "sleep" ? purple : bandTint.fg;
-              const completedBg = band.cat === "sleep" ? completedSleepSurface : bandTint.bg;
-              const surface = complete
-                ? completedBg
-                : ui.panel;
-              const foreground = complete
-                ? completedFg
-                : ui.muted;
+            {bands.map(({ band, blocks, folded }, bi) => {
+              const GroupIcon = band.smart === "hygiene" ? Droplet : CATEGORY_TINTS[band.cat].Icon;
+              const all = blocks.flatMap((b) => [b.it, ...b.kids]);
+              const complete = all.length > 0 && all.every((item) => item.done);
+              const isSleepBand = band.cat === "sleep";
+              // The card names what it holds; sleep and a folded group have no header (the folded parent row is the header).
+              const showHeader = !isSleepBand && !folded && (!!band.smart || !!band.slot || band.items.length > 1);
+              const groupKey = `${tod}:${bi}:${band.label}`;
+              const detailsOn = groupDetails[groupKey] ?? showDetails;
+              const first = blocks[0].it;
+              const surface = complete ? `linear-gradient(90deg, ${withAlpha(hue(all[0]), dark ? 0.24 : 0.11)}, ${withAlpha(hue(all[all.length - 1]), dark ? 0.24 : 0.11)})` : ui.panel;
+              const foreground = complete ? hue(first) : ui.muted;
               return (
-                <div key={bi} style={{ position: "relative", padding: `0 16px 10px ${MT.rowContentX}px` }}>
-                  <div style={{ borderRadius: dark ? 12 : MT.groupRadius, paddingBottom: MT.groupPadBottom, background: surface, position: "relative" }}>
-                    {/* band header */}
-                    {showHeader && <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `${MT.groupHeaderPadY}px 14px` }}>
+                <div key={bi} style={{ position: "relative", padding: `0 16px 8px ${MT.rowContentX}px` }}>
+                  <div style={{ borderRadius: MT.groupRadius, paddingBottom: MT.groupPadBottom, background: surface, position: "relative" }}>
+                    {/* card header: what the group holds, and its Info toggle */}
+                    {showHeader && <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `${MT.groupHeaderPadY}px 14px`, minHeight: 42, boxSizing: "border-box" }}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                         <GroupIcon size={12} strokeWidth={2} color={foreground} />
-                        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.75, color: foreground, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{band.label}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: foreground, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{band.label}</span>
                       </span>
+                      <button type="button" aria-label={detailsOn ? "Hide details" : "Show details"} aria-pressed={detailsOn} onClick={() => setGroupDetails((s) => ({ ...s, [groupKey]: !detailsOn }))} style={{ width: 22, height: 22, padding: 0, border: 0, background: "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><Info size={13} strokeWidth={2} color={detailsOn ? ui.text : ui.faint} /></button>
                     </div>}
                     {/* items */}
                     <div style={{ padding: showHeader ? "0 8px 2px" : `${MT.singletonPadTop}px 8px 2px`, display: "flex", flexDirection: "column", gap: MT.groupItemGap }}>
-                      {band.items.map((it, ii) => {
+                      {blocks.map(({ it, kids }, ii) => {
                         const ic = iconFor(it);
                         const ItemIcon = ic.Icon;
-                        const isDone = !!it.done;
-                        const mobileTint = bandTint;
-                        const sleepExtra = sleepWin.durationLabel && isWake(it) ? `${sleepWin.durationLabel} sleep`
-                          : sleepWin.durationLabel && isBed(it) ? `${sleepWin.durationLabel} until wake` : null;
-                        // Titles are verb + noun ("Go cycling"), so the line under them reads on: "at 7:30am for 20 min".
-                        // Sleep anchors keep the mobile "7:00am · 8h 30m sleep" form.
-                        const sub = isWake(it) || isBed(it)
-                          ? [fmtTime(it.time), sleepExtra].filter(Boolean).join(" · ")
-                          : [it.time ? `at ${fmtTime(it.time)}` : null, it.duration_minutes ? `for ${it.duration_minutes} min` : null].filter(Boolean).join(" ");
-                        const nodeH = isWake(it) || isBed(it) ? 66 : Math.max(34, Math.min(48, 34 + ((it.duration_minutes || 0) / 15) * 3));
-                        const hasDetail = showDetails && (!!it.description || !!it.children?.length);
+                        const wakeRow = isWake(it), bedRow = isBed(it);
+                        const isDone = it.done !== undefined ? !!it.done : (kids.length > 0 && kids.every((k) => k.done));
+                        const h = hue(it);
+                        const sleepNight = sleepWin.durationLabel && (wakeRow || bedRow) ? sleepWin.durationLabel.replace(/\s+/g, "") : null;
+                        const dur = it.duration_minutes || 0;
+                        const capsuleH = wakeRow || bedRow ? 52 : dur <= 35 ? 48 : Math.min(72, Math.round(48 + (dur - 35) * 0.8));
+                        const isBlock = kids.length > 0;
+                        const hasDetail = detailsOn && (!!it.description || !!it.children?.length);
                         return (
-                          <div key={ii} style={{ position: "relative", minHeight: Math.max(48, nodeH), paddingLeft: it.indent ? 16 : 0 }}>
-                            {/* Media capsule shares the lane axis; time stays in the card metadata. */}
-                            <span style={{ position: "absolute", left: MT.axisX - MT.itemOriginX - MT.railWidth / 2, top: 0, bottom: ii === band.items.length - 1 ? -12 : -6, width: MT.railWidth, background: isDone ? completedFg : ui.muted, opacity: 0.75 }} />
-                            {/* Day → wake bridge: continues the selected-day column from the fixed header down
-                                into the wake capsule. Extends upward and is clipped by the scrolling timeline,
-                                so it meets the header column exactly and scrolls with the day like mobile. */}
+                          <div key={ii} style={{ position: "relative", minHeight: 56 }}>
+                            {/* the rail through this step: solid in its hue once done, else dotted like a day still to come */}
+                            <span style={{ position: "absolute", left: MT.axisX - MT.itemOriginX - MT.railWidth / 2, top: 0, bottom: ii === blocks.length - 1 ? -16 : -6, width: MT.railWidth, background: isDone ? h : DOTTED(dark ? ui.muted : ui.faint), opacity: isDone ? 1 : 0.8 }} />
                             {/* Bedtime mirrors wake: the night column continues below the capsule. */}
-                            {isBed(it) && <span aria-hidden="true" style={{ position: "absolute", left: MT.axisX - MT.itemOriginX - MT.nodeWidth / 2, top: 2 + nodeH - 1, height: 100, width: MT.nodeWidth, background: `linear-gradient(180deg, ${purple} 0%, #965BD2 100%)`, WebkitMaskImage: "linear-gradient(180deg, #000 35%, transparent)", maskImage: "linear-gradient(180deg, #000 35%, transparent)", borderLeft: `1.5px solid ${purple}`, borderRight: `1.5px solid ${purple}`, boxSizing: "border-box", zIndex: 1 }} />}
-                            {isWake(it) && <span aria-hidden="true" style={{ position: "absolute", left: MT.axisX - MT.itemOriginX - MT.nodeWidth / 2, top: -2000, height: 2002, width: MT.nodeWidth, background: `linear-gradient(180deg, #A96EAE 0%, #A96EAE calc(100% - 110px), #965BD2 calc(100% - 50px), ${purple} 100%)`, borderLeft: `1.5px solid ${purple}`, borderRight: `1.5px solid ${purple}`, boxSizing: "border-box", zIndex: 1 }} />}
-                            {!it.indent && <span style={{ position: "absolute", left: MT.axisX - MT.itemOriginX - MT.nodeWidth / 2, top: 2, width: MT.nodeWidth, height: nodeH, borderRadius: isWake(it) ? `0 0 ${MT.nodeWidth / 2}px ${MT.nodeWidth / 2}px` : isBed(it) ? `${MT.nodeWidth / 2}px ${MT.nodeWidth / 2}px 0 0` : MT.nodeWidth / 2, overflow: "hidden", background: isWake(it) || isBed(it) ? purple : (isDone ? completedFg : ui.card), border: `1.5px solid ${isWake(it) || isBed(it) ? purple : (isDone ? completedFg : ui.muted)}`, borderTopWidth: isWake(it) ? 0 : 1.5, display: "inline-flex", alignItems: "center", justifyContent: "center", zIndex: 2 }}>
-                              {it.image_url && !/recipe_water-|openfoodfacts/i.test(it.image_url)
-                                ? <img src={it.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: isDone ? "none" : "grayscale(1)", opacity: isDone ? 1 : 0.72 }} />
-                                : isWake(it) ? <Sun size={16} strokeWidth={1.8} color="#FFFFFF" />
-                                  : <ItemIcon size={15} strokeWidth={1.8} color={isDone ? "#FFFFFF" : "#9CA3AF"} />}
-                            </span>}
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, minHeight: isWake(it) || isBed(it) ? 54 : 48, background: ui.card, borderRadius: dark ? 10 : MT.itemRadius, padding: "8px 9px 8px 11px", boxShadow: dark ? "none" : "0 1px 2px rgba(17,24,39,0.04)" }}>
-                            <div style={{ flex: "1 1 0", minWidth: 0, overflow: "hidden" }}>
-                              <div style={{ display: "flex", alignItems: "flex-start", gap: 5, minWidth: 0, overflow: "hidden" }}>
-                                <span title={it.display_name} style={{ flex: "1 1 0", minWidth: 0, fontSize: 13, fontWeight: 600, lineHeight: 1.25, color: isDone ? ui.muted : ui.text, textDecoration: isDone ? "line-through" : "none", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "break-word" }}>{it.display_name}</span>
-                                {it.repeat && <Repeat size={10} color="#9CA3AF" strokeWidth={2} style={{ flexShrink: 0 }} />}
-                              </div>
-                              {sub && <div style={{ fontSize: 10, fontWeight: 400, color: isDone ? "#C4C4C0" : "#9CA3AF", textDecoration: isDone ? "line-through" : "none", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sub}</div>}
-                            </div>
-                            <span style={{ width: 24, height: 24, borderRadius: 7, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", background: isDone ? purple : ui.card, border: isDone ? `1px solid ${purple}` : `1.5px solid ${ui.border}` }}>
-                              {isDone && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
+                            {bedRow && <span aria-hidden="true" style={{ position: "absolute", left: MT.axisX - MT.itemOriginX - MT.nodeWidth / 2, top: 2 + capsuleH - 1, height: 100, width: MT.nodeWidth, WebkitMaskImage: "linear-gradient(180deg, #000 35%, transparent)", maskImage: "linear-gradient(180deg, #000 35%, transparent)", borderTop: 0, boxSizing: "border-box", zIndex: 1, ...nightStyle, borderTopWidth: 0 }} />}
+                            {/* Day → wake bridge: continues the selected-day column from the fixed header down into the wake capsule. */}
+                            {wakeRow && <span aria-hidden="true" style={{ position: "absolute", left: MT.axisX - MT.itemOriginX - MT.nodeWidth / 2, top: -2000, height: 2002, width: MT.nodeWidth, boxSizing: "border-box", zIndex: 1, ...nightStyle, borderTopWidth: 0, borderBottomWidth: 0 }} />}
+                            {/* The capsule on the lane: a block's spans the card and its sub-steps. */}
+                            <span style={{ position: "absolute", left: MT.axisX - MT.itemOriginX - MT.nodeWidth / 2, top: isBlock ? 0 : 28 - capsuleH / 2, ...(isBlock ? { bottom: 0 } : { height: capsuleH }), width: MT.nodeWidth, borderRadius: wakeRow ? `0 0 ${MT.nodeWidth / 2}px ${MT.nodeWidth / 2}px` : bedRow ? `${MT.nodeWidth / 2}px ${MT.nodeWidth / 2}px 0 0` : MT.nodeWidth / 2, overflow: "hidden", ...(wakeRow || bedRow ? { background: nightDone ? nightHue : "transparent", border: `2px solid ${nightDone ? nightHue : ui.text}`, borderTopWidth: wakeRow ? 0 : 2, borderBottomWidth: bedRow ? 0 : 2 } : { background: isDone ? h : ui.row, border: `1px solid ${isDone ? h : (dark ? ui.muted : ui.faint)}` }), boxSizing: "border-box", display: "inline-flex", alignItems: "center", justifyContent: "center", zIndex: 2 }}>
+                              {!isDone && <span aria-hidden="true" style={{ position: "absolute", inset: 0, background: `${ui.muted}14` }} />}
+                              {it.image_url && !/recipe_water-|openfoodfacts/i.test(it.image_url) && !wakeRow && !bedRow
+                                ? <img src={it.image_url} alt="" style={{ position: "relative", width: "100%", height: "100%", objectFit: "cover", filter: isDone ? "none" : "grayscale(1)", opacity: isDone ? 1 : 0.72 }} />
+                                : wakeRow ? <Sun size={15} strokeWidth={2.2} color={isDone ? "#FFFFFF" : ui.muted} style={{ position: "relative" }} />
+                                  : <ItemIcon size={15} strokeWidth={2.2} color={isDone ? "#FFFFFF" : ui.muted} style={{ position: "relative" }} />}
                             </span>
+                            {/* the step's card */}
+                            <div style={{ borderRadius: 12, background: ui.row, border: dark ? `1px solid ${ui.itemBorder}` : "none", boxShadow: ui.rowShadow, overflow: "hidden" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 50, padding: "9px 10px", boxSizing: "border-box" }}>
+                                <div style={{ flex: "1 1 0", minWidth: 0 }}>
+                                  <div style={{ display: "flex", alignItems: "flex-start", gap: 5, minWidth: 0 }}>
+                                    <ItemIcon size={16} strokeWidth={1.75} color={ui.muted} style={{ flexShrink: 0, marginTop: 0.5 }} />
+                                    <span title={it.display_name} style={{ flex: "1 1 0", minWidth: 0, fontSize: 14, fontWeight: 600, lineHeight: "17px", color: ui.text, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "break-word" }}>{it.display_name}</span>
+                                  </div>
+                                  {/* time tab, repeat glyph, then how long */}
+                                  <div style={{ display: "flex", alignItems: "center", gap: 0, marginTop: 2, minWidth: 0 }}>
+                                    {it.time && <span style={{ padding: "3px 8px", borderRadius: 999, background: ui.tab, fontSize: 11, lineHeight: "15px", fontWeight: 500, color: ui.text, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{fmtTime(it.time)}</span>}
+                                    {(it.repeat || wakeRow || bedRow) && <Repeat size={11} strokeWidth={2} color={ui.faint} style={{ marginLeft: 2, flexShrink: 0 }} />}
+                                    {!wakeRow && !bedRow && dur > 0 && <span style={{ marginLeft: 6, fontSize: 11, lineHeight: "15px", color: isDone ? ui.muted : ui.faint, whiteSpace: "nowrap" }}>{durLabel(dur)}</span>}
+                                  </div>
+                                </div>
+                                <div style={{ alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 4, flexShrink: 0, minHeight: 26 }}>
+                                  {sleepNight && <span style={{ minWidth: 36, height: 24, borderRadius: 12, padding: "0 8px", background: ui.pill, fontSize: 11, fontWeight: 500, color: dark ? ui.text : "#6B7280", display: "inline-flex", alignItems: "center", justifyContent: "center", boxSizing: "border-box" }}>{sleepNight}</span>}
+                                  {wakeRow && <span style={{ width: 22, height: 22, borderRadius: 11, marginLeft: 6, background: ui.pill, display: "inline-flex", alignItems: "center", justifyContent: "center" }}><NotebookPen size={12} strokeWidth={2.2} color={ui.text} /></span>}
+                                  {!isDone && !wakeRow && !bedRow && <span style={{ width: 26, height: 26, borderRadius: 13, background: ui.pill, display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Timer size={13} strokeWidth={2.2} color={dark ? ui.text : ui.muted} /></span>}
+                                  <span style={{ width: 26, height: 26, borderRadius: 8, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", background: isDone ? h : "transparent", border: `1.5px solid ${isDone ? h : ui.checkBorder}`, boxSizing: "border-box" }}>
+                                    {isDone && <Tick size={16} ink={tickInkOn(h)} />}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
                             {hasDetail && (
-                              <div style={{ marginTop: 4, borderRadius: dark ? 10 : 12, padding: "7px 12px", background: isDone ? completedBg : (dark ? "#242427" : "rgba(229,231,235,0.58)"), border: `1px solid ${isDone ? completedFg + "24" : (dark ? "rgba(148,163,184,0.10)" : "rgba(148,163,184,0.10)")}` }}>
-                                {it.description && <div style={{ fontSize: 10, lineHeight: 1.45, fontWeight: 400, color: isDone ? completedFg : ui.muted }}>{it.description}</div>}
+                              <div style={{ marginTop: 4, borderRadius: 12, padding: "7px 12px", background: dark ? "#242427" : "rgba(229,231,235,0.58)", border: "1px solid rgba(148,163,184,0.10)" }}>
+                                {it.description && <div style={{ fontSize: 10, lineHeight: 1.45, fontWeight: 400, color: ui.muted }}>{it.description}</div>}
                                 {it.children && it.children.length > 0 && (
                                   <div style={{ marginTop: it.description ? 5 : 0, display: "flex", flexDirection: "column", gap: 4 }}>
                                     {it.children.map((c, ci) => (
                                       <div key={ci} style={{ display: "flex", alignItems: "flex-start", gap: 7, minWidth: 0 }}>
-                                        <span style={{ width: 4, height: 4, borderRadius: 2, background: isDone ? completedFg : ui.faint, flexShrink: 0, marginTop: 5, opacity: 0.75 }} />
-                                        <span style={{ fontSize: 10, color: isDone ? completedFg : ui.muted, lineHeight: 1.4 }}>{c}</span>
+                                        <span style={{ width: 4, height: 4, borderRadius: 2, background: ui.faint, flexShrink: 0, marginTop: 5, opacity: 0.75 }} />
+                                        <span style={{ fontSize: 10, color: ui.muted, lineHeight: 1.4 }}>{c}</span>
                                       </div>
                                     ))}
                                   </div>
                                 )}
                               </div>
                             )}
+                            {/* sub-steps under their parent, then the Add row */}
+                            {isBlock && <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingTop: 4 }}>
+                              {kids.map((k, ki) => <SubStepRow key={ki} it={k} ui={ui} hue={hue(allItems.find((x) => x.display_name === k.display_name && x.time === k.time) ?? k)} />)}
+                              {addRows && <AddRow ui={ui} />}
+                            </div>}
                           </div>
                         );
                       })}
@@ -477,13 +641,14 @@ export function ProtocolHomeScreen({
               );
             })}
           </div>
-        ))}
+          );
+        })}
 
         </div>
       </div>
 
       {/* floating TAB BAR */}
-      <div style={{ position: "absolute", left: 14, right: 14, bottom: 8, zIndex: 50, isolation: "isolate", display: "flex", alignItems: "center", borderRadius: 40, background: dark ? "#1C1C1E" : "#FFFFFF", border: `1px solid ${ui.border}`, boxShadow: dark ? "0 -6px 24px rgba(0,0,0,0.34)" : "0 -6px 24px rgba(15,23,42,0.14)", padding: "8px 5px" }}>
+      <div style={{ position: "absolute", left: 16, right: 16, bottom: 10, zIndex: 50, isolation: "isolate", display: "flex", alignItems: "center", borderRadius: 56, background: ui.dock, border: `1px solid ${ui.border}`, boxShadow: dark ? "0 -4px 20px rgba(0,0,0,0.34)" : "0 -4px 20px rgba(15,23,42,0.08)", padding: "8px 4px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 2, flex: 1, justifyContent: "space-around" }}>
           {[
             { I: SlidersHorizontal, label: "Home", active: true },
@@ -492,16 +657,14 @@ export function ProtocolHomeScreen({
             { I: ChartNoAxesCombined, label: "Stats", active: false },
             { I: ShoppingBasket, label: "Supplies", active: false },
           ].map(({ I, label, active }) => (
-            <div key={label} style={{ width: 48, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-              <span style={{ width: 38, height: 30, borderRadius: 28, display: "inline-flex", alignItems: "center", justifyContent: "center", background: active ? ui.panel : "transparent" }}>
-                <I size={19} strokeWidth={active ? 2 : 1.4} color={active ? ui.text : ui.muted} />
-              </span>
-              <span style={{ fontSize: 8.5, fontWeight: 400, marginTop: 2, color: active ? ui.text : ui.muted }}>{label}</span>
+            <div key={label} style={{ width: 52, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+              <I size={22} strokeWidth={active ? 1.5 : 1} color={active ? ui.selected : ui.faint} />
+              <span style={{ fontSize: 9, lineHeight: "12px", fontWeight: 400, marginTop: 2, color: active ? ui.selected : ui.faint }}>{label}</span>
             </div>
           ))}
         </div>
-        <span style={{ width: 48, height: 48, borderRadius: 24, background: ui.plus, display: "inline-flex", alignItems: "center", justifyContent: "center", marginLeft: 4, flexShrink: 0, boxShadow: "0 4px 12px rgba(0,0,0,0.18)" }}>
-          <Plus size={24} strokeWidth={1.6} color={ui.plusInk} />
+        <span style={{ width: 52, height: 52, borderRadius: 26, background: ui.plus, display: "inline-flex", alignItems: "center", justifyContent: "center", marginLeft: 4, flexShrink: 0, boxShadow: "0 4px 6px rgba(0,0,0,0.25)" }}>
+          <Plus size={26} strokeWidth={1} color={ui.plusInk} />
         </span>
       </div>
     </div>

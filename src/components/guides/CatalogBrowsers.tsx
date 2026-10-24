@@ -436,6 +436,9 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
   const [open, setOpen] = useState<string | null>(null);
   const [steps, setSteps] = useState<RoutineStep[] | null>(null);
   const [day, setDay] = useState(1);
+  // The phone preview in the app's own terms: a smart group as a card of rows or as one parent row (the app's smart-list preference), in light or dark.
+  const [listMode, setListMode] = useState<'card' | 'parent'>('parent');
+  const [phoneTheme, setPhoneTheme] = useState<'light' | 'dark'>('dark');
   const listRef = useRef<HTMLDivElement | null>(null);
   // Picking a day on the phone scrolls the step list to that day.
   const pickDay = (d: number) => { setDay(d); const el = listRef.current?.querySelector<HTMLElement>(`[data-day="${d}"]`); if (el && listRef.current) listRef.current.scrollTo({ top: Math.max(0, el.offsetTop - 4), behavior: 'smooth' }); };
@@ -511,7 +514,14 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
                 {!weekdays && phaseOf(phases, day) && <div style={{ color: acid, fontSize: 11 }}>Day {day} · {phaseOf(phases, day)}</div>}
               </div>;
             })()}
-            {steps ? <PhoneFrame width={300} screenBg="#FFFFFF"><ProtocolHomeScreen protocolName={r.name} items={dayItems} showDetails imageUrl={r.image || undefined} profileName="ROUTINE³" grouping="smart" /></PhoneFrame> : <span style={{ color: muted, fontSize: 11 }}>Loading…</span>}
+            {steps ? <>
+              <div role="group" aria-label="Phone view" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
+                {([['Groups', [['parent', 'Parent row'], ['card', 'Card']], listMode, setListMode], ['Look', [['dark', 'Dark'], ['light', 'Light']], phoneTheme, setPhoneTheme]] as const).map(([name, options, value, set]) => <span key={name} role="group" aria-label={name} style={{ display: 'inline-flex', border: `1px solid ${line}`, borderRadius: 999, overflow: 'hidden' }}>
+                  {options.map(([key, text]) => <button key={key} type="button" aria-pressed={value === key} onClick={() => (set as (v: string) => void)(key)} style={{ border: 0, padding: '3px 10px', fontSize: 10, cursor: 'pointer', background: value === key ? 'rgba(199,216,163,.14)' : 'transparent', color: value === key ? acid : ink }}>{text}</button>)}
+                </span>)}
+              </div>
+              <PhoneFrame width={300} screenBg={phoneTheme === 'dark' ? '#000000' : '#FFFFFF'}><ProtocolHomeScreen protocolName={r.name} items={dayItems} showDetails imageUrl={r.image || undefined} profileName="ROUTINE³" grouping="smart" smartListMode={listMode} theme={phoneTheme} addRows /></PhoneFrame>
+            </> : <span style={{ color: muted, fontSize: 11 }}>Loading…</span>}
           </div>
           <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 17, fontWeight: 600 }}>{r.name}</div>
