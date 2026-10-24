@@ -24,8 +24,8 @@ export const PROTOCOL_CARD_CSS = `
 .r3-pcard:hover,.r3-pcard:focus-within{--lift:-4px;border-color:#667245;box-shadow:0 22px 44px -18px rgba(17,18,15,.4)}
 .r3-pcard-main:focus-visible{outline:2px solid #9A6A2F;outline-offset:-4px}
 .r3-pcard[data-pressed=true]{border-color:#11120F}
-.r3-pcard-actions{position:absolute;top:10px;right:10px;z-index:2;display:flex;gap:6px;opacity:0;transform:translateY(-4px);transition:opacity 300ms var(--ease),transform 300ms var(--ease)}
-.r3-pcard:hover .r3-pcard-actions,.r3-pcard:focus-within .r3-pcard-actions{opacity:1;transform:none}
+.r3-pcard-actions{position:absolute;top:10px;right:10px;z-index:2;display:flex;gap:6px;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity 300ms var(--ease),transform 300ms var(--ease)}
+.r3-pcard:hover .r3-pcard-actions,.r3-pcard:focus-within .r3-pcard-actions{opacity:1;pointer-events:auto;transform:none}
 .r3-pcard-act{position:relative;display:grid;place-items:center;width:34px;height:34px;margin:0;padding:0;border:1px solid rgba(17,18,15,.55);border-radius:4px;background:rgba(255,255,255,.92);color:#11120F;cursor:pointer;transition:background 200ms ease,color 200ms ease,border-color 200ms ease}
 .r3-pcard-act::after{content:"";position:absolute;inset:-5px}
 .r3-pcard-act:hover{background:#11120F;border-color:#11120F;color:#FFF}
@@ -49,8 +49,8 @@ export const PROTOCOL_CARD_CSS = `
 .r3-pcard-cta{display:inline-flex;flex:0 0 auto;align-items:center;gap:8px;font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#11120F}
 .r3-pcard-cta svg{transition:transform 400ms var(--ease)}
 .r3-pcard:hover .r3-pcard-cta svg,.r3-pcard:focus-within .r3-pcard-cta svg{transform:translateX(4px)}
-@media (hover:none){
-  .r3-pcard-actions{opacity:1;transform:none}
+@media (hover:none),(pointer:coarse){
+  .r3-pcard-actions{opacity:1;pointer-events:auto;transform:none}
   .r3-pcard-img{filter:${COLOUR}}
   .r3-pcard-blur{filter:${COLOUR} blur(3.5px)}
   .r3-pcard-plate{filter:none}
