@@ -1408,8 +1408,8 @@ export async function listFitnessRoutines(accessToken: string, categories: strin
   const or = [...categories.map((c) => `category.ilike.${encodeURIComponent(c)}`), ...nameTerms.map((t) => `name.imatch.%5Cm${encodeURIComponent(t.replace(/[^\w ]/g, ''))}`)].join(',');
   const query = (columns: string) => fetch(`${rest()}/protocols?select=${columns}&user_id=is.null&is_public=not.is.false&is_active=not.is.false&or=(${or})&order=name`, { headers: headers(accessToken) });
   let res = await query('id,name,description,image_url,category,tags,total_days,target_gender,target_age_min,target_age_max');
-  // An environment without the audience columns still lists its routines, just without who they are for.
-  if (!res.ok) res = await query('id,name,description,image_url,category,tags,total_days');
+  // An environment without the audience columns (42703, undefined column) still lists its routines, just without who they are for.
+  if (!res.ok && (await res.clone().json().catch(() => null) as { code?: string } | null)?.code === '42703') res = await query('id,name,description,image_url,category,tags,total_days');
   if (!res.ok) throw new Error(`Could not load fitness routines (${res.status})`);
   return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, description: txt(r.description), image: txt(r.image_url), category: r.category, tags: Array.isArray(r.tags) ? r.tags.map(String) : [], totalDays: num(r.total_days), gender: txt(r.target_gender), ageMin: num(r.target_age_min), ageMax: num(r.target_age_max) }));
 }

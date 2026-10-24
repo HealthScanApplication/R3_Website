@@ -124,7 +124,7 @@ export function ProtocolCard({ title, kicker, tags, copy, imageUrl, by, cta = 'V
     <div className="r3-pcard-body">
       {kicker && <span className="r3-pcard-kicker">{kicker}</span>}
       <h3 className="r3-pcard-title">{title}</h3>
-      {tags && tags.length > 0 && <ul className="r3-pcard-tags" aria-label="Tags">{tags.map((tag) => <li key={`${tag.kind || 'tag'}:${tag.label}`} className="r3-pcard-tag" data-kind={tag.kind}>{tag.label}</li>)}</ul>}
+      {tags && tags.length > 0 && <ul className="r3-pcard-tags">{tags.map((tag) => <li key={`${tag.kind || 'tag'}:${tag.label}`} className="r3-pcard-tag" data-kind={tag.kind}>{tag.label}</li>)}</ul>}
       {copy && <p className="r3-pcard-copy">{copy}</p>}
       <span className="r3-pcard-foot">
         <span className="r3-pcard-by">{by}</span>

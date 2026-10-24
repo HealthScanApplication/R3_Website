@@ -32,6 +32,11 @@ it('shows its tags under the title, in the order given, each marked with its kin
   expect(container.querySelector('.r3-pcard-tags')).toBeNull();
 });
 
+it('the tags are part of what a screen reader says about the card', () => {
+  render(<ProtocolCard title="Teen routine" kicker="1 day · Draft" tags={[{ label: 'Hygiene', kind: 'category' }, { label: 'Women', kind: 'gender' }, { label: 'Ages 13–19', kind: 'age' }]} onClick={() => {}} />);
+  expect(screen.getByRole('button', { name: /Teen routine.*Hygiene.*Women.*Ages 13–19/ })).toBeTruthy();
+});
+
 it('the serif title has room above and below its lines, so the tops of the letters are not clipped by the line clamp', () => {
   const rule = /\.r3-pcard-title\{([^}]*)\}/.exec(PROTOCOL_CARD_CSS)![1];
   expect(Number(/line-height:([\d.]+)/.exec(rule)![1])).toBeGreaterThanOrEqual(1.1);

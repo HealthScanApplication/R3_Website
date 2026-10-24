@@ -95,7 +95,7 @@ export function genderLabel(source: Pick<ProtocolTagSource, 'target_gender' | 'd
   return raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
-/** "Ages 18+", "Ages 13–19", "Up to 5": from the age columns, else the description's Age line. Null when neither says. */
+/** "Ages 18+", "Ages 13–19", "Up to 5": from the age columns, else the number range in the description's Age line. Null when neither says, and for "All ages". */
 export function ageLabel(source: Pick<ProtocolTagSource, 'target_age_min' | 'target_age_max' | 'description'>): string | null {
   const min = typeof source.target_age_min === 'number' ? source.target_age_min : null;
   const max = typeof source.target_age_max === 'number' ? source.target_age_max : null;
@@ -103,9 +103,10 @@ export function ageLabel(source: Pick<ProtocolTagSource, 'target_age_min' | 'tar
   if (min !== null && (max === null || max >= 99)) return `Ages ${min}+`;
   if (min !== null && max !== null) return `Ages ${min}–${max}`;
   if (max !== null) return `Up to ${max}`;
-  const line = /Age:\s*(?:Adults\s*)?([^.]+)\./.exec(source.description || '')?.[1]?.trim();
-  if (!line || /^(not specified|any|all|everyone)$/i.test(line)) return null;
-  return /^\d/.test(line) ? `Ages ${line}` : titleCase(line);
+  // The builder's own age options: "Adults 45–64", "Women 45–64", "Teens 13–17", "Infants 0–1", "Adults 65+", "All ages", "All childhood".
+  const line = /Age:\s*([^.]+)\./.exec(source.description || '')?.[1]?.trim() || '';
+  const range = /(\d+)\s*(?:[–-]\s*(\d+)|(\+))/.exec(line);
+  return range ? (range[3] ? `Ages ${range[1]}+` : `Ages ${range[1]}–${range[2]}`) : null;
 }
 
 /** Who it is for: gender, then age. */
@@ -116,17 +117,16 @@ export function audienceTags(source: ProtocolTagSource): ProtocolTag[] {
 
 /**
  * Category, gender and age as tags. The category is the theme the protocol states (its category or tags) or its name
- * says; otherwise its own category word unless that only names a kind of record. A theme guessed from the description is
- * not used: a tag is only shown when the data behind it is plain. `category: false` leaves it out, for a list already
- * grouped by theme.
+ * says; otherwise its own category word. A theme guessed from the description is not used: a tag is only shown when the
+ * data behind it is plain. `category: false` leaves the category out, for a list already grouped by theme; `label` names
+ * it in the page's own words (a routine's "Strength"). Whatever the label, a kind of record ("module"), a part of the day
+ * (it is on the card's top line) or a repeat of the gender ("Women" and Women) is not a tag.
  */
-export function protocolTags(source: ProtocolTagSource, options: { category?: boolean } = {}): ProtocolTag[] {
+export function protocolTags(source: ProtocolTagSource, options: { category?: boolean; label?: string | null } = {}): ProtocolTag[] {
   const audience = audienceTags(source);
   if (options.category === false) return audience;
-  const theme = themeFromLabels(source) || firstTheme(THEME_BY_WORDS, (source.name || '').toLowerCase());
   const own = (source.category || '').trim();
-  const label = theme || (own && !NOT_A_SUBJECT.test(own.toLowerCase()) && !protocolWhen(own) ? titleCase(own) : '');
-  // "Women" as a category and as a gender is one tag.
-  if (!label || audience.some((t) => t.label.toLowerCase() === label.toLowerCase())) return audience;
+  const label = options.label || themeFromLabels(source) || firstTheme(THEME_BY_WORDS, (source.name || '').toLowerCase()) || (own ? titleCase(own) : '');
+  if (!label || NOT_A_SUBJECT.test(label.toLowerCase()) || protocolWhen(label) || audience.some((t) => t.label.toLowerCase() === label.toLowerCase())) return audience;
   return [{ label, kind: 'category' }, ...audience];
 }

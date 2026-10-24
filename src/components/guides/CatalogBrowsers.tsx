@@ -15,7 +15,7 @@ import { NUTRIENTS } from '../../utils/recipeNutrients';
 import { Header } from './GuardianBuilders';
 import { ProtocolCard, ProtocolCardGrid, clipCopy } from './ProtocolCard';
 import { ruleGroupFor } from '../../utils/protocolRules';
-import { audienceTags, type ProtocolTag } from '../../utils/protocolTags';
+import { protocolTags, type ProtocolTag } from '../../utils/protocolTags';
 
 const ink = '#F5F2EA', muted = '#B8B6AF', line = 'rgba(245,242,234,0.24)', acid = '#C7D8A3', panel = '#11120F', warn = '#E8B07A', danger = '#E88A7A';
 const field: React.CSSProperties = { height: 40, border: `1px solid ${line}`, background: '#090A08', color: ink, padding: '0 10px', fontSize: 13 };
@@ -397,10 +397,9 @@ export function routineCategoryLabel(category: string | null): string | null {
   const hit = (Object.values(ROUTINE_SECTIONS) as Array<{ kicker: string; categories: readonly string[] }>).find((x) => x.categories.includes(c));
   return hit ? hit.kicker : c.replace(/\b\w/g, (m) => m.toUpperCase());
 }
-/** A routine's tags: its category (Fitness, Strength, Hygiene …), then who it is for. */
+/** A routine's tags: its category in the section's words (Fitness, Strength, Hygiene …), then who it is for. */
 export function routineTags(r: FitnessRoutine): ProtocolTag[] {
-  const category = routineCategoryLabel(r.category);
-  return [...(category ? [{ label: category, kind: 'category' as const }] : []), ...audienceTags({ target_gender: r.gender, target_age_min: r.ageMin, target_age_max: r.ageMax, description: r.description })];
+  return protocolTags({ category: r.category, tags: r.tags, name: r.name, description: r.description, target_gender: r.gender, target_age_min: r.ageMin, target_age_max: r.ageMax }, { label: routineCategoryLabel(r.category) });
 }
 /** Remove redundant clock-period wording from workout labels; the UI already shows Morning/Evening and a time. */
 export function routineGroupLabel(group?: string | null): string | null {

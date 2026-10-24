@@ -68,8 +68,20 @@ describe('ageLabel', () => {
     expect(ageLabel({ target_age_min: null, target_age_max: 5 })).toBe('Up to 5');
   });
 
-  it('falls back to the Age line of the description, and is nothing when neither says', () => {
+  it('falls back to the Age line of the description, whichever of the builder\'s age options it holds', () => {
     expect(ageLabel({ description: 'Population: Women. Age: Adults 45–64.' })).toBe('Ages 45–64');
+    expect(ageLabel({ description: 'Population: Women. Age: Women 45–64.' })).toBe('Ages 45–64');
+    expect(ageLabel({ description: 'Population: Men. Age: Teens 13–17.' })).toBe('Ages 13–17');
+    expect(ageLabel({ description: 'Population: Children. Age: Infants 0–1.' })).toBe('Ages 0–1');
+    expect(ageLabel({ description: 'Population: Women. Age: Girls 0–12.' })).toBe('Ages 0–12');
+    expect(ageLabel({ description: 'Population: Everyone. Age: Adults 65+.' })).toBe('Ages 65+');
+  });
+
+  it('is nothing for the builder\'s "no restriction" values, and when neither source says', () => {
+    expect(ageLabel({ description: 'Population: Everyone. Age: All ages.' })).toBeNull();
+    expect(ageLabel({ description: 'Population: Children. Age: All childhood.' })).toBeNull();
+    expect(audienceTags({ description: 'Population: Everyone. Age: All ages.', target_gender: 'all' })).toEqual([]);
+    expect(audienceTags({ description: 'Population: Women. Age: Women 45–64.' }).map((t) => t.label)).toEqual(['Women', 'Ages 45–64']);
     expect(ageLabel({ description: 'Age: Not specified.' })).toBeNull();
     expect(ageLabel({ description: 'No audience here.' })).toBeNull();
     expect(ageLabel({})).toBeNull();
@@ -121,6 +133,13 @@ describe('protocolTags', () => {
     expect(labels(protocolTags({ category: 'module', name: 'Focus & Brain' }))).toEqual([]);
     expect(labels(protocolTags({ category: null, tags: ['Weekly', 'Fitness', 'Wellness'], name: 'Check' }))).toEqual(['Fitness']);
     expect(labels(protocolTags({ category: 'kids', tags: ['child', 'nutrition', 'age-3-4'], name: 'Child Nutrition • 3 to 4 Years' }))).toEqual(['Diet']);
+  });
+
+  it('a label given by the page is used, and still goes through the same rules', () => {
+    expect(labels(protocolTags({ category: 'strength', name: 'Pull day' }, { label: 'Strength' }))).toEqual(['Strength']);
+    expect(protocolTags({ category: 'module', name: 'Gentle flow' }, { label: 'Module' })).toEqual([]);
+    expect(protocolTags({ category: 'midday', name: 'Reset' }, { label: 'Midday' })).toEqual([]);
+    expect(labels(protocolTags({ category: 'Women', target_gender: 'female' }, { label: 'Women' }))).toEqual(['Women']);
   });
 
   it('a protocol with no data has no tags', () => {
