@@ -49,6 +49,21 @@ it('with no picture, or a picture that fails to load, it shows the plate', () =>
   expect([...container.querySelectorAll('img')].map((i) => i.getAttribute('src'))).toEqual([PROTOCOL_PLATE]);
 });
 
+it('a card that gets a different picture after one failed tries the new one; the same failed picture stays the plate', () => {
+  const { container, rerender } = render(<ProtocolCard title="Changing" imageUrl="https://example.com/missing.png" />);
+  fireEvent.error(container.querySelector('.r3-pcard-img')!);
+  expect([...container.querySelectorAll('img')].map((i) => i.getAttribute('src'))).toEqual([PROTOCOL_PLATE]);
+  rerender(<ProtocolCard title="Changing" imageUrl="https://example.com/missing.png" />);
+  expect(container.querySelectorAll('img')).toHaveLength(1);
+  rerender(<ProtocolCard title="Changing" imageUrl="https://example.com/fixed.png" />);
+  expect(container.querySelector('.r3-pcard-img')!.getAttribute('src')).toBe('https://example.com/fixed.png');
+});
+
+it('an open card brings the colour into the fallback plate as it does into a picture', () => {
+  const colourRule = PROTOCOL_CARD_CSS.split('\n').find((line) => line.includes('.r3-pcard-plate') && line.includes('grayscale(0)'))!;
+  expect(colourRule).toContain('.r3-pcard[data-pressed=true] .r3-pcard-plate');
+});
+
 it('leans toward the mouse and settles when it leaves; touch and zero-size boxes do nothing', () => {
   render(<ProtocolCard title="Leaning" />);
   const card = screen.getByRole('button', { name: /Leaning/ }).closest('.r3-pcard') as HTMLElement;
