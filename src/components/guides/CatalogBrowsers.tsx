@@ -13,6 +13,7 @@ import { ProtocolHomeScreen } from '../mockups/ProtocolHomeScreen';
 import { PhoneFrame } from '../mockups/PhoneFrame';
 import { NUTRIENTS } from '../../utils/recipeNutrients';
 import { Header } from './GuardianBuilders';
+import { ProtocolCard, ProtocolCardGrid, clipCopy } from './ProtocolCard';
 import { ruleGroupFor } from '../../utils/protocolRules';
 
 const ink = '#F5F2EA', muted = '#B8B6AF', line = 'rgba(245,242,234,0.24)', acid = '#C7D8A3', panel = '#11120F', warn = '#E8B07A', danger = '#E88A7A';
@@ -489,14 +490,9 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
     <p role="status" style={{ color: error ? warn : muted, fontSize: 11 }}>{busy ? 'Loading…' : error || (items.length ? `${items.length} routines` : `No published ${cfg.kicker.toLowerCase()} routines yet. Build one in the Protocol builder, and see the ${cfg.kicker.toLowerCase()} activities below this section in the sidebar.`)}</p>
     {byPeriod(items).map(([period, group]) => <section key={period} aria-label={period} style={{ marginBottom: 22 }}>
     <h3 style={{ ...kicker, color: acid, margin: '0 0 8px' }}>{period} <span style={{ color: muted }}>· {group.length}</span></h3>
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 8 }}>
+    <ProtocolCardGrid>
       {group.map((r) => <Fragment key={r.id}>
-        <button type="button" aria-pressed={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)} style={{ textAlign: 'left', border: `1px solid ${open === r.id ? acid : line}`, background: panel, color: ink, padding: 0, cursor: 'pointer', overflow: 'hidden' }}>
-          <div style={{ position: 'relative', aspectRatio: '16 / 9', background: r.image ? `url(${r.image}) center/cover` : '#1B1C18' }}>
-            <span style={{ position: 'absolute', top: 6, right: 6, display: 'flex', gap: 4 }}>{([[routineCategoryLabel(r.category), false], [routinePeriod(r), true]] as const).filter(([t]) => t).map(([t, period]) => <span key={String(period)} style={{ background: 'rgba(9,10,8,.82)', color: period ? acid : ink, border: `1px solid ${period ? acid : line}`, borderRadius: 999, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>{t}</span>)}</span>
-          </div>
-          <div style={{ padding: '8px 10px 10px' }}><div style={{ fontSize: 13, fontWeight: 600 }}>{r.name}</div><div style={{ color: muted, fontSize: 10, marginTop: 3 }}>{[r.category, ...r.tags.slice(0, 2)].filter(Boolean).join(' · ')}</div></div>
-        </button>
+        <ProtocolCard pressed={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)} imageUrl={r.image} kicker={[routineCategoryLabel(r.category), routinePeriod(r)].filter(Boolean).join(' · ')} title={r.name} copy={clipCopy(descriptionParagraphs(r.description)[0])} cta={open === r.id ? 'Hide steps' : 'View steps'} />
         {open === r.id && <div role="region" aria-label={`${r.name} steps`} style={{ gridColumn: '1 / -1', border: `1px solid ${acid}`, background: '#141611', padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 20, alignItems: 'start' }}>
           <div aria-label="As in the app" style={{ display: 'grid', justifyItems: 'center', gap: 8 }}>
             <div style={{ ...kicker, margin: 0 }}>As in the app{days > 1 ? (weekdays ? ` · ${dayName(day)}` : ` · day ${day} of ${days}${days > 7 ? ` · week ${Math.ceil(day / 7)}` : ''}`) : ''}</div>
@@ -535,7 +531,7 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
           </div>
         </div>}
       </Fragment>)}
-    </div></section>)}
+    </ProtocolCardGrid></section>)}
     {modal && accessToken && <StepModal accessToken={accessToken} target={modal} onClose={() => setModal(null)} />}
   </div>;
 }
