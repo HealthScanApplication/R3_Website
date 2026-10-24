@@ -72,7 +72,7 @@ it('the stylesheet keeps the effect: black and white tilt-shift at rest, colour 
   expect(css).toMatch(/\.r3-pcard-blur\.bottom\{[^}]*mask-image:linear-gradient\(to top/);
   expect(css).toMatch(/\.r3-pcard:hover \.r3-pcard-img[^{]*\{filter:grayscale\(0\)/);
   expect(css).toMatch(/\.r3-pcard:focus-within \.r3-pcard-img/);
-  expect(css).toMatch(/@media \(hover:none\)\{[^@]*\.r3-pcard-img\{filter:grayscale\(0\)/);
+  expect(css).toMatch(/@media \(hover:none\),\(pointer:coarse\)\{[^@]*\.r3-pcard-img\{filter:grayscale\(0\)/);
   expect(css).toMatch(/@media \(prefers-reduced-motion:reduce\)\{[^@]*transform:none!important/);
 });
 
@@ -110,8 +110,8 @@ it('a card the viewer does not own has no Edit or Delete', () => {
 
 it('the action buttons show on hover and focus, always on touch, and the delete one turns red', () => {
   const css = PROTOCOL_CARD_CSS.replace(/\s+/g, ' ');
-  expect(css).toMatch(/\.r3-pcard-actions\{[^}]*opacity:0/);
-  expect(css).toMatch(/\.r3-pcard:hover \.r3-pcard-actions,\.r3-pcard:focus-within \.r3-pcard-actions\{opacity:1/);
-  expect(css).toMatch(/@media \(hover:none\)\{ \.r3-pcard-actions\{opacity:1/);
+  expect(css).toMatch(/\.r3-pcard-actions\{[^}]*opacity:0;pointer-events:none/); // invisible buttons cannot be hit by a first tap or a stray click
+  expect(css).toMatch(/\.r3-pcard:hover \.r3-pcard-actions,\.r3-pcard:focus-within \.r3-pcard-actions\{opacity:1;pointer-events:auto/);
+  expect(css).toMatch(/@media \(hover:none\),\(pointer:coarse\)\{ \.r3-pcard-actions\{opacity:1;pointer-events:auto/);
   expect(css).toMatch(/\.r3-pcard-act\.danger:hover\{background:#B4472F/);
 });
