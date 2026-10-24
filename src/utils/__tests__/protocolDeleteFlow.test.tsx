@@ -125,3 +125,29 @@ it('the cards say what each protocol is and who it is for, from data it actually
   expect(slow.querySelector('.r3-pcard-kicker')!.textContent).toBe('Morning · 14 days · Public');
   expect(tagsOf(slow)).toEqual(['Wellness']);
 });
+
+it('your own and your family\'s routines are cards with the app\'s default avatar for each person, or their own photo', async () => {
+  store.protocols = [store.row('s1', 'Sleep reset'), store.row('m1', 'Your Routine'), store.row('m2', 'Your Routine'), store.row('m3', 'Your Routine'), store.row('m4', 'Your Routine'), store.row('m5', 'Your Routine')];
+  store.owners = new Map<string, unknown>([
+    ['m1', { name: 'John Ferreira', avatarUrl: null, relation: 'self', gender: 'male', age: 44 }],
+    ['m2', { name: 'Pati Pirog', avatarUrl: null, relation: 'family', gender: 'female', age: 41 }],
+    ['m3', { name: 'Zoe Ferreira', avatarUrl: null, relation: 'family', gender: 'female', age: 8 }],
+    ['m4', { name: 'Sam', avatarUrl: null, relation: 'family', gender: null, age: null }],
+    ['m5', { name: 'Kit', avatarUrl: 'https://example.com/kit.jpg', relation: 'family', gender: 'male', age: 9 }],
+  ]);
+  render(<Workspace profile={store.profile as any} onProfile={() => {}} />);
+  await screen.findByRole('heading', { level: 3, name: 'John Ferreira’s routine' });
+  const card = (name: string) => screen.getByRole('heading', { level: 3, name: name }).closest('.r3-pcard') as HTMLElement;
+  const avatar = (name: string) => card(name).querySelector('.r3-pcard-plate-slot img')?.getAttribute('src');
+  expect(avatar('John Ferreira’s routine')).toBe('/images/guides/avatars/member/man.png');
+  expect(avatar('Pati Pirog’s routine')).toBe('/images/guides/avatars/member/woman.png');
+  expect(avatar('Zoe Ferreira’s routine')).toBe('/images/guides/avatars/member/child-girl.png');
+  expect(avatar('Sam’s routine')).toBe('/images/guides/avatars/member/neutral.png'); // no gender stated: not guessed
+  // their own photo is the picture, with no avatar on a plate
+  expect(avatar('Kit’s routine')).toBeUndefined();
+  expect(card('Kit’s routine').querySelector('.r3-pcard-img')!.getAttribute('src')).toBe('https://example.com/kit.jpg');
+  expect(card('John Ferreira’s routine').querySelector('.r3-pcard-kicker')!.textContent).toBe('You · 7 days · Draft');
+  expect(card('Zoe Ferreira’s routine').querySelector('.r3-pcard-kicker')!.textContent).toBe('Family · 7 days · Draft');
+  // no Delete on a person's own routine
+  expect(screen.queryByRole('button', { name: /^Delete .*routine/ })).toBeNull();
+});

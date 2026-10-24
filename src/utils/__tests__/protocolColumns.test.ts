@@ -62,6 +62,23 @@ it('a database missing both groups loses both, one column at a time, and still a
   expect(last).toContain('name');
 });
 
+it('the Protocols tab asks for both lists at once: both succeed even though each is told about the same missing columns', async () => {
+  const asked: string[][] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    const columns = /[?&]select=([^&]*)/.exec(String(url))![1].split(',');
+    asked.push(columns);
+    await new Promise((resolve) => setTimeout(resolve, 5)); // both requests are in flight before either answer arrives
+    const gone = columns.find((c) => PROFILE.includes(c));
+    return gone ? new Response(JSON.stringify(missing(gone).body), { status: 400 }) : new Response(JSON.stringify([{ id: 'p1', name: 'One' }]), { status: 200 });
+  }));
+  const [mine, everyone] = await Promise.all([admin.listProtocols('tok'), admin.listPublicProtocols('tok')]);
+  expect(mine).toEqual([{ id: 'p1', name: 'One' }]);
+  expect(everyone).toEqual([{ id: 'p1', name: 'One' }]);
+  const last = asked[asked.length - 1];
+  for (const c of PROFILE) expect(last).not.toContain(c);
+  expect(last).toContain('tags');
+});
+
 it('an undefined-column error that names no column drops every optional column', async () => {
   const asked: string[][] = [];
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {

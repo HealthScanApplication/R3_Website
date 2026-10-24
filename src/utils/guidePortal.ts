@@ -262,19 +262,24 @@ export async function submitGuardianOptIn(guideId: string, lead: { name: string;
  * (user_active_protocol.profile_id → family_profiles; null profile = the account's main user).
  * Returns protocol id → that person's name and avatar, so routines can be labelled by owner.
  */
-export async function listRoutineOwners(userId: string, mainName: string, mainAvatar?: string | null): Promise<Map<string, { name: string; avatarUrl: string | null; relation: string | null }>> {
-  const owners = new Map<string, { name: string; avatarUrl: string | null; relation: string | null }>();
+/** Whose routine it is: their name, their own photo if the app saved one a browser can load, and what the default avatar is chosen from (age, gender, relation). */
+export interface RoutineOwner { name: string; avatarUrl: string | null; relation: string | null; gender?: string | null; age?: number | null }
+export async function listRoutineOwners(userId: string, mainName: string, mainAvatar?: string | null): Promise<Map<string, RoutineOwner>> {
+  const owners = new Map<string, RoutineOwner>();
   // Avatars saved by the app can be device paths (file:///var/mobile/...); only web URLs load here.
   const webUrl = (url?: string | null) => (url && /^https?:\/\//i.test(url) ? url : null);
-  const [{ data: active }, { data: profiles }] = await Promise.all([
+  const profilesWith = (columns: string) => db().from('family_profiles').select(columns).eq('owner_id', userId);
+  const [{ data: active }, withFacts] = await Promise.all([
     db().from('user_active_protocol').select('protocol_id,profile_id').eq('user_id', userId),
-    db().from('family_profiles').select('id,name,avatar_url,is_main_user,relation').eq('owner_id', userId),
+    profilesWith('id,name,avatar_url,is_main_user,relation,age,gender'),
   ]);
+  // A database without the age and gender columns still names everyone, it just cannot say who is a child.
+  const { data: profiles } = withFacts.error ? await profilesWith('id,name,avatar_url,is_main_user,relation') : withFacts;
   const byId = new Map((profiles || []).map((profile: any) => [profile.id, profile]));
   const main = (profiles || []).find((profile: any) => profile.is_main_user);
   for (const row of (active || []) as { protocol_id: string; profile_id: string | null }[]) {
     const profile: any = row.profile_id ? byId.get(row.profile_id) : main;
-    owners.set(row.protocol_id, { name: profile?.name || mainName, avatarUrl: webUrl(profile?.avatar_url) || (row.profile_id ? null : webUrl(mainAvatar)), relation: row.profile_id ? (profile?.is_main_user ? 'self' : profile?.relation || 'family') : 'self' });
+    owners.set(row.protocol_id, { name: profile?.name || mainName, avatarUrl: webUrl(profile?.avatar_url) || (row.profile_id ? null : webUrl(mainAvatar)), relation: row.profile_id ? (profile?.is_main_user ? 'self' : profile?.relation || 'family') : 'self', gender: profile?.gender ?? null, age: typeof profile?.age === 'number' ? profile.age : null });
   }
   return owners;
 }

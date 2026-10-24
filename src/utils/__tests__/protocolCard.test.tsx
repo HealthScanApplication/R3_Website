@@ -88,6 +88,33 @@ it('an open card brings the colour into the fallback plate as it does into a pic
   expect(colourRule).toContain('.r3-pcard[data-pressed=true] .r3-pcard-plate');
 });
 
+it('carries what an offer needs: a badge and corner tags on the picture, the maker with an avatar, a line under the copy, and a plate of its own', () => {
+  const { container } = render(<ProtocolCard title="Offer" href="/o" badge="£29" corner={<span>PDF</span>} plate={<span data-testid="art">art</span>} byAvatar={<i data-testid="avatar" />} by="Guardian" extra={<span>★★★★★</span>} />);
+  const media = container.querySelector('.r3-pcard-media')!;
+  expect(media.querySelector('.r3-pcard-badge')!.textContent).toBe('£29');
+  expect(media.querySelector('.r3-pcard-corner')!.textContent).toBe('PDF');
+  expect(media.querySelector('.r3-pcard-plate-slot [data-testid="art"]')).toBeTruthy();
+  expect(media.querySelector('img')).toBeNull(); // the default plate picture is replaced
+  expect(container.querySelector('.r3-pcard-by [data-testid="avatar"]')).toBeTruthy();
+  expect(container.querySelector('.r3-pcard-by-name')!.textContent).toBe('Guardian');
+  expect(container.querySelector('.r3-pcard-extra')!.textContent).toBe('★★★★★');
+});
+
+it('a card with no photo gets the colour glow, which an open card or a hover brings in; a card with a photo does not', () => {
+  const { container, rerender } = render(<ProtocolCard title="No photo" onClick={() => {}} />);
+  expect(container.querySelector('.r3-pcard-glow')).toBeTruthy();
+  const rule = PROTOCOL_CARD_CSS.split('\n').find((l) => l.includes('.r3-pcard-glow') && l.includes(':hover'))!;
+  expect(rule).toContain('[data-pressed=true] .r3-pcard-glow');
+  rerender(<ProtocolCard title="With photo" imageUrl="https://example.com/p.png" onClick={() => {}} />);
+  expect(container.querySelector('.r3-pcard-glow')).toBeNull();
+});
+
+it('the stylesheet is in the page head, so a card outside a ProtocolCardGrid is styled too', () => {
+  const el = document.getElementById('r3-pcard-css');
+  expect(el).toBeTruthy();
+  expect(el!.textContent).toBe(PROTOCOL_CARD_CSS);
+});
+
 it('leans toward the mouse and settles when it leaves; touch and zero-size boxes do nothing', () => {
   render(<ProtocolCard title="Leaning" />);
   const card = screen.getByRole('button', { name: /Leaning/ }).closest('.r3-pcard') as HTMLElement;

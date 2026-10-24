@@ -12,6 +12,7 @@ import { CombineProtocols, DietBuilder, FitnessBuilder } from './GuardianBuilder
 import { ProtocolCard, ProtocolCardGrid, clipCopy } from './ProtocolCard';
 import { ProtocolRemovalDialog, type ProtocolRemoval } from './ProtocolRemoval';
 import { PROTOCOL_THEMES, daysLabel, protocolTags, protocolTheme, protocolWhen } from '../../utils/protocolTags';
+import { defaultAvatarKeyFor } from '../../utils/memberAvatar';
 import { ProtocolChildrenPanel } from './ProtocolChildrenPanel';
 import { customizeProtocolRecipe } from '../../utils/protocolCopies';
 import { ContentBuilder } from './ContentBuilder';
@@ -42,7 +43,7 @@ import {
   importGuideProfile, listGuideLeads, listGuideOffers, listGuideRecipes, listGuideValueRamps, listRoutineOwners, upsertGuideOffer, upsertGuideValueRamp, listPublicGuideProfiles, saveGuideProfile, listGuardianReviews, listGuardianReviewRequests, createGuardianReviewRequest, submitGuardianReview, setGuardianReviewStatus, createOfferPayment, confirmOfferPayment, buyUpsellOneClick, getFreeOfferDownload, requestGuardianReview, decideGuardianSite, listAllGuideProfiles, listGuardianSuggestions, setGuardianSuggestionStatus, listPublicGuardianOffers, listReviewSummaries, type AdminGuideProfile, type GuardianSuggestionRow, type GuardianReview, type GuardianReviewRequest, submitGuardianSuggestion, submitGuardianOptIn,
   createGuideLibraryFolder, createGuideLibraryItem, deleteGuideLibraryItem, getGuideFileDownloadUrl,
   listGuideLibraryFolders, listGuideLibraryItems, replaceGuideBrands, listGuideBrands, updateGuideRecipe, saveGuideRecipeDraft, listPersonalProtocolPeople, uploadGuideFile, uploadGuideImage, uploadGuideLibraryAudio,
-  type GuideBrand, type GuideLead, type GuideLibraryFolder, type GuideLibraryItem, type GuideLibraryKind, type GuideOffer, type GuideProfile, type GuideRecipe,
+  type GuideBrand, type RoutineOwner, type GuideLead, type GuideLibraryFolder, type GuideLibraryItem, type GuideLibraryKind, type GuideOffer, type GuideProfile, type GuideRecipe,
   type GuideValueRamp, type ImportedGuideProfile,
 } from '../../utils/guidePortal';
 import { LIBRARY_KINDS, buildLibraryDraft, filterLibraryItems, libraryErrorMessage, libraryKindDefinition, librarySourceDocumentPath, librarySourcePrompt, librarySourceSubtitle, librarySourceUrls, type LibraryDraftInput } from '../../utils/guideLibrarySources';
@@ -897,7 +898,7 @@ function PublicGuidePage({ isSignedIn }: { isSignedIn: boolean }) {
                 <div aria-label="Filter offers" style={{ display: 'flex', gap: 7 }}>{(['all', 'free', 'paid'] as const).map((value) => <button type="button" key={value} onClick={() => setOfferFilter(value)} aria-pressed={offerFilter === value} style={{ height: 34, padding: '0 14px', border: `1px solid ${offerFilter === value ? ink : line}`, background: offerFilter === value ? ink : 'transparent', color: offerFilter === value ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer' }}>{value === 'all' ? 'All' : value === 'free' ? 'Free' : 'Paid'}</button>)}</div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,300px),1fr))', gap: 18 }}>
-                {shown.map((offer) => { const g = byId.get(offer.guide_id)!; const free = offer.access_model === 'free'; return <ProductCard key={offer.id} {...(reviewSummaries[offer.guide_id] || {})} kind={offer.kind} eyebrow={audienceLabel(g.social_links?.audience_details) || 'Everyone'} title={customerFacingOfferTitle(offer.title)} copy={(offer.description || '').split(' Delivery:')[0] || undefined} price={free ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid'} name={g.display_name} avatarUrl={g.avatar_url} accent="#667245" cta={free ? 'Get it free' : 'View offer'} href={`/guardians/${encodeURIComponent(g.slug)}${free ? '#start' : '#offers'}`} />; })}
+                {shown.map((offer) => { const g = byId.get(offer.guide_id)!; const free = offer.access_model === 'free'; return <ProductCard key={offer.id} {...(reviewSummaries[offer.guide_id] || {})} imageUrl={offer.cover_url} kind={offer.kind} eyebrow={audienceLabel(g.social_links?.audience_details) || 'Everyone'} title={customerFacingOfferTitle(offer.title)} copy={(offer.description || '').split(' Delivery:')[0] || undefined} price={free ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid'} name={g.display_name} avatarUrl={g.avatar_url} accent="#667245" cta={free ? 'Get it free' : 'View offer'} href={`/guardians/${encodeURIComponent(g.slug)}${free ? '#start' : '#offers'}`} />; })}
               </div>
               {!shown.length && <p style={{ color: muted }}>No offers match this filter yet.</p>}
             </div>
@@ -1205,7 +1206,7 @@ function GuardianFunnel({ profile, offers, ramp, accent, headingFont, reviews = 
       </div>
       {/* Same app-style offer cards as the hero, one per step of the path. */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,300px),360px))', justifyContent: 'center', gap: 18 }}>
-        {steps.map((offer, index) => { const free = index === 0 && offer.access_model === 'free'; return <ProductCard key={offer.id} {...reviewStats(reviews)} audience={audienceLabel(profile.social_links?.audience_details)} kind={offer.kind} eyebrow={`Step ${index + 1} · ${free ? 'Start free' : SUPPORT_KINDS.includes(offer.kind) ? 'Personal support' : 'Go deeper'}`} title={customerFacingOfferTitle(offer.title)} copy={offer.description || 'The next step in your journey.'} price={price(offer)} name={profile.display_name} avatarUrl={profile.avatar_url} accent={accent} cta={free ? 'Get it free' : sellsHere(offer) ? 'Get it now' : 'See what is included'} href={free ? '#start' : offerHref(offer)} onClick={free ? () => document.getElementById('start')?.scrollIntoView({ behavior: 'smooth' }) : sellsHere(offer) ? () => setCheckoutOffer(offer) : undefined} />; })}
+        {steps.map((offer, index) => { const free = index === 0 && offer.access_model === 'free'; return <ProductCard key={offer.id} {...reviewStats(reviews)} audience={audienceLabel(profile.social_links?.audience_details)} imageUrl={offer.cover_url} kind={offer.kind} eyebrow={`Step ${index + 1} · ${free ? 'Start free' : SUPPORT_KINDS.includes(offer.kind) ? 'Personal support' : 'Go deeper'}`} title={customerFacingOfferTitle(offer.title)} copy={offer.description || 'The next step in your journey.'} price={price(offer)} name={profile.display_name} avatarUrl={profile.avatar_url} accent={accent} cta={free ? 'Get it free' : sellsHere(offer) ? 'Get it now' : 'See what is included'} href={free ? '#start' : offerHref(offer)} onClick={free ? () => document.getElementById('start')?.scrollIntoView({ behavior: 'smooth' }) : sellsHere(offer) ? () => setCheckoutOffer(offer) : undefined} />; })}
       </div>
     </section>}
     {entry && <section id="start" style={{ padding: `clamp(60px,9vw,120px) ${PAGE_X}` }}>
@@ -1268,40 +1269,22 @@ const productArt = (kind?: string): TagArt | undefined => kind ? (offerTypeArt a
 // Light version of the dashboard offer card (art, author, title, value stars, price) for the public site and funnel.
 // Review stats for offer cards: average + count of published reviews, or nothing when there are none.
 const reviewStats = (reviews: GuardianReview[]) => { const live = reviews.filter((r) => r.status === 'published'); return live.length ? { rating: live.reduce((sum, r) => sum + r.rating, 0) / live.length, reviewCount: live.length } : {}; };
-function ProductCard({ kind, eyebrow, title, copy, price, name, avatarUrl, accent, cta = 'View', href, onClick, rating, reviewCount = 0, audience, imageUrl }: { imageUrl?: string | null; audience?: string; rating?: number; reviewCount?: number; kind?: string; eyebrow?: string; title: string; copy?: string; price?: string; name: string; avatarUrl?: string | null; accent: string; cta?: string; href?: string; onClick?: () => void }) {
-  const art = productArt(kind);
-  const stars = kind && kind in offerValueScores ? offerValueScores[kind as UpsellKind] : 2;
-  // Self-contained tilt + cursor glow so it works on the public page too (no parent handler there).
-  const [tilt, setTilt] = useState({ x: 0, y: 0, gx: 50, gy: 50, on: false });
-  const move = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (event.pointerType === 'touch') return;
-    const b = event.currentTarget.getBoundingClientRect();
-    const x = (event.clientX - b.left) / b.width; const y = (event.clientY - b.top) / b.height;
-    setTilt({ x: (.5 - y) * 8, y: (x - .5) * 10, gx: x * 100, gy: y * 100, on: true });
-  };
-  // App-style offer card (matches the sign-up/upsell pages): image, format tag, Guardian, title, value, stars, black CTA.
-  return <div onPointerMove={move} onPointerLeave={() => setTilt({ x: 0, y: 0, gx: 50, gy: 50, on: false })} style={{ position: 'relative', overflow: 'hidden', textAlign: 'left', fontFamily: APP.font, color: APP.text, background: APP.bg, border: `1px solid ${tilt.on ? APP.green : APP.border}`, borderRadius: 20, boxShadow: tilt.on ? '0 22px 50px rgba(17,24,39,.2)' : '0 14px 36px rgba(17,24,39,.12)', transform: `perspective(900px) rotateX(${tilt.x.toFixed(2)}deg) rotateY(${tilt.y.toFixed(2)}deg)${tilt.on ? ' translateY(-2px)' : ''}`, transition: tilt.on ? 'box-shadow 180ms ease, border-color 180ms ease' : 'transform 260ms ease, box-shadow 220ms ease, border-color 220ms ease', willChange: 'transform', display: 'flex', flexDirection: 'column' }}>
-    <span aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 3, pointerEvents: 'none', opacity: tilt.on ? 1 : 0, transition: 'opacity 200ms ease', background: `radial-gradient(260px circle at ${tilt.gx}% ${tilt.gy}%, rgba(255,255,255,.55), transparent 70%)`, mixBlendMode: 'soft-light' }} />
-    {price && <span style={{ position: 'absolute', zIndex: 2, top: 14, left: 14, background: '#000', color: '#FFF', borderRadius: 8, padding: '5px 10px', fontSize: 11, fontWeight: 600, letterSpacing: .5, textTransform: 'uppercase' }}>{price}</span>}
-    {/* Format and audience tags sit in the top-right corner, opposite the price badge. */}
-    <div style={{ position: 'absolute', zIndex: 2, top: 14, right: 14, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, maxWidth: '62%' }}>
-      <OfferFormatTag kind={kind} />
-      {audience && <span style={{ display: 'inline-flex', alignItems: 'center', height: 24, padding: '0 10px', borderRadius: 999, background: APP.surface, border: `1px solid ${APP.border}`, color: APP.text, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{audience}</span>}
-    </div>
-    <div style={{ display: 'flex', gap: 16, alignItems: 'center', padding: `${audience ? 76 : 50}px 18px 6px` }}>
-      {imageUrl ? <img src={imageUrl} alt="" loading="lazy" style={{ width: 84, height: 84, borderRadius: 16, objectFit: 'cover', display: 'block' }} /> : <AppOfferImage kind={kind} size={84} align="left" />}
-    </div>
-    <div style={{ padding: '10px 18px 0' }}>
-      {eyebrow && <span style={{ display: 'block', color: APP.greenDark, fontSize: 11, fontWeight: 600, letterSpacing: .5, textTransform: 'uppercase', marginBottom: 4 }}>{eyebrow}</span>}
-      <strong style={{ display: 'block', fontSize: 20, fontWeight: 600, lineHeight: 1.25, letterSpacing: -0.3 }}>{title}</strong>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 6 }}>{avatarUrl ? <img src={avatarUrl} alt="" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }} /> : <span style={{ width: 22, height: 22, borderRadius: '50%', background: APP.border, display: 'grid', placeItems: 'center', fontSize: 10, fontWeight: 600 }}>{(name || 'G')[0]}</span>}<span style={{ color: APP.muted, fontSize: 12, fontWeight: 500 }}>{name}</span></span>
-      {copy && <span style={{ display: 'block', color: APP.muted, fontSize: 13, fontWeight: 500, lineHeight: 1.5, marginTop: 6 }}>{copy}</span>}
-      {reviewCount > 0 && rating ? <span aria-label={`Rated ${rating.toFixed(1)} out of 5 from ${reviewCount} review${reviewCount === 1 ? '' : 's'}`} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}><span aria-hidden="true" style={{ fontSize: 13, letterSpacing: 1 }}>{Array.from({ length: 5 }, (_, i) => <span key={i} style={{ color: i < Math.round(rating) ? APP.greenDark : APP.border }}>★</span>)}</span><span style={{ color: APP.text, fontSize: 12, fontWeight: 600 }}>{rating.toFixed(1)}</span><span style={{ color: APP.muted, fontSize: 11, fontWeight: 500 }}>({reviewCount})</span></span> : null}
-    </div>
-    <div style={{ marginTop: 'auto', marginRight: 14, marginBottom: 14, marginLeft: 14, paddingTop: 0 }} /><div style={{ margin: '0 14px 14px', padding: 12, background: APP.surface, borderRadius: 14, boxShadow: '0 2px 8px rgba(17,24,39,.06)' }}>
-      <a href={href || '#'} onClick={onClick ? (event) => { event.preventDefault(); onClick(); } : undefined} style={{ ...appButton, minHeight: 50, borderRadius: 12, textDecoration: 'none', fontSize: 15, fontWeight: 600 }}>{cta === 'View' ? (price === 'Free' ? 'Get it free' : 'View offer') : cta}</a>
-    </div>
-  </div>;
+export function ProductCard({ kind, eyebrow, title, copy, price, name, avatarUrl, cta = 'View', href, onClick, rating, reviewCount = 0, audience, imageUrl }: { imageUrl?: string | null; audience?: string; rating?: number; reviewCount?: number; kind?: string; eyebrow?: string; title: string; copy?: string; price?: string; name: string; avatarUrl?: string | null; accent?: string; cta?: string; href?: string; onClick?: () => void }) {
+  // An offer is the same card as a Protocol (the Guardian profile card with the tilt-shift picture that comes into colour): the price sits on
+  // the picture, top left; the format tags top right; a cover photo is the picture, else the offer's own art stands on the plate.
+  const stars = reviewCount > 0 && rating
+    ? <span aria-label={`Rated ${rating.toFixed(1)} out of 5 from ${reviewCount} review${reviewCount === 1 ? '' : 's'}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span aria-hidden="true" style={{ fontSize: 13, letterSpacing: 1 }}>{Array.from({ length: 5 }, (_, i) => <span key={i} style={{ color: i < Math.round(rating) ? APP.greenDark : APP.border }}>★</span>)}</span><span style={{ color: APP.text, fontSize: 12, fontWeight: 600 }}>{rating.toFixed(1)}</span><span style={{ color: APP.muted, fontSize: 11, fontWeight: 500 }}>({reviewCount})</span></span>
+    : undefined;
+  const avatar = avatarUrl
+    ? <img src={avatarUrl} alt="" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover', flex: '0 0 auto' }} />
+    : <span aria-hidden="true" style={{ width: 22, height: 22, borderRadius: '50%', background: APP.border, display: 'grid', placeItems: 'center', fontSize: 10, fontWeight: 600, color: APP.text, flex: '0 0 auto' }}>{(name || 'G')[0]}</span>;
+  return <ProtocolCard
+    imageUrl={imageUrl} plate={<AppOfferImage kind={kind} size={116} />}
+    badge={price} corner={<OfferFormatTag kind={kind} />}
+    kicker={eyebrow} title={title} tags={audience ? [{ label: audience, kind: 'audience' }] : undefined} copy={copy} extra={stars}
+    by={name} byAvatar={avatar}
+    cta={cta === 'View' ? (price === 'Free' ? 'Get it free' : 'View offer') : cta}
+    href={href || '#'} onClick={onClick} />;
 }
 
 /** Guardian profile hero, shared by the published mini-site and the builder preview so both are identical. */
@@ -3736,7 +3719,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
   const [publicProtocolsError, setPublicProtocolsError] = useState('');
   const [combining, setCombining] = useState(false);
   const [valueRamps, setValueRamps] = useState<GuideValueRamp[]>([]);
-  const [routineOwners, setRoutineOwners] = useState<Map<string, { name: string; avatarUrl: string | null; relation: string | null }>>(new Map());
+  const [routineOwners, setRoutineOwners] = useState<Map<string, RoutineOwner>>(new Map());
   const [routineOwnersReady, setRoutineOwnersReady] = useState(false);
   const [editorProtocolId, setEditorProtocolId] = useState<string | null>(null);
   const [recipeId, setRecipeId] = useState<string | null>(null);
@@ -3890,7 +3873,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
             const forOthers = others.filter((x) => !personalPeople.has(x.id));
             const sectionHead = (title: string, copy: string, extra?: React.ReactNode) => <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 16, margin: '34px 0 14px', flexWrap: 'wrap' }}><div><div style={{ ...label, color: acid, margin: 0 }}>{title}</div><p style={{ color: muted, fontSize: 12, margin: '6px 0 0' }}>{copy}</p></div>{extra}</div>;
             const viewToggle = <div role="group" aria-label="View" style={{ display: 'inline-flex', border: `1px solid ${line}`, borderRadius: 4, overflow: 'hidden' }}>{(['cards', 'list'] as const).map((v, i) => <button key={v} type="button" aria-pressed={protocolView === v} onClick={() => setProtocolView(v)} style={{ height: 32, padding: '0 14px', border: 0, borderLeft: i ? `1px solid ${line}` : 0, background: protocolView === v ? ink : 'transparent', color: protocolView === v ? black : ink, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer' }}>{v}</button>)}</div>;
-            const meta = (x: AdminProtocol) => `${x.total_days || 1} days · ${x.is_public ? 'Published' : 'Draft'} · PDF + app twin`;
+            const meta = (x: AdminProtocol) => `${daysLabel(x.total_days)} · ${x.is_public ? 'Published' : 'Draft'} · PDF + app twin`;
             const shortCopy = (d?: string | null) => { const t = (d || '').replace(/\s+/g, ' ').trim(); return t.length > 110 ? `${t.slice(0, 110).replace(/\s+\S*$/, '')}…` : t || undefined; };
             return <>
               {forPeople.length > 0 && <>{sectionHead('Personal Protocols', `${forPeople.length} Protocol${forPeople.length === 1 ? '' : 's'} built for one person.`, viewToggle)}
@@ -3905,8 +3888,13 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
                     : list.map((x) => <Row key={x.id} image={x.image_url} title={x.name} meta={meta(x)} action="Open R3 builder" onClick={() => setProtocolId(x.id)} onDelete={routineOwnersReady && !routineOwners.has(x.id) ? () => setRemoving(x) : undefined} />)}
                 </div>; })}</>}
               {personal.length > 0 && sectionHead('Your routines', 'Your own routine and your family’s.')}
-              {personal.map(({ x, child }) => { const owner = routineOwners.get(x.id); const row = <Row key={x.id} image={owner?.avatarUrl || x.image_url} title={owner && /^your routine$/i.test(x.name.trim()) ? `${owner.name}’s routine` : x.name} meta={`${owner ? `${child && owner.relation ? `${owner.relation.charAt(0).toUpperCase()}${owner.relation.slice(1)} · ` : ''}Personal routine · ` : ''}${x.total_days || 1} days · ${x.is_public ? 'Published' : 'Draft'} · PDF + app twin`} action="Open R3 builder" onClick={() => setProtocolId(x.id)} />;
-              return child ? <div key={x.id} style={{ marginLeft: 40, paddingLeft: 16, borderLeft: `1px solid ${line}` }}>{row}</div> : row; })}
+              {protocolView === 'cards'
+                ? <ProtocolCardGrid>{personal.map(({ x, child }) => { const owner = routineOwners.get(x.id)!; const relation = child && owner.relation ? `${owner.relation.charAt(0).toUpperCase()}${owner.relation.slice(1)}` : owner.relation === 'self' ? 'You' : null;
+                  return <ProtocolCard key={x.id} imageUrl={owner.avatarUrl} plate={<img src={memberAvatarSrc(owner)} alt="" style={{ display: 'block', width: 172, height: 172, objectFit: 'contain' }} />}
+                    kicker={[relation, daysLabel(x.total_days), x.is_public ? 'Published' : 'Draft'].filter(Boolean).join(' · ')} title={/^your routine$/i.test(x.name.trim()) ? `${owner.name}’s routine` : x.name}
+                    copy={shortCopy(x.description)} cta="Open R3 builder" onClick={() => setProtocolId(x.id)} />; })}</ProtocolCardGrid>
+                : personal.map(({ x, child }) => { const owner = routineOwners.get(x.id); const row = <Row key={x.id} image={owner?.avatarUrl || x.image_url} title={owner && /^your routine$/i.test(x.name.trim()) ? `${owner.name}’s routine` : x.name} meta={`${owner ? `${child && owner.relation ? `${owner.relation.charAt(0).toUpperCase()}${owner.relation.slice(1)} · ` : ''}Personal routine · ` : ''}${daysLabel(x.total_days)} · ${x.is_public ? 'Published' : 'Draft'} · PDF + app twin`} action="Open R3 builder" onClick={() => setProtocolId(x.id)} />;
+                  return child ? <div key={x.id} style={{ marginLeft: 40, paddingLeft: 16, borderLeft: `1px solid ${line}` }}>{row}</div> : row; })}
             </>;
           })() : <Empty image={guidePlates.protocols} title="No Protocol drafts yet" copy="Build against the full Routine database with timings, quantities, linked records and PDF export." />)}
           {tab === 'protocols' && <section aria-labelledby="public-protocols-title" style={{ marginTop: 56, paddingTop: 34, borderTop: `1px solid ${line}` }}>
@@ -4118,6 +4106,10 @@ export function SiteProfileForm({ userId, profile, onProfile }: { userId: string
 const GUARDIAN_STEP_LABELS = ['Profile', 'Guidance', 'Audience', 'Offers', 'Site', 'Content'];
 /** Steps 1–5 are the setup flow; 06 opens the Content builder. */
 const guardianStepHref = (label: string, index: number) => (label === 'Content' ? '/guardians/workspace?tab=content' : `/guardians/workspace?step=${index + 1}`);
+
+/** The picture for someone's routine: their own photo when a browser can load it, else the app's default avatar for them (by age, then gender, then relation; a person whose gender is not stated gets the neutral one). */
+const MEMBER_AVATARS = '/images/guides/avatars/member';
+const memberAvatarSrc = (owner: Pick<RoutineOwner, 'age' | 'gender' | 'relation'>) => `${MEMBER_AVATARS}/${defaultAvatarKeyFor({ age: owner.age, gender: owner.gender, relation: owner.relation && owner.relation !== 'self' && owner.relation !== 'family' ? owner.relation : null })}.png`;
 
 function Row({ title, meta, action, onClick, image, onDelete }: { title: string; meta: string; action?: string; onClick?: () => void; image?: string | null; onDelete?: () => void }) { const content = <><div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 0 }}><span aria-hidden="true" style={{ position: 'relative', width: 56, height: 56, flex: '0 0 56px', display: 'grid', placeItems: 'center', overflow: 'hidden', border: `1px solid ${line}`, background: '#171812', color: muted, fontFamily: serif, fontSize: 22 }}>{title.replace(/^R3 Protocol\s*>\s*/i, '').trim().charAt(0)}{image && <img src={image} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = 'none'; }} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}</span><div style={{ minWidth: 0 }}><div style={{ fontFamily: serif, fontSize: 22 }}>{title}</div><div style={{ color: muted, fontSize: 11, marginTop: 5 }}>{meta}</div></div></div><span style={{ display: 'flex', alignItems: 'center', gap: 8, color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase' }}>{action}<ChevronRight size={16} /></span></>; const main = onClick ? <button type="button" onClick={onClick} style={{ flex: 1, minWidth: 0, width: '100%', border: 0, borderTop: onDelete ? 0 : `1px solid ${line}`, padding: '18px 4px', background: 'transparent', color: ink, display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'left', cursor: 'pointer' }}>{content}</button> : <div style={{ borderTop: onDelete ? 0 : `1px solid ${line}`, padding: '18px 4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>{content}</div>; return onDelete ? <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderTop: `1px solid ${line}` }}>{main}<button type="button" onClick={onDelete} aria-label={`Delete ${title}`} title="Delete" style={{ flex: '0 0 44px', width: 44, height: 44, display: 'grid', placeItems: 'center', border: `1px solid ${line}`, borderRadius: 4, background: 'transparent', color: muted, cursor: 'pointer' }}><Trash2 size={15} aria-hidden="true" /></button></div> : main; }
 
