@@ -397,6 +397,63 @@ export async function updateProtocol(
   return first(await handle(res, 'Update protocol'));
 }
 
+/* ───────── removing a protocol ───────── */
+/**
+ * What deleting a protocol takes with it, read before the owner decides. Deleting cascades in the database: its steps,
+ * its place in offers (guide_offer_routines), its share link and the record of who added it from that link. A count is
+ * null when it could not be read; the dialog then treats the protocol as shared.
+ */
+export interface ProtocolImpact {
+  steps: number | null;
+  offers: number | null;
+  /** A live share link exists. */
+  shareLink: boolean | null;
+  /** People who added a copy from its share link. */
+  adds: number | null;
+  isPublic: boolean;
+  /** Anything beyond a private draft, or anything we could not check: archiving is offered first and deleting needs the name typed. */
+  shared: boolean;
+}
+
+async function countRows(accessToken: string, table: string, filter: string, column: string): Promise<number | null> {
+  try {
+    const res = await fetch(`${rest()}/${table}?${filter}&select=${column}&limit=1`, { headers: headers(accessToken, { Prefer: 'count=exact' }) });
+    if (!res.ok) return null;
+    const total = Number((res.headers.get('content-range') || '').split('/')[1]);
+    return Number.isFinite(total) ? total : null;
+  } catch { return null; }
+}
+
+export async function protocolImpact(accessToken: string, protocol: { id: string; is_public?: boolean | null }): Promise<ProtocolImpact> {
+  const { getRoutineShareLink, getRoutineShareStats } = await import('./routineShare');
+  const [steps, offers, link, stats] = await Promise.all([
+    countRows(accessToken, 'protocol_items', `protocol_id=eq.${protocol.id}`, 'id'),
+    countRows(accessToken, 'guide_offer_routines', `protocol_id=eq.${protocol.id}`, 'offer_id'),
+    getRoutineShareLink(protocol.id).then((token) => token !== null, () => null),
+    getRoutineShareStats(protocol.id).then((x) => Number(x?.adds ?? 0), () => null),
+  ]);
+  const isPublic = Boolean(protocol.is_public);
+  const shared = isPublic || offers !== 0 || link !== false || (stats !== 0);
+  return { steps, offers, shareLink: link, adds: stats, isPublic, shared };
+}
+
+/** Delete a protocol for good. The database lets only its owner do this and answers with the deleted row; an empty answer means nothing was deleted. */
+export async function deleteProtocol(accessToken: string, id: string): Promise<void> {
+  const res = await fetch(`${rest()}/protocols?id=eq.${id}`, { method: 'DELETE', headers: headers(accessToken, { Prefer: 'return=representation' }) });
+  const rows = await handle(res, 'Delete protocol');
+  if (!Array.isArray(rows) || !rows.length) throw new Error('Nothing was deleted: this protocol is not yours, or it is already gone.');
+}
+
+/** Take a protocol out of the owner's list and off the public list, keeping everything. The owner's list hides is_active = false. */
+export async function archiveProtocol(accessToken: string, id: string): Promise<void> {
+  await updateProtocol(accessToken, id, { is_active: false, is_public: false });
+}
+
+/** Undo an archive. It comes back unpublished: publishing is a choice. */
+export async function restoreProtocol(accessToken: string, id: string): Promise<void> {
+  await updateProtocol(accessToken, id, { is_active: true });
+}
+
 export async function updateProtocolItem(
   accessToken: string,
   id: string,
