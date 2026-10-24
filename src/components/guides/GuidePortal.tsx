@@ -9,6 +9,7 @@ import { ProtocolEditor } from '../admin/ProtocolEditor';
 import { RoutineMark } from '../Header';
 import { ContentStudio } from './ContentStudio';
 import { CombineProtocols, DietBuilder, FitnessBuilder } from './GuardianBuilders';
+import { ProtocolCard, ProtocolCardGrid, clipCopy } from './ProtocolCard';
 import { ProtocolChildrenPanel } from './ProtocolChildrenPanel';
 import { customizeProtocolRecipe } from '../../utils/protocolCopies';
 import { ContentBuilder } from './ContentBuilder';
@@ -3906,13 +3907,13 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
             return <>
               {forPeople.length > 0 && <>{sectionHead('Personal Protocols', `${forPeople.length} Protocol${forPeople.length === 1 ? '' : 's'} built for one person.`, viewToggle)}
                 {protocolView === 'cards'
-                  ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18 }}>{forPeople.map((x) => { const person = personalPeople.get(x.id)!; return <ProductCard key={x.id} kind="routine" imageUrl={person.imageUrl || x.image_url} eyebrow={['Personal', `${x.total_days || 1} days`, x.is_public ? 'Published' : 'Draft'].join(' · ')} title={x.name.replace(/\s*·\s*Personal Protocol$/i, '') + '’s Protocol'} copy={shortCopy(x.description)} name={person.name} avatarUrl={person.imageUrl} accent={acid} cta="Open R3 builder" onClick={() => setProtocolId(x.id)} />; })}</div>
+                  ? <ProtocolCardGrid>{forPeople.map((x) => { const person = personalPeople.get(x.id)!; return <ProtocolCard key={x.id} imageUrl={person.imageUrl || x.image_url} kicker={['Personal', `${x.total_days || 1} days`, x.is_public ? 'Published' : 'Draft'].join(' · ')} title={x.name.replace(/\s*·\s*Personal Protocol$/i, '') + '’s Protocol'} copy={shortCopy(x.description)} by={person.name} cta="Open R3 builder" onClick={() => setProtocolId(x.id)} />; })}</ProtocolCardGrid>
                   : forPeople.map((x) => { const person = personalPeople.get(x.id)!; return <Row key={x.id} image={person.imageUrl || x.image_url} title={x.name} meta={`${person.name} · ${meta(x)}`} action="Open R3 builder" onClick={() => setProtocolId(x.id)} />; })}</>}
               {forOthers.length > 0 && <>{sectionHead('General Protocols', `${forOthers.length} Protocol${forOthers.length === 1 ? '' : 's'} for an audience or offer, by theme.`, forPeople.length ? undefined : viewToggle)}
                 {PROTOCOL_THEMES.map((theme) => { const list = forOthers.filter((x) => protocolTheme(x) === theme); if (!list.length) return null; return <div key={theme} style={{ marginBottom: 26 }}>
                   <h3 style={{ ...label, color: ink, display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0 12px' }}>{theme}<span style={{ color: muted, fontWeight: 400 }}>· {list.length}</span></h3>
                   {protocolView === 'cards'
-                    ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18 }}>{list.map((x) => <ProductCard key={x.id} kind="routine" eyebrow={[protocolAudience(x) || 'Everyone', `${x.total_days || 1} days`, x.is_public ? 'Published' : 'Draft'].join(' · ')} title={x.name.replace(/^R3 Protocol\s*>\s*/i, '')} imageUrl={x.image_url} copy={(() => { const d = (x.description || '').replace(/\s+/g, ' ').trim(); return d.length > 110 ? `${d.slice(0, 110).replace(/\s+\S*$/, '')}…` : d || undefined; })()} name={profile.display_name} avatarUrl={profile.avatar_url} accent={acid} cta="Open R3 builder" onClick={() => setProtocolId(x.id)} />)}</div>
+                    ? <ProtocolCardGrid>{list.map((x) => <ProtocolCard key={x.id} kicker={[protocolAudience(x) || 'Everyone', `${x.total_days || 1} days`, x.is_public ? 'Published' : 'Draft'].join(' · ')} title={x.name.replace(/^R3 Protocol\s*>\s*/i, '')} imageUrl={x.image_url} copy={clipCopy(x.description)} by={profile.display_name} cta="Open R3 builder" onClick={() => setProtocolId(x.id)} />)}</ProtocolCardGrid>
                     : list.map((x) => <Row key={x.id} image={x.image_url} title={x.name} meta={meta(x)} action="Open R3 builder" onClick={() => setProtocolId(x.id)} />)}
                 </div>; })}</>}
               {personal.length > 0 && sectionHead('Your routines', 'Your own routine and your family’s.')}
@@ -3926,10 +3927,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
             </div>
             {publicProtocolsError && <p role="alert" style={{ color: '#E8B86A', fontSize: 12 }}>{publicProtocolsError}</p>}
             {!publicProtocolsLoading && !publicProtocolsError && publicProtocols.length === 0 && <p style={{ color: muted, fontSize: 12 }}>No public protocols are available yet.</p>}
-            {publicProtocols.length > 0 && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18 }}>{publicProtocols.map((protocol) => {
-              const description = (protocol.description || '').replace(/\s+/g, ' ').trim();
-              return <ProductCard key={protocol.id} kind="routine" imageUrl={protocol.image_url} eyebrow={[protocol.category || 'Protocol', `${protocol.total_days || 1} days`, 'Public'].join(' · ')} title={protocol.name.replace(/^R3 Protocol\s*>\s*/i, '')} copy={description.length > 110 ? `${description.slice(0, 110).replace(/\s+\S*$/, '')}…` : description || undefined} name={protocol.creator || 'ROUTINE³'} accent={acid} cta="View public protocol" href={`/protocol/${encodeURIComponent(protocol.id)}`} />;
-            })}</div>}
+            {publicProtocols.length > 0 && <ProtocolCardGrid>{publicProtocols.map((protocol) => <ProtocolCard key={protocol.id} imageUrl={protocol.image_url} kicker={[protocol.category || 'Protocol', `${protocol.total_days || 1} days`, 'Public'].join(' · ')} title={protocol.name.replace(/^R3 Protocol\s*>\s*/i, '')} copy={clipCopy(protocol.description)} by={protocol.creator || 'ROUTINE³'} cta="View public protocol" href={`/protocol/${encodeURIComponent(protocol.id)}`} />)}</ProtocolCardGrid>}
           </section>}
         </div></>}
         {tab === 'content' && <ContentBuilder profile={profile} offers={offers} protocols={protocols} recipes={recipes} />}
