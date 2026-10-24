@@ -505,7 +505,7 @@ export async function setGuardianSuggestionStatus(id: string, status: GuardianSu
 }
 /** Published offers from approved Guardians, for the directory's offerings section. */
 export async function listPublicGuardianOffers(): Promise<GuideOffer[]> {
-  const { data, error } = await db().from('guide_offers').select('id,guide_id,kind,title,description,price_cents,currency,access_model,booking_url,affiliate_url,file_path,status').eq('status', 'published').order('price_cents', { ascending: true }).limit(60);
+  const { data, error } = await db().from('guide_offers').select('id,guide_id,kind,title,description,price_cents,currency,access_model,booking_url,affiliate_url,file_path,cover_url,status').eq('status', 'published').order('price_cents', { ascending: true }).limit(60);
   if (error) throw error;
   return (data || []) as GuideOffer[];
 }

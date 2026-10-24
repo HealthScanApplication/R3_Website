@@ -47,6 +47,16 @@ it('a click runs onClick instead of following the link; a modified click still o
   expect(onClick).toHaveBeenCalledTimes(1);
 });
 
+it('a card with nowhere to go (a preview) is not a link and not a button; with only a click handler it is a button', () => {
+  const { container, rerender } = render(<ProductCard {...base} kind="recipe_book" cta="Open recipe" />);
+  expect(screen.queryByRole('link')).toBeNull();
+  expect(screen.queryByRole('button')).toBeNull();
+  expect(container.querySelector('a[href="#"]')).toBeNull();
+  rerender(<ProductCard {...base} onClick={() => {}} />);
+  expect(screen.getByRole('button', { name: /7-day sleep challenge/ })).toBeTruthy();
+  expect(container.querySelector('a')).toBeNull();
+});
+
 it('a cover photo is the tilt-shift picture; without one the offer\'s art stands on the plate with a glow behind it', () => {
   const { container, rerender } = render(<ProductCard {...base} kind="ebook" imageUrl="https://example.com/cover.jpg" href="#" />);
   expect([...container.querySelectorAll('img')].map((i) => i.className).filter((c) => c.startsWith('r3-pcard'))).toEqual(['r3-pcard-img', 'r3-pcard-blur top', 'r3-pcard-blur bottom']);

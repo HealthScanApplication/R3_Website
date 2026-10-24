@@ -115,6 +115,41 @@ it('the stylesheet is in the page head, so a card outside a ProtocolCardGrid is 
   expect(el!.textContent).toBe(PROTOCOL_CARD_CSS);
 });
 
+it('a long tag is clipped with an ellipsis inside the card, and carries its full text as a title', () => {
+  const rule = /\.r3-pcard-tag\{([^}]*)\}/.exec(PROTOCOL_CARD_CSS)![1];
+  for (const part of ['min-width:0', 'max-width:100%', 'overflow:hidden', 'text-overflow:ellipsis']) expect(rule).toContain(part);
+  const { container } = render(<ProtocolCard title="Long" tags={[{ label: 'Women · 32–55 · Perimenopause, Menopause', kind: 'audience' }]} onClick={() => {}} />);
+  expect(container.querySelector('.r3-pcard-tag')!.getAttribute('title')).toBe('Women · 32–55 · Perimenopause, Menopause');
+});
+
+it('on a narrow picture the corner tags move to the bottom left so they do not run past the price badge', () => {
+  expect(PROTOCOL_CARD_CSS).toMatch(/\.r3-pcard-media\{[^}]*container-type:inline-size/);
+  const query = /@container \(max-width:330px\)\{([^\n]*)\}\n/.exec(PROTOCOL_CARD_CSS)![1];
+  expect(query).toContain('.r3-pcard-corner{top:auto;bottom:12px;left:12px;right:auto');
+});
+
+it('the keyboard focus ring is drawn round the whole card, where the picture cannot cover it', () => {
+  expect(PROTOCOL_CARD_CSS).toContain('@supports selector(:has(a))');
+  expect(PROTOCOL_CARD_CSS).toContain('.r3-pcard:has(.r3-pcard-main:focus-visible){outline:2px solid #9A6A2F;outline-offset:2px}');
+  expect(PROTOCOL_CARD_CSS).toContain('.r3-pcard-main:focus-visible{outline:2px solid #9A6A2F;outline-offset:-4px}'); // the fallback where :has is missing
+});
+
+it('art on the plate keeps the size it was given (the slot is as wide as its art, and nothing squeezes the art to half the picture)', () => {
+  expect(PROTOCOL_CARD_CSS).toContain('.r3-pcard-plate-slot{width:max-content}');
+  expect(PROTOCOL_CARD_CSS).toContain('.r3-pcard-plate-slot>*{max-width:none}');
+});
+
+it('an inert card is a preview: drawn like the others, but neither a link nor a button', () => {
+  const { container } = render(<ProtocolCard title="Preview" cta="Open recipe" inert href="/x" onClick={() => {}} />);
+  expect(screen.queryByRole('link')).toBeNull();
+  expect(screen.queryByRole('button')).toBeNull();
+  const main = container.querySelector('.r3-pcard-main') as HTMLElement;
+  expect(main.tagName).toBe('DIV');
+  expect(main.textContent).toContain('Preview');
+  expect(main.textContent).toContain('Open recipe');
+  expect(PROTOCOL_CARD_CSS).toContain('.r3-pcard-main[data-inert]{cursor:default}');
+});
+
 it('leans toward the mouse and settles when it leaves; touch and zero-size boxes do nothing', () => {
   render(<ProtocolCard title="Leaning" />);
   const card = screen.getByRole('button', { name: /Leaning/ }).closest('.r3-pcard') as HTMLElement;

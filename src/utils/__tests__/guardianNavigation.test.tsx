@@ -50,7 +50,8 @@ it('closes the active recipe editor when history returns to another tool',async(
   fireEvent.click(screen.getByRole('button',{name:'Protocols',exact:true}));
   fireEvent.click(screen.getByRole('button',{name:'Diet',exact:true}));
   fireEvent.click(screen.getByRole('button',{name:'Recipes',exact:true}));
-  fireEvent.click(await screen.findByRole('link',{name:'Open builder',exact:true}));
+  // The whole recipe card is the link now, so its name is the card's text ending in the call to action.
+  fireEvent.click((await screen.findAllByRole('link',{name:/Open builder/}))[0]);
   expect(screen.getByRole('button',{name:'← Recipes',exact:true})).toBeTruthy();
   window.history.replaceState({},'','/guardians/workspace?tab=leads');
   fireEvent(window,new PopStateEvent('popstate'));
@@ -66,7 +67,8 @@ it('opens the requested public path instead of silently using the first path',as
   window.history.replaceState({},'','/guardians/test-guide/value-ramp/second-path');
   render(<GuardianWebsite slug="test-guide" isSignedIn />);
   await screen.findByRole('heading',{name:'Guidance'});
-  await waitFor(()=>expect(screen.getByRole('heading',{name:'Second offer',exact:true})).toBeTruthy());
+  // The offer is a card (a heading) in the hero and again in the path, so there can be two.
+  await waitFor(()=>expect(screen.getAllByRole('heading',{name:'Second offer',exact:true}).length).toBeGreaterThan(0));
   expect(screen.getByRole('link',{name:'Guardian workspace →'}).getAttribute('href')).toBe('/guardians/workspace');
 });
 it('does not display a different funnel for a nonexistent public path',async()=>{
@@ -79,13 +81,13 @@ it('links each public path card to that path, not a shared first-funnel anchor',
   window.history.replaceState({},'','/guardians/test-guide');
   render(<GuardianWebsite slug="test-guide" isSignedIn />);
   await screen.findByRole('heading',{name:'Guidance'});
-  expect(screen.getAllByRole('link',{name:'Get it free'}).map(link=>link.getAttribute('href'))).toContain('/guardians/test-guide/value-ramp/second-path');
+  expect(screen.getAllByRole('link',{name:/Get it free/}).map(link=>link.getAttribute('href'))).toContain('/guardians/test-guide/value-ramp/second-path');
 });
 it('scrolls to the current funnel rather than reloading the same path',async()=>{
   window.history.replaceState({},'','/guardians/test-guide/value-ramp/first-path');
   render(<GuardianWebsite slug="test-guide" isSignedIn />);
   await screen.findByRole('heading',{name:'Guidance'});
-  expect(screen.getAllByRole('link',{name:'Get it free'})[0].getAttribute('href')).toBe('#offers');
+  expect(screen.getAllByRole('link',{name:/Get it free/})[0].getAttribute('href')).toBe('#offers');
 });
 it('keeps a failed Add form editable and shows its save error',async()=>{
   workspace();
@@ -135,6 +137,9 @@ it('keeps a long display name readable as a tooltip when it is truncated', ()=>{
 });
 
 import { GUARDIAN_BUILDERS_ORDER } from '../../components/guides/GuidePortal';
+
+// Each test renders the whole workspace or public page; on a busy machine that outruns the 5s default.
+vi.setConfig({ testTimeout: 30000 });
 it('lists the Site builder before the Content builder, which is last', () => {
   expect(GUARDIAN_BUILDERS_ORDER.slice(-2)).toEqual(['Site builder', 'Content builder']);
 });

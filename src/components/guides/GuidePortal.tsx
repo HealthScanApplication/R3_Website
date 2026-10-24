@@ -1285,7 +1285,7 @@ export function ProductCard({ kind, eyebrow, title, copy, price, name, avatarUrl
     kicker={eyebrow} title={title} tags={audience ? [{ label: audience, kind: 'audience' }] : undefined} copy={copy} extra={stars}
     by={name} byAvatar={avatar}
     cta={cta === 'View' ? (price === 'Free' ? 'Get it free' : 'View offer') : cta}
-    href={href || '#'} onClick={onClick} />;
+    href={href} onClick={onClick} inert={!href && !onClick} />;
 }
 
 /** Guardian profile hero, shared by the published mini-site and the builder preview so both are identical. */
@@ -3892,7 +3892,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
                     ? <ProtocolCardGrid>{list.map((x) => <ProtocolCard key={x.id} kicker={[daysLabel(x.total_days), x.is_public ? 'Published' : 'Draft'].join(' · ')} tags={protocolTags(x, { category: false })} title={x.name.replace(/^R3 Protocol\s*>\s*/i, '')} imageUrl={x.image_url} copy={clipCopy(x.description)} by={profile.display_name} cta="Open R3 builder" onClick={() => setProtocolId(x.id)} onEdit={() => setProtocolId(x.id)} onDelete={routineOwnersReady && !routineOwners.has(x.id) ? () => setRemoving(x) : undefined} />)}</ProtocolCardGrid>
                     : list.map((x) => <Row key={x.id} image={x.image_url} title={x.name} meta={meta(x)} action="Open R3 builder" onClick={() => setProtocolId(x.id)} onDelete={routineOwnersReady && !routineOwners.has(x.id) ? () => setRemoving(x) : undefined} />)}
                 </div>; })}</>}
-              {personal.length > 0 && sectionHead('Your routines', 'Your own routine and your family’s.')}
+              {personal.length > 0 && sectionHead('Your routines', 'Your own routine and your family’s.', forPeople.length || forOthers.length ? undefined : viewToggle)}
               {protocolView === 'cards'
                 ? <ProtocolCardGrid>{personal.map(({ x, child }) => { const owner = routineOwners.get(x.id)!; const relation = child && owner.relation ? `${owner.relation.charAt(0).toUpperCase()}${owner.relation.slice(1)}` : owner.relation === 'self' ? 'You' : null;
                   return <ProtocolCard key={x.id} imageUrl={owner.avatarUrl} plate={<img src={memberAvatarSrc(owner)} alt="" style={{ display: 'block', width: 172, height: 172, objectFit: 'contain' }} />}

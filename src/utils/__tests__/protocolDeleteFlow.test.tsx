@@ -151,3 +151,17 @@ it('your own and your family\'s routines are cards with the app\'s default avata
   // no Delete on a person's own routine
   expect(screen.queryByRole('button', { name: /^Delete .*routine/ })).toBeNull();
 });
+
+it('when Your routines is the only section it still has the cards / list switch, and the list is the old rows', async () => {
+  store.protocols = [store.row('m1', 'Your Routine'), store.row('m2', 'Your Routine')];
+  store.owners = new Map<string, unknown>([['m1', { name: 'John', avatarUrl: null, relation: 'self', gender: 'male', age: 44 }], ['m2', { name: 'Zoe', avatarUrl: null, relation: 'family', gender: 'female', age: 8 }]]);
+  render(<Workspace profile={store.profile as any} onProfile={() => {}} />);
+  await screen.findByRole('heading', { level: 3, name: 'John’s routine' });
+  const toggle = screen.getByRole('group', { name: 'View' });
+  fireEvent.click(within(toggle).getByRole('button', { name: /list/i }));
+  expect(screen.queryByRole('heading', { level: 3, name: 'John’s routine' })).toBeNull();
+  expect(screen.getAllByText(/Personal routine/)).toHaveLength(2); // one row for each person
+  fireEvent.click(within(toggle).getByRole('button', { name: /cards/i }));
+  await screen.findByRole('heading', { level: 3, name: 'John’s routine' });
+});
+
