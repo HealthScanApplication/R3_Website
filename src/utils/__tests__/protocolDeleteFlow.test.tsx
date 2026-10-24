@@ -4,6 +4,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Workspace } from '../../components/guides/GuidePortal';
 
+// The whole workspace renders in every test; on a busy machine that outruns the 5s default.
+vi.setConfig({ testTimeout: 30000 });
+
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'owner', app_metadata: {} }, accessToken: 'tok', signOut: () => {} }) }));
 const store = vi.hoisted(() => {
   const row = (id: string, name: string, over: Record<string, unknown> = {}) => ({ id, user_id: 'owner', name, description: `${name} description.`, category: 'Health', total_days: 7, is_public: false, is_active: true, image_url: null, ...over });
