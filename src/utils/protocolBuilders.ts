@@ -1360,7 +1360,7 @@ export async function browseIngredients(accessToken: string, f: { offset?: numbe
     meta: [['Type', txt(r.category_sub)], ['Season', Array.isArray(r.season) ? r.season.join(', ') : txt(r.season)], ['Origin', Array.isArray(r.origin_region) ? r.origin_region.join(', ') : txt(r.origin_region)]] }));
 }
 
-export interface FitnessRoutine { id: string; name: string; description: string | null; image: string | null; category: string | null; tags: string[]; totalDays?: number | null }
+export interface FitnessRoutine { id: string; name: string; description: string | null; image: string | null; category: string | null; tags: string[]; totalDays?: number | null; gender?: string | null; ageMin?: number | null; ageMax?: number | null }
 /**
  * What span a routine covers, for its card tag: a part of the day (Morning, Midday, Evening, Night), a whole Day,
  * or a Week / N weeks / Month / N days programme. From total_days, then the name, description and tags.
@@ -1406,9 +1406,12 @@ export function routinePeriod(r: Pick<FitnessRoutine, 'name' | 'description' | '
 export async function listFitnessRoutines(accessToken: string, categories: string[] = ['fitness', 'strength', 'recovery', 'mobility', 'cardio', 'hiit'], nameTerms: string[] = []): Promise<FitnessRoutine[]> {
   // Catalogue categories are not consistently cased ("Beauty", "wellness"), so match case-insensitively; a section may also match by name at the start of a word ("fast" finds Fasting, not Breakfast).
   const or = [...categories.map((c) => `category.ilike.${encodeURIComponent(c)}`), ...nameTerms.map((t) => `name.imatch.%5Cm${encodeURIComponent(t.replace(/[^\w ]/g, ''))}`)].join(',');
-  const res = await fetch(`${rest()}/protocols?select=id,name,description,image_url,category,tags,total_days&user_id=is.null&is_public=not.is.false&is_active=not.is.false&or=(${or})&order=name`, { headers: headers(accessToken) });
+  const query = (columns: string) => fetch(`${rest()}/protocols?select=${columns}&user_id=is.null&is_public=not.is.false&is_active=not.is.false&or=(${or})&order=name`, { headers: headers(accessToken) });
+  let res = await query('id,name,description,image_url,category,tags,total_days,target_gender,target_age_min,target_age_max');
+  // An environment without the audience columns (42703, undefined column) still lists its routines, just without who they are for.
+  if (!res.ok && (await res.clone().json().catch(() => null) as { code?: string } | null)?.code === '42703') res = await query('id,name,description,image_url,category,tags,total_days');
   if (!res.ok) throw new Error(`Could not load fitness routines (${res.status})`);
-  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, description: txt(r.description), image: txt(r.image_url), category: r.category, tags: Array.isArray(r.tags) ? r.tags.map(String) : [], totalDays: num(r.total_days) }));
+  return ((await res.json()) as any[]).map((r) => ({ id: r.id, name: r.name, description: txt(r.description), image: txt(r.image_url), category: r.category, tags: Array.isArray(r.tags) ? r.tags.map(String) : [], totalDays: num(r.total_days), gender: txt(r.target_gender), ageMin: num(r.target_age_min), ageMax: num(r.target_age_max) }));
 }
 export interface RoutineStep { id?: string; parentId?: string | null; /** The step's description: what to do and why. */ notes?: string | null; recipeId?: string | null; activityId?: string | null; dows?: number[] | null; name: string; time: string | null; group: string | null; day: number | null; kind: string | null; itemType: string | null; scope: string | null; recurrenceType?: string | null; category: string | null; subtype: string | null; minutes: number | null; sets: number | null; reps: number | null; weight: string | null }
 /** Every step of a Protocol, read in pages (a routine with a day-by-day cycle has hundreds of rows; one response is capped). */

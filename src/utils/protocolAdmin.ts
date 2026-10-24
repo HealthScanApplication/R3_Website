@@ -29,6 +29,9 @@ export interface AdminProtocol {
   category: string | null;
   type: string | null;
   target_gender: string | null;
+  target_age_min?: number | null;
+  target_age_max?: number | null;
+  tags?: string[] | null;
   creator: string | null;
   source: string | null;
   image_url: string | null;
@@ -261,9 +264,27 @@ export async function updateProtocolWithAI(
 }
 
 const PROTOCOL_COLS =
-  'id,user_id,name,description,category,type,target_gender,creator,source,image_url,health_score,total_days,is_suggested,is_active,is_public,start_time,sort_order,updated_at,profile_role,profile_name,profile_image_url,schedule_basis';
-let legacyProtocolColumns = false;
-const LEGACY_PROTOCOL_COLS = PROTOCOL_COLS.split(',').filter((column) => !['profile_role', 'profile_name', 'profile_image_url', 'schedule_basis'].includes(column)).join(',');
+  'id,user_id,name,description,category,type,target_gender,creator,source,image_url,health_score,total_days,is_suggested,is_active,is_public,start_time,sort_order,updated_at,profile_role,profile_name,profile_image_url,schedule_basis,target_age_min,target_age_max,tags';
+/** Columns an environment may not have: Staging's `protocols` view has no profile columns, and an older one may lack tags or ages too. */
+const OPTIONAL_PROTOCOL_COLUMNS = ['profile_role', 'profile_name', 'profile_image_url', 'schedule_basis', 'target_age_min', 'target_age_max', 'tags'];
+let protocolColumns = PROTOCOL_COLS.split(',');
+/**
+ * GET /protocols with the columns this environment has. A 42703 "column protocols.X does not exist" drops X, when X is an
+ * optional column, and asks again, so only what is really missing is lost; the answer is remembered for the session.
+ * A 42703 that names no column drops every optional one.
+ */
+async function selectProtocols(accessToken: string, suffix: string): Promise<Response> {
+  for (;;) {
+    const res = await fetch(`${rest()}/protocols?select=${protocolColumns.join(',')}${suffix}`, { headers: headers(accessToken) });
+    if (res.ok) return res;
+    const failure = await res.clone().json().catch(() => null) as { code?: string; message?: string } | null;
+    if (failure?.code !== '42703') return res;
+    const named = /column (?:\w+\.)?(\w+) does not exist/i.exec(failure.message || '')?.[1];
+    const drop = named ? (OPTIONAL_PROTOCOL_COLUMNS.includes(named) && protocolColumns.includes(named) ? [named] : []) : protocolColumns.filter((column) => OPTIONAL_PROTOCOL_COLUMNS.includes(column));
+    if (!drop.length) return res;
+    protocolColumns = protocolColumns.filter((column) => !drop.includes(column));
+  }
+}
 const ITEM_COLS =
   'id,protocol_id,display_name,item_type,kind,scope,scheduled_time,duration_minutes,group_name,day_number,sort_order,parent_protocol_item_id,has_children,category,subtype,hidden,enabled,notes,media_image_url,media_audio_url,amount,amount_unit,frequency_override,catalog_recipe_id,catalog_product_id,catalog_activity_id,catalog_ingredient_id,supplement_id,recurrence_type,recurrence_days_of_week,recurrence_interval_days,recurrence_interval_unit,recurrence_start_date,recurrence_end_date,scheduled_date,notifications_enabled,notification_lead_minutes,sets,reps,reps_display,weight_value,weight_unit,weight_display,rest_seconds,work_seconds,rounds,intensity,distance_value,distance_unit,load_type,intensity_variants,selected_intensity,filter';
 const LEGACY_ITEM_COLS = ITEM_COLS.split(',').filter((column) => !column.startsWith('media_')).join(',');
@@ -302,13 +323,7 @@ export async function listProtocols(accessToken: string, ownerId?: string | null
     // An owner's list hides archived (is_active = false) protocols, e.g. retired duplicates.
     (ownerId ? `&user_id=eq.${encodeURIComponent(ownerId)}&is_active=not.is.false` : '') +
     `&order=is_suggested.desc.nullslast,sort_order.asc.nullslast,name.asc`;
-  // Environments without the profile columns (Staging's protocols is a view) answer 42703; remember that so we stop retrying.
-  let res = await fetch(`${rest()}/protocols?select=${legacyProtocolColumns ? LEGACY_PROTOCOL_COLS : PROTOCOL_COLS}${suffix}`, { headers: headers(accessToken) });
-  if (!res.ok && !legacyProtocolColumns) {
-    const failure = await res.clone().json().catch(() => null) as { code?: string; message?: string } | null;
-    if (failure?.code === '42703') { legacyProtocolColumns = true; res = await fetch(`${rest()}/protocols?select=${LEGACY_PROTOCOL_COLS}${suffix}`, { headers: headers(accessToken) }); }
-  }
-  return (await handle(res, 'List protocols')) || [];
+  return (await handle(await selectProtocols(accessToken, suffix), 'List protocols')) || [];
 }
 
 /** Every active public protocol, including system and other Guardian protocols. */
@@ -318,15 +333,7 @@ export async function listPublicProtocols(accessToken: string): Promise<AdminPro
 
   for (let offset = 0; ; offset += pageSize) {
     const suffix = `&is_public=eq.true&is_active=not.is.false&order=is_suggested.desc.nullslast,sort_order.asc.nullslast,name.asc&limit=${pageSize}&offset=${offset}`;
-    let res = await fetch(`${rest()}/protocols?select=${legacyProtocolColumns ? LEGACY_PROTOCOL_COLS : PROTOCOL_COLS}${suffix}`, { headers: headers(accessToken) });
-    if (!res.ok && !legacyProtocolColumns) {
-      const failure = await res.clone().json().catch(() => null) as { code?: string } | null;
-      if (failure?.code === '42703') {
-        legacyProtocolColumns = true;
-        res = await fetch(`${rest()}/protocols?select=${LEGACY_PROTOCOL_COLS}${suffix}`, { headers: headers(accessToken) });
-      }
-    }
-    const page = ((await handle(res, 'List public protocols')) || []) as AdminProtocol[];
+    const page = ((await handle(await selectProtocols(accessToken, suffix), 'List public protocols')) || []) as AdminProtocol[];
     rows.push(...page);
     if (page.length < pageSize) return rows;
   }

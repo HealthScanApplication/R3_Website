@@ -11,6 +11,7 @@ import { ContentStudio } from './ContentStudio';
 import { CombineProtocols, DietBuilder, FitnessBuilder } from './GuardianBuilders';
 import { ProtocolCard, ProtocolCardGrid, clipCopy } from './ProtocolCard';
 import { ProtocolRemovalDialog, type ProtocolRemoval } from './ProtocolRemoval';
+import { PROTOCOL_THEMES, daysLabel, protocolTags, protocolTheme, protocolWhen } from '../../utils/protocolTags';
 import { ProtocolChildrenPanel } from './ProtocolChildrenPanel';
 import { customizeProtocolRecipe } from '../../utils/protocolCopies';
 import { ContentBuilder } from './ContentBuilder';
@@ -345,28 +346,6 @@ function guardianHeadlineSuggestions(topics: string[], audiences: string[]) {
   ])).slice(0, 30);
 }
 const SECTION_ICON = { hygiene: Bath, beauty: Sparkle, wellness: HeartHandshake, detox: Droplets, longevity: Hourglass } as const;
-/** Themes the Protocols page groups by, in sidebar order. */
-const PROTOCOL_THEMES = ['Diet', 'Fitness', 'Hygiene', 'Beauty', 'Wellness', 'Detox', 'Longevity', 'Other'] as const;
-/** A Protocol's theme from its category, then its builder, then words in its name / description. */
-function protocolTheme(x: { category?: string | null; name?: string | null; description?: string | null; builder_kind?: string | null }): typeof PROTOCOL_THEMES[number] {
-  const c = `${x.category || ''} ${(x as any).builder_kind || ''}`.toLowerCase(), t = `${x.name || ''} ${x.description || ''}`.toLowerCase();
-  const by = (re: RegExp) => re.test(c) || re.test(t);
-  if (/diet|nutrition|meal/.test(c)) return 'Diet';
-  if (/fitness|strength|cardio|hiit|recovery|mobility|workout/.test(c)) return 'Fitness';
-  if (/hygiene|oral|dental/.test(c)) return 'Hygiene';
-  if (/beauty|skin|hair/.test(c)) return 'Beauty';
-  if (/detox|cleanse/.test(c)) return 'Detox';
-  if (/longevity|performance/.test(c)) return 'Longevity';
-  if (/wellness|health|sleep|mind/.test(c)) return 'Wellness';
-  if (by(/\b(diet|meal|recipe|nutrition|eat|food|fasting)\b/)) return 'Diet';
-  if (by(/\b(fitness|workout|training|strength|run|gym|exercise)\b/)) return 'Fitness';
-  if (by(/\b(detox|cleanse|parasite)\b/)) return 'Detox';
-  if (by(/\b(skin|beauty|hair|glow)\b/)) return 'Beauty';
-  if (by(/\b(teeth|dental|oral|hygiene)\b/)) return 'Hygiene';
-  if (by(/\b(longevity|ageing|aging)\b/)) return 'Longevity';
-  if (by(/\b(sleep|stress|wellness|calm|menopause)\b/)) return 'Wellness';
-  return 'Other';
-}
 /** Sidebar sub-pages and the family they sit under. */
 const NAV_PARENT: Partial<Record<string, Tab>> = { diet: 'protocols', fitness: 'protocols', hygiene: 'protocols', beauty: 'protocols', wellness: 'protocols', detox: 'protocols', longevity: 'protocols', diet_protocols: 'diet', recipes: 'diet', ingredients: 'diet', cooking: 'diet', equipment: 'diet', routines: 'fitness', activities: 'fitness', hygiene_protocols: 'hygiene', hygiene_activities: 'hygiene', beauty_protocols: 'beauty', beauty_activities: 'beauty', wellness_protocols: 'wellness', wellness_activities: 'wellness', longevity_protocols: 'longevity', detox_protocols: 'detox' };
 const nav: { id: Tab; label: string; Icon: typeof Users }[] = [
@@ -1353,14 +1332,6 @@ function OfferFormatTag({ kind }: { kind?: string }) {
 }
 // Audience line from the offer-creation flow (social_links.audience_details), e.g. "Women · 32–55 · Menopause".
 type AudienceDetail = { min?: number; max?: number; stages?: string[] };
-/** "Women · 45–64" from a Protocol's target_gender and the "Age: Adults 45–64." line the builder writes into its description. */
-function protocolAudience(protocol: { target_gender?: string | null; description?: string | null }): string {
-  const d = protocol.description || '';
-  const gender = /Population:\s*([^.]+)\./.exec(d)?.[1]?.trim() || (protocol.target_gender && protocol.target_gender !== 'all' ? protocol.target_gender : '');
-  const age = /Age:\s*(?:Adults\s*)?([^.]+)\./.exec(d)?.[1]?.trim() || '';
-  return [gender && gender.charAt(0).toUpperCase() + gender.slice(1), age].filter(Boolean).join(' · ');
-}
-
 function audienceLabel(details?: Record<string, AudienceDetail> | string | null, groups?: string[]): string {
   let map: Record<string, AudienceDetail> = {};
   if (typeof details === 'string') { try { map = JSON.parse(details); } catch { map = {}; } } else if (details) map = details;
@@ -3924,13 +3895,13 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
             return <>
               {forPeople.length > 0 && <>{sectionHead('Personal Protocols', `${forPeople.length} Protocol${forPeople.length === 1 ? '' : 's'} built for one person.`, viewToggle)}
                 {protocolView === 'cards'
-                  ? <ProtocolCardGrid>{forPeople.map((x) => { const person = personalPeople.get(x.id)!; return <ProtocolCard key={x.id} imageUrl={person.imageUrl || x.image_url} kicker={['Personal', `${x.total_days || 1} days`, x.is_public ? 'Published' : 'Draft'].join(' · ')} title={x.name.replace(/\s*·\s*Personal Protocol$/i, '') + '’s Protocol'} copy={shortCopy(x.description)} by={person.name} cta="Open R3 builder" onClick={() => setProtocolId(x.id)} onEdit={() => setProtocolId(x.id)} onDelete={routineOwnersReady && !routineOwners.has(x.id) ? () => setRemoving(x) : undefined} />; })}</ProtocolCardGrid>
+                  ? <ProtocolCardGrid>{forPeople.map((x) => { const person = personalPeople.get(x.id)!; return <ProtocolCard key={x.id} imageUrl={person.imageUrl || x.image_url} kicker={['Personal', daysLabel(x.total_days), x.is_public ? 'Published' : 'Draft'].join(' · ')} tags={protocolTags(x)} title={x.name.replace(/\s*·\s*Personal Protocol$/i, '') + '’s Protocol'} copy={shortCopy(x.description)} by={person.name} cta="Open R3 builder" onClick={() => setProtocolId(x.id)} onEdit={() => setProtocolId(x.id)} onDelete={routineOwnersReady && !routineOwners.has(x.id) ? () => setRemoving(x) : undefined} />; })}</ProtocolCardGrid>
                   : forPeople.map((x) => { const person = personalPeople.get(x.id)!; return <Row key={x.id} image={person.imageUrl || x.image_url} title={x.name} meta={`${person.name} · ${meta(x)}`} action="Open R3 builder" onClick={() => setProtocolId(x.id)} onDelete={routineOwnersReady && !routineOwners.has(x.id) ? () => setRemoving(x) : undefined} />; })}</>}
               {forOthers.length > 0 && <>{sectionHead('General Protocols', `${forOthers.length} Protocol${forOthers.length === 1 ? '' : 's'} for an audience or offer, by theme.`, forPeople.length ? undefined : viewToggle)}
                 {PROTOCOL_THEMES.map((theme) => { const list = forOthers.filter((x) => protocolTheme(x) === theme); if (!list.length) return null; return <div key={theme} style={{ marginBottom: 26 }}>
                   <h3 style={{ ...label, color: ink, display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0 12px' }}>{theme}<span style={{ color: muted, fontWeight: 400 }}>· {list.length}</span></h3>
                   {protocolView === 'cards'
-                    ? <ProtocolCardGrid>{list.map((x) => <ProtocolCard key={x.id} kicker={[protocolAudience(x) || 'Everyone', `${x.total_days || 1} days`, x.is_public ? 'Published' : 'Draft'].join(' · ')} title={x.name.replace(/^R3 Protocol\s*>\s*/i, '')} imageUrl={x.image_url} copy={clipCopy(x.description)} by={profile.display_name} cta="Open R3 builder" onClick={() => setProtocolId(x.id)} onEdit={() => setProtocolId(x.id)} onDelete={routineOwnersReady && !routineOwners.has(x.id) ? () => setRemoving(x) : undefined} />)}</ProtocolCardGrid>
+                    ? <ProtocolCardGrid>{list.map((x) => <ProtocolCard key={x.id} kicker={[daysLabel(x.total_days), x.is_public ? 'Published' : 'Draft'].join(' · ')} tags={protocolTags(x, { category: false })} title={x.name.replace(/^R3 Protocol\s*>\s*/i, '')} imageUrl={x.image_url} copy={clipCopy(x.description)} by={profile.display_name} cta="Open R3 builder" onClick={() => setProtocolId(x.id)} onEdit={() => setProtocolId(x.id)} onDelete={routineOwnersReady && !routineOwners.has(x.id) ? () => setRemoving(x) : undefined} />)}</ProtocolCardGrid>
                     : list.map((x) => <Row key={x.id} image={x.image_url} title={x.name} meta={meta(x)} action="Open R3 builder" onClick={() => setProtocolId(x.id)} onDelete={routineOwnersReady && !routineOwners.has(x.id) ? () => setRemoving(x) : undefined} />)}
                 </div>; })}</>}
               {personal.length > 0 && sectionHead('Your routines', 'Your own routine and your family’s.')}
@@ -3944,7 +3915,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
             </div>
             {publicProtocolsError && <p role="alert" style={{ color: '#E8B86A', fontSize: 12 }}>{publicProtocolsError}</p>}
             {!publicProtocolsLoading && !publicProtocolsError && publicProtocols.length === 0 && <p style={{ color: muted, fontSize: 12 }}>No public protocols are available yet.</p>}
-            {publicProtocols.length > 0 && <ProtocolCardGrid>{publicProtocols.map((protocol) => <ProtocolCard key={protocol.id} imageUrl={protocol.image_url} kicker={[protocol.category || 'Protocol', `${protocol.total_days || 1} days`, 'Public'].join(' · ')} title={protocol.name.replace(/^R3 Protocol\s*>\s*/i, '')} copy={clipCopy(protocol.description)} by={protocol.creator || 'ROUTINE³'} cta="View public protocol" href={`/protocol/${encodeURIComponent(protocol.id)}`} />)}</ProtocolCardGrid>}
+            {publicProtocols.length > 0 && <ProtocolCardGrid>{publicProtocols.map((protocol) => <ProtocolCard key={protocol.id} imageUrl={protocol.image_url} kicker={[protocolWhen(protocol.category), daysLabel(protocol.total_days), 'Public'].filter(Boolean).join(' · ')} tags={protocolTags(protocol)} title={protocol.name.replace(/^R3 Protocol\s*>\s*/i, '')} copy={clipCopy(protocol.description)} by={protocol.creator || 'ROUTINE³'} cta="View public protocol" href={`/protocol/${encodeURIComponent(protocol.id)}`} />)}</ProtocolCardGrid>}
           </section>}
         </div></>}
         {tab === 'content' && <ContentBuilder profile={profile} offers={offers} protocols={protocols} recipes={recipes} />}
