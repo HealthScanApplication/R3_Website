@@ -7,6 +7,7 @@ import { ArrowRight, Pencil, Trash2 } from 'lucide-react';
  * middle, the top and bottom blurred as if the scene were a miniature. On hover, focus, or when the card is open, the
  * colour comes in and the blur eases off, and the card lifts and leans a few degrees toward the pointer.
  * Touch screens cannot hover, so there the picture is in colour from the start.
+ * Under the title, small tags say what it is (category) and who it is for (gender, ages); a tag with no data is left out.
  * An owner's card also carries Edit and Delete: two icon buttons that appear on hover or focus (always on touch), beside the card's
  * main link or button, never inside it.
  * Scoped CSS because index.css is prebuilt (no Tailwind JIT); `.r3-pcard*` classes only.
@@ -42,7 +43,10 @@ export const PROTOCOL_CARD_CSS = `
 .r3-pcard:hover .r3-pcard-plate,.r3-pcard:focus-within .r3-pcard-plate,.r3-pcard[data-pressed=true] .r3-pcard-plate{filter:grayscale(0) brightness(1.05)}
 .r3-pcard-body{display:flex;flex:1;flex-direction:column;padding:20px}
 .r3-pcard-kicker{color:#667245;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
-.r3-pcard-title{font-family:${serif};font-size:28px;font-weight:300;line-height:1.02;margin:12px 0 8px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.r3-pcard-title{font-family:${serif};font-size:28px;font-weight:300;line-height:1.14;margin:10px 0 8px;padding:.05em 0 .06em;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.r3-pcard-tags{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;padding:0;list-style:none}
+.r3-pcard-tag{margin:0;padding:5px 8px;border:1px solid rgba(17,18,15,.24);border-radius:2px;color:#4A4944;font-size:10px;font-weight:600;letter-spacing:.08em;line-height:1;text-transform:uppercase;white-space:nowrap}
+.r3-pcard-tag[data-kind=category]{border-color:rgba(102,114,69,.55);background:rgba(102,114,69,.1);color:#4C5732}
 .r3-pcard-copy{color:#66645F;font-size:13px;line-height:1.5;margin:0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .r3-pcard-foot{margin-top:auto;padding-top:20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .r3-pcard-by{min-width:0;color:#66645F;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -76,8 +80,10 @@ export function clipCopy(text: string | null | undefined, max = 110): string | u
 
 export interface ProtocolCardProps {
   title: string;
-  /** "Category · 7 days · Published". */
+  /** "7 days · Published". */
   kicker?: string;
+  /** Category, gender and age tags under the title. */
+  tags?: Array<{ label: string; kind?: 'category' | 'gender' | 'age' }>;
   copy?: string;
   imageUrl?: string | null;
   /** Who made it. */
@@ -93,7 +99,7 @@ export interface ProtocolCardProps {
   onDelete?: () => void;
 }
 
-export function ProtocolCard({ title, kicker, copy, imageUrl, by, cta = 'View protocol', href, onClick, pressed, onEdit, onDelete }: ProtocolCardProps) {
+export function ProtocolCard({ title, kicker, tags, copy, imageUrl, by, cta = 'View protocol', href, onClick, pressed, onEdit, onDelete }: ProtocolCardProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   // The picture that failed, not a flag: a card that later gets a different picture tries it.
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
@@ -119,6 +125,7 @@ export function ProtocolCard({ title, kicker, copy, imageUrl, by, cta = 'View pr
     <div className="r3-pcard-body">
       {kicker && <span className="r3-pcard-kicker">{kicker}</span>}
       <h3 className="r3-pcard-title">{title}</h3>
+      {tags && tags.length > 0 && <ul className="r3-pcard-tags">{tags.map((tag) => <li key={`${tag.kind || 'tag'}:${tag.label}`} className="r3-pcard-tag" data-kind={tag.kind}>{tag.label}</li>)}</ul>}
       {copy && <p className="r3-pcard-copy">{copy}</p>}
       <span className="r3-pcard-foot">
         <span className="r3-pcard-by">{by}</span>
