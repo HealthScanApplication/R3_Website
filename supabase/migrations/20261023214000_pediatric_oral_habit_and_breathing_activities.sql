@@ -1,0 +1,97 @@
+-- Fill the pediatric oral-habit and mouth-breathing gap found in the activity audit.
+-- These are parent/clinician-guided care actions, not jaw-reshaping treatments.
+
+insert into public.catalog_activities (
+  id, name, category, subcategory, lane_subcategory, domain, type, verb,
+  description, instructions, steps, duration_minutes, default_duration_min,
+  intensity, recommended_duration, recommended_frequency, recommended_intensity,
+  equipment_needed, equipment, body_parts, benefits, health_benefits,
+  contraindications, safety_notes, tips, tags, target_age_min, target_age_max,
+  target_gender, is_prenatal, is_group, is_active, sort_order, image_url,
+  image_primary_url, primary_image_url, image_status, url, created_at, updated_at
+)
+values
+(
+  'activity_child_pacifier_weaning_plan',
+  'Parent-Guided Pacifier Weaning',
+  'Wellness', 'Pediatric oral health', 'Oral care', 'wellness', 'canonical', 'Wean',
+  'A calm, developmentally appropriate plan for reducing and stopping pacifier use. The goal is to change the habit without shame or punishment; it does not promise to reshape the jaw. The American Academy of Pediatric Dentistry advises anticipatory guidance and discontinuing non-nutritive sucking habits by 36 months, with prolonged use beyond 18 months able to influence the developing bite.',
+  E'1. Choose a calm week without another major transition.\n2. Explain the plan in simple, positive words and let the child choose a comfort replacement such as a toy, cuddle, song, or story.\n3. For 3–7 days, limit the pacifier to sleep only; keep it out of sight at other times.\n4. Praise each pacifier-free period. Do not shame, tease, punish, or coat the pacifier with unpleasant substances.\n5. Choose a final goodbye ritual: place it in a keepsake box or exchange it for a small non-food reward.\n6. Keep the bedtime routine predictable and offer extra comfort for several nights.\n7. If the habit continues near age 3, or there is an open bite, crossbite, speech concern, pain, or chewing difficulty, arrange a pediatric dental review.',
+  '[{"order":1,"title":"Choose a calm week","instruction":"Avoid starting during illness, travel, a move, toilet training, or another major transition."},{"order":2,"title":"Prepare together","instruction":"Use simple positive language and choose a replacement comfort routine."},{"order":3,"title":"Limit to sleep","instruction":"For 3–7 days, keep the pacifier out of sight except at sleep times."},{"order":4,"title":"Praise progress","instruction":"Notice pacifier-free periods; do not shame, punish, tease, or use bitter substances."},{"order":5,"title":"Say goodbye","instruction":"Use a keepsake-box or exchange ritual chosen with the child."},{"order":6,"title":"Support bedtime","instruction":"Keep the bedtime sequence consistent and offer extra comfort."},{"order":7,"title":"Review if needed","instruction":"Seek pediatric dental advice for a persistent habit near age 3 or any bite, speech, pain, or chewing concern."}]'::jsonb,
+  10, 10, 'low', '10 minutes plus the usual bedtime routine', 'Daily during a 1–2 week transition', 'Gentle, child-led',
+  array['Comfort object or keepsake box'], '["comfort object","keepsake box"]'::jsonb, '["mouth","teeth","jaw"]'::jsonb,
+  '{"primary":"Supports age-appropriate cessation of prolonged non-nutritive sucking","secondary":["Reduces habit duration","Supports a calm bedtime transition"]}'::jsonb,
+  '["Oral habit support","Parent-child routine","Developing dentition awareness"]'::jsonb,
+  '["Do not abruptly remove a pacifier needed for a current medical or feeding plan without the child''s clinician","Do not use for an infant younger than 12 months as sleep-pacifier guidance also relates to SIDS risk reduction"]'::jsonb,
+  'Parent supervision required. Never tie a pacifier around the neck or attach unsafe cords. Do not cut or damage a pacifier for continued use. Seek a pediatric dentist for persistent habits or bite changes.',
+  'Pacifier benefits and risks vary by age. This activity is behavioral guidance, not orthodontic treatment.',
+  array['children','pediatric','oral health','pacifier','dummy','weaning','jaw','developing dentition'],
+  1, 3, array['all'], false, false, true, 100,
+  'https://routine3.com/images/activities/child-pacifier-weaning.webp',
+  'https://routine3.com/images/activities/child-pacifier-weaning.webp',
+  'https://routine3.com/images/activities/child-pacifier-weaning.webp', 'approved',
+  'https://www.aapd.org/research/oral-health-policies--recommendations/p_pacifiers.pdf', now(), now()
+),
+(
+  'activity_child_mouth_breathing_observation',
+  'Child Mouth-Breathing Observation Check',
+  'Wellness', 'Pediatric airway health', 'Oral care', 'wellness', 'canonical', 'Observe',
+  'A parent checklist for recording persistent mouth breathing, snoring, and sleep-related breathing signs before speaking with a pediatrician, pediatric dentist, or ENT clinician. This is an observation activity, not a diagnosis or breathing treatment.',
+  E'1. Observe the child while relaxed and awake: note whether the lips stay open, the nose seems blocked, or nasal breathing appears difficult.\n2. On two or three ordinary nights, listen for frequent snoring, gasping, choking, restless sleep, or pauses in breathing. Do not wake or reposition the child solely for the checklist.\n3. Note morning dry mouth or headache and daytime tiredness, irritability, attention difficulty, or persistent blocked nose.\n4. Record dates and short factual notes. If safe and appropriate, a brief sleep video can help a clinician; protect the child''s privacy and do not share it publicly.\n5. Arrange a pediatrician or pediatric ENT assessment for persistent mouth breathing, regular snoring, gasping, or pauses; arrange a pediatric dental review for bite or oral-development concerns.\n6. Seek urgent help for blue or grey lips/face, severe breathing effort, inability to speak or cry normally, or a breathing pause longer than 20 seconds.',
+  '[{"order":1,"title":"Observe while awake","instruction":"Note persistent open-mouth posture, blocked nose, or difficulty breathing comfortably through the nose."},{"order":2,"title":"Observe sleep","instruction":"On 2–3 ordinary nights, note regular snoring, gasping, choking, restlessness, or breathing pauses."},{"order":3,"title":"Check daytime signs","instruction":"Record dry mouth, morning headache, tiredness, irritability, attention difficulty, or persistent congestion."},{"order":4,"title":"Keep factual notes","instruction":"Write dates and observations; a private short video may help the clinician if it can be made safely."},{"order":5,"title":"Book assessment","instruction":"Discuss persistent signs with a pediatrician or ENT; add pediatric dental review for bite or oral-development concerns."},{"order":6,"title":"Know emergency signs","instruction":"Use emergency services for blue/grey color, severe breathing effort, inability to speak or cry normally, or a pause longer than 20 seconds."}]'::jsonb,
+  5, 5, 'low', '5 minutes of observation', '2–3 nights, then share findings with a clinician', 'Observation only',
+  array['Paper or private notes app'], '["paper or private notes app"]'::jsonb, '["nose","mouth","airway","sleep"]'::jsonb,
+  '{"primary":"Supports earlier recognition and clinical assessment of persistent mouth breathing","secondary":["Organizes sleep and daytime observations","Highlights urgent breathing signs"]}'::jsonb,
+  '["Pediatric airway awareness","Sleep-breathing observation","Clinical referral preparation"]'::jsonb,
+  '["Do not delay urgent care to complete the checklist","Do not use the checklist to diagnose or rule out sleep apnea"]'::jsonb,
+  'Never tape a child''s mouth or force nasal breathing. Persistent mouth breathing can reflect nasal obstruction, enlarged tonsils/adenoids, allergy, or other conditions that need clinical assessment.',
+  'A private sleep video can be useful to a clinician, but written observations are enough if recording would disturb the child or compromise privacy.',
+  array['children','pediatric','mouth breathing','nasal obstruction','snoring','sleep apnea signs','airway','jaw','oral development'],
+  2, 17, array['all'], false, false, true, 101,
+  'https://routine3.com/images/activities/child-mouth-breathing-observation.webp',
+  'https://routine3.com/images/activities/child-mouth-breathing-observation.webp',
+  'https://routine3.com/images/activities/child-mouth-breathing-observation.webp', 'approved',
+  'https://www.healthychildren.org/English/ages-stages/baby/sleep/Pages/Sleep-Apnea-Detection.aspx', now(), now()
+),
+(
+  'activity_child_clinician_guided_nasal_breathing',
+  'Clinician-Guided Nasal Breathing Practice for Children',
+  'Wellness', 'Pediatric oral health', 'Breathwork', 'wellness', 'canonical', 'Practice',
+  'A brief, gentle practice for a child who has already had nasal obstruction and sleep-breathing concerns assessed and has been given an individualized plan by a qualified clinician. It supports awareness and adherence; evidence does not establish that unsupervised exercises reshape the jaw.',
+  E'1. Confirm that the child''s pediatrician, ENT, pediatric dentist, orthodontist, speech-language therapist, or qualified orofacial myofunctional clinician has assessed the airway and approved this practice.\n2. Sit upright and relaxed. Keep the jaw loose; teeth should not be clenched.\n3. With the mouth comfortably closed only if breathing is easy, take 5 quiet breaths through the nose at the pace prescribed by the clinician. Do not hold the breath.\n4. Rest and ask the child whether breathing feels easy. Stop immediately for blockage, air hunger, dizziness, anxiety, pain, or distress.\n5. Repeat only the tongue-rest, lip-seal, swallowing, or breathing drill specifically taught by the clinician; do not improvise resistance devices or jaw exercises.\n6. Record completion and symptoms, then review progress with the clinician at the agreed follow-up.',
+  '[{"order":1,"title":"Confirm clinical clearance","instruction":"Use only after airway assessment and with an individualized professional plan."},{"order":2,"title":"Set a relaxed posture","instruction":"Sit upright; relax the jaw and avoid clenching."},{"order":3,"title":"Take five easy breaths","instruction":"Close the lips only if comfortable and breathe quietly through the nose without breath-holding."},{"order":4,"title":"Check comfort","instruction":"Stop for obstruction, air hunger, dizziness, anxiety, pain, or distress."},{"order":5,"title":"Use only the prescribed drill","instruction":"Follow the exact tongue-rest, lip-seal, swallowing, or breathing drill taught by the clinician."},{"order":6,"title":"Record and review","instruction":"Note completion and symptoms for the next professional follow-up."}]'::jsonb,
+  5, 5, 'low', '3–5 minutes or the clinician-prescribed duration', 'Only as prescribed', 'Comfortable and symptom-free',
+  array['Clinician-provided plan'], '["clinician-provided plan"]'::jsonb, '["nose","mouth","tongue","lips","jaw"]'::jsonb,
+  '{"primary":"Supports adherence to a clinician-prescribed pediatric orofacial plan","secondary":["Builds breathing awareness","Records tolerance and symptoms"]}'::jsonb,
+  '["Clinician-guided orofacial function","Nasal-breathing awareness","Relaxed oral posture"]'::jsonb,
+  '["Unassessed or untreated nasal obstruction","Suspected or untreated obstructive sleep apnea","Acute respiratory illness or asthma flare","Child cannot breathe comfortably through the nose","Age or development insufficient to follow voluntary instructions"]'::jsonb,
+  'Never tape the mouth, force the lips closed, restrict airflow, use resistance devices, or continue through distress. Mouth breathing can be a sign of airway obstruction; exercises must not replace medical, dental, ENT, sleep, or speech-language assessment.',
+  'Generally suitable only for children able to follow voluntary instructions, often age 4 or older. Evidence for pediatric orofacial myofunctional therapy remains limited and condition-specific.',
+  array['children','pediatric','nasal breathing','oral posture','myofunctional','clinician guided','airway','tongue posture','lip seal','jaw'],
+  4, 17, array['all'], false, false, true, 102,
+  'https://routine3.com/images/activities/child-clinician-guided-nasal-breathing.webp',
+  'https://routine3.com/images/activities/child-clinician-guided-nasal-breathing.webp',
+  'https://routine3.com/images/activities/child-clinician-guided-nasal-breathing.webp', 'approved',
+  'https://pubmed.ncbi.nlm.nih.gov/40166722/', now(), now()
+)
+on conflict (id) do update set
+  name=excluded.name, category=excluded.category, subcategory=excluded.subcategory,
+  lane_subcategory=excluded.lane_subcategory, domain=excluded.domain, type=excluded.type,
+  verb=excluded.verb, description=excluded.description, instructions=excluded.instructions,
+  steps=excluded.steps, duration_minutes=excluded.duration_minutes,
+  default_duration_min=excluded.default_duration_min, intensity=excluded.intensity,
+  recommended_duration=excluded.recommended_duration,
+  recommended_frequency=excluded.recommended_frequency,
+  recommended_intensity=excluded.recommended_intensity,
+  equipment_needed=excluded.equipment_needed, equipment=excluded.equipment,
+  body_parts=excluded.body_parts, benefits=excluded.benefits,
+  health_benefits=excluded.health_benefits, contraindications=excluded.contraindications,
+  safety_notes=excluded.safety_notes, tips=excluded.tips, tags=excluded.tags,
+  target_age_min=excluded.target_age_min, target_age_max=excluded.target_age_max,
+  target_gender=excluded.target_gender, is_prenatal=excluded.is_prenatal,
+  is_group=excluded.is_group, is_active=excluded.is_active, sort_order=excluded.sort_order,
+  image_url=excluded.image_url, image_primary_url=excluded.image_primary_url,
+  primary_image_url=excluded.primary_image_url, image_status=excluded.image_status,
+  url=excluded.url, updated_at=now();
+
+notify pgrst, 'reload schema';
