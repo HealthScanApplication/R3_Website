@@ -19,21 +19,44 @@ jobs:
       issues: write
     
     steps:
+      # The sync needs a Supabase service key, which only exists as repo secrets.
+      # Without them the job can only fail, so skip it and say why instead.
+      - name: Check registry credentials
+        id: creds
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_KEY" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Code registry sync skipped::SUPABASE_URL and SUPABASE_SERVICE_KEY repository secrets are not set."
+            {
+              echo "### Code registry sync skipped"
+              echo "Set the \`SUPABASE_URL\` and \`SUPABASE_SERVICE_KEY\` repository secrets (Settings > Secrets and variables > Actions) to enable it. See CODE_REGISTRY_GUIDE.md."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout code
+        if: steps.creds.outputs.configured == 'true'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Full history for commit info
 
       - name: Setup Node.js
+        if: steps.creds.outputs.configured == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
+        if: steps.creds.outputs.configured == 'true'
         run: npm ci --legacy-peer-deps
 
       - name: Run code registry sync
+        if: steps.creds.outputs.configured == 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
