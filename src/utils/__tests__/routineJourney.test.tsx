@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { RoutineStep } from '../protocolBuilders';
 import { RoutineJourney } from '../../components/guides/RoutineJourney';
+import { asMealRule } from '../../components/guides/CatalogBrowsers';
 
 const step = (over: Partial<RoutineStep>): RoutineStep => ({ id: undefined, parentId: null, notes: null, recipeId: null, activityId: null, dows: null, name: 'Step', time: null, group: null, day: null, kind: 'action', itemType: 'activity', scope: null, recurrenceType: null, category: 'do', subtype: 'wellness', minutes: null, sets: null, reps: null, weight: null, ...over });
 const steps: RoutineStep[] = [
@@ -16,7 +17,7 @@ const steps: RoutineStep[] = [
   step({ id: 's7', name: 'Evening walk', time: '18:30', day: 2, subtype: 'exercise' }),
   step({ id: 's8', name: 'Get morning daylight', time: '07:30', day: 2 }),
 ];
-const dish = (id: string, name: string) => ({ id, name_common: name, image_primary_url: `https://img/${id}.webp`, image_url: null, meal_slot: 'lunch', cuisine: null, description_simple: null, description: null, health_score: 88, prep_time: null, cook_time: null, servings: 1, nutrition_per_100g: null, nutrition_per_serving: { energy_kcal: id === 'rec1' ? 300 : 450, protein_g: id === 'rec1' ? 10 : 35, carbohydrates_g: 40, fats_g: 12, fiber_g: 5 }, elements_hazardous: null, dietary_info: null });
+const dish = (id: string, name: string) => ({ id, name_common: name, image_primary_url: `https://img/${id}.webp`, image_url: null, meal_slot: 'lunch', cuisine: null, description_simple: null, description: null, health_score: 88, prep_time: null, cook_time: null, servings: 1, nutrition_per_100g: null, nutrition_per_serving: { energy_kcal: id === 'rec1' ? 300 : 450, protein_g: id === 'rec1' ? 10 : 35, carbohydrates_g: 40, fats_g: 12, fiber_g: 5, sugars_g: 6 }, elements_hazardous: null, dietary_info: null });
 const calls: string[] = [];
 beforeEach(() => {
   calls.length = 0;
@@ -60,7 +61,7 @@ it('a step\'s description is indented under its title, in the same column as the
   const note = screen.getByText('Spend time outdoors soon after waking.');
   expect(note.parentElement).toBe(title.parentElement);
   const row = title.closest('li') as HTMLElement;
-  expect(row.style.gridTemplateColumns).toMatch(/^44px/); // a picture column, then the text column the note sits in
+  expect(row.style.gridTemplateColumns).toMatch(/^24px 44px/); // a number column, a picture column, then the text column the note sits in
   expect(container.querySelector('li [data-prefix]')!.nextElementSibling!.contains(note)).toBe(true);
 });
 
@@ -99,7 +100,69 @@ it('the Nutrients tab adds up the day\'s meals and shows the share of the daily 
   const panel = screen.getByRole('tabpanel');
   await waitFor(() => expect(within(panel).getByRole('list', { name: 'Macros' })).toBeTruthy());
   expect(within(panel).getByRole('list', { name: 'Macros' }).textContent).toContain('750'); // 300 + 450 kcal
-  await waitFor(() => expect(within(panel).getByRole('list', { name: 'Daily value' }).textContent).toMatch(/Vitamin C/));
+  await waitFor(() => expect(within(panel).getByRole('list', { name: /^Vitamins/ }).textContent).toMatch(/Vitamin C/));
   fireEvent.click(screen.getByRole('tab', { name: 'Steps' }));
   expect(screen.getByText('Get morning daylight')).toBeTruthy();
+});
+
+it('the Nutrients tab keeps macros (with sugar) apart from the micronutrients, and files the micronutrients by type', async () => {
+  show();
+  await screen.findByText('Eat a high-protein lunch');
+  await screen.findByRole('group', { name: /Suggested meal/ });
+  fireEvent.click(screen.getByRole('tab', { name: 'Nutrients' }));
+  const panel = screen.getByRole('tabpanel');
+  const macros = await within(panel).findByRole('list', { name: 'Macros' });
+  for (const label of ['Energy', 'Protein', 'Carbs', 'Fat', 'Fibre', 'Sugar']) expect(macros.textContent).toContain(label);
+  expect(macros.textContent).toContain('12 g'); // 6 + 6 g of sugar over the day's two meals
+  const vitamins = await within(panel).findByRole('list', { name: /^Vitamins/ });
+  expect(vitamins.textContent).toMatch(/Vitamin C/);
+  for (const macro of ['Protein', 'Fibre', 'Sugar', 'Alcohol']) expect(vitamins.textContent).not.toContain(macro);
+  // no micronutrient list repeats a macro
+  for (const list of within(panel).getAllByRole('list')) if (list !== macros) for (const macro of ['Protein', 'Fibre', 'Sugar']) expect(list.textContent).not.toContain(macro);
+});
+
+it('steps are numbered down the day on a timeline at the left: one number each, a line joining a step to the next in its list', async () => {
+  const { container } = show();
+  await screen.findByText('Eat a high-protein lunch');
+  expect([...container.querySelectorAll('[data-step-number]')].map((n) => n.getAttribute('data-step-number'))).toEqual(['1', '2', '3', '4', '5']);
+  for (const list of container.querySelectorAll('ol')) {
+    const rows = [...list.children];
+    expect(list.getAttribute('start')).toBe(rows[0].querySelector('[data-step-number]')!.getAttribute('data-step-number'));
+    rows.forEach((row, i) => expect(!!row.querySelector('span[style*="width: 1px"]')).toBe(i < rows.length - 1)); // no line after the last step of a list
+  }
+  const row = container.querySelector('li') as HTMLElement;
+  expect(row.firstElementChild!.hasAttribute('data-step-number')).toBe(true); // the number is the left-most column
+});
+
+it('nothing inside the routine carries a colour of its own: no green or amber accents', async () => {
+  const { container } = show();
+  await screen.findByText('Eat a high-protein lunch');
+  fireEvent.click(screen.getByRole('tab', { name: 'Nutrients' }));
+  await screen.findByRole('list', { name: 'Macros' });
+  expect(container.innerHTML).not.toMatch(/199,\s*216,\s*163|C7D8A3|232,\s*184,\s*106|E8B86A/i);
+});
+
+it('"Finish caffeine for the day" is a meal rule, a Do rule with its note, not a meal step with a suggested dish', async () => {
+  const rule = step({ id: 'c1', name: 'Finish caffeine for the day', time: '14:00', itemType: 'consume', subtype: 'meal', category: 'consume', group: 'Lunch', notes: 'Choose caffeine-free drinks after this point.' });
+  render(<RoutineJourney accessToken="tok" steps={[rule]} description="A week." totalDays={1} />);
+  const rules = await screen.findByRole('list', { name: 'Meals rules' });
+  expect(within(rules).getByText('Do')).toBeTruthy();
+  expect(rules.textContent).toContain('Finish caffeine for the day');
+  expect(rules.textContent).toContain('14:00');
+  expect(rules.textContent).toContain('Choose caffeine-free drinks after this point.');
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  expect(document.querySelector('[data-step-number]')).toBeNull(); // not a numbered step
+  expect(screen.queryByRole('group', { name: /meal:/i })).toBeNull(); // no dish
+  expect(calls.some((u) => u.includes('meal_slot'))).toBe(false); // none was even looked up
+});
+
+it('asMealRule turns only a limit on eating or drinking into a rule', () => {
+  const meal = { itemType: 'consume', subtype: 'meal', category: 'consume' };
+  expect(asMealRule(step({ name: 'Finish caffeine for the day', ...meal })).kind).toBe('rule_do');
+  expect(asMealRule(step({ name: 'Stop eating 3 hours before bed', ...meal })).kind).toBe('rule_do');
+  expect(asMealRule(step({ name: 'Avoid refined sugar', ...meal })).kind).toBe('rule_dont');
+  expect(asMealRule(step({ name: 'Eat a high-protein lunch', ...meal })).kind).toBe('action');
+  expect(asMealRule(step({ name: 'Finish the soup', recipeId: 'r1', ...meal })).kind).toBe('action'); // a linked dish is a meal
+  expect(asMealRule(step({ name: 'Stop scrolling at night', subtype: 'wellness' })).kind).toBe('action'); // not in a meal list
+  expect(asMealRule(step({ name: 'Finish caffeine for the day', kind: 'rule_dont', ...meal })).kind).toBe('rule_dont'); // a stored rule is left alone
 });

@@ -40,7 +40,7 @@ export async function listGuardianRoutines(guideId: string, accessToken: string 
   return (await res.json()) as OfferRoutine[];
 }
 
-const ink = '#F5F2EA', acid = '#C7D8A3';
+const ink = '#F5F2EA', muted = '#B8B6AF';
 
 export function OfferProtocolItems({ guideId, offerTitle }: { guideId: string; offerTitle: string }) {
   const { user, accessToken } = useAuth();
@@ -62,11 +62,11 @@ export function OfferProtocolItems({ guideId, offerTitle }: { guideId: string; o
   }, [guideId, offerTitle, token]);
   if (!found) return null;
   const shown = clean(found.routine.name);
-  return <section aria-label={`What is inside ${shown}`} style={{ border: `1px solid rgba(199,216,163,.4)`, background: '#141611', color: ink, padding: 'clamp(14px,2.4vw,22px)', textAlign: 'left' }}>
+  return <section aria-label={`What is inside ${shown}`} style={{ border: `1px solid rgba(245,242,234,.2)`, background: '#141611', color: ink, padding: 'clamp(14px,2.4vw,22px)', textAlign: 'left' }}>
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', margin: '0 0 10px' }}>
-      <span style={{ color: acid, fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Inside this routine</span>
+      <span style={{ color: muted, fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Inside this routine</span>
       {/* Only the Guardian's own session reads drafts: say so, so a visitor's page is not mistaken for this one. */}
-      {!found.routine.is_public && <span role="status" style={{ border: '1px solid rgba(232,184,106,.5)', color: '#E8B86A', borderRadius: 999, padding: '2px 10px', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>Draft · only you can see this</span>}
+      {!found.routine.is_public && <span role="status" style={{ border: '1px dashed rgba(245,242,234,.42)', color: ink, borderRadius: 999, padding: '2px 10px', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>Draft · only you can see this</span>}
     </div>
     <RoutineJourney accessToken={token || publicAnonKey} steps={found.steps} description={found.routine.description} totalDays={found.routine.total_days} />
   </section>;

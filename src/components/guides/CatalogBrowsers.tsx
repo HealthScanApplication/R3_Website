@@ -6,7 +6,7 @@
  *   CatalogIngredients ingredients by category, with nutrients and hazards (Diet section).
  *   FitnessRoutines    the app's published fitness Protocols and their steps (Fitness section).
  */
-import { Fragment, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { AlertTriangle, Dumbbell, Heart, Loader2, Search, Utensils, Wheat, X } from 'lucide-react';
 import { RECIPE_DIETS, browseIngredients, browseRecipes, listFitnessRoutines, listMyDietPlans, mealSlotOf, protocolDiet, recipeIngredientNames, routinePeriod, routineSteps, stepMedia, getActivityDetail, type ActivityDetail, type CatalogFood, type FitnessRoutine, type RecipeCatalogGroup, type RoutineStep } from '../../utils/protocolBuilders';
 import { ProtocolHomeScreen } from '../mockups/ProtocolHomeScreen';
@@ -14,7 +14,7 @@ import { PhoneFrame } from '../mockups/PhoneFrame';
 import { NUTRIENTS } from '../../utils/recipeNutrients';
 import { Header } from './GuardianBuilders';
 import { ProtocolCard, ProtocolCardGrid, clipCopy } from './ProtocolCard';
-import { ruleGroupFor } from '../../utils/protocolRules';
+import { AVOID_TITLE, isMealRuleTitle, ruleGroupFor } from '../../utils/protocolRules';
 import { protocolTags, type ProtocolTag } from '../../utils/protocolTags';
 
 const ink = '#F5F2EA', muted = '#B8B6AF', line = 'rgba(245,242,234,0.24)', acid = '#C7D8A3', panel = '#11120F', warn = '#E8B07A', danger = '#E88A7A';
@@ -232,6 +232,15 @@ export function smartListOfStep(s: Pick<RoutineStep, 'subtype' | 'scope' | 'cate
   if (/hygiene|beauty/.test(t)) return 'Hygiene';
   return 'Wellness';
 }
+/**
+ * A step in a meal list that limits eating or drinking ("Finish caffeine for the day") is a rule for the meals, not a meal:
+ * it is read as a Do rule (a Don't rule when it opens with avoid / no / skip …), so it sits with the rules and gets no dish.
+ * A step that links a recipe, or is already a rule, is left as it is.
+ */
+export function asMealRule(s: RoutineStep): RoutineStep {
+  if (s.kind?.startsWith('rule') || s.recipeId || s.activityId || !isMealRuleTitle(s.name) || smartListOfStep(s) !== 'Meals') return s;
+  return { ...s, kind: AVOID_TITLE.test(s.name.trim()) ? 'rule_dont' : 'rule_do' };
+}
 /** A part of the day's steps as the app's smart lists (Hygiene, Supplements, Meals…), each list in the order it first appears, steps in time order within it. */
 export function bySmartList(steps: RoutineStep[]): RoutineStep[] {
   const order: string[] = [];
@@ -242,13 +251,14 @@ export function bySmartList(steps: RoutineStep[]): RoutineStep[] {
  * A part of the day as smart-list blocks: [list, its steps, its rules]. Rules are the loose rules of that list plus
  * the rules hanging under its steps, each written once with the steps it applies to ("Chew slowly · Breakfast, Lunch").
  */
-export function smartListBlocks(steps: RoutineStep[], kids: (s: RoutineStep) => RoutineStep[]): Array<[string, RoutineStep[], Array<{ name: string; dont: boolean; on: string[] }>]> {
+export interface SmartListRule { name: string; dont: boolean; on: string[]; /** Why, and how: the rule row's own description. */ note?: string | null; time?: string | null }
+export function smartListBlocks(steps: RoutineStep[], kids: (s: RoutineStep) => RoutineStep[]): Array<[string, RoutineStep[], SmartListRule[]]> {
   const isRule = (s: RoutineStep) => !!s.kind?.startsWith('rule');
   return [...new Set(bySmartList(steps).map((s) => smartListOfStep(s)))].map((list) => {
     const inList = steps.filter((s) => smartListOfStep(s) === list);
     const acts = inList.filter((s) => !isRule(s));
-    const rules = new Map<string, { name: string; dont: boolean; on: string[] }>();
-    const add = (r: RoutineStep, on?: string) => { const k = r.name.trim().toLowerCase(); const x = rules.get(k) || { name: r.name, dont: r.kind === 'rule_dont', on: [] }; if (on && !x.on.includes(on)) x.on.push(on); rules.set(k, x); };
+    const rules = new Map<string, SmartListRule>();
+    const add = (r: RoutineStep, on?: string) => { const k = r.name.trim().toLowerCase(); const x = rules.get(k) || { name: r.name, dont: r.kind === 'rule_dont', on: [], ...(r.notes ? { note: r.notes } : {}), ...(r.time ? { time: r.time } : {}) }; if (on && !x.on.includes(on)) x.on.push(on); rules.set(k, x); };
     for (const r of inList.filter(isRule)) add(r);
     for (const a of acts) for (const k of kids(a).filter(isRule)) add(k, a.name);
     return [list, acts, [...rules.values()]];
@@ -427,7 +437,9 @@ export const descriptionParagraphs = (text: string) => text.split(/\s*#{2,}\s*/)
  * What the routine browser works out from a routine's raw steps: the week view, the tree of sub-steps, the images of the
  * steps that link to a catalogue activity or recipe, and (for a builder, `suggest`) a catalogue recipe for each generic meal.
  */
-export function useRoutineView({ accessToken, steps, section, totalDays, description, suggest = true, keepBasics = false }: { accessToken: string; steps: RoutineStep[] | null; section: string; totalDays?: number | null; description?: string | null; suggest?: boolean; /** Show every step of the routine: for a routine that is the offer itself, hygiene and sleep steps are its own, not suggested basics. */ keepBasics?: boolean }) {
+export function useRoutineView({ accessToken, steps: rawSteps, section, totalDays, description, suggest = true, keepBasics = false }: { accessToken: string; steps: RoutineStep[] | null; section: string; totalDays?: number | null; description?: string | null; suggest?: boolean; /** Show every step of the routine: for a routine that is the offer itself, hygiene and sleep steps are its own, not suggested basics. */ keepBasics?: boolean }) {
+  // A step that limits eating or drinking is a meal rule, read as one everywhere in the view.
+  const steps = useMemo(() => rawSteps && rawSteps.map(asMealRule), [rawSteps]);
   // Only the routine's own steps; daily basics (hygiene, sleep) are suggested beside it, not part of it.
   const basics = keepBasics ? [] : (steps || []).filter((s) => isBasicFor(s, section));
   const basicIds = new Set(basics.map((s) => s.id));

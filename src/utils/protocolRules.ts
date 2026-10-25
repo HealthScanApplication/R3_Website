@@ -47,6 +47,10 @@ const VAGUE: { re: RegExp; title: string; query: string; minutes: number }[] = [
 ];
 export const AVOID_TITLE = /^(avoid|no|skip|don'?t|do not|cut out|cut|limit|reduce|abstain|refrain|follow the .*diet|practi[cs]e .*abstinence)\b/i;
 export const isRuleTitle = (title: string) => AVOID_TITLE.test(title.trim());
+/** Openings of a limit on eating or drinking ("Finish caffeine for the day", "Stop eating 3 hours before bed"), not of a thing to eat. */
+const LIMIT_TITLE = /^(finish|stop|end|quit|cease|pause|delay|wait|last)\b/i;
+/** A title in a meal list that limits what is eaten or drunk, so it is a rule for the meals and not a meal. */
+export const isMealRuleTitle = (title: string) => AVOID_TITLE.test(title.trim()) || LIMIT_TITLE.test(title.trim());
 
 /* ───────── a thing to take is a step, never a rule ───────── */
 /** A rule is a constraint ("Avoid X", "Keep binders 2 h from food"); a named supplement or plain drink to take is a step. */
