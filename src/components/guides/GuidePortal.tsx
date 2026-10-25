@@ -3719,7 +3719,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
   const [recipes, setRecipes] = useState<GuideRecipe[]>([]);
   const [protocols, setProtocols] = useState<AdminProtocol[]>([]);
   // Delete flow: the protocol being removed (dialog open) and the last removal (notice, with Undo after an archive).
-  const [removing, setRemoving] = useState<AdminProtocol | null>(null);
+  const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null);
   const [removed, setRemoved] = useState<ProtocolRemoval | null>(null);
   const [publicProtocols, setPublicProtocols] = useState<AdminProtocol[]>([]);
   const [publicProtocolsLoading, setPublicProtocolsLoading] = useState(false);
@@ -3933,12 +3933,12 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
         {tab === 'protocols' && protocolId && accessToken && user && <div style={{ background: '#F5F4EF', color: '#151515', padding: 18, minHeight: 700 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
             <button onClick={() => setProtocolId(null)} style={{ ...btn, background: '#151515', color: '#FFF' }}>← Protocols</button>
-            {(() => { const open = protocols.find((protocol) => protocol.id === protocolId); return open && routineOwnersReady && !routineOwners.has(open.id) ? <button type="button" onClick={() => setRemoving(open)} title={`Delete ${open.name}`} style={{ ...btn, background: 'transparent', color: '#B4472F', borderColor: '#B4472F', maxWidth: 'min(100%, 360px)' }}><Trash2 size={14} aria-hidden="true" style={{ flex: '0 0 auto' }} /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Delete “{open.name.replace(/^R3 Protocol\s*>\s*/i, '')}”</span></button> : null; })()}
+            {(() => { const open = protocols.find((protocol) => protocol.id === (editorProtocolId || protocolId)); return open && routineOwnersReady && !routineOwners.has(open.id) ? <button type="button" onClick={() => setRemoving(open)} title={`Delete ${open.name}`} style={{ ...btn, background: 'transparent', color: '#B4472F', borderColor: '#B4472F', maxWidth: 'min(100%, 360px)' }}><Trash2 size={14} aria-hidden="true" style={{ flex: '0 0 auto' }} /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Delete “{open.name.replace(/^R3 Protocol\s*>\s*/i, '')}”</span></button> : null; })()}
           </div>
           <RoutineShareLink tone="light" guardianSlug={profile.slug} protocolId={editorProtocolId || protocolId} protocolName={protocols.find((protocol) => protocol.id === (editorProtocolId || protocolId))?.name} />
           <ProtocolChildrenPanel token={accessToken} ownerId={user.id} parentId={editorProtocolId || protocolId} protocols={protocols} onChanged={refreshProtocols} onEdit={(kind, id) => { setParentContext(editorProtocolId || protocolId); setChildPlanId(id); setTab(kind); setProtocolId(null); refreshProtocols(); }} />
           {protocols.find((protocol) => protocol.id === protocolId) && <GuardianProtocolAI accessToken={accessToken} protocol={protocols.find((protocol) => protocol.id === protocolId)!} ownerId={user.id} initialSourceUrls={librarySourceUrls(builderLibrarySources).join('\n')} initialSourcePath={librarySourceDocumentPath(builderLibrarySources)} initialRequest={builderLibrarySources.length ? `Build a practical Protocol using these Library sources:\n${builderLibrarySources.map((source) => librarySourcePrompt(source, 4000)).join('\n')}` : undefined} onBuilt={() => setProtocolRevision((value) => value + 1)} />}
-          <ProtocolEditor key={`${protocolId}-${protocolRevision}`} accessToken={accessToken} initialProtocolId={editorProtocolId || protocolId} ownerId={user.id} onSelectedChange={setEditorProtocolId} onCustomizeRecipe={customizeRecipe} />
+          <ProtocolEditor key={`${protocolId}-${protocolRevision}`} accessToken={accessToken} initialProtocolId={editorProtocolId || protocolId} ownerId={user.id} onSelectedChange={setEditorProtocolId} onCustomizeRecipe={customizeRecipe} onDelete={setRemoving} canDelete={(id) => routineOwnersReady && !routineOwners.has(id)} />
           <div style={{ height: 90 }} />
           <ProtocolAIBar key={editorProtocolId || protocolId} accessToken={accessToken} protocolId={editorProtocolId || protocolId} guideId={user.id} onUpdated={() => setProtocolRevision((value) => value + 1)} />
         </div>}

@@ -401,7 +401,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 /* ── main editor ── */
-export function ProtocolEditor({ accessToken, onOpenCatalogRecord, initialProtocolId, ownerId, onSelectedChange, onCustomizeRecipe }: {
+export function ProtocolEditor({ accessToken, onOpenCatalogRecord, initialProtocolId, ownerId, onSelectedChange, onCustomizeRecipe, onDelete, canDelete }: {
   accessToken: string;
   onOpenCatalogRecord?: (kind: CatalogKind, id: string) => void;
   /** deep-open a protocol (e.g. clicking a Protocol cell in the Kits master table) */
@@ -411,6 +411,10 @@ export function ProtocolEditor({ accessToken, onOpenCatalogRecord, initialProtoc
   /** Reports the protocol currently shown, so tools outside the editor (the AI bar) act on the same one. */
   onSelectedChange?: (id: string | null) => void;
   onCustomizeRecipe?: (protocolId: string, itemId: string) => void;
+  /** Delete the protocol shown here. The host owns the confirmation (what it takes with it, the name typed), so the button only asks. Without it the editor has no delete. */
+  onDelete?: (protocol: { id: string; name: string }) => void;
+  /** Whether the protocol shown may be deleted from here (a person's own routine may not). Default: yes. */
+  canDelete?: (id: string) => boolean;
 }) {
   const [protocols, setProtocols] = useState<AdminProtocol[]>([]);
   const [loadingList, setLoadingList] = useState(true);
@@ -1895,6 +1899,7 @@ export function ProtocolEditor({ accessToken, onOpenCatalogRecord, initialProtoc
                   <strong style={{ color: C.ink, fontSize: 16, flex: '1 1 240px' }}>{form.name || 'Untitled Protocol'}</strong>
                   <button type="button" onClick={() => setEditorFocus('timeline')} style={{ padding: '8px 13px', borderRadius: 8, border: '1px solid ' + (editorFocus === 'timeline' ? C.accent : C.hair), background: editorFocus === 'timeline' ? 'var(--sb-brand-soft)' : C.paper, color: editorFocus === 'timeline' ? C.accent : C.sub, fontWeight: 700, cursor: 'pointer' }}><CalendarDays size={13} style={{ display: 'inline', marginRight: 6, verticalAlign: '-2px' }} />Timeline & rules</button>
                   <button type="button" onClick={() => setEditorFocus('details')} style={{ padding: '8px 13px', borderRadius: 8, border: '1px solid ' + (editorFocus === 'details' ? C.accent : C.hair), background: editorFocus === 'details' ? 'var(--sb-brand-soft)' : C.paper, color: editorFocus === 'details' ? C.accent : C.sub, fontWeight: 700, cursor: 'pointer' }}><ImageIcon size={13} style={{ display: 'inline', marginRight: 6, verticalAlign: '-2px' }} />Details & cover</button>
+                  {onDelete && selectedId && (canDelete ? canDelete(selectedId) : true) && <button type="button" onClick={() => onDelete({ id: selectedId, name: form.name || 'Untitled Protocol' })} title="Delete this protocol: you will see what it takes with it first" style={{ padding: '8px 13px', borderRadius: 8, border: '1px solid ' + C.danger, background: C.paper, color: C.danger, fontWeight: 700, cursor: 'pointer' }}><Trash2 size={13} style={{ display: 'inline', marginRight: 6, verticalAlign: '-2px' }} aria-hidden="true" />Delete protocol</button>}
                 </div>
                 <p style={{ color: C.faint, fontSize: 11, margin: '8px 0 0' }}>{editorFocus === 'timeline' ? 'Set what happens, its alarm time, and whether it repeats daily, weekly, monthly or once.' : 'Edit the Protocol identity and choose a cover from linked Routine content or upload your own.'}</p>
               </div>

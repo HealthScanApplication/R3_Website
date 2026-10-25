@@ -165,3 +165,46 @@ it('when Your routines is the only section it still has the cards / list switch,
   await screen.findByRole('heading', { level: 3, name: 'John’s routine' });
 });
 
+
+/* ── inside the builder: the protocol shown there has its own Delete protocol, and Delete targets the one on screen ── */
+const openBuilder = async (name: string) => {
+  vi.stubGlobal('fetch', vi.fn(async () => new Response('[]', { status: 200 }))); // the editor's other reads come back empty
+  await open();
+  fireEvent.click(await screen.findByRole('button', { name: `Edit ${name}` }));
+  await screen.findByRole('button', { name: /^Delete protocol$/ });
+};
+afterEach(() => { vi.unstubAllGlobals(); });
+
+it('the editor has a Delete protocol button that asks first, and the name must be typed', async () => {
+  await openBuilder('Sleep reset');
+  fireEvent.click(screen.getByRole('button', { name: /^Delete protocol$/ }));
+  const dialog = await screen.findByRole('dialog', { name: 'Delete protocol' });
+  expect(within(dialog).getByRole('heading', { name: 'Delete “Sleep reset”?' })).toBeTruthy();
+  expect(api.deleteProtocol).not.toHaveBeenCalled(); // nothing happens on the first click
+  const del = await within(dialog).findByRole('button', { name: 'Delete permanently' }) as HTMLButtonElement;
+  expect(del.disabled).toBe(true);
+  fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'Sleep reset' } });
+  fireEvent.click(del);
+  await screen.findByText(/Deleted “Sleep reset”/);
+  expect(api.deleteProtocol).toHaveBeenCalledWith('tok', 'p1');
+  expect(screen.queryByRole('button', { name: /^Delete protocol$/ })).toBeNull(); // the builder closed with it
+});
+
+it('both Delete buttons act on the protocol the editor is showing, not the one that was opened', async () => {
+  await openBuilder('Sleep reset');
+  fireEvent.click(await screen.findByRole('button', { name: /Gut plan/ })); // pick another protocol in the editor's own list
+  await screen.findByRole('button', { name: 'Delete “Gut plan”' });
+  expect(screen.queryByRole('button', { name: 'Delete “Sleep reset”' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: /^Delete protocol$/ }));
+  const dialog = await screen.findByRole('dialog', { name: 'Delete protocol' });
+  expect(within(dialog).getByRole('heading', { name: 'Delete “Gut plan”?' })).toBeTruthy();
+  await waitFor(() => expect(api.protocolImpact).toHaveBeenCalledWith('tok', 'p2'));
+  expect(api.protocolImpact).not.toHaveBeenCalledWith('tok', 'p1');
+});
+
+it('a person\'s own routine has no Delete protocol in the editor', async () => {
+  await openBuilder('Sleep reset');
+  fireEvent.click(await screen.findByRole('button', { name: /Your Routine/ }));
+  await waitFor(() => expect(screen.queryByRole('button', { name: /^Delete protocol$/ })).toBeNull());
+  expect(screen.queryByRole('button', { name: /^Delete “Your Routine”/ })).toBeNull();
+});
