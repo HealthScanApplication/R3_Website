@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 
 const auth = vi.hoisted(() => ({ user: null as null | { id: string }, accessToken: null as null | string }));
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: auth.user, accessToken: auth.accessToken, signOut: () => {} }) }));
@@ -35,6 +35,29 @@ it('matches the routine named like the offer, ignoring case, punctuation and the
   expect(matchOfferRoutine('', routines)).toBeNull();
 });
 
+it('compares titles by their letters in any script, accents folded; a draft and a published routine of one name: the published one is the offer\'s', () => {
+  expect(matchOfferRoutine('Café sleep!', [{ id: 'c', name: 'cafe SLEEP', total_days: 1, description: null }])?.id).toBe('c');
+  const arabic = [{ id: 'a1', name: 'تحدي النوم لمدة 7 أيام', total_days: 7, description: null }, { id: 'a2', name: 'خطة القناة', total_days: 7, description: null }];
+  expect(matchOfferRoutine('تحدي النوم لمدة 7 أيام', arabic)?.id).toBe('a1'); // a non-Latin title is not squashed to nothing
+  expect(matchOfferRoutine('خطة القناة', arabic)?.id).toBe('a2'); // and two different ones do not collide
+  const both = [{ id: 'draft', name: 'Gut plan', total_days: 7, description: null, is_public: false }, { id: 'live', name: 'Gut plan', total_days: 7, description: null, is_public: true }];
+  expect(matchOfferRoutine('Gut plan', both)?.id).toBe('live');
+  expect(matchOfferRoutine('Gut plan', [...both, { ...both[1], id: 'live2' }])).toBeNull();
+});
+
+it('the Guardian sees a note on a draft, a published routine has none, and the region is named without the internal prefix', async () => {
+  auth.user = { id: 'g1' }; auth.accessToken = 'owner-token';
+  serve([{ ...routines[0], name: 'R3 Protocol > 7-day menopause sleep challenge for women', is_public: false } as any]);
+  render(<OfferProtocolItems guideId="g1" offerTitle="7-day menopause sleep challenge for women" />);
+  const panel = await screen.findByRole('region', { name: 'What is inside 7-day menopause sleep challenge for women' });
+  expect(within(panel).getByRole('status').textContent).toContain('Draft · only you can see this');
+  cleanup();
+  serve([{ ...routines[0], is_public: true } as any]);
+  render(<OfferProtocolItems guideId="g1" offerTitle="7-day menopause sleep challenge for women" />);
+  const live = await screen.findByRole('region', { name: /What is inside/ });
+  expect(within(live).queryByRole('status')).toBeNull();
+});
+
 it('a visitor reads only the published routines, with the public key, and sees the routine\'s steps by part of the day', async () => {
   serve();
   render(<OfferProtocolItems guideId="g1" offerTitle="7-day menopause sleep challenge for women" />);
@@ -56,7 +79,7 @@ it('the Guardian, signed in, reads their own routines (drafts too) with their ow
   render(<OfferProtocolItems guideId="g1" offerTitle="7-day menopause sleep challenge for women" />);
   await screen.findByRole('region', { name: /What is inside/ });
   const list = calls.find((c) => c.url.includes('/protocols?'))!;
-  expect(list.url).not.toContain('is_public');
+  expect(list.url).not.toContain('is_public=eq.true'); // no published-only filter for the Guardian
   expect(list.auth).toBe('Bearer owner-token');
   expect(calls.find((c) => c.url.includes('/protocol_items?'))!.auth).toBe('Bearer owner-token');
 });

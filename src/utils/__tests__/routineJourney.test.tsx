@@ -36,6 +36,14 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const show = () => render(<RoutineJourney accessToken="tok" steps={steps} description="A week." totalDays={2} />);
 
+it('a routine\'s own hygiene and sleep steps are shown, not tucked away as suggested basics', async () => {
+  const own = [...steps, step({ id: 'h1', name: 'Brush teeth', time: '07:00', subtype: 'hygiene' }), step({ id: 'z1', name: 'Start sleep', time: '22:00', subtype: 'sleep', category: 'sleep' })];
+  render(<RoutineJourney accessToken="tok" steps={own} description="A week." totalDays={2} />);
+  expect(await screen.findByText('Brush teeth')).toBeTruthy();
+  expect(screen.getByText('Start sleep')).toBeTruthy();
+  expect(screen.queryByText(/Suggested daily basics/)).toBeNull();
+});
+
 it('every step has a picture in front of it: its own image, or an icon for what it is', async () => {
   const { container } = show();
   await screen.findByText('Eat a high-protein lunch');

@@ -103,7 +103,7 @@ function MealCard({ food, suggested, list }: { food: CatalogFood; suggested: boo
 }
 
 export function RoutineJourney({ accessToken, steps, description, totalDays }: { accessToken: string; steps: RoutineStep[] | null; description?: string | null; totalDays?: number | null }) {
-  const view = useRoutineView({ accessToken, steps, section: 'wellness', totalDays, description, suggest: false });
+  const view = useRoutineView({ accessToken, steps, section: 'wellness', totalDays, description, suggest: false, keepBasics: true });
   const { own, tree, days, dayName, isRule, media, modal, setModal } = view;
   const [tab, setTab] = useState<'steps' | 'nutrients'>('steps');
   const [day, setDay] = useState(1);

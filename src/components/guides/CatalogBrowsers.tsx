@@ -427,11 +427,11 @@ export const descriptionParagraphs = (text: string) => text.split(/\s*#{2,}\s*/)
  * What the routine browser works out from a routine's raw steps: the week view, the tree of sub-steps, the images of the
  * steps that link to a catalogue activity or recipe, and (for a builder, `suggest`) a catalogue recipe for each generic meal.
  */
-export function useRoutineView({ accessToken, steps, section, totalDays, description, suggest = true }: { accessToken: string; steps: RoutineStep[] | null; section: string; totalDays?: number | null; description?: string | null; suggest?: boolean }) {
+export function useRoutineView({ accessToken, steps, section, totalDays, description, suggest = true, keepBasics = false }: { accessToken: string; steps: RoutineStep[] | null; section: string; totalDays?: number | null; description?: string | null; suggest?: boolean; /** Show every step of the routine: for a routine that is the offer itself, hygiene and sleep steps are its own, not suggested basics. */ keepBasics?: boolean }) {
   // Only the routine's own steps; daily basics (hygiene, sleep) are suggested beside it, not part of it.
-  const basics = (steps || []).filter((s) => isBasicFor(s, section));
+  const basics = keepBasics ? [] : (steps || []).filter((s) => isBasicFor(s, section));
   const basicIds = new Set(basics.map((s) => s.id));
-  const weekView = expandWeekly(mergeHygieneSets((steps || []).filter((s) => !isBasicFor(s, section) && !(s.parentId && basicIds.has(s.parentId)))));
+  const weekView = expandWeekly(mergeHygieneSets((steps || []).filter((s) => (keepBasics || !isBasicFor(s, section)) && !(s.parentId && basicIds.has(s.parentId)))));
   const own = weekView.steps, weekdays = weekView.weekdays;
   // A repeating week is a 7-day view (Mon–Sun); a numbered cycle uses its Length (total_days) or its last numbered day.
   const days = !steps ? 1 : weekdays ? 7 : Math.max(1, totalDays || 1, ...steps.map((s) => s.day || 1));
