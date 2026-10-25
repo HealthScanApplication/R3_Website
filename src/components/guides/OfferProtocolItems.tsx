@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { projectId, publicAnonKey } from '../../utils/supabase/info';
 import { routineSteps, type RoutineStep } from '../../utils/protocolBuilders';
-import { RoutineStepsPanel } from './CatalogBrowsers';
+import { RoutineJourney } from './RoutineJourney';
 
 const squash = (text: string) => text.toLowerCase().replace(/^r3\s*protocol\s*>\s*/i, '').replace(/[^a-z0-9]+/g, '');
 
@@ -54,8 +54,8 @@ export function OfferProtocolItems({ guideId, offerTitle }: { guideId: string; o
     return () => { live = false; };
   }, [guideId, offerTitle, token]);
   if (!found) return null;
-  return <section aria-label={`What is inside ${found.routine.name}`} style={{ border: `1px solid rgba(199,216,163,.4)`, background: '#141611', color: ink, padding: 14, textAlign: 'left' }}>
-    <div style={{ color: acid, fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', margin: '0 0 6px' }}>Inside this routine</div>
-    <RoutineStepsPanel accessToken={token || publicAnonKey} steps={found.steps} description={found.routine.description} totalDays={found.routine.total_days} />
+  return <section aria-label={`What is inside ${found.routine.name}`} style={{ border: `1px solid rgba(199,216,163,.4)`, background: '#141611', color: ink, padding: 'clamp(14px,2.4vw,22px)', textAlign: 'left' }}>
+    <div style={{ color: acid, fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', margin: '0 0 10px' }}>Inside this routine</div>
+    <RoutineJourney accessToken={token || publicAnonKey} steps={found.steps} description={found.routine.description} totalDays={found.routine.total_days} />
   </section>;
 }

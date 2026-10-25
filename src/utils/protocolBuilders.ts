@@ -1263,7 +1263,7 @@ export async function listKitchenEquipment(accessToken: string): Promise<Kitchen
 
 /* ── catalogue browsing: ROUTINE³ recipes, ingredients, fitness routines ── */
 export interface CatalogHazard { key: string; level: string }
-export interface CatalogFood { form?: 'raw' | 'processed' | null; processing?: string | null; id: string; name: string; image: string | null; category: string | null; description: string | null; healthScore: number | null; per100: Record<string, number>; nutritionBasis?: 'per100g' | 'serving'; hazards: CatalogHazard[]; meta: Array<[string, string | null]>; diets: string[] }
+export interface CatalogFood { form?: 'raw' | 'processed' | null; processing?: string | null; id: string; name: string; image: string | null; category: string | null; description: string | null; healthScore: number | null; per100: Record<string, number>; /** A recipe's figures for one serving, when it has them (per100 is per 100 g when it has those). */ perServing?: Record<string, number>; nutritionBasis?: 'per100g' | 'serving'; hazards: CatalogHazard[]; meta: Array<[string, string | null]>; diets: string[] }
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 /** Flat numeric keys of a nutrition_per_100g record (provenance keys starting with "_" are skipped). */
 export function per100Of(v: unknown): Record<string, number> {
@@ -1326,7 +1326,7 @@ export async function browseRecipes(accessToken: string, f: { ids?: string[]; of
   return ((await res.json()) as any[]).map((r) => {
     const per100 = per100Of(r.nutrition_per_100g), serving = per100Of(r.nutrition_per_serving);
     const hasPer100 = Object.keys(per100).length > 0;
-    return { id: r.id, name: r.name_common, image: r.image_primary_url || r.image_url || null, category: r.meal_slot || null, description: txt(r.description_simple) || txt(r.description), healthScore: num(r.health_score), per100: hasPer100 ? per100 : serving, nutritionBasis: hasPer100 ? 'per100g' as const : 'serving' as const, hazards: hazardsOf(r.elements_hazardous), diets: dietsOf(r.dietary_info),
+    return { id: r.id, name: r.name_common, image: r.image_primary_url || r.image_url || null, category: r.meal_slot || null, description: txt(r.description_simple) || txt(r.description), healthScore: num(r.health_score), per100: hasPer100 ? per100 : serving, nutritionBasis: hasPer100 ? 'per100g' as const : 'serving' as const, perServing: Object.keys(serving).length ? serving : undefined, hazards: hazardsOf(r.elements_hazardous), diets: dietsOf(r.dietary_info),
       meta: [['Cuisine', txt(r.cuisine)], ['Meal', txt(r.meal_slot)], ['Prep', txt(r.prep_time)], ['Cook', txt(r.cook_time)], ['Serves', r.servings ? String(r.servings) : null]] };
   });
 }
