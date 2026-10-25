@@ -5,6 +5,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { Workspace, GuardianWebsite, GuardianHeader } from '../../components/guides/GuidePortal';
 import { useGuardianPage } from '../../components/guides/useGuardianPage';
 
+// Each test renders the whole workspace or public page; on a busy machine that outruns the 5s default.
+vi.setConfig({ testTimeout: 30000 });
+
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user:{id:'owner',app_metadata:{}},accessToken:null,signOut:()=>{} }) }));
 const fixtures = vi.hoisted(() => ({
   profile:{id:'owner',user_id:'owner',slug:'test-guide',display_name:'Test Guide',specialties:[],social_links:{},headline:'Guidance',status:'published'},
@@ -50,8 +53,8 @@ it('closes the active recipe editor when history returns to another tool',async(
   fireEvent.click(screen.getByRole('button',{name:'Protocols',exact:true}));
   fireEvent.click(screen.getByRole('button',{name:'Diet',exact:true}));
   fireEvent.click(screen.getByRole('button',{name:'Recipes',exact:true}));
-  // The whole recipe card is the link now, so its name is the card's text ending in the call to action.
-  fireEvent.click((await screen.findAllByRole('link',{name:/Open builder/}))[0]);
+  // The whole recipe card opens the builder (it has a click handler and no page, so it is a button); its name is the card's text ending in the call to action.
+  fireEvent.click((await screen.findAllByRole('button',{name:/Open builder/}))[0]);
   expect(screen.getByRole('button',{name:'← Recipes',exact:true})).toBeTruthy();
   window.history.replaceState({},'','/guardians/workspace?tab=leads');
   fireEvent(window,new PopStateEvent('popstate'));
@@ -137,9 +140,6 @@ it('keeps a long display name readable as a tooltip when it is truncated', ()=>{
 });
 
 import { GUARDIAN_BUILDERS_ORDER } from '../../components/guides/GuidePortal';
-
-// Each test renders the whole workspace or public page; on a busy machine that outruns the 5s default.
-vi.setConfig({ testTimeout: 30000 });
 it('lists the Site builder before the Content builder, which is last', () => {
   expect(GUARDIAN_BUILDERS_ORDER.slice(-2)).toEqual(['Site builder', 'Content builder']);
 });
