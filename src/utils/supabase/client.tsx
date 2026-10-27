@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { projectId, publicAnonKey } from './info';
+import { withDefaultHeaders } from './requestHeaders';
 
 const supabaseUrl = `https://${projectId}.supabase.co`;
 
@@ -97,9 +98,8 @@ function createSupabaseClient(): SupabaseClient {
         // Merge via the Headers API: supabase-js v2.9x passes a Headers INSTANCE,
         // which `{...headers}` spreads to {} — silently dropping apikey/Authorization
         // ("No API key found in request"). new Headers() handles both shapes.
-        const mergedHeaders = new Headers(options.headers as HeadersInit | undefined);
-        mergedHeaders.set('Accept', 'application/json');
-        if (!mergedHeaders.has('Content-Type')) mergedHeaders.set('Content-Type', 'application/json');
+        // withDefaultHeaders keeps a file upload's multipart type: forcing JSON on it broke every storage upload.
+        const mergedHeaders = withDefaultHeaders(options.headers as HeadersInit | undefined, options.body);
 
         return fetch(url, {
           ...options,

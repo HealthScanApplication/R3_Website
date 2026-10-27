@@ -14,6 +14,7 @@ import { OfferProtocolItems } from './OfferProtocolItems';
 import { ProtocolRemovalDialog, type ProtocolRemoval } from './ProtocolRemoval';
 import { PROTOCOL_THEMES, daysLabel, protocolTags, protocolTheme, protocolWhen } from '../../utils/protocolTags';
 import { defaultAvatarKeyFor } from '../../utils/memberAvatar';
+import { PhotoDropzone } from '../PhotoDropzone';
 import { ProtocolChildrenPanel } from './ProtocolChildrenPanel';
 import { customizeProtocolRecipe } from '../../utils/protocolCopies';
 import { ContentBuilder } from './ContentBuilder';
@@ -197,6 +198,9 @@ const storyTemplates: { id: StoryTemplateId; name: string; style: string; descri
   { id: 'community', name: 'The Gathering', style: 'Community warmth', description: 'Welcoming, shared and generous.', image: '/images/guides/templates/community-table.webp', heading: 'Fraunces', body: 'DM Sans', page: '#F5EBDD', accent: '#9A5B3B', header: 'tone', treatment: 'color' },
 ];
 
+/** A portrait is an image: the upload helper also accepts videos (for page backgrounds), which make no sense here. */
+const portraitProblem = (file: File) => (/^image\/(?:jpeg|png|webp|gif)$/.test(file.type) ? null : 'Choose a JPG, PNG, WebP or GIF image.');
+const PORTRAIT_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
 const defaultAvatars = [
   { name: 'Guardian', image: '/images/guides/avatars/guardian.png' },
   { name: 'Woman', image: '/images/guides/avatars/woman.png' },
@@ -2519,15 +2523,19 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         <div><label style={label}>Pricing region</label><select style={input} value={pricingRegion} onChange={(event) => { const option = pricingRegions.find((item) => item.region === event.target.value); if (option) { setPricingRegion(option.region); setCurrency(option.currency); } }}>{pricingRegions.map((option) => <option key={option.region} value={option.region}>{option.label}</option>)}</select></div>
       </div>
       {/* Profile image: one compact row, like the brand line above. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18 }}>
+      <PhotoDropzone onFile={uploadPortrait} validate={portraitProblem} onReject={setImportMessage} accept={PORTRAIT_ACCEPT} disabled={uploading}>
+        {({ open, dragging }) => (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18, padding: dragging ? 6 : 0, outline: dragging ? `2px dashed ${ink}` : 'none' }}>
         {avatarUrl ? <img src={avatarUrl} alt="Profile" referrerPolicy="no-referrer" style={{ width: 36, height: 36, objectFit: 'cover', border: `1px solid ${line}` }} /> : <span aria-hidden="true" style={{ width: 36, height: 36, display: 'grid', placeItems: 'center', border: `1px solid ${line}`, color: muted, fontFamily: serif, fontSize: 16 }}>{displayName.trim().charAt(0) || 'B'}</span>}
         <span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Profile image · optional</span>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>
+        <button type="button" onClick={open} disabled={uploading} aria-label={avatarUrl ? 'Replace profile image' : 'Upload profile image'} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer', background: 'transparent', border: 0, padding: 0 }}>
           {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}{uploading ? 'Uploading' : avatarUrl ? 'Replace' : 'Upload'}
-          <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => uploadPortrait(event.target.files?.[0])} style={{ display: 'none' }} />
-        </label>
+        </button>
+        <span style={{ color: muted, fontSize: 9 }}>{dragging ? 'Drop to upload' : 'or drag a photo here'}</span>
         {importMessage && <p style={{ color: importMessage.startsWith('Imported') ? acid : muted, fontSize: 11, lineHeight: 1.5, margin: '10px 0 0' }}>{importMessage}</p>}
       </div>
+        )}
+      </PhotoDropzone>
       <p style={{ color: muted, fontSize: 10, lineHeight: 1.5, margin: '9px 0 0' }}>Language applies to your page and content. Pricing region sets the currency for every paid stage.</p>
       <Disclosure id="profile-contact" title="Contact" required summary={contactEmail.trim() || 'Add your email'} open={profileOpen.contact} onToggle={() => setProfileOpen((o) => ({ ...o, contact: !o.contact }))}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12, marginTop: 18 }}>
@@ -2878,10 +2886,15 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
               <div><label style={label}>Page color</label><input type="color" style={{ ...input, padding: 5 }} value={pageColor} onChange={(e) => setPageColor(e.target.value)} /></div>
               <div><label style={label}>Accent color</label><input type="color" style={{ ...input, padding: 5 }} value={accentColor} onChange={(e) => setAccentColor(e.target.value)} /></div>
             </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
-              <label style={{ ...btn, height: 36, background: 'transparent', color: ink, fontSize: 8 }}><Upload size={11} />{avatarUrl ? 'Replace avatar' : 'Upload avatar'}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => uploadPortrait(event.target.files?.[0])} style={{ display: 'none' }} /></label>
+            <PhotoDropzone onFile={uploadPortrait} validate={portraitProblem} onReject={setImportMessage} accept={PORTRAIT_ACCEPT} disabled={uploading}>
+              {({ open, dragging }) => (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10, alignItems: 'center', padding: dragging ? 6 : 0, outline: dragging ? `2px dashed ${ink}` : 'none' }}>
+              <button type="button" onClick={open} disabled={uploading} style={{ ...btn, height: 36, background: 'transparent', color: ink, fontSize: 8 }}><Upload size={11} />{avatarUrl ? 'Replace avatar' : 'Upload avatar'}</button>
+              <span style={{ color: muted, fontSize: 9 }}>{dragging ? 'Drop to upload' : 'or drag a photo here'}</span>
               <button type="button" onClick={() => setSiteStyleStage(2)} style={{ ...btn, height: 36, background: 'transparent', color: ink, fontSize: 8 }}>← Background</button>
             </div>
+              )}
+            </PhotoDropzone>
             </>}
           </div>
           <div id="profile-site-preview" className="g-sticky" style={{ scrollMarginTop: 20 }}><span style={{ ...label, display: 'block', color: acid, marginBottom: 7 }}>Profile site preview <span style={{ color: muted }}>· shows every published offer path</span></span><PreviewFrame device={previewDevice}><div style={{ flex: '1 0 auto', background: pageColor, fontFamily: sans }}>

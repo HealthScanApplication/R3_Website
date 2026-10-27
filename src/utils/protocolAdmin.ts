@@ -309,6 +309,8 @@ async function handle(res: Response, ctx: string): Promise<any> {
     } catch {
       detail = await res.text().catch(() => '');
     }
+    // The database refuses the suggested flag to anyone but a catalog admin; say that in plain words.
+    if (res.status === 403 && /change whether a routine is suggested/i.test(detail)) throw new Error('Only an admin can mark a routine as suggested.');
     throw new Error(`${ctx} failed (${res.status}): ${detail || res.statusText}`);
   }
   if (res.status === 204) return null;
