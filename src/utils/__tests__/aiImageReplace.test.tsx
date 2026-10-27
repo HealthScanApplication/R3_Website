@@ -117,6 +117,7 @@ describe('preview, accept, try again, cancel', () => {
     expect(within(dialog).getByRole('button', { name: 'Accept' })).toBeTruthy();
     expect(within(dialog).getByRole('button', { name: 'Try again' })).toBeTruthy();
     expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeTruthy();
+    expect(dialog.textContent).toMatch(/Try again draws another picture and is charged again/); // a second picture is a second charge, and the person is told
     expect(onAccepted).not.toHaveBeenCalled();
     expect(store.upload).not.toHaveBeenCalled();
   });

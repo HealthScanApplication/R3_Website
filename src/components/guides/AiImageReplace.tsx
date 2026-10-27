@@ -188,7 +188,7 @@ function ReplaceDialog({ userId, title, description, kind, currentUrl, onAccepte
         </div>
         {result?.mock && <p style={{ color: '#E8B86A', fontSize: 12, lineHeight: 1.5, margin: 0 }}>This is the free test image: it shows the flow works, but nothing real was drawn, so it cannot be kept as a cover.</p>}
 
-        <p style={{ color: muted, fontSize: 11, lineHeight: 1.5, margin: 0 }}>{choice.note} {!choice.test && 'Nothing is spent until you press the button that shows the price.'}</p>
+        <p style={{ color: muted, fontSize: 11, lineHeight: 1.5, margin: 0 }}>{choice.note} {!choice.test && (result ? 'Try again draws another picture and is charged again.' : 'Nothing is spent until you press the button that shows the price.')}</p>
       </>}
       {error && <p role="alert" style={{ color: '#E8A39B', fontSize: 12, margin: 0 }}>{error}</p>}
     </div>
