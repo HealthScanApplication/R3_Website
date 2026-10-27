@@ -98,7 +98,8 @@ function ExpertiseTags({ tags, color = '#667245', compact = false }: { tags: str
 
 type Tab = 'home' | 'profile' | 'library' | 'leads' | 'value_ramps' | 'offer_builder' | 'products' | 'recipes' | 'diet' | 'diet_protocols' | 'fitness' | 'activities' | 'cooking' | 'equipment' | 'ingredients' | 'routines' | 'hygiene' | 'hygiene_protocols' | 'hygiene_activities' | 'beauty' | 'beauty_protocols' | 'beauty_activities' | 'wellness' | 'wellness_protocols' | 'wellness_activities' | 'longevity' | 'longevity_protocols' | 'detox' | 'detox_protocols' | 'content' | 'protocols' | 'admin';
 const WORKSPACE_TABS: readonly Tab[] = ['home', 'profile', 'library', 'leads', 'value_ramps', 'offer_builder', 'products', 'recipes', 'diet', 'diet_protocols', 'fitness', 'activities', 'cooking', 'equipment', 'ingredients', 'routines', 'hygiene', 'hygiene_protocols', 'hygiene_activities', 'beauty', 'beauty_protocols', 'beauty_activities', 'wellness', 'wellness_protocols', 'wellness_activities', 'longevity', 'longevity_protocols', 'detox', 'detox_protocols', 'content', 'protocols', 'admin'];
-const SETUP_STEPS = [1, 2, 3, 4, 5] as const;
+// 0 is the Get started page a new Guardian meets first; 1–5 are the setup steps (Profile … Site).
+const SETUP_STEPS = [0, 1, 2, 3, 4, 5] as const;
 type FreeOfferKind = 'ebook' | 'one_to_one_call' | 'group_call' | 'recipe_book' | 'routine' | 'in_person';
 type UpsellKind = 'ebook' | 'routine' | 'routine_guidance' | 'recipe_book' | 'group_call' | 'one_to_one_call' | 'in_person' | 'festival';
 type DeliveryFormat = 'Downloadable PDF' | 'Interactive Protocol' | 'PDF + Interactive Protocol' | 'Live online' | 'In person' | 'Event';
@@ -409,7 +410,7 @@ export const GUARDIAN_BUILDERS_ORDER = GUARDIAN_BUILDERS.map((b) => b.label);
  * its translucent-over-hero look; `onNavigate` switches tabs in-app (workspace) instead of
  * following the href. When signed out, every link opens the sign-in modal via `onSignIn`.
  */
-export function GuardianHeader({ isSignedIn, activeTab, displayName, avatarUrl, transparent, extra, locked, onNavigate, onSignIn, onSignOut }: {
+export function GuardianHeader({ isSignedIn, activeTab, displayName, avatarUrl, profileLink, transparent, extra, locked, onNavigate, onSignIn, onSignOut }: {
   isSignedIn: boolean;
   /** Why the builders can't open yet (e.g. setup not saved): links stay visible but don't navigate. */
   locked?: string;
@@ -417,6 +418,11 @@ export function GuardianHeader({ isSignedIn, activeTab, displayName, avatarUrl, 
   displayName?: string;
   /** The Guardian's picture, shown beside the name (profile photo, else the first brand's logo). Transparent images are fine. */
   avatarUrl?: string | null;
+  /**
+   * Where the picture leads when this page has its own profile step (the setup's 01 Profile) rather than the workspace's Site
+   * builder tab. It works even while the builders are locked: the profile is the one place a new Guardian can always go.
+   */
+  profileLink?: { href: string; onOpen: () => void };
   transparent?: boolean;
   /** Page-specific controls shown before the account, e.g. the setup dashboard's Offers / Sites toggles. */
   extra?: React.ReactNode;
@@ -425,6 +431,7 @@ export function GuardianHeader({ isSignedIn, activeTab, displayName, avatarUrl, 
   onSignOut?: () => void;
 }) {
   const edge = isSignedIn ? ink : 'rgba(245,242,234,.4)';
+  const avatarLocked = Boolean(locked) && !profileLink;
   const href = (tab: Tab) => (isSignedIn ? `/guardians/workspace?tab=${tab}` : '#guardian-apply');
   const go = (tab: Tab) => (event: React.MouseEvent) => {
     if (locked) { event.preventDefault(); return; }
@@ -458,7 +465,7 @@ export function GuardianHeader({ isSignedIn, activeTab, displayName, avatarUrl, 
         <div className="g-header-account" style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 'none' }}>
           {extra}
           {isSignedIn ? <>
-            {(avatarUrl || displayName) && <a href={locked ? undefined : href('profile')} onClick={go('profile')} aria-label={locked ? `Your profile · ${locked}` : 'Your profile'} aria-disabled={locked ? true : undefined} title={locked || 'Your profile'} style={{ display: 'inline-flex', borderRadius: '50%', cursor: locked ? 'default' : 'pointer', flexShrink: 0 }}>
+            {(avatarUrl || displayName) && <a href={avatarLocked ? undefined : profileLink?.href ?? href('profile')} onClick={profileLink ? (event) => { event.preventDefault(); profileLink.onOpen(); } : go('profile')} aria-label={avatarLocked ? `Your profile · ${locked}` : 'Your profile'} aria-disabled={avatarLocked ? true : undefined} title={avatarLocked ? locked : 'Your profile'} style={{ display: 'inline-flex', borderRadius: '50%', cursor: avatarLocked ? 'default' : 'pointer', flexShrink: 0 }}>
               <GuardianAvatar url={avatarUrl} name={displayName} line={line} />
             </a>}
             {displayName && <span className="g-header-name" title={displayName} style={{ color: muted, fontSize: 11, whiteSpace: 'nowrap' }}>{displayName}</span>}
@@ -1553,8 +1560,45 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   </div>;
 }
 
+const GET_STARTED_STEPS = ['Profile', 'Guidance', 'Audience', 'Offers', 'Site'] as const;
+
+/**
+ * What a new Guardian meets before the profile step: what the role is, in three plain promises, and the five steps ahead.
+ * It claims nothing about payments or earnings (payments are not live yet) and says only what the builders do today.
+ */
+export function GuardianGetStarted({ onStart }: { onStart: () => void }) {
+  const promises = [
+    { Icon: BookOpen, title: 'Share what you know', copy: 'Turn your experience into routines, recipes and guides. They live on your own Guardian page and in the ROUTINE³ app, where people follow them day by day.' },
+    { Icon: CalendarDays, title: 'Book clients', copy: 'Offer calls and sessions from the same page. People book through your own booking link or ROUTINE³ Booking, and everyone who reaches out is kept together as your leads.' },
+    { Icon: HeartHandshake, title: 'Help people keep going', copy: 'A routine only works when it is followed. Guide the people you work with, adjust as you learn what helps them, and keep them on track.' },
+  ];
+  return <main aria-labelledby="guardian-get-started" style={{ maxWidth: 1100, margin: '0 auto', padding: 'clamp(40px,7vw,88px) 0 40px' }}>
+    <span style={{ ...label, color: acid }}>Become a Guardian</span>
+    <h1 id="guardian-get-started" style={{ margin: '10px 0 0', maxWidth: 820, fontFamily: serif, fontWeight: 300, fontSize: 'clamp(38px,6vw,68px)', lineHeight: 1.04 }}>Share what you know. Help people live it.</h1>
+    <p style={{ maxWidth: 640, margin: '22px 0 0', color: muted, fontSize: 16, lineHeight: 1.65 }}>A Guardian is someone with real experience, in food, movement, sleep, skin or mindset, who turns it into routines other people can follow, and is there to help them along the way.</p>
+    <ul aria-label="What a Guardian does" style={{ listStyle: 'none', margin: 'clamp(30px,5vw,52px) 0 0', padding: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,260px),1fr))', gap: 1, background: line, border: `1px solid ${line}` }}>
+      {promises.map(({ Icon, title, copy }) => <li key={title} style={{ background: panel, padding: 'clamp(20px,3vw,30px)' }}>
+        <Icon size={22} strokeWidth={1.5} color={acid} aria-hidden="true" />
+        <h2 style={{ margin: '18px 0 0', fontFamily: serif, fontWeight: 300, fontSize: 26, lineHeight: 1.15 }}>{title}</h2>
+        <p style={{ margin: '10px 0 0', color: muted, fontSize: 14, lineHeight: 1.65 }}>{copy}</p>
+      </li>)}
+    </ul>
+    <section aria-label="The five steps" style={{ marginTop: 'clamp(30px,5vw,52px)' }}>
+      <span style={label}>Five short steps</span>
+      <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexWrap: 'wrap', gap: '10px 28px' }}>
+        {GET_STARTED_STEPS.map((name, index) => <li key={name} style={{ display: 'flex', alignItems: 'baseline', gap: 9, fontFamily: sans, fontSize: 12, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}><span style={{ color: acid }}>0{index + 1}</span>{name}</li>)}
+      </ol>
+    </section>
+    <div style={{ marginTop: 'clamp(30px,5vw,48px)', display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+      <button type="button" onClick={onStart} style={{ ...btn, minWidth: 260 }}>Start with your profile <ArrowRight size={14} /></button>
+      <span style={{ color: muted, fontSize: 12, lineHeight: 1.5 }}>Nothing is public until your page has been reviewed.</span>
+    </div>
+  </main>;
+}
+
 export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasProfile = false, onDone }: { userId: string; accessToken: string; name: string; email: string; accountAvatarUrl?: string | null; hasProfile?: boolean; onDone: (p: GuideProfile) => void }) {
-  const [step, setStep] = useGuardianPage<number>('step', SETUP_STEPS, 1);
+  // A new Guardian opens on Get started (0); someone with a profile already is here to edit it, so they open on Profile.
+  const [step, setStep] = useGuardianPage<number>('step', SETUP_STEPS, hasProfile ? 1 : 0);
   const [displayName, setDisplayName] = useState(name);
   const { signOut } = useAuth();
   const [mainLanguage, setMainLanguage] = useState(defaultLanguage());
@@ -2202,7 +2246,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     { n: 4, label: 'Offers', title: 'Build your offers.', copy: 'Plan the journey, then build every free and paid offer it contains.', image: '/images/guides/offer-plate.png' },
     { n: 5, label: 'Site', title: 'Build your site.', copy: 'Preview the customer journey, then publish.', image: '/images/guides/guide-plate.png' },
   ];
-  const activeStep = steps[step - 1];
+  const activeStep = steps[Math.max(step, 1) - 1];
   const rampAudienceOptions = audience.length ? audience : ['Everyone'];
   // A specific group (e.g. Women) beats the 'Everyone' default, so the path matches the audience chip on the cards.
   const specificAudience = rampAudienceOptions.find((group) => group !== 'Everyone');
@@ -2424,13 +2468,22 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
                   </div>
                 </div>;
   };
+  // The picture in the header opens step 01. It works while the builders are still locked: this setup is where a new Guardian can go.
+  const profileLink = { href: '/guardians/workspace?step=1', onOpen: () => { setError(''); setSummaryView(null); setProfileStage(0); setStep(1); } };
+  const setupLock = hasProfile ? undefined : 'finish setup to open the builders';
+  if (step === 0) return <div style={{ minHeight: '100vh', background: black, color: ink, padding: '30px clamp(20px,6vw,90px)', fontFamily: sans }}>
+    <div style={{ position: 'sticky', top: 0, zIndex: 50, margin: '-30px calc(-1 * clamp(20px,6vw,90px)) 0', maxWidth: 'none' }}>
+      <GuardianHeader isSignedIn displayName={displayName} avatarUrl={navAvatarUrl} profileLink={profileLink} locked={setupLock} onSignOut={() => signOut()} />
+    </div>
+    <GuardianGetStarted onStart={() => setStep(1)} />
+  </div>;
   return <div onPointerMove={tiltCard} onPointerOut={resetTilt} style={{ minHeight: '100vh', background: black, color: ink, padding: '30px clamp(20px,6vw,90px)', fontFamily: sans }}>
     <style>{`@keyframes guardian-orbit{to{transform:rotate(360deg)}}.guardian-image-loader{animation:guardian-orbit 1.8s linear infinite}.guardian-card{--card-rotate-x:0deg;--card-rotate-y:0deg;transition:transform 160ms ease,border-color 180ms ease,box-shadow 180ms ease,background-color 180ms ease;transform-origin:center;transform-style:preserve-3d;will-change:transform;text-align:left}.guardian-card>span[aria-hidden="true"],.guardian-card [role="img"]{margin-left:0!important;margin-right:0!important}.guardian-card img{transition:filter 180ms ease;filter:grayscale(1) contrast(.92)!important}.guardian-card:hover{transform:perspective(700px) translateY(-5px) rotateX(var(--card-rotate-x)) rotateY(var(--card-rotate-y));box-shadow:0 16px 30px rgba(0,0,0,.3)}.guardian-card:not([aria-pressed="true"]):not([aria-disabled="true"]):hover{border-color:#A56B48!important;background-color:#171811!important}.guardian-card:hover img{filter:grayscale(0) contrast(1.02) saturate(1.08)!important}.guardian-card[aria-disabled="true"]:hover{transform:none;box-shadow:none}.guardian-card:focus-visible{outline:2px solid #C7D8A3;outline-offset:3px}@media(prefers-reduced-motion:reduce){.guardian-card,.guardian-image-loader{transition:none;animation:none}.guardian-card:hover{transform:none!important}}`}</style>
     {/* Same shared header as the landing and tool pages; negative margins cancel this page's padding so it spans full width. */}
     {/* maxWidth none: the site CSS caps every element at 100% under 768px, which would undo the full bleed. */}
     <div style={{ position: 'sticky', top: 0, zIndex: 50, margin: '-30px calc(-1 * clamp(20px,6vw,90px)) 0', maxWidth: 'none' }}>
       {/* Until a profile is saved every ?tab= URL re-renders this setup, so builder links would just reload it and drop unsaved answers. */}
-      <GuardianHeader isSignedIn displayName={displayName} avatarUrl={navAvatarUrl} locked={hasProfile ? undefined : 'finish setup to open the builders'} onSignOut={() => signOut()} extra={<>
+      <GuardianHeader isSignedIn displayName={displayName} avatarUrl={navAvatarUrl} profileLink={profileLink} locked={setupLock} onSignOut={() => signOut()} extra={<>
         <button type="button" onClick={() => setSummaryView('offers')} style={{ padding: 0, border: 0, borderBottom: summaryView === 'offers' ? `1px solid ${ink}` : '1px solid transparent', background: 'transparent', color: summaryView === 'offers' ? ink : muted, cursor: 'pointer', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Offers <span style={{ color: acid }}>{builtOfferCount}/{totalOfferCount}</span></button>
         <button type="button" onClick={() => setSummaryView('sites')} style={{ padding: 0, border: 0, borderBottom: summaryView === 'sites' ? `1px solid ${ink}` : '1px solid transparent', background: 'transparent', color: summaryView === 'sites' ? ink : muted, cursor: 'pointer', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Sites <span style={{ color: acid }}>2</span></button>
         <span aria-hidden="true" style={{ width: 1, height: 14, background: line }} />

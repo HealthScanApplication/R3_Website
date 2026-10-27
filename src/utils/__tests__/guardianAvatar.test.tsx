@@ -80,10 +80,11 @@ describe('useGuardianAvatarUrl', () => {
 
 describe('the header wiring', () => {
   const portal = fs.readFileSync(path.join(__dirname, '..', '..', 'components', 'guides', 'GuidePortal.tsx'), 'utf8');
-  it('shows the avatar before the name, and both signed-in pages pass it', () => {
+  it('shows the avatar before the name, and every signed-in page passes it', () => {
     expect(portal).toMatch(/<GuardianAvatar url=\{avatarUrl\} name=\{displayName\}[^>]*\/>\s*<\/a>\}\s*\{displayName && <span className="g-header-name"/);
     expect(portal).toContain('avatarUrl={navAvatarUrl}');
-    expect(portal.match(/avatarUrl=\{navAvatarUrl\}/g)).toHaveLength(2);
+    // The Get started page, the setup steps and the workspace each draw their own header.
+    expect(portal.match(/avatarUrl=\{navAvatarUrl\}/g)).toHaveLength(3);
     expect(portal).toContain('useGuardianAvatarUrl(user?.id, profile.avatar_url,');
     expect(portal).toContain('useGuardianAvatarUrl(userId, avatarUrl, logoUrl)');
   });
@@ -108,6 +109,16 @@ describe('pressing the avatar opens the profile', () => {
     expect(link.getAttribute('aria-disabled')).toBe('true');
     expect(link.getAttribute('aria-label')).toMatch(/finish setup/);
     fireEvent.click(link);
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+  it('opens the page\'s own profile step when it has one, even while the builders are locked', () => {
+    const onOpen = vi.fn();
+    const { link, onNavigate } = renderHeader({ locked: 'finish setup to open the builders', profileLink: { href: '/guardians/workspace?step=1', onOpen } });
+    expect(link.getAttribute('href')).toBe('/guardians/workspace?step=1');
+    expect(link.getAttribute('aria-disabled')).toBeNull();
+    expect(link.getAttribute('aria-label')).toBe('Your profile');
+    expect(fireEvent.click(link)).toBe(false); // the click was handled in the app, not followed as a link
+    expect(onOpen).toHaveBeenCalledTimes(1);
     expect(onNavigate).not.toHaveBeenCalled();
   });
   it('shows initials as the link when there is a name but no picture', () => {
