@@ -15,6 +15,7 @@ import { ProtocolRemovalDialog, type ProtocolRemoval } from './ProtocolRemoval';
 import { PROTOCOL_THEMES, daysLabel, protocolTags, protocolTheme, protocolWhen } from '../../utils/protocolTags';
 import { defaultAvatarKeyFor } from '../../utils/memberAvatar';
 import { PhotoDropzone } from '../PhotoDropzone';
+import { GuardianAvatar, useGuardianAvatarUrl } from './GuardianAvatar';
 import { ProtocolChildrenPanel } from './ProtocolChildrenPanel';
 import { customizeProtocolRecipe } from '../../utils/protocolCopies';
 import { ContentBuilder } from './ContentBuilder';
@@ -408,12 +409,14 @@ export const GUARDIAN_BUILDERS_ORDER = GUARDIAN_BUILDERS.map((b) => b.label);
  * its translucent-over-hero look; `onNavigate` switches tabs in-app (workspace) instead of
  * following the href. When signed out, every link opens the sign-in modal via `onSignIn`.
  */
-export function GuardianHeader({ isSignedIn, activeTab, displayName, transparent, extra, locked, onNavigate, onSignIn, onSignOut }: {
+export function GuardianHeader({ isSignedIn, activeTab, displayName, avatarUrl, transparent, extra, locked, onNavigate, onSignIn, onSignOut }: {
   isSignedIn: boolean;
   /** Why the builders can't open yet (e.g. setup not saved): links stay visible but don't navigate. */
   locked?: string;
   activeTab?: Tab;
   displayName?: string;
+  /** The Guardian's picture, shown beside the name (profile photo, else the first brand's logo). Transparent images are fine. */
+  avatarUrl?: string | null;
   transparent?: boolean;
   /** Page-specific controls shown before the account, e.g. the setup dashboard's Offers / Sites toggles. */
   extra?: React.ReactNode;
@@ -455,6 +458,9 @@ export function GuardianHeader({ isSignedIn, activeTab, displayName, transparent
         <div className="g-header-account" style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 'none' }}>
           {extra}
           {isSignedIn ? <>
+            {(avatarUrl || displayName) && <a href={locked ? undefined : href('profile')} onClick={go('profile')} aria-label={locked ? `Your profile · ${locked}` : 'Your profile'} aria-disabled={locked ? true : undefined} title={locked || 'Your profile'} style={{ display: 'inline-flex', borderRadius: '50%', cursor: locked ? 'default' : 'pointer', flexShrink: 0 }}>
+              <GuardianAvatar url={avatarUrl} name={displayName} line={line} />
+            </a>}
             {displayName && <span className="g-header-name" title={displayName} style={{ color: muted, fontSize: 11, whiteSpace: 'nowrap' }}>{displayName}</span>}
             <button type="button" onClick={onSignOut} title="Sign out" aria-label="Sign out" style={{ border: `1px solid ${line}`, background: 'transparent', color: ink, width: 31, height: 31, flexShrink: 0, boxSizing: 'border-box', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><LogOut size={13} /></button>
           </> : <button type="button" onClick={onSignIn} style={{ ...builderLink, height: 31, border: `1px solid ${ink}`, borderRadius: 2, padding: '0 16px', background: 'transparent' }}>Sign in</button>}
@@ -1586,6 +1592,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const [format, setFormat] = useState<string[]>(['Protocol (Physical + Interactive)']);
   const [intro, setIntro] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(accountAvatarUrl || defaultAvatars[0].image);
+  const navAvatarUrl = useGuardianAvatarUrl(userId, avatarUrl, logoUrl);
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null);
   const [backgroundType, setBackgroundType] = useState<'image' | 'video'>('image');
   const [uploadingBackground, setUploadingBackground] = useState(false);
@@ -2423,7 +2430,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     {/* maxWidth none: the site CSS caps every element at 100% under 768px, which would undo the full bleed. */}
     <div style={{ position: 'sticky', top: 0, zIndex: 50, margin: '-30px calc(-1 * clamp(20px,6vw,90px)) 0', maxWidth: 'none' }}>
       {/* Until a profile is saved every ?tab= URL re-renders this setup, so builder links would just reload it and drop unsaved answers. */}
-      <GuardianHeader isSignedIn displayName={displayName} locked={hasProfile ? undefined : 'finish setup to open the builders'} onSignOut={() => signOut()} extra={<>
+      <GuardianHeader isSignedIn displayName={displayName} avatarUrl={navAvatarUrl} locked={hasProfile ? undefined : 'finish setup to open the builders'} onSignOut={() => signOut()} extra={<>
         <button type="button" onClick={() => setSummaryView('offers')} style={{ padding: 0, border: 0, borderBottom: summaryView === 'offers' ? `1px solid ${ink}` : '1px solid transparent', background: 'transparent', color: summaryView === 'offers' ? ink : muted, cursor: 'pointer', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Offers <span style={{ color: acid }}>{builtOfferCount}/{totalOfferCount}</span></button>
         <button type="button" onClick={() => setSummaryView('sites')} style={{ padding: 0, border: 0, borderBottom: summaryView === 'sites' ? `1px solid ${ink}` : '1px solid transparent', background: 'transparent', color: summaryView === 'sites' ? ink : muted, cursor: 'pointer', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Sites <span style={{ color: acid }}>2</span></button>
         <span aria-hidden="true" style={{ width: 1, height: 14, background: line }} />
@@ -3796,6 +3803,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
       .finally(() => { if (live) setPublicProtocolsLoading(false); });
     return () => { live = false; };
   }, [accessToken, tab]);
+  const navAvatarUrl = useGuardianAvatarUrl(user?.id, profile.avatar_url, (user?.user_metadata as { avatar_url?: string } | undefined)?.avatar_url);
   const metric = useMemo(() => [{ n: leads.length, l: 'Leads' }, { n: valueRamps.length, l: 'Offers' }, { n: offers.length + recipes.length + protocols.length, l: 'Items' }, { n: protocols.length, l: 'R3 Protocols' }], [leads.length, offers.length, recipes.length, protocols.length, valueRamps.length]);
   async function quickAdd() {
     if (!user || !newTitle.trim() || creating) return;
@@ -3811,7 +3819,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
     finally { setCreating(false); }
   }
   return <div style={{ minHeight: '100vh', background: black, color: ink, fontFamily: sans }}>
-    <GuardianHeader isSignedIn activeTab={tab} displayName={profile.display_name} onNavigate={(next) => { setTab(next); setProtocolId(null); setRecipeId(null); setChildPlanId(null); setParentContext(null); }} onSignOut={signOut} />
+    <GuardianHeader isSignedIn activeTab={tab} displayName={profile.display_name} avatarUrl={navAvatarUrl} onNavigate={(next) => { setTab(next); setProtocolId(null); setRecipeId(null); setChildPlanId(null); setParentContext(null); }} onSignOut={signOut} />
     {/* Profile → Site setup steps, kept as workspace context under the shared header. */}
     <div aria-label="Guardian setup steps" style={{ padding: '0 clamp(20px,6vw,90px)', borderBottom: `1px solid ${line}` }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', display: 'grid', gridTemplateColumns: `repeat(${GUARDIAN_STEP_LABELS.length},1fr)` }}>
