@@ -28,6 +28,8 @@ import { MediaUploadField } from './MediaUploadField';
 import { MarkdownField } from './MarkdownField';
 import { listRoutineOwners } from '../../utils/guidePortal';
 import { computeSleepWindow, isWakeName, isBedName } from '../../utils/sleepWindow';
+import { isCatalogAdminToken } from '../../utils/catalogAdmin';
+import { changedProtocolFields, importedProtocolFields } from '../../utils/protocolPatch';
 import { descriptiveMealSlot } from '../../protocolDomain/mealSlot';
 import { smartListOf, slotFromGroupName, mealSlotFor, SLOT_TITLE, type Row as StandardRow } from '../../utils/routineStandard';
 import { checkProtocolItem, onGateWarnings, type GateWarning } from '../../utils/protocolGate';
@@ -416,6 +418,8 @@ export function ProtocolEditor({ accessToken, onOpenCatalogRecord, initialProtoc
   /** Whether the protocol shown may be deleted from here (a person's own routine may not). Default: yes. */
   canDelete?: (id: string) => boolean;
 }) {
+  // Only a catalog admin may mark a routine as suggested (enforced by the database); the control is hidden for everyone else.
+  const canSuggest = useMemo(() => isCatalogAdminToken(accessToken), [accessToken]);
   const [protocols, setProtocols] = useState<AdminProtocol[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -728,10 +732,7 @@ export function ProtocolEditor({ accessToken, onOpenCatalogRecord, initialProtoc
 
   async function saveProtocol() {
     if (!selected) return;
-    const patch: Partial<AdminProtocol> = {};
-    for (const f of PROTO_FIELDS) {
-      if ((form as any)[f] !== (selected as any)[f]) (patch as any)[f] = (form as any)[f];
-    }
+    const patch = changedProtocolFields(form as AdminProtocol, selected, PROTO_FIELDS, canSuggest);
     if (Object.keys(patch).length === 0) return;
     setSavingProtocol(true);
     try {
@@ -817,8 +818,7 @@ export function ProtocolEditor({ accessToken, onOpenCatalogRecord, initialProtoc
       )) { setImporting(false); return; }
 
       // 1) protocol fields (only the editable allowlist — never touch id/user_id/timestamps)
-      const patch: any = {};
-      for (const f of PROTO_FIELDS) if (p[f] !== undefined) patch[f] = p[f];
+      const patch = importedProtocolFields(p, PROTO_FIELDS as readonly string[], canSuggest) as Partial<AdminProtocol>;
       if (Object.keys(patch).length) await updateProtocol(accessToken, target.id, patch);
 
       // 2) clear existing items (children first for referential integrity)
@@ -2037,7 +2037,7 @@ export function ProtocolEditor({ accessToken, onOpenCatalogRecord, initialProtoc
                     </div>
                   </div>
                   <div style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 2 }}>
-                    {([['is_suggested', 'Suggested'], ['is_active', 'Active'], ['is_public', 'Public']] as const).map(([key, lbl]) => (
+                    {([['is_suggested', 'Suggested'], ['is_active', 'Active'], ['is_public', 'Public']] as const).filter(([key]) => key !== 'is_suggested' || canSuggest).map(([key, lbl]) => (
                       <label key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: C.ink, cursor: 'pointer' }}>
                         <input type="checkbox" checked={!!(form as any)[key]} onChange={(e) => setField(key as keyof AdminProtocol, e.target.checked as any)} />
                         {lbl}
