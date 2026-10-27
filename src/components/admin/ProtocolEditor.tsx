@@ -25,6 +25,7 @@ import {
 import { PhoneFrame } from '../mockups/PhoneFrame';
 import { ProtocolHomeScreen, type HomeItem } from '../mockups/ProtocolHomeScreen';
 import { MediaUploadField } from './MediaUploadField';
+import { ProtocolNameField } from './ProtocolNameField';
 import { MarkdownField } from './MarkdownField';
 import { listRoutineOwners } from '../../utils/guidePortal';
 import { computeSleepWindow, isWakeName, isBedName } from '../../utils/sleepWindow';
@@ -1896,7 +1897,7 @@ export function ProtocolEditor({ accessToken, onOpenCatalogRecord, initialProtoc
                   <div><div style={{ fontSize: 11, color: C.faint, textTransform: 'uppercase', letterSpacing: '.06em' }}>{form.profile_name || routinePerson?.name || form.creator || 'Protocol owner'} · {form.profile_role || routinePerson?.relation || 'self'}</div><div style={{ fontSize: 11, color: C.sub }}>Assigned profile</div></div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <strong style={{ color: C.ink, fontSize: 16, flex: '1 1 240px' }}>{form.name || 'Untitled Protocol'}</strong>
+                  <ProtocolNameField value={form.name || ''} onChange={(value) => setField('name', value)} onSave={saveProtocol} dirty={dirty} saving={savingProtocol} colors={C} />
                   <button type="button" onClick={() => setEditorFocus('timeline')} style={{ padding: '8px 13px', borderRadius: 8, border: '1px solid ' + (editorFocus === 'timeline' ? C.accent : C.hair), background: editorFocus === 'timeline' ? 'var(--sb-brand-soft)' : C.paper, color: editorFocus === 'timeline' ? C.accent : C.sub, fontWeight: 700, cursor: 'pointer' }}><CalendarDays size={13} style={{ display: 'inline', marginRight: 6, verticalAlign: '-2px' }} />Timeline & rules</button>
                   <button type="button" onClick={() => setEditorFocus('details')} style={{ padding: '8px 13px', borderRadius: 8, border: '1px solid ' + (editorFocus === 'details' ? C.accent : C.hair), background: editorFocus === 'details' ? 'var(--sb-brand-soft)' : C.paper, color: editorFocus === 'details' ? C.accent : C.sub, fontWeight: 700, cursor: 'pointer' }}><ImageIcon size={13} style={{ display: 'inline', marginRight: 6, verticalAlign: '-2px' }} />Details & cover</button>
                   {onDelete && selectedId && (canDelete ? canDelete(selectedId) : true) && <button type="button" onClick={() => onDelete({ id: selectedId, name: form.name || 'Untitled Protocol' })} title="Delete this protocol: you will see what it takes with it first" style={{ padding: '8px 13px', borderRadius: 8, border: '1px solid ' + C.danger, background: C.paper, color: C.danger, fontWeight: 700, cursor: 'pointer' }}><Trash2 size={13} style={{ display: 'inline', marginRight: 6, verticalAlign: '-2px' }} aria-hidden="true" />Delete protocol</button>}
