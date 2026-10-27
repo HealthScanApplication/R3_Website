@@ -51,6 +51,10 @@ import {
 import { ReferralTierProgress } from './ReferralTierProgress';
 import { SocialSharingModal } from './SocialSharingModal';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { getSupabaseClient } from '../utils/supabase/client';
+import { PhotoDropzone } from './PhotoDropzone';
+import { PROFILE_PHOTO_ACCEPT, removeStoredProfilePhoto, saveProfilePhotoUrl, uploadProfilePhoto, validateProfilePhoto } from '../utils/profilePhoto';
+import { loadProfilePreferences, saveProfilePreferences } from '../utils/profilePreferences';
 import { Clock, CheckCircle, Users2 } from 'lucide-react';
 
 interface ProfilePageProps {
@@ -138,7 +142,7 @@ const R3_PROFILE_CSS = `
 `;
 
 export function ProfilePage({ user, onNavigateToSettings, onNavigateToHome }: ProfilePageProps) {
-  const { user: authUser } = useAuth();
+  const { user: authUser, refreshSession } = useAuth();
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -347,6 +351,16 @@ export function ProfilePage({ user, onNavigateToSettings, onNavigateToHome }: Pr
         profilePictureUrl: authUser.user_metadata.avatar_url
       }));
     }
+
+    // The copy saved on the account wins over this device's copy, when there is one.
+    let active = true;
+    if (authUser?.id) {
+      loadProfilePreferences(getSupabaseClient(), authUser.id).then((saved) => {
+        if (!active || !saved) return;
+        setPreferences(prev => ({ ...prev, ...(saved as Partial<UserPreferences>), profilePictureUrl: String(saved.profilePictureUrl || prev.profilePictureUrl || '') }));
+      }).catch(() => undefined);
+    }
+    return () => { active = false; };
   }, [authUser]);
 
   const formatDate = (dateString: string) => {
@@ -431,63 +445,20 @@ export function ProfilePage({ user, onNavigateToSettings, onNavigateToHome }: Pr
 
   const savePreferences = async () => {
     setSaving(true);
-    let backendSaveSuccess = false;
-    
     try {
-      // Save to localStorage first (immediate backup)
+      // Keep a copy on this device first, so a failed sync never loses what was typed.
       localStorage.setItem('healthscan_user_preferences', JSON.stringify(preferences));
-      console.log('✅ Preferences saved to localStorage successfully');
-      
-      // Always attempt to save all profile data to backend
-      try {
-        const response = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-ed0fe4c2/update-user-profile`,
-          {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${publicAnonKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-              userId: authUser?.id,
-              email: authUser?.email,
-              profileData: {
-                // Include all preferences for backend storage
-                ...preferences,
-                lastSyncedAt: new Date().toISOString()
-              }
-            })
-          }
-        );
-
-        if (response.ok) {
-          const result = await response.json();
-          console.log('✅ Profile data saved to backend successfully:', result.message);
-          backendSaveSuccess = true;
-        } else {
-          const errorText = await response.text();
-          console.error('❌ Backend save failed with status:', response.status, errorText);
-          throw new Error(`Backend responded with ${response.status}: ${errorText}`);
-        }
-      } catch (backendError: any) {
-        console.error('❌ Failed to sync profile to backend:', backendError);
-        
-        // Show specific error message to user
-        const errorMessage = backendError.message || 'Unknown error occurred';
-        toast.error(`Preferences saved locally but failed to sync to server: ${errorMessage}`);
-        
-        // Still continue with success since localStorage worked
+      if (!authUser?.id) {
+        toast.success('Preferences saved on this device.');
         return;
       }
-      
-      // Simulate processing delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Success message based on what worked
-      if (backendSaveSuccess) {
+      try {
+        // The signed-in person's own profile row, under their own session (no server route, no user id sent for a server to trust).
+        await saveProfilePreferences(getSupabaseClient(), { id: authUser.id, email: authUser.email }, preferences as unknown as Record<string, unknown>);
         toast.success('Preferences saved and synced successfully!');
-      } else {
-        toast.success('Preferences saved locally!');
+      } catch (syncError: any) {
+        console.error('❌ Failed to save preferences to the account:', syncError);
+        toast.error(`Saved on this device, but could not be saved to your account: ${syncError?.message || 'Unknown error'}`);
       }
     } catch (error: any) {
       console.error('❌ Failed to save preferences:', error);
@@ -552,135 +523,53 @@ export function ProfilePage({ user, onNavigateToSettings, onNavigateToHome }: Pr
     }
   };
 
-  // Handle profile picture upload
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const rememberPhotoLocally = (profilePictureUrl: string) => {
+    const savedPreferences = localStorage.getItem('healthscan_user_preferences');
+    const currentPrefs = savedPreferences ? JSON.parse(savedPreferences) : {};
+    localStorage.setItem('healthscan_user_preferences', JSON.stringify({ ...currentPrefs, profilePictureUrl }));
+  };
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select a valid image file');
+  // A chosen or dropped profile picture: straight to the person's own storage folder, then onto their account and profile.
+  const handleImageFile = async (file: File) => {
+    if (!authUser?.id) {
+      toast.error('Sign in to change your profile picture.');
       return;
     }
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image size must be less than 5MB');
-      return;
-    }
-
     try {
       setUploadingImage(true);
-
-      // Create FormData for file upload
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('userId', authUser?.id || '');
-      formData.append('email', authUser?.email || '');
-
-      // Upload image to server
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-ed0fe4c2/upload-profile-picture`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-          body: formData
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        const newImageUrl = data.imageUrl;
-
-        // Update preferences with new image URL
-        setPreferences(prev => ({
-          ...prev,
-          profilePictureUrl: newImageUrl
-        }));
-
-        // Save to localStorage
-        const savedPreferences = localStorage.getItem('healthscan_user_preferences');
-        const currentPrefs = savedPreferences ? JSON.parse(savedPreferences) : {};
-        localStorage.setItem('healthscan_user_preferences', JSON.stringify({
-          ...currentPrefs,
-          profilePictureUrl: newImageUrl
-        }));
-
-        toast.success('Profile picture updated successfully!');
-        setShowImageUpload(false);
-      } else {
-        const error = await response.text();
-        console.error('❌ Profile picture upload failed:', { status: response.status, error });
-        toast.error(`Failed to upload image (${response.status}): ${error}`);
-      }
-    } catch (error) {
+      const client = getSupabaseClient();
+      const previousUrl = preferences.profilePictureUrl;
+      const newImageUrl = await uploadProfilePhoto(client, authUser.id, file);
+      await saveProfilePhotoUrl(client, { id: authUser.id, email: authUser.email }, newImageUrl);
+      setPreferences(prev => ({ ...prev, profilePictureUrl: newImageUrl }));
+      rememberPhotoLocally(newImageUrl);
+      void removeStoredProfilePhoto(client, authUser.id, previousUrl);
+      await refreshSession();
+      toast.success('Profile picture updated successfully!');
+      setShowImageUpload(false);
+    } catch (error: any) {
       console.error('Error uploading image:', error);
-      toast.error('Failed to upload image. Please try again.');
+      toast.error(error?.message || 'Failed to upload image. Please try again.');
     } finally {
       setUploadingImage(false);
-      // Reset the input
-      if (event.target) {
-        event.target.value = '';
-      }
     }
   };
 
   const handleRemoveProfilePicture = async () => {
+    if (!authUser?.id) return;
     try {
       setUploadingImage(true);
-
-      // Remove image from server if it exists
-      if (preferences.profilePictureUrl) {
-        try {
-          const response = await fetch(
-            `https://${projectId}.supabase.co/functions/v1/make-server-ed0fe4c2/remove-profile-picture`,
-            {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${publicAnonKey}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ 
-                userId: authUser?.id,
-                email: authUser?.email,
-                imageUrl: preferences.profilePictureUrl 
-              })
-            }
-          );
-          
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.warn('⚠️ Failed to remove profile picture from server:', response.status, errorText);
-          } else {
-            console.log('✅ Profile picture removed from server successfully');
-          }
-        } catch (serverError) {
-          console.warn('⚠️ Server error while removing profile picture:', serverError);
-          // Continue with local removal even if server removal fails
-        }
-      }
-
-      // Update preferences
-      setPreferences(prev => ({
-        ...prev,
-        profilePictureUrl: ''
-      }));
-
-      // Save to localStorage
-      const savedPreferences = localStorage.getItem('healthscan_user_preferences');
-      const currentPrefs = savedPreferences ? JSON.parse(savedPreferences) : {};
-      localStorage.setItem('healthscan_user_preferences', JSON.stringify({
-        ...currentPrefs,
-        profilePictureUrl: ''
-      }));
-
+      const client = getSupabaseClient();
+      await saveProfilePhotoUrl(client, { id: authUser.id, email: authUser.email }, null);
+      void removeStoredProfilePhoto(client, authUser.id, preferences.profilePictureUrl);
+      setPreferences(prev => ({ ...prev, profilePictureUrl: '' }));
+      rememberPhotoLocally('');
+      await refreshSession();
       toast.success('Profile picture removed successfully!');
       setShowImageUpload(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error removing image:', error);
-      toast.error('Failed to remove image. Please try again.');
+      toast.error(error?.message || 'Failed to remove image. Please try again.');
     } finally {
       setUploadingImage(false);
     }
@@ -719,15 +608,21 @@ export function ProfilePage({ user, onNavigateToSettings, onNavigateToHome }: Pr
               <div className="flex flex-col items-center text-center mb-6">
                 {/* Profile Picture with Upload */}
                 <div className="relative mb-4">
-                  <Avatar className="w-20 h-20 avatar-with-hover-effects">
-                    <AvatarImage 
-                      src={preferences.profilePictureUrl || authUser?.user_metadata?.avatar_url} 
-                      alt="Profile picture"
-                    />
-                    <AvatarFallback className="bg-[var(--healthscan-green)] text-white text-xl font-bold avatar-fallback">
-                      {getUserInitials(authUser?.email || 'HS')}
-                    </AvatarFallback>
-                  </Avatar>
+                  <PhotoDropzone onFile={handleImageFile} onReject={(message) => toast.error(message)} validate={validateProfilePhoto} accept={PROFILE_PHOTO_ACCEPT} disabled={uploadingImage}>
+                    {({ dragging }) => (
+                      <div style={{ borderRadius: '50%', outline: dragging ? '3px dashed #16140F' : 'none', outlineOffset: 3 }}>
+                        <Avatar className="w-20 h-20 avatar-with-hover-effects">
+                          <AvatarImage 
+                            src={preferences.profilePictureUrl || authUser?.user_metadata?.avatar_url} 
+                            alt="Profile picture"
+                          />
+                          <AvatarFallback className="bg-[var(--healthscan-green)] text-white text-xl font-bold avatar-fallback">
+                            {getUserInitials(authUser?.email || 'HS')}
+                          </AvatarFallback>
+                        </Avatar>
+                      </div>
+                    )}
+                  </PhotoDropzone>
                   
                   {/* Upload Button */}
                   <Button
@@ -751,59 +646,73 @@ export function ProfilePage({ user, onNavigateToSettings, onNavigateToHome }: Pr
                         className="fixed inset-0 z-5" 
                         onClick={() => setShowImageUpload(false)}
                       />
-                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 p-3 z-10 min-w-48">
-                      <div className="space-y-2">
-                        <label className="block">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleImageUpload}
-                            className="hidden"
-                            disabled={uploadingImage}
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="w-full btn-standard cursor-pointer hover:bg-green-50 border-green-200"
-                            disabled={uploadingImage}
-                            onClick={(e: React.MouseEvent) => e.preventDefault()}
-                          >
-                            <Upload className="w-4 h-4 mr-2" />
-                            Upload Photo
-                          </Button>
-                        </label>
-                        
-                        {preferences.profilePictureUrl && (
-                          <Button
-                            onClick={handleRemoveProfilePicture}
-                            variant="outline"
-                            size="sm"
-                            className="w-full btn-standard text-red-600 hover:bg-red-50 border-red-200"
-                            disabled={uploadingImage}
-                          >
-                            <X className="w-4 h-4 mr-2" />
-                            Remove Photo
-                          </Button>
+                      <PhotoDropzone
+                        className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 p-3 z-10 min-w-48"
+                        onFile={handleImageFile}
+                        onReject={(message) => toast.error(message)}
+                        validate={validateProfilePhoto}
+                        accept={PROFILE_PHOTO_ACCEPT}
+                        disabled={uploadingImage}
+                      >
+                        {({ open, dragging }) => (
+                          <>
+                            <div className="space-y-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="w-full btn-standard cursor-pointer hover:bg-green-50 border-green-200"
+                                disabled={uploadingImage}
+                                onClick={open}
+                              >
+                                <Upload className="w-4 h-4 mr-2" />
+                                Upload Photo
+                              </Button>
+
+                              <div
+                                style={{
+                                  border: `1px dashed ${dragging ? '#16140F' : 'rgba(22,20,15,.35)'}`,
+                                  background: dragging ? 'rgba(22,20,15,.06)' : 'transparent',
+                                  padding: '10px 8px',
+                                  textAlign: 'center',
+                                  fontSize: 11,
+                                }}
+                              >
+                                {dragging ? 'Drop to upload' : 'or drag a photo here'}
+                              </div>
+
+                              {preferences.profilePictureUrl && (
+                                <Button
+                                  onClick={handleRemoveProfilePicture}
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full btn-standard text-red-600 hover:bg-red-50 border-red-200"
+                                  disabled={uploadingImage}
+                                >
+                                  <X className="w-4 h-4 mr-2" />
+                                  Remove Photo
+                                </Button>
+                              )}
+
+                              <Button
+                                onClick={() => setShowImageUpload(false)}
+                                variant="ghost"
+                                size="sm"
+                                className="w-full btn-standard text-gray-500 hover:bg-gray-50"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+
+                            <div className="mt-2 pt-2 border-t border-gray-100">
+                              <p className="text-xs text-gray-500 text-center">
+                                Max size: 5MB<br/>
+                                JPG, PNG, WebP, GIF supported
+                              </p>
+                            </div>
+                          </>
                         )}
-                        
-                        <Button
-                          onClick={() => setShowImageUpload(false)}
-                          variant="ghost"
-                          size="sm"
-                          className="w-full btn-standard text-gray-500 hover:bg-gray-50"
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                      
-                      <div className="mt-2 pt-2 border-t border-gray-100">
-                        <p className="text-xs text-gray-500 text-center">
-                          Max size: 5MB<br/>
-                          JPG, PNG, GIF supported
-                        </p>
-                      </div>
-                    </div>
+                      </PhotoDropzone>
                     </>
                   )}
                 </div>
