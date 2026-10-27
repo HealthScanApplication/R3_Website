@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { chooseImageProvider, dataUrlToFile, type ImageStatus } from '../guardianImages';
 
-const status = (over: Partial<ImageStatus> & { own?: Partial<ImageStatus['own']> } = {}): ImageStatus => ({
+const status = (over: Partial<Omit<ImageStatus, 'own'>> & { own?: Partial<ImageStatus['own']> } = {}): ImageStatus => ({
   live: true, house: true, house_left: 4, house_per_day: 10, model: 'gpt-image-1',
   prices: { low: { square: 0.011, wide: 0.016 }, medium: { square: 0.042, wide: 0.063 }, high: { square: 0.167, wide: 0.25 } },
   ...over,
