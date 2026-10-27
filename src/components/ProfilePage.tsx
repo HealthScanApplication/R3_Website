@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
@@ -164,6 +164,9 @@ export function ProfilePage({ user, onNavigateToSettings, onNavigateToHome }: Pr
   
   // Email verification state
   const [isResendingEmail, setIsResendingEmail] = useState(false);
+
+  // Fields the person has changed since the page opened: the account copy, which arrives later, never overwrites these.
+  const editedKeys = useRef<Set<string>>(new Set());
 
   // User preferences state
   const [preferences, setPreferences] = useState<UserPreferences>({
@@ -357,7 +360,12 @@ export function ProfilePage({ user, onNavigateToSettings, onNavigateToHome }: Pr
     if (authUser?.id) {
       loadProfilePreferences(getSupabaseClient(), authUser.id).then((saved) => {
         if (!active || !saved) return;
-        setPreferences(prev => ({ ...prev, ...(saved as Partial<UserPreferences>), profilePictureUrl: String(saved.profilePictureUrl || prev.profilePictureUrl || '') }));
+        setPreferences(prev => {
+          const next: Record<string, unknown> = { ...prev };
+          // An explicit empty photo means it was removed on the account, so it clears a cached one; only a field edited here is kept.
+          for (const [key, value] of Object.entries(saved)) if (!editedKeys.current.has(key)) next[key] = value;
+          return next as unknown as UserPreferences;
+        });
       }).catch(() => undefined);
     }
     return () => { active = false; };
@@ -410,6 +418,7 @@ export function ProfilePage({ user, onNavigateToSettings, onNavigateToHome }: Pr
   };
 
   const updatePreference = (key: keyof UserPreferences, value: any) => {
+    editedKeys.current.add(key);
     setPreferences(prev => ({
       ...prev,
       [key]: value
@@ -417,6 +426,7 @@ export function ProfilePage({ user, onNavigateToSettings, onNavigateToHome }: Pr
   };
 
   const toggleHealthGoal = (goal: string) => {
+    editedKeys.current.add('healthGoals');
     setPreferences(prev => ({
       ...prev,
       healthGoals: prev.healthGoals.includes(goal)
@@ -426,6 +436,7 @@ export function ProfilePage({ user, onNavigateToSettings, onNavigateToHome }: Pr
   };
 
   const toggleDietaryRestriction = (restriction: string) => {
+    editedKeys.current.add('dietaryRestrictions');
     setPreferences(prev => ({
       ...prev,
       dietaryRestrictions: prev.dietaryRestrictions.includes(restriction)
@@ -435,6 +446,7 @@ export function ProfilePage({ user, onNavigateToSettings, onNavigateToHome }: Pr
   };
 
   const toggleAllergy = (allergy: string) => {
+    editedKeys.current.add('allergies');
     setPreferences(prev => ({
       ...prev,
       allergies: prev.allergies.includes(allergy)
@@ -541,6 +553,7 @@ export function ProfilePage({ user, onNavigateToSettings, onNavigateToHome }: Pr
       const previousUrl = preferences.profilePictureUrl;
       const newImageUrl = await uploadProfilePhoto(client, authUser.id, file);
       await saveProfilePhotoUrl(client, { id: authUser.id, email: authUser.email }, newImageUrl);
+      editedKeys.current.add('profilePictureUrl');
       setPreferences(prev => ({ ...prev, profilePictureUrl: newImageUrl }));
       rememberPhotoLocally(newImageUrl);
       void removeStoredProfilePhoto(client, authUser.id, previousUrl);
@@ -562,6 +575,7 @@ export function ProfilePage({ user, onNavigateToSettings, onNavigateToHome }: Pr
       const client = getSupabaseClient();
       await saveProfilePhotoUrl(client, { id: authUser.id, email: authUser.email }, null);
       void removeStoredProfilePhoto(client, authUser.id, preferences.profilePictureUrl);
+      editedKeys.current.add('profilePictureUrl');
       setPreferences(prev => ({ ...prev, profilePictureUrl: '' }));
       rememberPhotoLocally('');
       await refreshSession();

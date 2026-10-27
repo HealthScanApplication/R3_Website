@@ -46,8 +46,11 @@ describe('loading the saved preferences', () => {
     expect(await loadProfilePreferences(c, 'u-1')).toEqual({ units: 'metric', profilePictureUrl: 'https://x/y.png' });
     expect(eq).toHaveBeenCalledWith('id', 'u-1');
   });
-  it('returns null when nothing is stored, or the read fails, so the page keeps its local copy', async () => {
-    expect(await loadProfilePreferences(client({ data: { preferences: {}, avatar_url: null } }).c, 'u-1')).toBeNull();
+  it('states an empty photo when the row has none, so a removed photo clears a cached one on another device', async () => {
+    expect(await loadProfilePreferences(client({ data: { preferences: { units: 'metric' }, avatar_url: null } }).c, 'u-1')).toEqual({ units: 'metric', profilePictureUrl: '' });
+    expect(await loadProfilePreferences(client({ data: { preferences: {}, avatar_url: null } }).c, 'u-1')).toEqual({ profilePictureUrl: '' });
+  });
+  it('returns null when there is no row or the read fails, so the page keeps its local copy', async () => {
     expect(await loadProfilePreferences(client().c, 'u-1')).toBeNull();
     expect(await loadProfilePreferences(client({ error: { message: 'boom' } }).c, 'u-1')).toBeNull();
   });

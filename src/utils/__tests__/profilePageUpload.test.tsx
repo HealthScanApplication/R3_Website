@@ -16,7 +16,7 @@ const db = vi.hoisted(() => {
     from: vi.fn(() => ({ upsert, select: () => ({ eq: () => ({ maybeSingle }) }) })),
     auth: { updateUser },
   };
-  return { upload, remove, upsert, updateUser, client };
+  return { upload, remove, upsert, updateUser, maybeSingle, client };
 });
 
 vi.mock('sonner', () => ({ toast }));
@@ -100,5 +100,32 @@ describe('Profile page photo and save', () => {
     fireEvent.click(await screen.findByRole('button', { name: /save preferences/i }));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('permission denied for table user_profiles')));
     expect(localStorage.getItem('healthscan_user_preferences')).toBeTruthy();
+  });
+
+  it('an account copy that arrives after the person started typing does not overwrite what they typed', async () => {
+    let resolveLoad: (value: unknown) => void = () => undefined;
+    db.maybeSingle.mockImplementationOnce(() => new Promise((resolve) => { resolveLoad = resolve; }) as never);
+    render(<ProfilePage user={{}} onNavigateToSettings={() => undefined} />);
+    const name = (await screen.findByLabelText('Full Name')) as HTMLInputElement;
+    fireEvent.change(name, { target: { value: 'Typed By Me' } });
+    resolveLoad({ data: { preferences: { fullName: 'Saved Name', units: 'metric' }, avatar_url: null }, error: null });
+    await waitFor(() => expect(db.maybeSingle).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+    await waitFor(() => expect(db.upsert).toHaveBeenCalled());
+    const saved = ((db.upsert.mock.calls[0] as unknown[])[0] as Record<string, any>).preferences;
+    expect(saved.fullName).toBe('Typed By Me'); // the edit survived the late load
+    expect(saved.units).toBe('metric');          // a field they did not touch took the account value
+    expect(name.value).toBe('Typed By Me');
+  });
+
+  it('a photo removed on another device clears the one this device had cached', async () => {
+    localStorage.setItem('healthscan_user_preferences', JSON.stringify({ profilePictureUrl: 'https://x.supabase.co/storage/v1/object/public/profile-avatars/u-1/old.png' }));
+    let resolveLoad: (value: unknown) => void = () => undefined;
+    db.maybeSingle.mockImplementationOnce(() => new Promise((resolve) => { resolveLoad = resolve; }) as never);
+    const { container } = render(<ProfilePage user={{}} onNavigateToSettings={() => undefined} />);
+    await openPhotoPopup(container);
+    expect(screen.getByRole('button', { name: /remove photo/i })).toBeTruthy(); // the cached photo is what the page shows first
+    resolveLoad({ data: { preferences: {}, avatar_url: null }, error: null });
+    await waitFor(() => expect(screen.queryByRole('button', { name: /remove photo/i })).toBeNull());
   });
 });

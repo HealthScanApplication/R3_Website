@@ -25,11 +25,14 @@ export async function saveProfilePreferences(
   if (error) throw new Error(error.message || 'The server did not accept the preferences.');
 }
 
-/** The saved preferences, or null when there are none yet (or they cannot be read: the page then keeps its local copy). */
+/**
+ * The saved preferences, or null when there is no profile row yet or it cannot be read (the page then keeps its local copy).
+ * When the row exists its photo is always stated: `profilePictureUrl` is '' when the photo was removed, so a device that still
+ * holds the old URL clears it instead of keeping a deleted file.
+ */
 export async function loadProfilePreferences(client: SupabaseClient, userId: string): Promise<StoredPreferences | null> {
   const { data, error } = await client.from('user_profiles').select('preferences, avatar_url').eq('id', userId).maybeSingle();
   if (error || !data) return null;
   const preferences = (data.preferences && typeof data.preferences === 'object' ? data.preferences : {}) as StoredPreferences;
-  if (!Object.keys(preferences).length && !data.avatar_url) return null;
-  return data.avatar_url ? { ...preferences, profilePictureUrl: data.avatar_url } : preferences;
+  return { ...preferences, profilePictureUrl: data.avatar_url ?? '' };
 }
