@@ -39,6 +39,23 @@
     <meta name="twitter:image:alt" content="ROUTINE³: build a routine for any goal" />
     <meta name="twitter:site" content="@healthscanlive" />
 
+    <!-- LCP: on the home page the hero picture is a React <img>, found only after the bundle has run. Start it now, with the same
+         srcset and sizes the <img> uses (src/config/homeImages.ts; a test keeps them equal) so the browser takes it from here.
+         Only on "/", so no other route pays for a picture it does not show. -->
+    <script>
+      (function () {
+        if (location.pathname !== '/' || /[?&]page=/.test(location.search)) return;
+        var l = document.createElement('link');
+        l.rel = 'preload';
+        l.as = 'image';
+        l.href = '/images/hero/cover-1440.webp';
+        l.setAttribute('imagesrcset', '/images/hero/cover-960.webp 960w, /images/hero/cover-1440.webp 1440w, /images/hero/cover-1920.webp 1920w');
+        l.setAttribute('imagesizes', '100vw');
+        l.setAttribute('fetchpriority', 'high');
+        document.head.appendChild(l);
+      })();
+    </script>
+
     <!-- Preconnect for performance -->
     <link rel="preconnect" href="https://mofhvoudjxinvpplsytd.supabase.co" crossorigin />
     <link rel="dns-prefetch" href="https://mofhvoudjxinvpplsytd.supabase.co" />
