@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Calendar, Clock, ExternalLink, User } from 'lucide-react';
-import { ImageWithFallback } from './figma/ImageWithFallback';
+import { OptimizedImage } from './OptimizedImage';
 
 interface BlogCardProps {
   title: string;
@@ -58,10 +58,11 @@ export function BlogCard({
       {/* Article Image */}
       {imageUrl && (
         <div className="relative overflow-hidden">
-          <ImageWithFallback
+          <OptimizedImage
             src={imageUrl}
             alt={title}
-            className="w-full h-48 object-cover transition-transform duration-300 group-hover:scale-105"
+            className="transition-transform duration-300 group-hover:scale-105"
+            style={{ height: 192 }}
           />
           {category && (
             <Badge 

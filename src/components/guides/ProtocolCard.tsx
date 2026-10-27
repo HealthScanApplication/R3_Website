@@ -1,5 +1,6 @@
-import { useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ArrowRight, Pencil, Trash2 } from 'lucide-react';
+import { resolveImageSources } from '../../utils/imageLoading';
 
 /**
  * Protocol card: the Guardian profile card (dark picture on top, small-caps kicker, serif title, a short description,
@@ -140,6 +141,11 @@ export function ProtocolCard({ title, kicker, tags, copy, imageUrl, by, byAvatar
   // The picture that failed, not a flag: a card that later gets a different picture tries it.
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const photo = imageUrl && imageUrl !== failedUrl ? imageUrl : null;
+  // A card shows its picture about 300px wide: take a copy of that size from Storage (the blurred layers, 160px), and the
+  // original if the copy will not load. Pictures elsewhere are used as they are.
+  const [fullSizeUrl, setFullSizeUrl] = useState<string | null>(null);
+  const sharp = useMemo(() => (photo && photo !== fullSizeUrl ? resolveImageSources(photo, { proportional: true, widths: [480, 960] }) : null), [photo, fullSizeUrl]);
+  const soft = useMemo(() => (photo && photo !== fullSizeUrl ? resolveImageSources(photo, { proportional: true, widths: [160] }) : null), [photo, fullSizeUrl]);
   // The lean is written straight to CSS variables: no render per pointer move across a grid of cards.
   const lean = (event: React.PointerEvent<HTMLDivElement>) => {
     const el = ref.current;
@@ -153,9 +159,9 @@ export function ProtocolCard({ title, kicker, tags, copy, imageUrl, by, byAvatar
   const inner = <>
     <div className="r3-pcard-media">
       {photo ? <>
-        <img className="r3-pcard-img" src={photo} alt="" loading="lazy" onError={() => setFailedUrl(photo)} />
-        <img className="r3-pcard-blur top" src={photo} alt="" aria-hidden="true" loading="lazy" />
-        <img className="r3-pcard-blur bottom" src={photo} alt="" aria-hidden="true" loading="lazy" />
+        <img className="r3-pcard-img" src={sharp?.src ?? photo} srcSet={sharp?.srcSet} sizes={sharp?.srcSet ? '(max-width: 640px) 100vw, 360px' : undefined} alt="" loading="lazy" decoding="async" onError={() => (sharp?.transformed ? setFullSizeUrl(photo) : setFailedUrl(photo))} />
+        <img className="r3-pcard-blur top" src={soft?.src ?? photo} alt="" aria-hidden="true" loading="lazy" decoding="async" />
+        <img className="r3-pcard-blur bottom" src={soft?.src ?? photo} alt="" aria-hidden="true" loading="lazy" decoding="async" />
       </> : <>
         <span className="r3-pcard-glow" aria-hidden="true" />
         {plate ? <span className="r3-pcard-plate-slot" aria-hidden="true">{plate}</span> : <img className="r3-pcard-plate" src={PROTOCOL_PLATE} alt="" loading="lazy" />}
