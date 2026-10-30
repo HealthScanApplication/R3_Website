@@ -1502,6 +1502,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   const [profile, setProfile] = useState<GuideProfile | null>(null);
   const [offers, setOffers] = useState<GuideOffer[]>([]);
   const [valueRamps, setValueRamps] = useState<GuideValueRamp[]>([]);
+  const [guardianProtocols, setGuardianProtocols] = useState<AdminProtocol[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     setLoading(true);
@@ -1510,6 +1511,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
       setOffers(found ? await listGuideOffers(found.user_id) : []);
       setValueRamps(found ? await listGuideValueRamps(found.user_id).catch(() => []) : []);
       setReviews(found ? await listGuardianReviews(found.user_id).catch(() => []) : []);
+      setGuardianProtocols(found ? (await listPublicProtocols('').catch(() => [])).filter((protocol) => protocol.user_id === found.user_id) : []);
     }).catch(() => { setProfile(null); setOffers([]); }).finally(() => setLoading(false));
   }, [slug]);
   if (loading) return <div style={{ minHeight: '100vh', background: black, color: ink, display: 'grid', placeItems: 'center', fontFamily: sans }}>Building Guardian page…</div>;
@@ -1550,7 +1552,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
       <GuardianOfferCatalog profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} />
       {reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}
       <GuardianFunnel key={selectedRamp?.id || 'default'} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} />
-      <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} />
+      <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} protocols={guardianProtocols} />
       <footer style={{ padding: `28px ${PAGE_X}`, borderTop: '1px solid rgba(17,18,15,.2)', color: '#66645F', fontSize: 11, lineHeight: 1.6 }}>
         {profile.display_name} shares general wellbeing guidance, not medical advice. Speak to your GP or doctor before changing medication, diet or exercise, and about any health concern. Individual results vary.
       </footer>

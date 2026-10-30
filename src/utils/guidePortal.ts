@@ -96,8 +96,6 @@ export interface GuideValueRamp {
   status: 'draft' | 'published';
   created_at: string;
   updated_at: string;
-  catalog_product_id?: string | null;
-  regional_storefronts?: Record<string, Partial<Pick<GuideProduct, 'shop_domain' | 'product_handle' | 'variant_id' | 'currency' | 'price_cents'>>>;
 }
 
 export interface GuideBrand {
@@ -666,6 +664,10 @@ export interface GuideProduct {
   updated_at: string;
   /** Protocols the product is shown on. */
   protocol_ids: string[];
+  /** Matching catalog product, used by Protocol steps. */
+  catalog_product_id?: string | null;
+  /** Store, variant and price overrides for each sales region. */
+  regional_storefronts?: Record<string, Partial<Pick<GuideProduct, 'shop_domain' | 'product_handle' | 'variant_id' | 'currency' | 'price_cents'>>>;
 }
 
 export type GuideProductInput = Omit<GuideProduct, 'id' | 'guide_id' | 'commission_percent' | 'created_at' | 'updated_at' | 'protocol_ids' | 'catalog_product_id' | 'regional_storefronts'>;
