@@ -42,7 +42,7 @@ import { CatalogIngredients, CatalogRecipes, FitnessRoutines } from './CatalogBr
 import { buildProtocolWithAI, foldSleepSteps, saveDraftStep, updateProtocolWithAI, listProtocolItems, createProtocol, findOrCreateProtocol, createProtocolItem, listProtocols, listPublicProtocols, restoreProtocol, type AdminProtocol } from '../../utils/protocolAdmin';
 import {
   recoverUpsellPayment, createGuideLead, createGuideOffer, createGuideRecipe, createGuideValueRamp, getGuideProfile, getGuideProfileBySlug,
-  importGuideProfile, listGuideLeads, listGuideOffers, listGuideRecipes, listGuideValueRamps, listRoutineOwners, upsertGuideOffer, upsertGuideValueRamp, listPublicGuideProfiles, saveGuideProfile, listGuardianReviews, listGuardianReviewRequests, createGuardianReviewRequest, submitGuardianReview, setGuardianReviewStatus, createOfferPayment, confirmOfferPayment, buyUpsellOneClick, getFreeOfferDownload, requestGuardianReview, decideGuardianSite, listAllGuideProfiles, listGuardianSuggestions, setGuardianSuggestionStatus, listPublicGuardianOffers, listReviewSummaries, type AdminGuideProfile, type GuardianSuggestionRow, type GuardianReview, type GuardianReviewRequest, submitGuardianSuggestion, submitGuardianOptIn,
+  importGuideProfile, listGuideLeads, listGuideOffers, listGuideProducts, listGuideRecipes, listGuideValueRamps, listRoutineOwners, upsertGuideOffer, upsertGuideValueRamp, listPublicGuideProfiles, saveGuideProfile, listGuardianReviews, listGuardianReviewRequests, createGuardianReviewRequest, submitGuardianReview, setGuardianReviewStatus, createOfferPayment, confirmOfferPayment, buyUpsellOneClick, getFreeOfferDownload, requestGuardianReview, decideGuardianSite, listAllGuideProfiles, listGuardianSuggestions, setGuardianSuggestionStatus, listPublicGuardianOffers, listReviewSummaries, type AdminGuideProfile, type GuardianSuggestionRow, type GuardianReview, type GuardianReviewRequest, submitGuardianSuggestion, submitGuardianOptIn,
   createGuideLibraryFolder, createGuideLibraryItem, deleteGuideLibraryItem, getGuideFileDownloadUrl,
   listGuideLibraryFolders, listGuideLibraryItems, replaceGuideBrands, listGuideBrands, updateGuideRecipe, saveGuideRecipeDraft, listPersonalProtocolPeople, uploadGuideFile, uploadGuideImage, uploadGuideLibraryAudio,
   updateGuideLead, deleteGuideLead, updateGuideValueRamp, deleteGuideValueRamp, deleteGuideRecipe, deleteGuideOffer,
@@ -3788,6 +3788,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
   useEffect(() => { setNavClosed([]); }, [tab]);
   const [leads, setLeads] = useState<GuideLead[]>([]);
   const [offers, setOffers] = useState<GuideOffer[]>([]);
+  const [productsCount, setProductsCount] = useState(0);
   const [recipes, setRecipes] = useState<GuideRecipe[]>([]);
   const [protocols, setProtocols] = useState<AdminProtocol[]>([]);
   // Delete flow: the protocol being removed (dialog open) and the last removal (notice, with Undo after an archive).
@@ -3844,7 +3845,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
   const [protocolRevision, setProtocolRevision] = useState(0);
   const [selectedLibraryIds, setSelectedLibraryIds] = useState<string[]>([]);
   const [builderLibrarySources, setBuilderLibrarySources] = useState<GuideLibraryItem[]>([]);
-  useEffect(() => { if (!user) return; Promise.all([listGuideLeads(user.id), listGuideOffers(user.id), listGuideRecipes(user.id), accessToken ? listProtocols(accessToken, user.id) : Promise.resolve([])]).then(([l,o,r,p]) => { setLeads(l); setOffers(o); setRecipes(r); setProtocols(p); }).catch(() => {}); listGuideValueRamps(user.id).then(setValueRamps).catch(() => setValueRamps([])); listRoutineOwners(user.id, profile.display_name, profile.avatar_url).then((owners) => { setRoutineOwners(owners); setRoutineOwnersReady(true); }).catch(() => {}); }, [user?.id, accessToken]);
+  useEffect(() => { if (!user) return; Promise.all([listGuideLeads(user.id), listGuideOffers(user.id), listGuideProducts(user.id), listGuideRecipes(user.id), accessToken ? listProtocols(accessToken, user.id) : Promise.resolve([])]).then(([l,o,products,r,p]) => { setLeads(l); setOffers(o); setProductsCount(products.length); setRecipes(r); setProtocols(p); }).catch(() => {}); listGuideValueRamps(user.id).then(setValueRamps).catch(() => setValueRamps([])); listRoutineOwners(user.id, profile.display_name, profile.avatar_url).then((owners) => { setRoutineOwners(owners); setRoutineOwnersReady(true); }).catch(() => {}); }, [user?.id, accessToken]);
   useEffect(() => {
     if (!accessToken || tab !== 'protocols') return;
     let live = true;
@@ -3857,6 +3858,15 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
     return () => { live = false; };
   }, [accessToken, tab]);
   const metric = useMemo(() => [{ n: leads.length, l: 'Leads' }, { n: valueRamps.length, l: 'Offers' }, { n: offers.length + recipes.length + protocols.length, l: 'Items' }, { n: protocols.length, l: 'R3 Protocols' }], [leads.length, offers.length, recipes.length, protocols.length, valueRamps.length]);
+  const offerInventory = useMemo(() => [
+    { label: 'Offer paths', count: valueRamps.length, tab: 'value_ramps' as Tab },
+    { label: 'Products', count: productsCount, tab: 'products' as Tab },
+    { label: 'R3 protocols', count: protocols.length, tab: 'protocols' as Tab },
+    { label: 'PDF guides', count: offers.filter((offer) => offer.kind === 'ebook').length, tab: 'offer_builder' as Tab },
+    { label: 'Recipe books', count: offers.filter((offer) => offer.kind === 'recipe_book').length, tab: 'offer_builder' as Tab },
+    { label: 'Calls & events', count: offers.filter((offer) => ['one_to_one_call', 'group_call', 'in_person', 'festival'].includes(offer.kind)).length, tab: 'offer_builder' as Tab },
+    { label: 'All offers', count: offers.length, tab: 'offer_builder' as Tab },
+  ], [offers, productsCount, protocols.length, valueRamps.length]);
   async function quickAdd() {
     if (!user || !newTitle.trim() || creating) return;
     setCreating(true); setCreateError('');
@@ -3877,15 +3887,12 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
   async function removeRecipe(row: GuideRecipe) { if (!user || !window.confirm(`Delete ${row.title}?`)) return; await deleteGuideRecipe(user.id, row.id); setRecipes((current) => current.filter((item) => item.id !== row.id)); }
   return <div style={{ minHeight: '100vh', background: black, color: ink, fontFamily: sans }}>
     <GuardianHeader isSignedIn activeTab={tab} displayName={profile.display_name} onNavigate={(next) => { setTab(next); setProtocolId(null); setRecipeId(null); setChildPlanId(null); setParentContext(null); }} onSignOut={signOut} />
-    {/* Profile → Site setup steps, kept as workspace context under the shared header. */}
-    <div aria-label="Guardian setup steps" style={{ padding: '0 clamp(20px,6vw,90px)', borderBottom: `1px solid ${line}` }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', display: 'grid', gridTemplateColumns: `repeat(${GUARDIAN_STEP_LABELS.length},1fr)` }}>
-        {GUARDIAN_STEP_LABELS.map((stepLabel, index) => <a key={stepLabel} href={guardianStepHref(stepLabel, index)} style={{ height: 50, display: 'grid', placeItems: 'center', borderRight: index < GUARDIAN_STEP_LABELS.length - 1 ? `1px solid ${line}` : 0, color: muted, textDecoration: 'none', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{String(index + 1).padStart(2, '0')} · {stepLabel}</a>)}
-      </div>
-    </div>
     <div style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr)', minHeight: 'calc(100vh - 63px)' }}>
       <div className="g-railwrap">
-        <aside className="g-rail" aria-label="Guardian sections"><a href="/guardians/workspace" title="Dashboard" style={{ display: 'flex', alignItems: 'center', gap: 12, height: 42, padding: '0 20px', marginBottom: 10, borderBottom: `1px solid ${line}`, color: ink, textDecoration: 'none', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}><LayoutDashboard size={16} style={{ flex: '0 0 auto' }} /><span className="g-rlabel">Dashboard</span></a>{navItems.map(({ id, label: n, Icon }) => {
+        <aside className="g-rail" aria-label="Guardian sections">
+          <div className="g-rlabel" style={{ padding: '12px 20px 6px', color: acid, fontSize: 8, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>Set up your Guardian</div>
+          {GUARDIAN_STEP_LABELS.map((stepLabel, index) => <a key={stepLabel} href={guardianStepHref(stepLabel, index)} title={stepLabel} style={{ display: 'flex', alignItems: 'center', gap: 11, height: 34, padding: '0 20px', color: muted, textDecoration: 'none', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}><span aria-hidden="true" style={{ width: 17, color: acid, fontSize: 8 }}>{String(index + 1).padStart(2, '0')}</span><span className="g-rlabel">{stepLabel}</span></a>)}
+          <a href="/guardians/workspace" title="Dashboard" style={{ display: 'flex', alignItems: 'center', gap: 12, height: 42, padding: '0 20px', margin: '10px 0', borderTop: `1px solid ${line}`, borderBottom: `1px solid ${line}`, color: ink, textDecoration: 'none', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}><LayoutDashboard size={16} style={{ flex: '0 0 auto' }} /><span className="g-rlabel">Dashboard</span></a>{navItems.map(({ id, label: n, Icon }) => {
           // Sub-pages sit under their family (Diet: Recipes, Cooking techniques, Cooking equipment; Fitness: Activities) as
           // smaller child rows on a tree line; the parent stays lit while one of its children is open.
           // Tree: Protocols > Diet / Fitness / Hygiene / Beauty / Wellness / Longevity > their pages. Each level indents
@@ -3907,7 +3914,11 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
             {parent && <span aria-hidden="true" style={{ position: 'absolute', left: lineX(depth), top: '50%', width: 6, borderTop: `1px solid ${line}` }} />}
             <button onClick={() => { setTab(id); setProtocolId(null); setRecipeId(null); setChildPlanId(null); setParentContext(null); }} title={n} aria-current={on ? 'page' : undefined} style={{ flex: 1, minWidth: 0, height: depth ? 34 : 42, border: 0, background: on ? '#1C1E19' : 'transparent', color: on || family ? ink : muted, display: 'flex', alignItems: 'center', gap: depth ? 10 : 12, padding: depth ? '0 20px 0 22px' : '0 20px', cursor: 'pointer', fontFamily: sans, fontSize: depth ? 10 : 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>            <Icon size={depth ? 13 : 16} style={{ flex: '0 0 auto', marginLeft: depth ? 6 + depth * 10 : 0, color: on ? acid : undefined }} /><span className="g-rlabel" style={{ flex: 1, textAlign: 'left' }}>{n}</span></button>
             {hasChildren && <button type="button" aria-label={`${isOpen(id) ? 'Fold' : 'Unfold'} ${n}`} aria-expanded={isOpen(id)} className="g-rlabel" onClick={() => { if (isOpen(id)) { setNavOpen((o) => o.filter((x) => x !== id)); setNavClosed((c) => [...c, id]); } else { setNavClosed((c) => c.filter((x) => x !== id)); setNavOpen((o) => [...o, id]); } }} style={{ border: 0, background: 'transparent', color: muted, cursor: 'pointer', padding: '0 14px 0 4px', display: 'inline-flex', alignItems: 'center' }}><ChevronRight size={12} style={{ transform: isOpen(id) ? 'rotate(90deg)' : undefined, transition: 'transform .15s ease' }} /></button>}
-          </div>; })}</aside>
+          </div>; })}
+          <div className="g-rlabel" aria-label="Offer inventory" style={{ margin: '4px 14px 14px 31px', padding: '6px 0 3px 13px', borderLeft: `1px solid ${line}` }}>
+            {offerInventory.map((item, index) => <button key={item.label} type="button" onClick={() => { setTab(item.tab); setProtocolId(null); setRecipeId(null); }} style={{ position: 'relative', width: '100%', height: 29, border: 0, background: 'transparent', color: item.tab === tab ? ink : muted, padding: '0 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, cursor: 'pointer', fontFamily: sans, fontSize: 9, fontWeight: item.label === 'All offers' ? 800 : 600, letterSpacing: '.04em', textAlign: 'left' }}><span aria-hidden="true" style={{ position: 'absolute', left: -13, top: '50%', width: 8, borderTop: `1px solid ${line}` }} /><span>{item.label}</span><span style={{ minWidth: 20, color: item.tab === tab ? acid : muted, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{item.count}</span>{item.label === 'All offers' && index === offerInventory.length - 1 ? <span aria-hidden="true" style={{ position: 'absolute', left: -14, bottom: -4, height: 18, borderLeft: `3px solid ${black}` }} /> : null}</button>)}
+          </div>
+        </aside>
       </div>
       {/* overflow-x clip, not hidden: hidden makes main a scroll container and breaks sticky columns inside (Diet planner). */}
       <main style={{ padding: 'clamp(26px,5vw,68px)', overflowX: 'clip' }}>
