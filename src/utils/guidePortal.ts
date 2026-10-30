@@ -96,6 +96,8 @@ export interface GuideValueRamp {
   status: 'draft' | 'published';
   created_at: string;
   updated_at: string;
+  catalog_product_id?: string | null;
+  regional_storefronts?: Record<string, Partial<Pick<GuideProduct, 'shop_domain' | 'product_handle' | 'variant_id' | 'currency' | 'price_cents'>>>;
 }
 
 export interface GuideBrand {
@@ -666,7 +668,7 @@ export interface GuideProduct {
   protocol_ids: string[];
 }
 
-export type GuideProductInput = Omit<GuideProduct, 'id' | 'guide_id' | 'commission_percent' | 'created_at' | 'updated_at' | 'protocol_ids'>;
+export type GuideProductInput = Omit<GuideProduct, 'id' | 'guide_id' | 'commission_percent' | 'created_at' | 'updated_at' | 'protocol_ids' | 'catalog_product_id' | 'regional_storefronts'>;
 
 // A missing table answers 404 with an empty body, so keep the status for the UI's message.
 function productsError(error: any, status: number): Error & { code?: string; status?: number } {

@@ -1156,7 +1156,6 @@ function GuardianFunnel({ profile, offers, ramp, accent, headingFont, reviews = 
   const ordered = orderFunnelOffers(offers, ramp);
   const entry = ordered.find((offer) => offer.access_model === 'free') || null;
   const nextPaid = ordered.find((offer) => offer.access_model === 'paid' && !SUPPORT_KINDS.includes(offer.kind)) || null;
-  const support = ordered.find((offer) => SUPPORT_KINDS.includes(offer.kind)) || null;
   const [form, setForm] = useState({ name: '', email: '', goal: '', consent: false });
   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
   const [checkoutOffer, setCheckoutOffer] = useState<GuideOffer | null>(null);
@@ -1199,37 +1198,21 @@ function GuardianFunnel({ profile, offers, ramp, accent, headingFont, reviews = 
   const eyebrow: React.CSSProperties = { color: accent, fontSize: 10, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase' };
   const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', height: 46, border: '1px solid #11120F', borderRadius: 2, padding: '0 14px', fontFamily: 'inherit', fontSize: 14, background: '#FFF', color: '#11120F', outline: 'none' };
   const solid: React.CSSProperties = { minHeight: 46, border: '1px solid #11120F', borderRadius: 2, background: '#11120F', color: '#FFF', padding: '0 20px', fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10, textDecoration: 'none', cursor: 'pointer' };
-  const steps = [entry, nextPaid, support].filter(Boolean) as GuideOffer[];
   // Pitch videos saved by the builder in social_links.offer_videos ('free' = lead magnet).
   const offerVideos = (() => { try { return JSON.parse(String((profile.social_links as Record<string, unknown> | null)?.offer_videos || '{}')) as Record<string, string>; } catch { return {} as Record<string, string>; } })();
   const leadVideo = offerVideos.free || '';
   return <>
     {checkoutOffer && <OfferCheckout key={checkoutOffer.id} offer={checkoutOffer} upsells={paidAfter(checkoutOffer)} profile={profile} accent={accent} reviews={reviews} videos={offerVideos} onFreshCheckout={setCheckoutOffer} onClose={() => setCheckoutOffer(null)} />}
     {!stripeConfig.enabled && ordered.some(offer => offer.access_model === 'paid' && offer.price_cents > 0 && !offer.booking_url) && <p role="status" style={{ padding: '16px 24px', textAlign: 'center', color: accent }}>{stripeConfig.error}</p>}
-    {steps.length > 0 && <section id="offers" style={{ padding: `clamp(60px,9vw,120px) ${PAGE_X}`, borderTop: '1px solid rgba(17,18,15,.2)' }}>
-      {/* App-style heading (Poppins, like the ROUTINE³ paywall): green label, bold title, muted subtitle. */}
-      <div style={{ fontFamily: APP.font, textAlign: 'center', margin: '0 auto 28px', maxWidth: 640 }}>
-        <span style={{ display: 'block', color: APP.greenDark, fontSize: 15, fontWeight: 600, marginBottom: 6 }}>{ramp?.problem ? ramp.problem : `Work with ${profile.display_name}`}</span>
-        <h2 style={{ ...HEADLINE_STYLES[headlineStyle].section, margin: '0 0 8px' }}>Your path, step by step{headlineStyle === 'editorial' ? '.' : ''}</h2>
-        <p style={{ color: APP.muted, fontSize: 15, fontWeight: 600, margin: 0 }}>Start free, then go deeper when you’re ready.</p>
-      </div>
-      {/* Same app-style offer cards as the hero, one per step of the path. */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,300px),360px))', justifyContent: 'center', gap: 18 }}>
-        {steps.map((offer, index) => { const free = index === 0 && offer.access_model === 'free'; return <ProductCard key={offer.id} {...reviewStats(reviews)} audience={audienceLabel(profile.social_links?.audience_details)} imageUrl={offer.cover_url} kind={offer.kind} eyebrow={`Step ${index + 1} · ${free ? 'Start free' : SUPPORT_KINDS.includes(offer.kind) ? 'Personal support' : 'Go deeper'}`} title={customerFacingOfferTitle(offer.title)} copy={offer.description || 'The next step in your journey.'} price={price(offer)} name={profile.display_name} avatarUrl={profile.avatar_url} accent={accent} cta={free ? 'Get it free' : sellsHere(offer) ? 'Get it now' : 'See what is included'} href={free ? '#start' : offerHref(offer)} onClick={free ? () => document.getElementById('start')?.scrollIntoView({ behavior: 'smooth' }) : sellsHere(offer) ? () => setCheckoutOffer(offer) : undefined} />; })}
-      </div>
-    </section>}
     {entry && <section id="start" style={{ padding: `clamp(60px,9vw,120px) ${PAGE_X}` }}>
-      {/* Same wide ROUTINE³ app-style card as the builder's sign-up preview: offer left, form in a white panel right. */}
-      <div {...tiltHandlers(3)} style={tiltStyle({ position: 'relative', maxWidth: 880, margin: '0 auto', background: APP.bg, color: APP.text, fontFamily: APP.font, borderRadius: 24, overflow: 'hidden', boxShadow: '0 20px 50px rgba(17,24,39,.14)', display: 'flex', flexWrap: 'wrap', alignItems: 'stretch' })}><GlowLayer />
-        <span style={{ position: 'absolute', zIndex: 2, top: 16, left: 16, background: '#000', color: '#FFF', borderRadius: 8, padding: '5px 10px', fontSize: 11, fontWeight: 600, letterSpacing: .5 }}>FREE</span>
-        <div style={{ flex: '1 1 340px', minWidth: 0, padding: '56px 28px 28px', display: 'grid', alignContent: 'start', justifyItems: 'start', textAlign: 'left' }}>
-          {leadVideo && state !== 'done' ? <video src={leadVideo} controls playsInline style={{ width: '100%', aspectRatio: '16 / 9', objectFit: 'cover', background: '#000', borderRadius: 12, marginBottom: 12 }} /> : <AppOfferImage kind={entry.kind} size={110} align="left" />}
-          <div style={{ margin: '12px 0 2px' }}><OfferFormatTag kind={entry.kind} /></div>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, margin: '12px 0 6px' }}>{profile.avatar_url ? <img src={profile.avatar_url} alt="" style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover' }} /> : <span style={{ width: 24, height: 24, borderRadius: '50%', background: APP.border, display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 600 }}>{(profile.display_name || 'G')[0]}</span>}<span style={{ color: APP.muted, fontSize: 13, fontWeight: 500 }}>{profile.display_name}</span></span>
-          <h2 style={{ fontFamily: APP.font, fontSize: 28, fontWeight: 600, lineHeight: '34px', letterSpacing: -0.5, margin: '0 0 6px' }}>{state === 'done' ? 'You’re in!' : entry.title}</h2>
-          <p style={{ color: APP.muted, fontSize: 16, fontWeight: 600, lineHeight: 1.45, margin: 0 }}>{state === 'done' ? `${entry.title} runs as a daily routine in the ROUTINE³ app, with reminders, so you keep going.` : entry.description || 'Get the guide and the interactive routine that goes with it.'}</p>
-        </div>
-        <div {...tiltHandlers(6)} style={tiltStyle({ flex: '1 1 320px', minWidth: 0, margin: 16, alignSelf: 'stretch', justifyContent: 'center', padding: '24px 22px 20px', background: APP.surface, borderRadius: 16, boxShadow: '0 2px 8px rgba(17,24,39,.08)', display: 'flex', flexDirection: 'column', gap: 12 })}><GlowLayer />
+      <div style={{ maxWidth: 720, margin: '0 auto 26px', textAlign: 'center', fontFamily: APP.font }}>
+        <span style={{ color: APP.greenDark, fontSize: 12, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Follow {profile.display_name}</span>
+        <h2 style={{ ...HEADLINE_STYLES[headlineStyle].section, margin: '10px 0 8px' }}>Get new guidance in your inbox.</h2>
+        <p style={{ color: APP.muted, fontSize: 15, fontWeight: 600, margin: 0 }}>Subscribe once and receive {entry.title} free.</p>
+      </div>
+      <div {...tiltHandlers(3)} style={tiltStyle({ position: 'relative', maxWidth: 620, margin: '0 auto', background: APP.bg, color: APP.text, fontFamily: APP.font, borderRadius: 24, overflow: 'hidden', boxShadow: '0 20px 50px rgba(17,24,39,.14)' })}><GlowLayer />
+        {leadVideo && state !== 'done' && <video src={leadVideo} controls playsInline style={{ width: '100%', aspectRatio: '16 / 9', objectFit: 'cover', background: '#000' }} />}
+        <div {...tiltHandlers(6)} style={tiltStyle({ minWidth: 0, margin: 16, justifyContent: 'center', padding: '24px 22px 20px', background: APP.surface, borderRadius: 16, boxShadow: '0 2px 8px rgba(17,24,39,.08)', display: 'flex', flexDirection: 'column', gap: 12 })}><GlowLayer />
           {state === 'done' ? <>
             {!nextPaid && <span style={{ width: 52, height: 52, margin: '0 auto 4px', borderRadius: '50%', background: APP.greenSoft, color: '#000', display: 'grid', placeItems: 'center' }}><Check size={24} /></span>}
             {nextPaid && <div style={{ border: `2px solid ${APP.green}`, borderRadius: 12, overflow: 'hidden', textAlign: 'center' }}>
@@ -1267,9 +1250,6 @@ function GuardianFunnel({ profile, offers, ramp, accent, headingFont, reviews = 
       {downloadError && <p role="alert" style={{ maxWidth: 880, margin: '8px auto 0', color: '#EF4444', fontFamily: APP.font, fontSize: 12 }}>{downloadError}</p>}
       {reviews.length > 0 && <div style={{ maxWidth: 880, margin: '24px auto 0', paddingTop: 20, borderTop: '1px solid rgba(17,24,39,.14)' }}><ReviewRail reviews={reviews} accent={APP.greenDark} /></div>}
     </section>}
-    <footer style={{ padding: `28px ${PAGE_X}`, borderTop: '1px solid rgba(17,18,15,.2)', color: '#66645F', fontSize: 11, lineHeight: 1.6 }}>
-      {profile.display_name} shares general wellbeing guidance, not medical advice. Speak to your GP or doctor before changing medication, diet or exercise, and about any health concern. Individual results vary.
-    </footer>
   </>;
 }
 
@@ -1461,6 +1441,10 @@ function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, a
   return <section style={{ position: 'relative', overflow: 'clip', minHeight: '100svh', display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', alignItems: 'center', backgroundImage: background && !backgroundIsVideo ? `linear-gradient(rgba(242,239,231,.66),rgba(242,239,231,.66)),url(${background})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: greyscale ? 'luminosity' : 'normal', color: '#11120F' }}>
     {background && backgroundIsVideo && <><video src={background} autoPlay muted loop playsInline aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'none' }} /><span aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'rgba(242,239,231,.66)' }} /></>}
     <div style={{ position: 'relative', zIndex: 2, width: '100%', maxWidth: 1240, margin: '0 auto', boxSizing: 'border-box', padding: 'clamp(40px,7cqw,96px) clamp(24px,6cqw,84px)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,300px),1fr))', gap: 'clamp(28px,5cqw,72px)', alignItems: 'start' }}>
+      <div style={{ display: 'grid', gap: 12, alignSelf: 'center' }}>
+        <span style={{ fontFamily: APP.font, color: APP.greenDark, fontSize: 15, fontWeight: 600 }}>Featured</span>
+        {cards.map((card) => <ProductCard key={card.key} {...reviewSummary} audience={audience} kind={card.kind} eyebrow={card.eyebrow} title={card.title} copy={card.copy} price={card.price} name={name} avatarUrl={avatarUrl} accent={accent} href={card.href} onClick={card.onClick} />)}
+      </div>
       <div style={{ alignSelf: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
           {avatarUrl ? <img src={avatarUrl} alt={name} style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'none' }} /> : <span style={{ width: 56, height: 56, borderRadius: '50%', background: '#D7D4CC', display: 'grid', placeItems: 'center', fontFamily: headingFont, fontSize: 24 }}>{(name || 'G').charAt(0)}</span>}
@@ -1470,12 +1454,10 @@ function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, a
         <h1 style={{ ...HEADLINE_STYLES[headlineStyle].hero, margin: '0 0 16px' }}>{HEADLINE_STYLES[headlineStyle].stripStop ? (headline || name).replace(/\.$/, '') : (headline || name)}</h1>
         <ExpertiseTags tags={tags} color={accent} />
         <p style={{ fontFamily: APP.font, color: APP.muted, fontSize: 16, fontWeight: 500, lineHeight: 1.55, maxWidth: 560, margin: 0 }}>{bio}</p>
-      </div>
-      <div style={{ display: 'grid', gap: 12 }}>
-        <span style={{ fontFamily: APP.font, color: APP.greenDark, fontSize: 15, fontWeight: 600 }}>Explore my offers</span>
-        {cards.map((card) => <Fragment key={card.key}>
-          <ProductCard {...reviewSummary} audience={audience} kind={card.kind} eyebrow={card.eyebrow} title={card.title} copy={card.copy} price={card.price} name={name} avatarUrl={avatarUrl} accent={accent} href={card.href} onClick={card.onClick} />
-        </Fragment>)}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 28, fontFamily: APP.font }}>
+          <a href="#start" style={{ minHeight: 48, padding: '0 22px', background: '#11120F', color: '#FFF', border: '1px solid #11120F', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase' }}>Follow by email</a>
+          <a href="#catalog" style={{ minHeight: 48, padding: '0 22px', background: 'transparent', color: '#11120F', border: '1px solid #11120F', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase' }}>See all offers</a>
+        </div>
       </div>
     </div>
   </section>;
@@ -1569,6 +1551,9 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
       {reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}
       <GuardianFunnel key={selectedRamp?.id || 'default'} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} />
       <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} />
+      <footer style={{ padding: `28px ${PAGE_X}`, borderTop: '1px solid rgba(17,18,15,.2)', color: '#66645F', fontSize: 11, lineHeight: 1.6 }}>
+        {profile.display_name} shares general wellbeing guidance, not medical advice. Speak to your GP or doctor before changing medication, diet or exercise, and about any health concern. Individual results vary.
+      </footer>
     </main>
   </div>;
 }

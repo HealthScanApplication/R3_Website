@@ -5,7 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { Check, Copy, ExternalLink, Loader2, Pencil, Plus, ShoppingBag, Trash2, X } from 'lucide-react';
 import { deleteGuideProduct, listGuideProducts, listPublicGuideProducts, saveGuideProduct, type GuideProduct } from '../../utils/guidePortal';
 import {
-  buildProductBuyUrl, formatProductPrice, importShopifyProduct, normalizeDiscountCode, parsePriceToCents, parseShopifyProductUrl,
+  buildProductBuyUrl, formatProductPrice, importShopifyProduct, normalizeDiscountCode, parsePriceToCents, parseShopifyProductUrl, regionalProduct,
   type ImportedShopifyVariant,
 } from '../../utils/guideProducts';
 
@@ -129,7 +129,7 @@ export function GuardianProducts({ guideId, guardianSlug, commissionPercent, pro
     catch { setMessage('Could not copy. Use the open button and copy the address instead.'); }
   }
 
-  const buyUrl = (product: Pick<GuideProduct, 'shop_domain' | 'product_handle' | 'variant_id' | 'title' | 'price_cents' | 'currency' | 'discount_code'>) => buildProductBuyUrl(product, { medium: 'web', guardianSlug });
+  const buyUrl = (product: GuideProduct) => buildProductBuyUrl(regionalProduct(product), { medium: 'web', guardianSlug });
 
   return <section>
     <div style={{ border: `1px solid ${line}`, background: panel, padding: 'clamp(24px,4vw,40px)', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 24, alignItems: 'end' }}>
@@ -177,7 +177,7 @@ export function GuardianProducts({ guideId, guardianSlug, commissionPercent, pro
           <div style={{ minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}><span style={{ color: product.status === 'published' ? acid : muted, fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{product.status === 'published' ? 'Live' : 'Draft'} · {product.shop_domain}{product.discount_code ? ` · code ${product.discount_code}` : ''}</span><span style={{ display: 'flex', gap: 5 }}><span style={{ border: `1px solid ${line}`, padding: '3px 6px', color: ink, fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>Yours</span><span style={{ border: `1px solid ${line}`, padding: '3px 6px', color: product.status === 'published' ? acid : muted, fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{product.status === 'published' ? 'Public' : 'Private'}</span></span></div>
             <h3 style={{ fontFamily: serif, fontSize: 22, fontWeight: 300, margin: '4px 0 3px' }}>{product.title}{product.variant_title ? <span style={{ color: muted, fontSize: 15 }}> · {product.variant_title}</span> : null}</h3>
-            <span style={{ color: muted, fontSize: 11 }}>{[formatProductPrice(product.price_cents, product.currency), onProtocols.length ? `On ${onProtocols.join(', ')}` : 'Not on a Protocol yet', !product.variant_id && 'opens the product page (no variant)'].filter(Boolean).join(' · ')}</span>
+            <span style={{ color: muted, fontSize: 11 }}>{[formatProductPrice(product.price_cents, product.currency), product.catalog_product_id && 'Official brand · catalog linked', onProtocols.length ? `On ${onProtocols.join(', ')}` : 'Not on a Protocol yet', !product.variant_id && 'opens the product page (no variant)'].filter(Boolean).join(' · ')}</span>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             <a href={buyUrl(product)} target="_blank" rel="noopener noreferrer" title="Open buy link" aria-label={`Open buy link for ${product.title}`} style={{ ...iconBtn, textDecoration: 'none' }}><ExternalLink size={14} /></a>
@@ -209,18 +209,18 @@ export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding 
       <p style={{ color: APP.muted, fontSize: 15, fontWeight: 600, margin: 0 }}>Every published product, bought directly from {guardianName}’s own store.</p>
     </div>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,240px),280px))', justifyContent: 'center', gap: 18 }}>
-      {products.map((product) => <article key={product.id} style={{ background: APP.surface, border: `1px solid ${APP.border}`, borderRadius: 20, overflow: 'hidden', display: 'flex', flexDirection: 'column', fontFamily: APP.font, color: APP.text }}>
+      {products.map((product) => { const regional = regionalProduct(product); return <article key={product.id} style={{ background: APP.surface, border: `1px solid ${APP.border}`, borderRadius: 20, overflow: 'hidden', display: 'flex', flexDirection: 'column', fontFamily: APP.font, color: APP.text }}>
         {product.image_url ? <img src={product.image_url} alt="" loading="lazy" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', background: '#F6F8FA' }} /> : <div style={{ aspectRatio: '1', display: 'grid', placeItems: 'center', background: '#F6F8FA', color: APP.muted }}><ShoppingBag size={40} strokeWidth={1.2} /></div>}
         <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, lineHeight: 1.3 }}>{product.title}</h3>
           {product.description && <p style={{ color: APP.muted, fontSize: 13, lineHeight: 1.5, margin: 0 }}>{product.description.length > 140 ? `${product.description.slice(0, 139)}…` : product.description}</p>}
           <div style={{ marginTop: 'auto', paddingTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-            <strong style={{ fontSize: 15 }}>{formatProductPrice(product.price_cents, product.currency)}</strong>
-            <a href={buildProductBuyUrl(product, { medium: 'web', guardianSlug, protocolSlug: null })} target="_blank" rel="noopener noreferrer" style={{ background: '#000', color: '#FFF', borderRadius: 12, padding: '10px 16px', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>Buy</a>
+            <strong style={{ fontSize: 15 }}>{regional.price_cents == null ? 'See local price' : formatProductPrice(regional.price_cents, regional.currency)}</strong>
+            <a href={buildProductBuyUrl(regional, { medium: 'web', guardianSlug, protocolSlug: null })} target="_blank" rel="noopener noreferrer" style={{ background: '#000', color: '#FFF', borderRadius: 12, padding: '10px 16px', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>{regional.variant_id ? 'Add to basket' : 'View product'}</a>
           </div>
           {product.discount_code && <span style={{ color: APP.greenDark, fontSize: 11, fontWeight: 600 }}>Code {product.discount_code} applied at checkout</span>}
         </div>
-      </article>)}
+      </article>; })}
     </div>
   </section>;
 }
