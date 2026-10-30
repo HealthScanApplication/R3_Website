@@ -1298,12 +1298,12 @@ const PAGE_X = 'max(clamp(24px,6vw,84px), calc((100% - 1240px) / 2 + clamp(24px,
 type HeadlineStyle = 'editorial' | 'app' | 'statement';
 const HEADLINE_STYLES: Record<HeadlineStyle, { label: string; hero: React.CSSProperties; section: React.CSSProperties; stripStop?: boolean }> = {
   editorial: { label: 'Editorial serif', hero: { fontFamily: serif, fontWeight: 300, fontSize: 'clamp(46px,7cqw,96px)', lineHeight: .95, letterSpacing: '-.035em', color: '#11120F' }, section: { fontFamily: serif, fontWeight: 300, fontSize: 'clamp(36px,5vw,58px)', lineHeight: 1, letterSpacing: '-.02em', color: '#11120F' } },
-  app: { label: 'App bold', stripStop: true, hero: { fontFamily: "'Poppins', 'Inter', sans-serif", fontWeight: 700, fontSize: 'clamp(36px,5.2cqw,60px)', lineHeight: 1.08, letterSpacing: '-.03em', color: '#111827' }, section: { fontFamily: "'Poppins', 'Inter', sans-serif", fontWeight: 700, fontSize: 'clamp(28px,4vw,36px)', lineHeight: 1.2, letterSpacing: -0.8, color: '#111827' } },
-  statement: { label: 'Statement caps', stripStop: true, hero: { fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 700, fontSize: 'clamp(34px,5cqw,64px)', lineHeight: 1, letterSpacing: '.02em', textTransform: 'uppercase', color: '#11120F' }, section: { fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 700, fontSize: 'clamp(24px,3.4vw,34px)', lineHeight: 1.1, letterSpacing: '.04em', textTransform: 'uppercase', color: '#11120F' } },
+  app: { label: 'App bold', stripStop: true, hero: { fontFamily: sans, fontWeight: 700, fontSize: 'clamp(36px,5.2cqw,60px)', lineHeight: 1.08, letterSpacing: '-.03em', color: '#111827' }, section: { fontFamily: sans, fontWeight: 700, fontSize: 'clamp(28px,4vw,36px)', lineHeight: 1.2, letterSpacing: -0.8, color: '#111827' } },
+  statement: { label: 'Statement caps', stripStop: true, hero: { fontFamily: sans, fontWeight: 700, fontSize: 'clamp(34px,5cqw,64px)', lineHeight: 1, letterSpacing: '.02em', textTransform: 'uppercase', color: '#11120F' }, section: { fontFamily: sans, fontWeight: 700, fontSize: 'clamp(24px,3.4vw,34px)', lineHeight: 1.1, letterSpacing: '.04em', textTransform: 'uppercase', color: '#11120F' } },
 };
 const headlineStyleOf = (value?: string | null): HeadlineStyle => value === 'app' || value === 'statement' ? value : 'editorial';
 // ROUTINE³ iOS app look (mobile repo: Paywall.tsx, SignUpScreen.tsx, designTokens.ts) for the sign-up and upsell pages.
-const APP = { bg: '#F2F4F7', surface: '#FFFFFF', alt: '#F6F8FA', text: '#111827', muted: '#6B7280', faint: '#9CA3AF', border: '#E5E7EB', green: '#10B981', greenDark: '#047857', greenSoft: '#86EFAC', font: "'Poppins', 'Inter', sans-serif" };
+const APP = { bg: '#F2F4F7', surface: '#FFFFFF', alt: '#F6F8FA', text: '#111827', muted: '#6B7280', faint: '#9CA3AF', border: '#E5E7EB', green: '#10B981', greenDark: '#047857', greenSoft: '#86EFAC', font: sans };
 const appButton: React.CSSProperties = { width: '100%', minHeight: 56, border: 0, borderRadius: 16, background: '#000', color: '#FFF', fontFamily: APP.font, cursor: 'pointer', display: 'grid', placeItems: 'center', padding: '8px 16px', boxSizing: 'border-box' };
 // Format tag for Protocol offers: printable PDF plus the interactive version in the ROUTINE³ app.
 const ProtocolFormatTag = () => <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: APP.text, fontFamily: APP.font, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}><span style={{ ...boxTag, background: '#F5F2EA' }}><FileText size={11} />Printed PDF</span><span aria-hidden="true" style={{ color: '#F5F2EA', fontWeight: 800 }}>+</span><span style={{ ...boxTag, background: '#F5F2EA' }}>R3 Protocol</span></span>;
@@ -1465,11 +1465,18 @@ function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, a
       setCaptureState('done');
     } catch { setCaptureState('error'); }
   }
-  return <section style={{ position: 'relative', overflow: 'clip', minHeight: 'calc(100svh - 64px)', display: 'grid', alignItems: 'end', background: '#151A12', color: '#FFF' }}>
+  const goTo = (id: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
+    const target = document.getElementById(id);
+    if (!target) return;
+    event.preventDefault();
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    window.history.replaceState(null, '', `#${id}`);
+  };
+  return <section style={{ position: 'relative', overflow: 'clip', minHeight: 'calc(100svh - 64px)', display: 'grid', alignItems: 'center', background: '#151A12', color: '#FFF' }}>
     {heroMedia && !backgroundIsVideo && <img src={heroMedia} alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />}
     {heroMedia && backgroundIsVideo && <video src={heroMedia} autoPlay muted loop playsInline aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />}
     <span aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,rgba(8,10,7,.88) 0%,rgba(8,10,7,.62) 48%,rgba(8,10,7,.18) 100%),linear-gradient(0deg,rgba(8,10,7,.72),transparent 55%)' }} />
-    <div style={{ position: 'relative', zIndex: 2, width: '100%', maxWidth: 1240, margin: '0 auto', boxSizing: 'border-box', padding: 'clamp(52px,8vw,110px) clamp(24px,6vw,84px)', display: 'grid', gridTemplateColumns: 'minmax(0,720px)', alignItems: 'end' }}>
+    <div style={{ position: 'relative', zIndex: 2, width: '100%', maxWidth: 1240, margin: '0 auto', boxSizing: 'border-box', padding: 'clamp(76px,10vh,120px) clamp(24px,6vw,84px)', display: 'grid', gridTemplateColumns: 'minmax(0,720px)', alignItems: 'center' }}>
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
           {avatarUrl ? <img src={avatarUrl} alt={name} style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'none' }} /> : <span style={{ width: 56, height: 56, borderRadius: '50%', background: '#D7D4CC', display: 'grid', placeItems: 'center', fontFamily: headingFont, fontSize: 24 }}>{(name || 'G').charAt(0)}</span>}
@@ -1478,15 +1485,15 @@ function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, a
         <h1 style={{ ...HEADLINE_STYLES[headlineStyle].hero, color: '#FFF', fontSize: 'clamp(48px,7vw,96px)', textShadow: '0 2px 28px rgba(0,0,0,.28)', margin: '0 0 16px' }}>{HEADLINE_STYLES[headlineStyle].stripStop ? (headline || name).replace(/\.$/, '') : (headline || name)}</h1>
         <ExpertiseTags tags={tags} color={accent} />
         <p style={{ fontFamily: APP.font, color: 'rgba(255,255,255,.82)', fontSize: 16, fontWeight: 500, lineHeight: 1.55, maxWidth: 590, margin: 0 }}>{bio}</p>
-        <form onSubmit={capture} style={{ display: 'flex', flexWrap: 'wrap', maxWidth: 590, marginTop: 28, fontFamily: APP.font }}>
+        <form onSubmit={capture} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', width: '100%', maxWidth: 590, marginTop: 28, fontFamily: APP.font }}>
           <label htmlFor="guardian-hero-email" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)' }}>Email address</label>
-          <span style={{ flex: '1 1 260px', minHeight: 54, display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px', boxSizing: 'border-box', background: 'rgba(255,255,255,.95)', color: '#11120F' }}><Mail size={18} /><input id="guardian-hero-email" required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Enter your email address" style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', color: '#11120F', font: 'inherit' }} /></span>
-          <button disabled={captureState === 'sending' || captureState === 'done'} style={{ minHeight: 54, padding: '0 22px', border: '1px solid #D6E7A8', background: '#D6E7A8', color: '#11120F', fontSize: 11, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer' }}>{captureState === 'done' ? 'You’re subscribed' : captureState === 'sending' ? 'Joining…' : 'Follow by email'}</button>
+          <span style={{ minWidth: 0, minHeight: 54, display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px', boxSizing: 'border-box', border: '1px solid rgba(255,255,255,.94)', borderRight: 0, background: 'rgba(255,255,255,.95)', color: '#11120F' }}><Mail size={18} /><input id="guardian-hero-email" required type="email" autoComplete="email" value={email} onChange={(event) => { setEmail(event.target.value); if (captureState === 'error') setCaptureState('idle'); }} placeholder="Enter your email address" style={{ width: '100%', minWidth: 0, border: 0, outline: 0, background: 'transparent', color: '#11120F', font: 'inherit' }} /></span>
+          <button type="submit" disabled={captureState === 'sending' || captureState === 'done'} style={{ minHeight: 54, padding: '0 clamp(14px,2vw,22px)', border: '1px solid #D6E7A8', background: '#D6E7A8', color: '#11120F', fontFamily: APP.font, fontSize: 11, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: captureState === 'sending' || captureState === 'done' ? 'default' : 'pointer', opacity: captureState === 'sending' ? .7 : 1 }}>{captureState === 'done' ? 'You’re subscribed' : captureState === 'sending' ? 'Joining…' : 'Follow by email'}</button>
         </form>
         {captureState === 'error' && <span role="alert" style={{ display: 'block', color: '#FFD0C8', fontFamily: APP.font, fontSize: 12, marginTop: 8 }}>We could not add your email. Please try again.</span>}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 14, fontFamily: APP.font }}>
-          <a href="#catalog" style={{ minHeight: 46, padding: '0 18px', background: '#FFF', color: '#11120F', border: '1px solid #FFF', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>Explore protocols</a>
-          <a href="#shop" style={{ minHeight: 46, padding: '0 18px', background: 'rgba(8,10,7,.3)', color: '#FFF', border: '1px solid rgba(255,255,255,.7)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>Shop products</a>
+          <a href="#catalog" onClick={goTo('catalog')} style={{ minHeight: 46, padding: '0 18px', background: '#FFF', color: '#11120F', border: '1px solid #FFF', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>Explore protocols</a>
+          <a href="#shop" onClick={goTo('shop')} style={{ minHeight: 46, padding: '0 18px', background: 'rgba(8,10,7,.3)', color: '#FFF', border: '1px solid rgba(255,255,255,.7)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>Shop products</a>
         </div>
       </div>
     </div>
@@ -1577,7 +1584,7 @@ function GuardianSiteHeader({ brandName, path, right }: { brandName?: string; pa
 
 function PublicLocaleBar({ value, onChange }: { value: GuardianLocalePreference; onChange: (value: GuardianLocalePreference) => void }) {
   const field: React.CSSProperties = { border: 0, background: 'transparent', color: '#11120F', fontFamily: APP.font, fontSize: 10, fontWeight: 700, outline: 0, cursor: 'pointer', maxWidth: 116 };
-  return <aside aria-label="Location, language and currency" style={{ position: 'fixed', zIndex: 100, top: 10, right: 12, display: 'flex', alignItems: 'center', gap: 6, minHeight: 42, padding: '0 10px', border: '1px solid rgba(17,18,15,.2)', borderRadius: 4, background: 'rgba(255,255,255,.96)', color: '#11120F', boxShadow: '0 8px 28px rgba(0,0,0,.12)', backdropFilter: 'blur(12px)' }}>
+  return <aside aria-label="Location, language and currency" style={{ position: 'fixed', zIndex: 100, top: 76, right: 'clamp(8px,2vw,20px)', maxWidth: 'calc(100vw - 16px)', display: 'flex', alignItems: 'center', gap: 6, minHeight: 42, padding: '0 10px', boxSizing: 'border-box', border: '1px solid rgba(17,18,15,.2)', borderRadius: 4, background: 'rgba(255,255,255,.96)', color: '#11120F', boxShadow: '0 8px 28px rgba(0,0,0,.12)', backdropFilter: 'blur(12px)', fontFamily: APP.font }}>
     <Globe2 size={14} aria-hidden="true" />
     <select aria-label="Store region" value={value.region} onChange={(event) => { const option = pricingRegions.find((item) => item.region === event.target.value) || pricingRegions[0]; onChange({ ...value, region: option.region, currency: option.currency }); }} style={field}>{pricingRegions.map((option) => <option key={option.region} value={option.region}>{option.region}</option>)}</select>
     <span aria-hidden="true" style={{ color: 'rgba(17,18,15,.3)' }}>·</span>
@@ -1632,7 +1639,8 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   const publicHeaderBackground = '#FFFFFF';
   const publicHeaderText = '#11120F';
   const publicExpertiseTags = parseExpertiseTags(socials.expertise_tags);
-  return <div lang={publicLanguage} dir={publicLanguage === 'ar' ? 'rtl' : 'ltr'} style={{ minHeight: '100vh', background: publicPageColor, color: '#11120F', fontFamily: publicBodyFont }}>
+  return <div className="guardian-public-site" lang={publicLanguage} dir={publicLanguage === 'ar' ? 'rtl' : 'ltr'} style={{ minHeight: '100vh', background: publicPageColor, color: '#11120F', fontFamily: publicBodyFont }}>
+    <style>{`.guardian-public-site button,.guardian-public-site input,.guardian-public-site select,.guardian-public-site textarea{font-family:${sans}}.guardian-public-site a{font-family:inherit}.guardian-public-site h1,.guardian-public-site h2,.guardian-public-site h3{font-synthesis:none}`}</style>
     <PublicLocaleBar value={localePreference} onChange={updateLocalePreference} />
     {publicHeaderStyle !== 'hidden' && <header style={{ minHeight: 64, background: publicHeaderBackground, color: publicHeaderText, borderBottom: '1px solid rgba(17,18,15,.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18, padding: '0 clamp(20px,6vw,84px)', flexWrap: 'wrap' }}>
       <a href="/" aria-label="ROUTINE³" style={{ color: publicHeaderText, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 12 }}><RoutineMark size={32} textColor="#16140F" hairline="#16140F" />{socials.brand_name && <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.12em' }}>{socials.brand_name}</span>}</a>
