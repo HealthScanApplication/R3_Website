@@ -39,7 +39,17 @@ export function LoadingScreen() {
   const [frame, setFrame] = useState(0);
   useEffect(() => {
     let live = true;
-    LOADER_FRAMES.forEach((src) => { const img = new Image(); img.onload = () => { if (live) setReady((r) => (r.includes(src) ? r : LOADER_FRAMES.filter((f) => f === src || r.includes(f)))); }; img.src = src; });
+    // One frame at a time, so the flipbook never takes the network from the page it is covering for (the next frame is
+    // asked for only once the last has arrived or failed).
+    const load = (i: number) => {
+      if (!live || i >= LOADER_FRAMES.length) return;
+      const src = LOADER_FRAMES[i];
+      const img = new Image();
+      img.onload = () => { if (live) setReady((r) => (r.includes(src) ? r : LOADER_FRAMES.filter((f) => f === src || r.includes(f)))); load(i + 1); };
+      img.onerror = () => load(i + 1);
+      img.src = src;
+    };
+    load(0);
     const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     const t = still ? 0 : window.setInterval(() => setFrame((n) => n + 1), 420);
     return () => { live = false; if (t) window.clearInterval(t); };
