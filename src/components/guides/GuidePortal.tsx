@@ -41,7 +41,7 @@ import { CookingEquipment, CookingTechniques } from './CookingLibrary';
 import { CatalogIngredients, CatalogRecipes, FitnessRoutines } from './CatalogBrowsers';
 import { buildProtocolWithAI, foldSleepSteps, saveDraftStep, updateProtocolWithAI, listProtocolItems, createProtocol, findOrCreateProtocol, createProtocolItem, listProtocols, listPublicProtocols, restoreProtocol, type AdminProtocol } from '../../utils/protocolAdmin';
 import {
-  recoverUpsellPayment, createGuideLead, createGuideOffer, createGuideRecipe, createGuideValueRamp, getGuideProfile, getGuideProfileBySlug,
+  recoverUpsellPayment, createGuideLead, createGuideOffer, createGuideRecipe, createGuideValueRamp, getGuideProfile, getGuideProfileBySlug, canonicalGuideSlug,
   importGuideProfile, listGuideLeads, listGuideOffers, listGuideProducts, listGuideRecipes, listGuideValueRamps, listRoutineOwners, upsertGuideOffer, upsertGuideValueRamp, listPublicGuideProfiles, saveGuideProfile, listGuardianReviews, listGuardianReviewRequests, createGuardianReviewRequest, submitGuardianReview, setGuardianReviewStatus, createOfferPayment, confirmOfferPayment, buyUpsellOneClick, getFreeOfferDownload, requestGuardianReview, decideGuardianSite, listAllGuideProfiles, listGuardianSuggestions, setGuardianSuggestionStatus, listPublicGuardianOffers, listReviewSummaries, type AdminGuideProfile, type GuardianSuggestionRow, type GuardianReview, type GuardianReviewRequest, submitGuardianSuggestion, submitGuardianOptIn,
   createGuideLibraryFolder, createGuideLibraryItem, deleteGuideLibraryItem, getGuideFileDownloadUrl,
   listGuideLibraryFolders, listGuideLibraryItems, replaceGuideBrands, listGuideBrands, updateGuideRecipe, saveGuideRecipeDraft, listPersonalProtocolPeople, uploadGuideFile, uploadGuideImage, uploadGuideLibraryAudio,
@@ -4264,15 +4264,21 @@ function GuidePortalRoutes() {
   const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
   const isWorkspaceRoute = pathname === '/guardians/workspace';
   const communityRoute = pathname.match(/^\/guardians\/([^/]+)\/community\/([^/]+)$/);
-  const routeSlug = pathname.match(/^\/guardians\/([^/]+)(?:\/value-ramp\/[^/]+)?$/)?.[1] || null;
+  const rawRouteSlug = pathname.match(/^\/guardians\/([^/]+)(?:\/value-ramp\/[^/]+)?$/)?.[1] || null;
+  const routeSlug = rawRouteSlug ? canonicalGuideSlug(rawRouteSlug) : null;
   const [profile, setProfile] = useState<GuideProfile | null>(null);
   const [checking, setChecking] = useState(true);
+  useEffect(() => {
+    if (!rawRouteSlug || !routeSlug || rawRouteSlug === routeSlug) return;
+    const canonicalPath = pathname.replace(`/guardians/${rawRouteSlug}`, `/guardians/${routeSlug}`);
+    window.history.replaceState({}, '', `${canonicalPath}${window.location.search}${window.location.hash}`);
+  }, [pathname, rawRouteSlug, routeSlug]);
   useEffect(() => {
     if (!user) { setProfile(null); setChecking(false); return; }
     setChecking(true); getGuideProfile(user.id).then(setProfile).catch(() => setProfile(null)).finally(() => setChecking(false));
   }, [user?.id]);
-  if (communityRoute) return <GuardianCommunityPage guardianSlug={decodeURIComponent(communityRoute[1])} channelSlug={decodeURIComponent(communityRoute[2])} />;
-  if (routeSlug && !isWorkspaceRoute) return <GuardianWebsite slug={decodeURIComponent(routeSlug)} isSignedIn={Boolean(user)} />;
+  if (communityRoute) return <GuardianCommunityPage guardianSlug={canonicalGuideSlug(communityRoute[1])} channelSlug={decodeURIComponent(communityRoute[2])} />;
+  if (routeSlug && !isWorkspaceRoute) return <GuardianWebsite slug={routeSlug} isSignedIn={Boolean(user)} />;
   if (!isWorkspaceRoute) return <PublicGuidePage isSignedIn={Boolean(user)} />;
   if (loading || checking) return <div style={{ minHeight: '100vh', background: black, color: ink, display: 'grid', placeItems: 'center', fontFamily: sans }}>Opening Guardian workspace…</div>;
   if (!user) return <PublicGuidePage isSignedIn={false} />;

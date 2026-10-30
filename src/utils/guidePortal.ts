@@ -188,6 +188,18 @@ export async function uploadGuideLibraryAudio(userId: string, file: File): Promi
 
 const db = () => getSupabaseClient();
 
+/** Historical public slugs that belong to an existing Guardian profile. */
+const GUIDE_SLUG_ALIASES: Record<string, string> = {
+  'barbara-o-neill': 'barbara-oneill',
+};
+
+export function canonicalGuideSlug(slug: string): string {
+  let decoded = slug;
+  try { decoded = decodeURIComponent(slug); } catch { /* Keep malformed route text stable. */ }
+  const normalized = decoded.trim().toLowerCase();
+  return GUIDE_SLUG_ALIASES[normalized] || normalized;
+}
+
 export async function importGuideProfile(urls: string[], accessToken: string): Promise<ImportedGuideProfile> {
   const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-ed0fe4c2/guides/import-profile`, {
     method: 'POST',
@@ -210,7 +222,8 @@ export async function getGuideProfile(userId: string): Promise<GuideProfile | nu
 }
 
 export async function getGuideProfileBySlug(slug: string): Promise<GuideProfile | null> {
-  const { data, error } = await db().from('guide_profiles').select('*').eq('slug', slug).maybeSingle();
+  const canonicalSlug = canonicalGuideSlug(slug);
+  const { data, error } = await db().from('guide_profiles').select('*').eq('slug', canonicalSlug).maybeSingle();
   if (error) throw error;
   return data as GuideProfile | null;
 }
@@ -221,7 +234,18 @@ export async function listPublicGuideProfiles(): Promise<GuideProfile[]> {
     .eq('status', 'approved')
     .order('display_name', { ascending: true });
   if (error) throw error;
-  return (data || []) as GuideProfile[];
+  const profiles = (data || []) as GuideProfile[];
+  const byCanonicalSlug = new Map<string, GuideProfile>();
+  for (const profile of profiles) {
+    const canonicalSlug = canonicalGuideSlug(profile.slug);
+    const existing = byCanonicalSlug.get(canonicalSlug);
+    // Prefer the canonical database record: its user_id owns the offers,
+    // products, reviews and Protocols shown on the combined profile site.
+    if (!existing || profile.slug === canonicalSlug) {
+      byCanonicalSlug.set(canonicalSlug, { ...profile, slug: canonicalSlug });
+    }
+  }
+  return [...byCanonicalSlug.values()];
 }
 
 export interface GuardianSuggestion {
@@ -340,7 +364,7 @@ export async function saveOfferCommunityChannel(guideId: string, offerId: string
 }
 
 export async function getCommunityChannelByRoute(guardianSlug: string, channelSlug: string): Promise<GuideCommunityChannel | null> {
-  const { data: guide, error: guideError } = await db().from('guide_profiles').select('user_id').eq('slug', guardianSlug).eq('status', 'approved').maybeSingle();
+  const { data: guide, error: guideError } = await db().from('guide_profiles').select('user_id').eq('slug', canonicalGuideSlug(guardianSlug)).eq('status', 'approved').maybeSingle();
   if (guideError) throw guideError;
   if (!guide) return null;
   const { data, error } = await db().from('guide_community_channels').select('*').eq('guide_id', guide.user_id).eq('slug', channelSlug).maybeSingle();
