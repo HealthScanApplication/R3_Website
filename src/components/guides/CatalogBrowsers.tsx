@@ -53,7 +53,8 @@ function FoodGrid({ items, renderExtra }: { items: CatalogFood[]; renderExtra?: 
     {items.map((f) => <Fragment key={f.id}>
       <button type="button" aria-pressed={open === f.id} onClick={() => setOpen(open === f.id ? null : f.id)} style={{ textAlign: 'left', border: `1px solid ${open === f.id ? acid : line}`, background: panel, color: ink, padding: 0, cursor: 'pointer', overflow: 'hidden' }}>
         <div style={{ position: 'relative', aspectRatio: '4 / 3', background: f.image ? `url(${f.image}) center/cover` : '#1B1C18' }}>
-          {f.healthScore != null && <span aria-label={`Health score ${Math.round(f.healthScore)}`} style={{ position: 'absolute', top: 6, right: 6, display: 'inline-flex', alignItems: 'center', gap: 3, background: 'rgba(9,10,8,.82)', color: acid, border: `1px solid ${acid}`, borderRadius: 999, padding: '2px 7px', fontSize: 11, fontWeight: 700 }}><Heart size={10} aria-hidden="true" />{Math.round(f.healthScore)}</span>}
+          <span style={{ position: 'absolute', top: 6, right: 6, zIndex: 1, padding: '3px 6px', border: `1px solid ${line}`, background: 'rgba(9,10,8,.82)', color: ink, fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>Public</span>
+          {f.healthScore != null && <span aria-label={`Health score ${Math.round(f.healthScore)}`} style={{ position: 'absolute', top: 30, right: 6, display: 'inline-flex', alignItems: 'center', gap: 3, background: 'rgba(9,10,8,.82)', color: acid, border: `1px solid ${acid}`, borderRadius: 999, padding: '2px 7px', fontSize: 11, fontWeight: 700 }}><Heart size={10} aria-hidden="true" />{Math.round(f.healthScore)}</span>}
           {f.processing && <span style={{ position: 'absolute', left: 6, bottom: 6, background: 'rgba(9,10,8,.82)', color: ink, border: `1px solid ${line}`, borderRadius: 3, padding: '1px 6px', fontSize: 10 }}>{f.processing}</span>}
         </div>
         <div style={{ padding: '8px 10px 10px' }}>
@@ -555,7 +556,7 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
     <h3 style={{ ...kicker, color: acid, margin: '0 0 8px' }}>{period} <span style={{ color: muted }}>· {group.length}</span></h3>
     <ProtocolCardGrid>
       {group.map((r) => <Fragment key={r.id}>
-        <ProtocolCard pressed={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)} imageUrl={r.image} kicker={routinePeriod(r)} tags={routineTags(r)} title={r.name} copy={clipCopy(descriptionParagraphs(r.description)[0])} cta={open === r.id ? 'Hide steps' : 'View steps'} />
+        <ProtocolCard pressed={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)} imageUrl={r.image} kicker={routinePeriod(r)} tags={routineTags(r)} title={r.name} copy={clipCopy(descriptionParagraphs(r.description)[0])} owned={r.tags.includes('your plan')} visibility={r.tags.includes('your plan') ? 'private' : 'public'} cta={open === r.id ? 'Hide steps' : 'View steps'} />
         {open === r.id && <div role="region" aria-label={`${r.name} steps`} style={{ gridColumn: '1 / -1', border: `1px solid ${acid}`, background: '#141611', padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 20, alignItems: 'start' }}>
           <div aria-label="As in the app" style={{ display: 'grid', justifyItems: 'center', gap: 8 }}>
             <div style={{ ...kicker, margin: 0 }}>As in the app{days > 1 ? (weekdays ? ` · ${dayName(day)}` : ` · day ${day} of ${days}${days > 7 ? ` · week ${Math.ceil(day / 7)}` : ''}`) : ''}</div>

@@ -50,6 +50,9 @@ export const PROTOCOL_CARD_CSS = `
 .r3-pcard-badge{position:absolute;z-index:2;top:12px;left:12px;padding:6px 10px;border-radius:2px;background:#F5F2EA;color:#11120F;font-size:10px;font-weight:700;letter-spacing:.12em;line-height:1;text-transform:uppercase}
 .r3-pcard-corner{position:absolute;z-index:2;top:12px;right:12px;display:flex;flex-direction:column;align-items:flex-end;gap:6px;max-width:calc(100% - 100px)}
 .r3-pcard-corner>*{padding:4px 6px;border-radius:2px;background:rgba(245,242,234,.94);max-width:100%;box-sizing:border-box}
+.r3-pcard-corner>[data-card-owner=yours]{background:#11120F;color:#FFF;border:1px solid rgba(255,255,255,.48);font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+.r3-pcard-corner>[data-card-visibility]{border:1px solid rgba(17,18,15,.35);color:#11120F;font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+.r3-pcard-corner>[data-card-visibility=private]{background:#E7E1D6;color:#4B453D}
 .r3-pcard:hover .r3-pcard-img,.r3-pcard:focus-within .r3-pcard-img,.r3-pcard[data-pressed=true] .r3-pcard-img{filter:${COLOUR};transform:scale(1.035)}
 .r3-pcard:hover .r3-pcard-blur,.r3-pcard:focus-within .r3-pcard-blur,.r3-pcard[data-pressed=true] .r3-pcard-blur{filter:${COLOUR} blur(3.5px);transform:scale(1.09)}
 .r3-pcard:hover .r3-pcard-plate,.r3-pcard:focus-within .r3-pcard-plate,.r3-pcard[data-pressed=true] .r3-pcard-plate,.r3-pcard:hover .r3-pcard-plate-slot,.r3-pcard:focus-within .r3-pcard-plate-slot,.r3-pcard[data-pressed=true] .r3-pcard-plate-slot{filter:grayscale(0) brightness(1.05)}
@@ -118,6 +121,9 @@ export interface ProtocolCardProps {
   badge?: ReactNode;
   /** On the picture, top right: format tags. Each child sits on a light chip. */
   corner?: ReactNode;
+  /** Ownership and visibility shown together at the top right. `Yours` is rendered only when owned is true. */
+  owned?: boolean;
+  visibility?: 'public' | 'private';
   /** Shown on the plate when there is no photo, in place of the default plate picture. */
   plate?: ReactNode;
   /** Under the description (a star rating). */
@@ -135,7 +141,15 @@ export interface ProtocolCardProps {
   onDelete?: () => void;
 }
 
-export function ProtocolCard({ title, kicker, tags, copy, imageUrl, by, byAvatar, badge, corner, plate, extra, cta = 'View protocol', href, onClick, pressed, inert, onEdit, onDelete }: ProtocolCardProps) {
+export function CardOwnershipTags({ owned = false, visibility }: { owned?: boolean; visibility?: 'public' | 'private' }) {
+  if (!visibility && !owned) return null;
+  return <>
+    {owned && <span data-card-owner="yours">Yours</span>}
+    {visibility && <span data-card-visibility={visibility}>{visibility === 'public' ? 'Public' : 'Private'}</span>}
+  </>;
+}
+
+export function ProtocolCard({ title, kicker, tags, copy, imageUrl, by, byAvatar, badge, corner, owned = false, visibility, plate, extra, cta = 'View protocol', href, onClick, pressed, inert, onEdit, onDelete }: ProtocolCardProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   // The picture that failed, not a flag: a card that later gets a different picture tries it.
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
@@ -161,7 +175,7 @@ export function ProtocolCard({ title, kicker, tags, copy, imageUrl, by, byAvatar
         {plate ? <span className="r3-pcard-plate-slot" aria-hidden="true">{plate}</span> : <img className="r3-pcard-plate" src={PROTOCOL_PLATE} alt="" loading="lazy" />}
       </>}
       {badge && <span className="r3-pcard-badge">{badge}</span>}
-      {corner && <div className="r3-pcard-corner">{corner}</div>}
+      {(corner || visibility || owned) && <div className="r3-pcard-corner"><CardOwnershipTags owned={owned} visibility={visibility} />{corner}</div>}
     </div>
     <div className="r3-pcard-body">
       {kicker && <span className="r3-pcard-kicker">{kicker}</span>}

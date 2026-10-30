@@ -241,6 +241,17 @@ export async function createGuideLead(guideId: string, lead: Pick<GuideLead, 'na
   return data as GuideLead;
 }
 
+export async function updateGuideLead(guideId: string, id: string, lead: Partial<Pick<GuideLead, 'name' | 'email' | 'goal' | 'stage'>>): Promise<GuideLead> {
+  const { data, error } = await db().from('guide_leads').update(lead).eq('id', id).eq('guide_id', guideId).select().single();
+  if (error) throw error;
+  return data as GuideLead;
+}
+
+export async function deleteGuideLead(guideId: string, id: string): Promise<void> {
+  const { error } = await db().from('guide_leads').delete().eq('id', id).eq('guide_id', guideId);
+  if (error) throw error;
+}
+
 /** Public opt-in from a Guardian mini-site. Insert-only: visitors cannot read leads back. */
 export async function submitGuardianOptIn(guideId: string, lead: { name: string; email: string; goal: string | null; marketingConsent: boolean; consentText: string; sourceOfferId?: string | null; valueRampId?: string | null }): Promise<void> {
   const { error } = await db().from('guide_leads').insert({
@@ -306,6 +317,11 @@ export async function upsertGuideOffer(guideId: string, offer: GuideOfferInput, 
   return data as GuideOffer;
 }
 
+export async function deleteGuideOffer(guideId: string, id: string): Promise<void> {
+  const { error } = await db().from('guide_offers').delete().eq('id', id).eq('guide_id', guideId);
+  if (error) throw error;
+}
+
 /** Create or update an offer path by slug, with its offers in funnel order. */
 export async function upsertGuideValueRamp(guideId: string, ramp: Pick<GuideValueRamp, 'name' | 'slug' | 'audience' | 'problem' | 'offer_ids' | 'status'>): Promise<GuideValueRamp> {
   const { data, error } = await db().from('guide_value_ramps').upsert({ guide_id: guideId, ...ramp }, { onConflict: 'guide_id,slug' }).select().single();
@@ -323,6 +339,17 @@ export async function createGuideValueRamp(guideId: string, ramp: Pick<GuideValu
   const { data, error } = await db().from('guide_value_ramps').insert({ guide_id: guideId, ...ramp }).select().single();
   if (error) throw error;
   return data as GuideValueRamp;
+}
+
+export async function updateGuideValueRamp(guideId: string, id: string, ramp: Partial<Pick<GuideValueRamp, 'name' | 'audience' | 'problem' | 'offer_ids' | 'status'>>): Promise<GuideValueRamp> {
+  const { data, error } = await db().from('guide_value_ramps').update(ramp).eq('id', id).eq('guide_id', guideId).select().single();
+  if (error) throw error;
+  return data as GuideValueRamp;
+}
+
+export async function deleteGuideValueRamp(guideId: string, id: string): Promise<void> {
+  const { error } = await db().from('guide_value_ramps').delete().eq('id', id).eq('guide_id', guideId);
+  if (error) throw error;
 }
 
 /** The Guardian's saved brands (personal first, then business brands), each with its own brand kit in social_links. */
@@ -374,6 +401,11 @@ export async function updateGuideRecipe(id: string, recipe: Partial<Pick<GuideRe
   return data as GuideRecipe;
 }
 
+export async function deleteGuideRecipe(guideId: string, id: string): Promise<void> {
+  const { error } = await db().from('guide_recipes').delete().eq('id', id).eq('guide_id', guideId);
+  if (error) throw error;
+}
+
 export async function listGuideLibraryFolders(guideId: string): Promise<GuideLibraryFolder[]> {
   const { data, error } = await db().from('guide_library_folders').select('*').eq('guide_id', guideId).order('name');
   if (error) throw error;
@@ -386,6 +418,17 @@ export async function createGuideLibraryFolder(guideId: string, name: string): P
   return data as GuideLibraryFolder;
 }
 
+export async function updateGuideLibraryFolder(guideId: string, id: string, name: string): Promise<GuideLibraryFolder> {
+  const { data, error } = await db().from('guide_library_folders').update({ name }).eq('id', id).eq('guide_id', guideId).select().single();
+  if (error) throw error;
+  return data as GuideLibraryFolder;
+}
+
+export async function deleteGuideLibraryFolder(guideId: string, id: string): Promise<void> {
+  const { error } = await db().from('guide_library_folders').delete().eq('id', id).eq('guide_id', guideId);
+  if (error) throw error;
+}
+
 export async function listGuideLibraryItems(guideId: string): Promise<GuideLibraryItem[]> {
   const { data, error } = await db().from('guide_library_items').select('*').eq('guide_id', guideId).order('created_at', { ascending: false });
   if (error) throw error;
@@ -396,6 +439,12 @@ export async function createGuideLibraryItem(guideId: string, item: Pick<GuideLi
   // Older kinds leave metadata out so they keep saving before the metadata column exists.
   const { metadata, ...row } = item;
   const { data, error } = await db().from('guide_library_items').insert({ guide_id: guideId, ...row, ...(metadata && Object.keys(metadata).length ? { metadata } : {}) }).select().single();
+  if (error) throw error;
+  return data as GuideLibraryItem;
+}
+
+export async function updateGuideLibraryItem(guideId: string, id: string, item: Partial<Pick<GuideLibraryItem, 'folder_id' | 'title' | 'source_url' | 'transcript' | 'metadata'>>): Promise<GuideLibraryItem> {
+  const { data, error } = await db().from('guide_library_items').update(item).eq('id', id).eq('guide_id', guideId).select().single();
   if (error) throw error;
   return data as GuideLibraryItem;
 }
