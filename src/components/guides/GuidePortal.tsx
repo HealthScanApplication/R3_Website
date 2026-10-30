@@ -81,7 +81,10 @@ function parseExpertiseTags(value?: string) {
 
 function customerFacingOfferTitle(value: string) {
   // Older drafts were saved as "Custom Protocol"; customers see "Personalised Protocol".
-  return value.replace(/^R3\s+Protocol\s*>\s*/i, '').replace(/^Custom Protocol\b/i, 'Personalised Protocol').trim();
+  const title = value.replace(/^R3\s+Protocol\s*>\s*/i, '').replace(/^Custom Protocol\b/i, 'Personalised Protocol').trim();
+  if (title === 'Whole-Day Natural Wellness Routine') return 'Self Heal by Design';
+  if (title === '7-Day Apple Juice and Olive Oil Protocol') return 'Misty Mountain Cleanse Routine';
+  return title;
 }
 
 function offerTitleSize(value: string) {
@@ -1144,12 +1147,12 @@ export function OfferCheckout({ offer, upsells, profile, accent, onClose, onFres
         <span style={{ width: 56, height: 56, margin: '0 auto 14px', borderRadius: '50%', background: APP.greenSoft, color: '#000', display: 'grid', placeItems: 'center' }}><Check size={26} /></span>
         <h2 style={{ fontFamily: APP.font, fontSize: 28, fontWeight: 600, margin: '0 0 4px' }}>You’re all set!</h2>
         <p style={{ color: APP.muted, fontSize: 16, fontWeight: 600, margin: '0 0 18px', overflowWrap: 'anywhere' }}>{message || `Payment confirmed for ${email}`}</p>
-        <div style={{ background: APP.surface, border: `1px solid ${APP.border}`, borderRadius: 12, padding: '6px 16px', textAlign: 'left', marginBottom: 18 }}>{bought.map((id) => <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', fontSize: 15, fontWeight: 600 }}><span style={{ width: 22, height: 22, flex: '0 0 22px', borderRadius: '50%', border: '1.5px solid #262626', display: 'grid', placeItems: 'center' }}><Check size={13} strokeWidth={2.5} /></span>{[offer, ...upsells].find(item => item.id === id)?.title}</div>)}</div>
+        <div style={{ background: APP.surface, border: `1px solid ${APP.border}`, borderRadius: 12, padding: '6px 16px', textAlign: 'left', marginBottom: 18 }}>{bought.map((id) => { const boughtTitle = [offer, ...upsells].find(item => item.id === id)?.title; return <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', fontSize: 15, fontWeight: 600 }}><span style={{ width: 22, height: 22, flex: '0 0 22px', borderRadius: '50%', border: '1.5px solid #262626', display: 'grid', placeItems: 'center' }}><Check size={13} strokeWidth={2.5} /></span>{boughtTitle ? customerFacingOfferTitle(boughtTitle) : ''}</div>; })}</div>
       </div> : <div style={{ padding: '44px 24px 24px' }}>
         <AppOfferImage kind={offer.kind} size={80} />
         <div style={{ margin: '12px 0 2px' }}><OfferFormatTag kind={offer.kind} /></div>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, margin: '12px 0 6px' }}>{profile.avatar_url ? <img src={profile.avatar_url} alt="" style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover' }} /> : <span style={{ width: 24, height: 24, borderRadius: '50%', background: APP.border, display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 600 }}>{(profile.display_name || 'G')[0]}</span>}<span style={{ color: APP.muted, fontSize: 13, fontWeight: 500 }}>{profile.display_name}</span></span>
-        <h2 style={{ fontFamily: APP.font, fontSize: 28, fontWeight: 600, lineHeight: '34px', letterSpacing: -0.5, margin: '0 0 4px' }}>{offer.title}</h2>
+        <h2 style={{ fontFamily: APP.font, fontSize: 28, fontWeight: 600, lineHeight: '34px', letterSpacing: -0.5, margin: '0 0 4px' }}>{customerFacingOfferTitle(offer.title)}</h2>
         <p style={{ color: APP.muted, fontSize: 16, fontWeight: 600, margin: '0 0 20px' }}>{money(offer.price_cents)} · secure checkout</p>
         {stage === 'details' ? <form id={checkoutFormId} onSubmit={start} style={{ display: 'grid', gap: 0, textAlign: 'left' }}>
           <input required placeholder="First name" aria-label="First name" value={name} onChange={(e) => setName(e.target.value)} style={{ ...field, borderRadius: '12px 12px 0 0' }} />
@@ -1220,7 +1223,7 @@ function GuardianFunnel({ profile, offers, ramp, accent, headingFont, reviews = 
       <div style={{ maxWidth: 720, margin: '0 auto 26px', textAlign: 'center', fontFamily: APP.font }}>
         <span style={{ color: APP.greenDark, fontSize: 12, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Follow {profile.display_name}</span>
         <h2 style={{ ...HEADLINE_STYLES[headlineStyle].section, margin: '10px 0 8px' }}>Get new guidance in your inbox.</h2>
-        <p style={{ color: APP.muted, fontSize: 15, fontWeight: 600, margin: 0 }}>Subscribe once and receive {entry.title} free.</p>
+        <p style={{ color: APP.muted, fontSize: 15, fontWeight: 600, margin: 0 }}>Subscribe once and receive {customerFacingOfferTitle(entry.title)} free.</p>
       </div>
       <div {...tiltHandlers(3)} style={tiltStyle({ position: 'relative', maxWidth: 620, margin: '0 auto', background: APP.bg, color: APP.text, fontFamily: APP.font, borderRadius: 24, overflow: 'hidden', boxShadow: '0 20px 50px rgba(17,24,39,.14)' })}><GlowLayer />
         {leadVideo && state !== 'done' && <video src={leadVideo} controls playsInline style={{ width: '100%', aspectRatio: '16 / 9', objectFit: 'cover', background: '#000' }} />}
@@ -1513,7 +1516,7 @@ function FreeOfferFlipCard({ profile, offer, protocol, reviews, accent }: { prof
         <ProductCard {...reviewStats(reviews)} audience={audienceLabel(profile.social_links?.audience_details)} imageUrl={offer.cover_url} kind={offer.kind} eyebrow="Free offer" title={customerFacingOfferTitle(offer.title)} copy={offer.description || 'Open this offer to see what is included.'} price="Free" name={profile.display_name} avatarUrl={profile.avatar_url} accent={accent} cta="Get free access" onClick={() => setFlipped(true)} visibility="public" />
       </div>
       <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', transform: 'rotateY(180deg)', boxSizing: 'border-box', minHeight: 520, padding: 26, border: '1px solid rgba(242,239,231,.34)', borderRadius: 6, background: '#F2EFE7', color: '#11120F', display: 'flex', flexDirection: 'column', fontFamily: APP.font }}>
-        <button type="button" onClick={() => setFlipped(false)} aria-label={`Back to ${offer.title}`} style={{ alignSelf: 'flex-end', border: 0, background: 'transparent', color: '#66645F', fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer' }}>Back</button>
+        <button type="button" onClick={() => setFlipped(false)} aria-label={`Back to ${customerFacingOfferTitle(offer.title)}`} style={{ alignSelf: 'flex-end', border: 0, background: 'transparent', color: '#66645F', fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer' }}>Back</button>
         <span style={{ color: APP.greenDark, fontSize: 10, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 18 }}>Free protocol</span>
         <h3 style={{ fontFamily: serif, fontSize: 32, fontWeight: 300, lineHeight: 1.06, margin: '12px 0 10px' }}>{customerFacingOfferTitle(offer.title)}</h3>
         <p style={{ color: '#66645F', fontSize: 14, lineHeight: 1.55, margin: 0 }}>Enter your email to unlock the complete protocol, including every day, step and linked detail.</p>
