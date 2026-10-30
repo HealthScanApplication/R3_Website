@@ -259,6 +259,46 @@ export function GuardianProducts({ guideId, guardianSlug, commissionPercent, pro
 
 const APP = { surface: '#FFFFFF', text: '#11120F', muted: '#66645F', border: 'rgba(17,18,15,.2)', greenDark: '#667245', font: sans };
 
+const publicProductCardMotion = {
+  onPointerMove: (event: React.PointerEvent<HTMLElement>) => {
+    if (event.pointerType === 'touch' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const card = event.currentTarget;
+    const bounds = card.getBoundingClientRect();
+    const x = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+    const y = Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
+    card.style.setProperty('--product-rx', `${((.5 - y) * 5).toFixed(2)}deg`);
+    card.style.setProperty('--product-ry', `${((x - .5) * 6).toFixed(2)}deg`);
+    card.style.setProperty('--product-px', `${((.5 - x) * 16).toFixed(1)}px`);
+    card.style.setProperty('--product-py', `${((.5 - y) * 16).toFixed(1)}px`);
+    card.style.setProperty('--product-lift', '-5px');
+    card.style.boxShadow = '0 24px 46px -22px rgba(17,18,15,.5)';
+  },
+  onPointerLeave: (event: React.PointerEvent<HTMLElement>) => {
+    const card = event.currentTarget;
+    card.style.setProperty('--product-rx', '0deg');
+    card.style.setProperty('--product-ry', '0deg');
+    card.style.setProperty('--product-px', '0px');
+    card.style.setProperty('--product-py', '0px');
+    card.style.setProperty('--product-lift', '0px');
+    card.style.boxShadow = 'none';
+  },
+};
+
+const publicProductCardStyle: React.CSSProperties = {
+  background: APP.surface,
+  border: `1px solid ${APP.border}`,
+  borderRadius: 6,
+  overflow: 'hidden',
+  display: 'flex',
+  flexDirection: 'column',
+  fontFamily: APP.font,
+  color: APP.text,
+  transform: 'perspective(1100px) rotateX(var(--product-rx, 0deg)) rotateY(var(--product-ry, 0deg)) translateY(var(--product-lift, 0px))',
+  transformStyle: 'preserve-3d',
+  transition: 'transform 420ms cubic-bezier(.16,1,.3,1), box-shadow 420ms cubic-bezier(.16,1,.3,1)',
+  willChange: 'transform',
+};
+
 /** Public "Shop" block on a Guardian's site. Renders nothing until there are published products. */
 export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding, protocols = [], localePreference, categoryOrder }: { guideId: string; guardianSlug: string; guardianName: string; pagePadding: string; protocols?: AdminProtocol[]; localePreference?: GuardianLocalePreference; categoryOrder?: string }) {
   const [products, setProducts] = useState<GuideProduct[]>([]);
@@ -317,8 +357,8 @@ export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding,
     <div role="tablist" aria-label="Product categories" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '0 0 26px' }}>{categories.map((category) => <button key={category} type="button" role="tab" aria-selected={activeCategory === category} onClick={() => setActiveCategory(category)} style={{ border: `1px solid ${activeCategory === category ? APP.text : APP.border}`, background: activeCategory === category ? APP.text : 'transparent', color: activeCategory === category ? '#FFF' : APP.text, minHeight: 38, padding: '0 14px', fontFamily: APP.font, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{category}</button>)}</div>
     {message && <p role="alert" style={{ color: '#8A3D2F', fontSize: 12 }}>{message}</p>}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,280px),1fr))', gap: 18 }}>
-      {shownProducts.map((product) => { const regional = regionalProduct(product, localePreference?.locale || navigator.language, localePreference?.region || Intl.DateTimeFormat().resolvedOptions().timeZone); const linkedIds = [...new Set([...product.protocol_ids, ...(product.catalog_product_id ? usage[product.catalog_product_id] || [] : [])])]; const linked = linkedIds.map((id) => protocols.find((protocol) => protocol.id === id)).filter((protocol): protocol is AdminProtocol => !!protocol); return <article key={product.id} style={{ background: APP.surface, border: `1px solid ${APP.border}`, borderRadius: 6, overflow: 'hidden', display: 'flex', flexDirection: 'column', fontFamily: APP.font, color: APP.text }}>
-        {product.image_url ? <img src={product.image_url} alt="" loading="lazy" style={{ width: '100%', aspectRatio: '1.2', objectFit: 'contain', background: '#EEEAE2', filter: 'grayscale(.18) contrast(1.02)' }} /> : <div style={{ aspectRatio: '1.2', display: 'grid', placeItems: 'center', background: '#EEEAE2', color: APP.muted }}><ShoppingBag size={40} strokeWidth={1.2} /></div>}
+      {shownProducts.map((product) => { const regional = regionalProduct(product, localePreference?.locale || navigator.language, localePreference?.region || Intl.DateTimeFormat().resolvedOptions().timeZone); const linkedIds = [...new Set([...product.protocol_ids, ...(product.catalog_product_id ? usage[product.catalog_product_id] || [] : [])])]; const linked = linkedIds.map((id) => protocols.find((protocol) => protocol.id === id)).filter((protocol): protocol is AdminProtocol => !!protocol); return <article key={product.id} {...publicProductCardMotion} style={publicProductCardStyle} onPointerDown={(event) => { if (event.pointerType !== 'mouse') event.currentTarget.style.setProperty('--product-lift', '-2px'); }} onPointerUp={(event) => { if (event.pointerType !== 'mouse') event.currentTarget.style.setProperty('--product-lift', '0px'); }}>
+        {product.image_url ? <div style={{ position: 'relative', width: '100%', aspectRatio: '1', overflow: 'hidden', background: '#EEEAE2' }}><img src={product.image_url} alt="" loading="lazy" style={{ position: 'absolute', inset: -12, width: 'calc(100% + 24px)', height: 'calc(100% + 24px)', maxWidth: 'none', objectFit: 'cover', objectPosition: 'center', filter: 'grayscale(.18) contrast(1.02)', transform: 'translate3d(var(--product-px, 0px), var(--product-py, 0px), 0) scale(1.025)', transition: 'transform 500ms cubic-bezier(.16,1,.3,1), filter 500ms ease', willChange: 'transform' }} /></div> : <div style={{ width: '100%', aspectRatio: '1', display: 'grid', placeItems: 'center', background: '#EEEAE2', color: APP.muted }}><ShoppingBag size={40} strokeWidth={1.2} /></div>}
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
           <span style={{ color: APP.greenDark, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Product · {product.shop_domain}</span>
           <h3 style={{ fontFamily: serif, fontSize: 27, fontWeight: 300, margin: 0, lineHeight: 1.08 }}>{product.title}</h3>
