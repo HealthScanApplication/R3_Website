@@ -46,6 +46,25 @@ export interface GuideOffer {
   status: 'draft' | 'published';
 }
 
+export interface GuideCommunityChannel {
+  id: string;
+  offer_id: string;
+  guide_id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  created_at: string;
+}
+
+export interface GuideCommunityMessage {
+  id: string;
+  channel_id: string;
+  user_id: string;
+  author_name: string;
+  body: string;
+  created_at: string;
+}
+
 export interface GuideRecipe {
   id: string;
   guide_id: string;
@@ -305,6 +324,51 @@ export async function createGuideOffer(guideId: string, offer: Pick<GuideOffer, 
   const { data, error } = await db().from('guide_offers').insert({ guide_id: guideId, ...offer }).select().single();
   if (error) throw error;
   return data as GuideOffer;
+}
+
+export async function getOfferCommunityChannel(guideId: string, offerId: string): Promise<GuideCommunityChannel | null> {
+  const { data, error } = await db().from('guide_community_channels').select('*').eq('guide_id', guideId).eq('offer_id', offerId).maybeSingle();
+  if (error) throw error;
+  return data as GuideCommunityChannel | null;
+}
+
+export async function saveOfferCommunityChannel(guideId: string, offerId: string, input: { name: string; slug: string; description?: string | null }): Promise<GuideCommunityChannel> {
+  const row = { guide_id: guideId, offer_id: offerId, name: input.name.trim(), slug: input.slug.trim(), description: input.description?.trim() || null };
+  const { data, error } = await db().from('guide_community_channels').upsert(row, { onConflict: 'offer_id' }).select().single();
+  if (error) throw error;
+  return data as GuideCommunityChannel;
+}
+
+export async function getCommunityChannelByRoute(guardianSlug: string, channelSlug: string): Promise<GuideCommunityChannel | null> {
+  const { data: guide, error: guideError } = await db().from('guide_profiles').select('user_id').eq('slug', guardianSlug).eq('status', 'approved').maybeSingle();
+  if (guideError) throw guideError;
+  if (!guide) return null;
+  const { data, error } = await db().from('guide_community_channels').select('*').eq('guide_id', guide.user_id).eq('slug', channelSlug).maybeSingle();
+  if (error) throw error;
+  return data as GuideCommunityChannel | null;
+}
+
+export async function joinGuideCommunity(channelId: string, userId: string): Promise<void> {
+  const { error } = await db().from('guide_community_members').upsert({ channel_id: channelId, user_id: userId }, { onConflict: 'channel_id,user_id' });
+  if (error) throw error;
+}
+
+export async function isGuideCommunityMember(channelId: string, userId: string): Promise<boolean> {
+  const { data, error } = await db().from('guide_community_members').select('channel_id').eq('channel_id', channelId).eq('user_id', userId).maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
+}
+
+export async function listGuideCommunityMessages(channelId: string): Promise<GuideCommunityMessage[]> {
+  const { data, error } = await db().from('guide_community_messages').select('*').eq('channel_id', channelId).order('created_at', { ascending: true }).limit(200);
+  if (error) throw error;
+  return (data || []) as GuideCommunityMessage[];
+}
+
+export async function postGuideCommunityMessage(channelId: string, userId: string, authorName: string, body: string): Promise<GuideCommunityMessage> {
+  const { data, error } = await db().from('guide_community_messages').insert({ channel_id: channelId, user_id: userId, author_name: authorName.trim().slice(0, 80) || 'Member', body: body.trim() }).select().single();
+  if (error) throw error;
+  return data as GuideCommunityMessage;
 }
 
 type GuideOfferInput = Pick<GuideOffer, 'kind' | 'title' | 'description' | 'price_cents' | 'affiliate_url' | 'access_model' | 'file_path' | 'booking_url'> & Partial<Pick<GuideOffer, 'currency' | 'status'>>;
