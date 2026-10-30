@@ -1,11 +1,11 @@
 // Guardian products: the workspace "My products" manager and the public "Shop" block.
 // Buyers check out on the Guardian's own Shopify store; ROUTINE³ attribution and the
 // Guardian's discount code travel in the cart permalink (docs/guardian-shopify-commerce.md).
-import React, { useEffect, useState } from 'react';
-import { Check, Copy, ExternalLink, Loader2, Pencil, Plus, ShoppingBag, Trash2, X } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Check, Copy, ExternalLink, Grid2X2, List, Loader2, Pencil, Plus, ShoppingBag, Trash2, X } from 'lucide-react';
 import { deleteGuideProduct, listGuideProducts, listPublicGuideProducts, saveGuideProduct, type GuideProduct } from '../../utils/guidePortal';
 import {
-  buildProductBuyUrl, formatProductPrice, importShopifyProduct, normalizeDiscountCode, parsePriceToCents, parseShopifyProductUrl, regionalProduct,
+  attributionSlug, buildCartPermalink, buildProductBuyUrl, effectiveCommissionPercent, formatProductPrice, importShopifyProduct, normalizeDiscountCode, parsePriceToCents, parseShopifyProductUrl, regionalProduct,
   type ImportedShopifyVariant,
 } from '../../utils/guideProducts';
 
@@ -21,6 +21,21 @@ const input: React.CSSProperties = { width: '100%', height: 44, boxSizing: 'bord
 const label: React.CSSProperties = { display: 'block', color: muted, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 7, marginTop: 12, lineHeight: 1.35 };
 const btn: React.CSSProperties = { minHeight: 44, border: `1px solid ${line}`, background: ink, color: black, padding: '0 18px', borderRadius: 4, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, lineHeight: 1.2 };
 const iconBtn: React.CSSProperties = { ...btn, width: 38, minHeight: 38, padding: 0, background: 'transparent', color: ink };
+
+function retailer(product: GuideProduct): 'Amazon' | 'Shopify' {
+  return /(^|\.)amazon\./i.test(product.shop_domain) ? 'Amazon' : 'Shopify';
+}
+
+function StoreBadge({ product }: { product: GuideProduct }) {
+  const name = retailer(product);
+  return <span title={`${name} purchase link`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: `1px solid ${line}`, padding: '4px 7px', color: ink, fontSize: 9, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}><ShoppingBag size={11} />{name}</span>;
+}
+
+function regionVersion(product: GuideProduct, region: 'AU' | 'UK'): GuideProduct | null {
+  const override = product.regional_storefronts?.[region] || (region === 'UK' ? product.regional_storefronts?.EU : null);
+  if (override) return { ...product, ...override };
+  return region === 'AU' ? product : null;
+}
 
 interface ProductForm {
   id?: string;
@@ -68,6 +83,8 @@ export function GuardianProducts({ guideId, guardianSlug, commissionPercent, pro
   const [importing, setImporting] = useState(false);
   const [message, setMessage] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [view, setView] = useState<'cards' | 'list'>('cards');
+  const [basketProtocolId, setBasketProtocolId] = useState('');
 
   useEffect(() => {
     let live = true;
@@ -130,6 +147,25 @@ export function GuardianProducts({ guideId, guardianSlug, commissionPercent, pro
   }
 
   const buyUrl = (product: GuideProduct) => buildProductBuyUrl(regionalProduct(product), { medium: 'web', guardianSlug });
+  const protocolOptions = useMemo(() => protocols.filter((protocol) => products.some((product) => product.protocol_ids.includes(protocol.id))), [products, protocols]);
+  const selectedProtocolId = basketProtocolId || protocolOptions[0]?.id || '';
+  const selectedProtocol = protocols.find((protocol) => protocol.id === selectedProtocolId);
+  const basketProducts = useMemo(() => products.filter((product) => product.status === 'published' && product.protocol_ids.includes(selectedProtocolId)).map((product) => regionalProduct(product)), [products, selectedProtocolId]);
+  const basketStores = [...new Set(basketProducts.map((product) => product.shop_domain))];
+  const basketCurrency = basketProducts[0]?.currency;
+  const basketHasOneCurrency = basketProducts.every((product) => product.currency === basketCurrency);
+  const basketHasAllPrices = basketProducts.every((product) => product.price_cents != null);
+  const basketSubtotal = basketHasOneCurrency && basketHasAllPrices ? basketProducts.reduce((total, product) => total + (product.price_cents || 0), 0) : null;
+  const basketFee = basketHasOneCurrency && basketHasAllPrices ? basketProducts.reduce((total, product) => total + Math.round((product.price_cents || 0) * effectiveCommissionPercent(product, commissionPercent) / 100), 0) : null;
+  const feeRates = [...new Set(basketProducts.map((product) => effectiveCommissionPercent(product, commissionPercent)))];
+  const basketReady = basketProducts.length > 0 && basketStores.length === 1 && basketProducts.every((product) => !!product.variant_id);
+  const basketUrl = basketReady ? buildCartPermalink(basketProducts, { medium: 'web', guardianSlug, protocolSlug: selectedProtocol ? attributionSlug(selectedProtocol.name) : null }) : null;
+
+  const productMeta = (product: GuideProduct) => {
+    const local = regionalProduct(product);
+    const onProtocols = product.protocol_ids.map((id) => protocols.find((protocol) => protocol.id === id)?.name).filter(Boolean);
+    return { local, onProtocols, cartReady: retailer(local) === 'Shopify' && !!local.variant_id };
+  };
 
   return <section>
     <div style={{ border: `1px solid ${line}`, background: panel, padding: 'clamp(24px,4vw,40px)', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 24, alignItems: 'end' }}>
@@ -169,24 +205,34 @@ export function GuardianProducts({ guideId, guardianSlug, commissionPercent, pro
 
     {message && <p role="status" style={{ color: message.endsWith('saved.') ? acid : '#F0A7A7', fontSize: 12 }}>{message}</p>}
 
-    <div style={{ marginTop: 18 }}>
-      {loading ? <p style={{ color: muted, fontSize: 12 }}>Loading products…</p> : products.length ? products.map((product) => {
-        const onProtocols = product.protocol_ids.map((id) => protocols.find((protocol) => protocol.id === id)?.name).filter(Boolean);
-        return <article key={product.id} style={{ display: 'grid', gridTemplateColumns: '64px minmax(0,1fr) auto', gap: 16, alignItems: 'center', borderTop: `1px solid ${line}`, padding: '16px 2px' }}>
-          {product.image_url ? <img src={product.image_url} alt="" style={{ width: 64, height: 64, objectFit: 'cover', background: '#fff' }} /> : <div style={{ width: 64, height: 64, border: `1px solid ${line}`, display: 'grid', placeItems: 'center', color: muted }}><ShoppingBag size={20} strokeWidth={1.3} /></div>}
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}><span style={{ color: product.status === 'published' ? acid : muted, fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{product.status === 'published' ? 'Live' : 'Draft'} · {product.shop_domain}{product.discount_code ? ` · code ${product.discount_code}` : ''}</span><span style={{ display: 'flex', gap: 5 }}><span style={{ border: `1px solid ${line}`, padding: '3px 6px', color: ink, fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>Yours</span><span style={{ border: `1px solid ${line}`, padding: '3px 6px', color: product.status === 'published' ? acid : muted, fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{product.status === 'published' ? 'Public' : 'Private'}</span></span></div>
-            <h3 style={{ fontFamily: serif, fontSize: 22, fontWeight: 300, margin: '4px 0 3px' }}>{product.title}{product.variant_title ? <span style={{ color: muted, fontSize: 15 }}> · {product.variant_title}</span> : null}</h3>
-            <span style={{ color: muted, fontSize: 11 }}>{[formatProductPrice(product.price_cents, product.currency), product.catalog_product_id && 'Official brand · catalog linked', onProtocols.length ? `On ${onProtocols.join(', ')}` : 'Not on a Protocol yet', !product.variant_id && 'opens the product page (no variant)'].filter(Boolean).join(' · ')}</span>
-          </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <a href={buyUrl(product)} target="_blank" rel="noopener noreferrer" title="Open buy link" aria-label={`Open buy link for ${product.title}`} style={{ ...iconBtn, textDecoration: 'none' }}><ExternalLink size={14} /></a>
-            <button type="button" title="Copy buy link" aria-label={`Copy buy link for ${product.title}`} onClick={() => void copyLink(product)} style={iconBtn}>{copiedId === product.id ? <Check size={14} color={acid} /> : <Copy size={14} />}</button>
-            <button type="button" title="Edit product" aria-label={`Edit ${product.title}`} onClick={() => { setForm(formFromProduct(product)); setMessage(''); }} style={iconBtn}><Pencil size={14} /></button>
-            <button type="button" title="Remove product" aria-label={`Remove ${product.title}`} onClick={() => void remove(product)} style={{ ...iconBtn, color: muted }}><Trash2 size={14} /></button>
-          </div>
-        </article>;
-      }) : !form && <div style={{ border: `1px dashed ${line}`, padding: 'clamp(24px,4vw,40px)', marginTop: 4, textAlign: 'center' }}><ShoppingBag size={34} strokeWidth={1} color={acid} /><h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 28, margin: '12px 0 6px' }}>No products yet</h2><p style={{ color: muted, fontSize: 12, margin: '0 auto 16px', maxWidth: 420 }}>Paste a product link from your Shopify store. It will show on your site and on the Protocols you choose.</p><button type="button" onClick={() => setForm(emptyForm(defaultCurrency))} style={btn}><Plus size={14} />Add your first product</button></div>}
+    {!loading && products.length > 0 && <>
+      <section style={{ border: `1px solid ${line}`, marginTop: 18, padding: 'clamp(18px,3vw,26px)', background: panel }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'end', flexWrap: 'wrap' }}>
+          <div><span style={{ ...label, margin: 0, color: acid }}>Protocol basket</span><h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 28, margin: '6px 0 0' }}>One checkout, when the store supports it.</h2></div>
+          {protocolOptions.length > 0 && <select aria-label="Protocol basket" value={selectedProtocolId} onChange={(event) => setBasketProtocolId(event.target.value)} style={{ ...input, width: 'min(100%,320px)' }}>{protocolOptions.map((protocol) => <option key={protocol.id} value={protocol.id}>{protocol.name}</option>)}</select>}
+        </div>
+        {selectedProtocol ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, marginTop: 18 }}>
+          <div style={{ border: `1px solid ${line}`, padding: 14 }}><span style={label}>Products</span><strong style={{ fontFamily: serif, fontWeight: 300, fontSize: 25 }}>{basketProducts.length}</strong></div>
+          <div style={{ border: `1px solid ${line}`, padding: 14 }}><span style={label}>Protocol price</span><strong style={{ fontFamily: serif, fontWeight: 300, fontSize: 25 }}>{basketSubtotal == null ? 'Store prices' : formatProductPrice(basketSubtotal, basketCurrency)}</strong></div>
+          <div style={{ border: `1px solid ${line}`, padding: 14 }}><span style={label}>ROUTINE³ fee</span><strong style={{ fontFamily: serif, fontWeight: 300, fontSize: 25 }}>{feeRates.length === 1 ? `${feeRates[0]}%` : 'Blended'}{basketFee == null ? '' : ` · ${formatProductPrice(basketFee, basketCurrency)}`}</strong></div>
+          <div style={{ border: `1px solid ${line}`, padding: 14, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>{basketUrl ? <a href={basketUrl} target="_blank" rel="noopener noreferrer" style={{ ...btn, textDecoration: 'none', background: acid }}>Buy all {basketProducts.length}</a> : <><strong style={{ color: '#F0C28A', fontSize: 12 }}>One-click basket unavailable</strong><span style={{ color: muted, fontSize: 10, lineHeight: 1.4, marginTop: 5 }}>{basketStores.length > 1 ? 'Products use different stores.' : 'One or more products needs a Shopify variant.'}</span></>}</div>
+        </div> : <p style={{ color: muted, fontSize: 12, marginBottom: 0 }}>Attach products to a Protocol to create its price and buy-all basket.</p>}
+      </section>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginTop: 18 }}>
+        <span style={{ color: muted, fontSize: 11 }}>Regional storefronts and checkout readiness are based on the saved product links.</span>
+        <span style={{ display: 'flex' }}><button type="button" aria-label="Card view" aria-pressed={view === 'cards'} onClick={() => setView('cards')} style={{ ...iconBtn, background: view === 'cards' ? ink : 'transparent', color: view === 'cards' ? black : ink }}><Grid2X2 size={14} /></button><button type="button" aria-label="List view" aria-pressed={view === 'list'} onClick={() => setView('list')} style={{ ...iconBtn, background: view === 'list' ? ink : 'transparent', color: view === 'list' ? black : ink }}><List size={14} /></button></span>
+      </div>
+    </>}
+
+    <div style={{ marginTop: 12 }}>
+      {loading ? <p style={{ color: muted, fontSize: 12 }}>Loading products…</p> : products.length ? <div style={view === 'cards' ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,280px),1fr))', gap: 14 } : undefined}>{products.map((product) => {
+        const { local, onProtocols, cartReady } = productMeta(product);
+        const regions = (['AU', 'UK'] as const).map((region) => ({ region, product: regionVersion(product, region) }));
+        const actions = <div style={{ display: 'flex', gap: 6 }}><a href={buyUrl(product)} target="_blank" rel="noopener noreferrer" title="Open buy link" aria-label={`Open buy link for ${product.title}`} style={{ ...iconBtn, textDecoration: 'none' }}><ExternalLink size={14} /></a><button type="button" title="Copy buy link" aria-label={`Copy buy link for ${product.title}`} onClick={() => void copyLink(product)} style={iconBtn}>{copiedId === product.id ? <Check size={14} color={acid} /> : <Copy size={14} />}</button><button type="button" title="Edit product" aria-label={`Edit ${product.title}`} onClick={() => { setForm(formFromProduct(product)); setMessage(''); }} style={iconBtn}><Pencil size={14} /></button><button type="button" title="Remove product" aria-label={`Remove ${product.title}`} onClick={() => void remove(product)} style={{ ...iconBtn, color: muted }}><Trash2 size={14} /></button></div>;
+        if (view === 'list') return <article key={product.id} style={{ display: 'grid', gridTemplateColumns: '64px minmax(0,1fr) auto', gap: 16, alignItems: 'center', borderTop: `1px solid ${line}`, padding: '16px 2px' }}>{product.image_url ? <img src={product.image_url} alt="" style={{ width: 64, height: 64, objectFit: 'cover', background: '#fff' }} /> : <div style={{ width: 64, height: 64, border: `1px solid ${line}`, display: 'grid', placeItems: 'center', color: muted }}><ShoppingBag size={20} /></div>}<div style={{ minWidth: 0 }}><div style={{ display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap' }}><StoreBadge product={product} /><span style={{ color: product.status === 'published' ? acid : muted, fontSize: 9, fontWeight: 800, textTransform: 'uppercase' }}>{product.status === 'published' ? 'Public' : 'Private'}</span><span style={{ color: cartReady ? acid : '#F0C28A', fontSize: 9, fontWeight: 800, textTransform: 'uppercase' }}>{cartReady ? 'Mobile cart ready' : 'Product page only'}</span></div><h3 style={{ fontFamily: serif, fontSize: 22, fontWeight: 300, margin: '5px 0 3px' }}>{product.title}</h3><span style={{ color: muted, fontSize: 11 }}>{formatProductPrice(local.price_cents, local.currency) || 'See store price'} · {onProtocols.length ? `On ${onProtocols.join(', ')}` : 'Not on a Protocol yet'}</span></div>{actions}</article>;
+        return <article key={product.id} style={{ border: `1px solid ${line}`, background: panel, minWidth: 0, display: 'flex', flexDirection: 'column' }}><div style={{ position: 'relative', aspectRatio: '1.35', background: '#F3F1EA', overflow: 'hidden' }}>{product.image_url ? <img src={product.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#777' }}><ShoppingBag size={40} /></div>}<span style={{ position: 'absolute', top: 10, left: 10 }}><StoreBadge product={product} /></span><span style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 5 }}><span style={{ border: `1px solid ${line}`, background: black, padding: '4px 7px', fontSize: 8, fontWeight: 800 }}>YOURS</span><span style={{ border: `1px solid ${line}`, background: black, color: product.status === 'published' ? acid : muted, padding: '4px 7px', fontSize: 8, fontWeight: 800 }}>{product.status === 'published' ? 'PUBLIC' : 'PRIVATE'}</span></span></div><div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}><div><h3 style={{ fontFamily: serif, fontSize: 22, lineHeight: 1.05, fontWeight: 300, margin: 0 }}>{product.title}</h3><span style={{ color: cartReady ? acid : '#F0C28A', fontSize: 9, fontWeight: 800, textTransform: 'uppercase' }}>{cartReady ? 'Mobile cart ready' : 'Product page only — no direct variant'}</span></div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>{regions.map(({ region, product: item }) => <div key={region} style={{ border: `1px solid ${line}`, padding: 9 }}><strong style={{ display: 'block', fontSize: 10 }}>{region} store</strong><span style={{ color: muted, fontSize: 10 }}>{item ? (formatProductPrice(item.price_cents, item.currency) || 'See store price') : 'Not configured'}</span><span style={{ display: 'block', color: item?.variant_id ? acid : muted, fontSize: 8, marginTop: 3 }}>{item ? (item.variant_id ? 'Cart ready' : 'Page link') : 'No storefront'}</span></div>)}</div><span style={{ color: muted, fontSize: 10 }}>{onProtocols.length ? `On ${onProtocols.join(', ')}` : 'Not on a Protocol yet'}</span><div style={{ marginTop: 'auto' }}>{actions}</div></div></article>;
+      })}</div> : !form && <div style={{ border: `1px dashed ${line}`, padding: 'clamp(24px,4vw,40px)', marginTop: 4, textAlign: 'center' }}><ShoppingBag size={34} strokeWidth={1} color={acid} /><h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 28, margin: '12px 0 6px' }}>No products yet</h2><p style={{ color: muted, fontSize: 12, margin: '0 auto 16px', maxWidth: 420 }}>Paste a product link from your Shopify store. It will show on your site and on the Protocols you choose.</p><button type="button" onClick={() => setForm(emptyForm(defaultCurrency))} style={btn}><Plus size={14} />Add your first product</button></div>}
     </div>
   </section>;
 }
