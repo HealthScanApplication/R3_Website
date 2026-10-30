@@ -1463,7 +1463,46 @@ function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, a
   </section>;
 }
 
-function GuardianOfferCatalog({ profile, offers, ramps, reviews, accent }: { profile: GuideProfile; offers: GuideOffer[]; ramps: GuideValueRamp[]; reviews: GuardianReview[]; accent: string }) {
+const offerProtocolKey = (value: string) => value.toLowerCase().replace(/\br3\b|\bprotocol\b/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+
+function FreeOfferFlipCard({ profile, offer, protocol, reviews, accent }: { profile: GuideProfile; offer: GuideOffer; protocol?: AdminProtocol; reviews: GuardianReview[]; accent: string }) {
+  const [flipped, setFlipped] = useState(false);
+  const [email, setEmail] = useState('');
+  const [state, setState] = useState<'idle' | 'sending' | 'error'>('idle');
+  async function unlock(event: React.FormEvent) {
+    event.preventDefault();
+    setState('sending');
+    try {
+      await submitGuardianOptIn(profile.user_id, {
+        name: email.trim().split('@')[0] || 'Subscriber', email, goal: null,
+        marketingConsent: false, consentText: CONSENT_TEXT, sourceOfferId: offer.id,
+      });
+      window.location.assign(protocol ? `/protocol/${encodeURIComponent(protocol.id)}` : '#start');
+    } catch { setState('error'); }
+  }
+  return <div style={{ minHeight: 520, perspective: 1200 }}>
+    <div style={{ position: 'relative', minHeight: 520, transformStyle: 'preserve-3d', transition: 'transform 650ms cubic-bezier(.16,1,.3,1)', transform: flipped ? 'rotateY(180deg)' : 'rotateY(0)' }}>
+      <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden' }}>
+        <ProductCard {...reviewStats(reviews)} audience={audienceLabel(profile.social_links?.audience_details)} imageUrl={offer.cover_url} kind={offer.kind} eyebrow="Free offer" title={customerFacingOfferTitle(offer.title)} copy={offer.description || 'Open this offer to see what is included.'} price="Free" name={profile.display_name} avatarUrl={profile.avatar_url} accent={accent} cta="Get free access" onClick={() => setFlipped(true)} visibility="public" />
+      </div>
+      <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', transform: 'rotateY(180deg)', boxSizing: 'border-box', minHeight: 520, padding: 26, border: '1px solid rgba(242,239,231,.34)', borderRadius: 6, background: '#F2EFE7', color: '#11120F', display: 'flex', flexDirection: 'column', fontFamily: APP.font }}>
+        <button type="button" onClick={() => setFlipped(false)} aria-label={`Back to ${offer.title}`} style={{ alignSelf: 'flex-end', border: 0, background: 'transparent', color: '#66645F', fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer' }}>Back</button>
+        <span style={{ color: APP.greenDark, fontSize: 10, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 18 }}>Free protocol</span>
+        <h3 style={{ fontFamily: serif, fontSize: 32, fontWeight: 300, lineHeight: 1.06, margin: '12px 0 10px' }}>{customerFacingOfferTitle(offer.title)}</h3>
+        <p style={{ color: '#66645F', fontSize: 14, lineHeight: 1.55, margin: 0 }}>Enter your email to unlock the complete protocol, including every day, step and linked detail.</p>
+        <form onSubmit={unlock} style={{ marginTop: 'auto', display: 'grid', gap: 10 }}>
+          <label htmlFor={`free-offer-${offer.id}`} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Email address</label>
+          <span style={{ height: 52, display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px', boxSizing: 'border-box', border: '1px solid #11120F', background: '#FFF' }}><Mail size={17} aria-hidden="true" /><input id={`free-offer-${offer.id}`} required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', color: '#11120F', font: 'inherit' }} /></span>
+          {state === 'error' && <span role="alert" style={{ color: '#A33B2B', fontSize: 12 }}>We could not unlock this protocol. Please try again.</span>}
+          <button disabled={state === 'sending'} style={{ minHeight: 50, border: '1px solid #11120F', background: '#11120F', color: '#FFF', fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer', opacity: state === 'sending' ? .6 : 1 }}>{state === 'sending' ? 'Opening protocol…' : 'Email me access & open protocol'}</button>
+          <span style={{ color: '#77746D', fontSize: 10, lineHeight: 1.45 }}>Your email is used to provide this access. No marketing subscription is added here.</span>
+        </form>
+      </div>
+    </div>
+  </div>;
+}
+
+function GuardianOfferCatalog({ profile, offers, ramps, reviews, accent, protocols }: { profile: GuideProfile; offers: GuideOffer[]; ramps: GuideValueRamp[]; reviews: GuardianReview[]; accent: string; protocols: AdminProtocol[] }) {
   if (!offers.length) return null;
   const price = (offer: GuideOffer) => offer.access_model === 'free' ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Enquire';
   const href = (offer: GuideOffer) => {
@@ -1481,7 +1520,13 @@ function GuardianOfferCatalog({ profile, offers, ramps, reviews, accent }: { pro
         <p style={{ color: '#B9B9B0', fontFamily: APP.font, fontSize: 16, lineHeight: 1.55, maxWidth: 620, margin: 0 }}>Browse the full published collection—free resources, protocols, sessions, communities and programs.</p>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,300px),1fr))', gap: 18 }}>
-        {offers.map((offer) => <ProductCard key={offer.id} {...reviewStats(reviews)} audience={audienceLabel(profile.social_links?.audience_details)} imageUrl={offer.cover_url} kind={offer.kind} eyebrow={offer.access_model === 'free' ? 'Free offer' : 'Published offer'} title={customerFacingOfferTitle(offer.title)} copy={offer.description || 'Open this offer to see what is included.'} price={price(offer)} name={profile.display_name} avatarUrl={profile.avatar_url} accent={accent} cta={offer.kind === 'community' ? 'Join community' : 'View offer'} href={href(offer)} visibility="public" />)}
+        {offers.map((offer) => {
+          const wanted = offerProtocolKey(offer.title);
+          const protocol = protocols.find((item) => offerProtocolKey(item.name) === wanted) || protocols.find((item) => offerProtocolKey(item.name).includes(wanted) || wanted.includes(offerProtocolKey(item.name)));
+          return offer.access_model === 'free' && offer.kind !== 'community'
+            ? <FreeOfferFlipCard key={offer.id} profile={profile} offer={offer} protocol={protocol} reviews={reviews} accent={accent} />
+            : <ProductCard key={offer.id} {...reviewStats(reviews)} audience={audienceLabel(profile.social_links?.audience_details)} imageUrl={offer.cover_url} kind={offer.kind} eyebrow="Published offer" title={customerFacingOfferTitle(offer.title)} copy={offer.description || 'Open this offer to see what is included.'} price={price(offer)} name={profile.display_name} avatarUrl={profile.avatar_url} accent={accent} cta={offer.kind === 'community' ? 'Join community' : 'View offer'} href={href(offer)} visibility="public" />;
+        })}
       </div>
     </div>
   </section>;
@@ -1549,7 +1594,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
       {/* Shared with the builder preview, so what Guardians build is what they publish. */}
       <GuardianSiteHero audience={audienceLabel(profile.social_links?.audience_details)} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={profile.display_name} avatarUrl={profile.avatar_url} specialties={profile.specialties} headline={profile.headline || profile.display_name} tags={publicExpertiseTags} bio={profile.bio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} greyscale={publicGreyscale}
         cards={publishedRamps.length ? publishedRamps.slice(0, 1).map((ramp) => ({ key: ramp.id, offerTitle: publishedOffers.find((offer) => offer.id === ramp.offer_ids[0])?.title || ramp.name, eyebrow: ramp.problem || undefined, title: customerFacingOfferTitle(publishedOffers.find((offer) => offer.id === ramp.offer_ids[0])?.title || ramp.name), copy: publishedOffers.find((offer) => offer.id === ramp.offer_ids[0])?.description || '', kind: publishedOffers.find((offer) => offer.id === ramp.offer_ids[0])?.kind, price: publishedOffers.find((offer) => offer.id === ramp.offer_ids[0])?.access_model === 'free' ? 'Free' : undefined, href: pathSlug === encodeURIComponent(ramp.slug) ? '#offers' : `/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}` })) : freeOffers.slice(0, 1).map((offer) => ({ key: offer.id, offerTitle: offer.title, eyebrow: profile.specialties.slice(0, 2).join(' · '), title: customerFacingOfferTitle(offer.title), copy: offer.description || '', kind: offer.kind, price: 'Free', href: '#start' }))} />
-      <GuardianOfferCatalog profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} />
+      <GuardianOfferCatalog profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} />
       {reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}
       <GuardianFunnel key={selectedRamp?.id || 'default'} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} />
       <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} protocols={guardianProtocols} />
