@@ -703,7 +703,11 @@ function productsError(error: any, status: number): Error & { code?: string; sta
 
 function withProtocolIds(row: any): GuideProduct {
   const { guide_product_protocols: links, ...product } = row;
-  return { ...product, protocol_ids: ((links || []) as { protocol_id: string; position: number }[]).sort((a, b) => a.position - b.position).map((link) => link.protocol_id) } as GuideProduct;
+  const catalogId = typeof product.catalog_product_id === 'string' ? product.catalog_product_id : '';
+  const imageUrl = /^trelune_[a-z0-9_]+$/.test(catalogId)
+    ? `/images/trelune/generated/${catalogId}.jpg`
+    : product.image_url;
+  return { ...product, image_url: imageUrl, protocol_ids: ((links || []) as { protocol_id: string; position: number }[]).sort((a, b) => a.position - b.position).map((link) => link.protocol_id) } as GuideProduct;
 }
 
 export async function listGuideProducts(guideId: string): Promise<GuideProduct[]> {
