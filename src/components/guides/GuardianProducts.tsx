@@ -202,11 +202,11 @@ export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding 
     return () => { live = false; };
   }, [guideId]);
   if (!products.length) return null;
-  return <section id="shop" aria-label={`Shop ${guardianName}'s products`} style={{ padding: `clamp(60px,9vw,120px) ${pagePadding}`, borderTop: '1px solid rgba(17,18,15,.2)' }}>
+  return <section id="shop" aria-label={`Shop ${guardianName}'s products`} style={{ padding: `clamp(72px,10vw,132px) ${pagePadding}`, borderTop: '1px solid rgba(17,18,15,.2)', background: '#F2EFE7', color: APP.text }}>
     <div style={{ fontFamily: APP.font, textAlign: 'center', margin: '0 auto 28px', maxWidth: 640 }}>
-      <span style={{ display: 'block', color: APP.greenDark, fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Shop</span>
-      <h2 style={{ fontFamily: APP.font, fontSize: 'clamp(28px,4vw,40px)', fontWeight: 700, color: APP.text, margin: '0 0 8px' }}>What {guardianName} uses</h2>
-      <p style={{ color: APP.muted, fontSize: 15, fontWeight: 600, margin: 0 }}>Bought directly from {guardianName}’s own store.</p>
+      <span style={{ display: 'block', color: APP.greenDark, fontSize: 15, fontWeight: 600, marginBottom: 6 }}>All products · {products.length}</span>
+      <h2 style={{ fontFamily: APP.font, fontSize: 'clamp(28px,4vw,40px)', fontWeight: 700, color: APP.text, margin: '0 0 8px' }}>{guardianName}’s complete shop</h2>
+      <p style={{ color: APP.muted, fontSize: 15, fontWeight: 600, margin: 0 }}>Every published product, bought directly from {guardianName}’s own store.</p>
     </div>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,240px),280px))', justifyContent: 'center', gap: 18 }}>
       {products.map((product) => <article key={product.id} style={{ background: APP.surface, border: `1px solid ${APP.border}`, borderRadius: 20, overflow: 'hidden', display: 'flex', flexDirection: 'column', fontFamily: APP.font, color: APP.text }}>
