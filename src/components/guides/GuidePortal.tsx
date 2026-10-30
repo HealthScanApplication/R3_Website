@@ -3473,7 +3473,7 @@ const offerBuilderTypes = [
   { kind: 'recipe_book', title: 'Recipe collection', eyebrow: 'Meals', copy: 'Build recipes grouped as breakfast, lunch, dinner, snack or drink.', Icon: Salad },
   { kind: 'one_to_one_call', title: '1:1 booking', eyebrow: 'Private live', copy: 'Send a client to your saved booking page for individual support.', Icon: CalendarDays },
   { kind: 'group_call', title: 'Group call', eyebrow: 'Live group', copy: 'Create a shared session using your saved booking link.', Icon: Users },
-  { kind: 'community', title: 'Guardian forum / digital community', eyebrow: 'Ongoing community', copy: 'Create a private or public space for discussions, resources, questions and ongoing member support.', Icon: Users },
+  { kind: 'community', title: 'Digital community', eyebrow: 'Ongoing community', copy: 'Create a private or public space for discussions, resources, questions and ongoing member support.', Icon: Users },
   { kind: 'in_person', title: 'In-person offer', eyebrow: 'Physical', copy: 'Package an appointment, workshop or local experience.', Icon: Globe2 },
 ] as const;
 
