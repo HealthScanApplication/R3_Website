@@ -532,6 +532,7 @@ const audienceArt = atlas('/images/guides/tags/audience.webp', 4, 2, ['Everyone'
 const supportArt = atlas('/images/guides/tags/support-v3.webp', 3, 2, ['ROUTINE³ (physical + digital)', 'Recipes', 'Group call', '1:1 online', 'In person', 'Event']);
 const offerArt: Record<string, TagArt> = atlas('/images/guides/tags/offers-v2.webp', 4, 3, ['Starter guide', 'Recipe pack', 'ROUTINE³', '1:1 call', 'Group call', 'Journey', 'Event', 'eBook', 'Recipe book', 'Team program', 'Upload', 'Paid'], .75);
 const offerTypeArt = atlas('/images/guides/tags/offer-types-v3.png', 4, 2, ['routine', 'ebook', 'recipe_book', 'routine_guidance', 'festival', 'group_call', 'one_to_one_call', 'in_person']);
+(offerTypeArt as Record<string, TagArt>).community = offerTypeArt.group_call;
 const freeOfferArt: Record<FreeOfferKind, TagArt> = {
   ebook: offerArt.eBook,
   one_to_one_call: offerArt['1:1 call'],
@@ -917,7 +918,7 @@ function PublicGuidePage({ isSignedIn }: { isSignedIn: boolean }) {
   );
 }
 
-const SUPPORT_KINDS: GuideOffer['kind'][] = ['one_to_one_call', 'group_call', 'in_person', 'journey', 'festival', 'team_program'];
+const SUPPORT_KINDS: GuideOffer['kind'][] = ['one_to_one_call', 'group_call', 'community', 'in_person', 'journey', 'festival', 'team_program'];
 
 /** Default funnel order: the ramp's own order when published, else free → paid by price → personal support. */
 function orderFunnelOffers(offers: GuideOffer[], ramp: GuideValueRamp | null): GuideOffer[] {
@@ -1314,7 +1315,7 @@ const isProtocolKind = (kind?: string) => kind === 'routine' || kind === 'routin
 // Every offer gets a format tag: app-delivered plans are PDF + ROUTINE³, others name their format.
 const APP_PLAN_KINDS = ['routine', 'routine_guidance', 'program', 'journey', 'team_program', 'lead_magnet'];
 const boxTag: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 5, height: 22, padding: '0 8px', border: '1px solid #111827', borderRadius: 2, background: '#F5F2EA', fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', boxSizing: 'border-box', color: '#111827', textTransform: 'uppercase', whiteSpace: 'nowrap' };
-const OTHER_FORMATS: Record<string, string> = { lead: 'Lead', ebook: 'Printed PDF', recipe_book: 'Printed PDF', one_to_one_call: '1:1 call', group_call: 'Group call', in_person: 'In person', festival: 'Event', product: 'Product' };
+const OTHER_FORMATS: Record<string, string> = { lead: 'Lead', ebook: 'Printed PDF', recipe_book: 'Printed PDF', one_to_one_call: '1:1 call', group_call: 'Group call', community: 'Digital community', in_person: 'In person', festival: 'Event', product: 'Product' };
 function OfferFormatTag({ kind }: { kind?: string }) {
   if (!kind || APP_PLAN_KINDS.includes(kind)) return <ProtocolFormatTag />;
   const name = OTHER_FORMATS[kind] || 'Online';
@@ -3471,6 +3472,7 @@ const offerBuilderTypes = [
   { kind: 'recipe_book', title: 'Recipe collection', eyebrow: 'Meals', copy: 'Build recipes grouped as breakfast, lunch, dinner, snack or drink.', Icon: Salad },
   { kind: 'one_to_one_call', title: '1:1 booking', eyebrow: 'Private live', copy: 'Send a client to your saved booking page for individual support.', Icon: CalendarDays },
   { kind: 'group_call', title: 'Group call', eyebrow: 'Live group', copy: 'Create a shared session using your saved booking link.', Icon: Users },
+  { kind: 'community', title: 'Guardian forum / digital community', eyebrow: 'Ongoing community', copy: 'Create a private or public space for discussions, resources, questions and ongoing member support.', Icon: Users },
   { kind: 'in_person', title: 'In-person offer', eyebrow: 'Physical', copy: 'Package an appointment, workshop or local experience.', Icon: Globe2 },
 ] as const;
 
