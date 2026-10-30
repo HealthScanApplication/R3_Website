@@ -1309,16 +1309,16 @@ const headlineStyleOf = (value?: string | null): HeadlineStyle => value === 'app
 const APP = { bg: '#F2F4F7', surface: '#FFFFFF', alt: '#F6F8FA', text: '#111827', muted: '#6B7280', faint: '#9CA3AF', border: '#E5E7EB', green: '#10B981', greenDark: '#047857', greenSoft: '#86EFAC', font: "'Poppins', 'Inter', sans-serif" };
 const appButton: React.CSSProperties = { width: '100%', minHeight: 56, border: 0, borderRadius: 16, background: '#000', color: '#FFF', fontFamily: APP.font, cursor: 'pointer', display: 'grid', placeItems: 'center', padding: '8px 16px', boxSizing: 'border-box' };
 // Format tag for Protocol offers: printable PDF plus the interactive version in the ROUTINE³ app.
-const ProtocolFormatTag = () => <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: APP.text, fontFamily: APP.font, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, height: 18, padding: '0 8px', border: '1px solid #111827', borderRadius: 2, fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.13em', boxSizing: 'border-box' }}><FileText size={11} />PDF</span><span aria-hidden="true" style={{ color: APP.muted }}>+</span><RoutineMark size={18} textColor="#111827" hairline="#111827" suffix="" /></span>;
+const ProtocolFormatTag = () => <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: APP.text, fontFamily: APP.font, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}><span style={{ ...boxTag, background: '#F5F2EA' }}><FileText size={11} />Printed PDF</span><span aria-hidden="true" style={{ color: '#F5F2EA', fontWeight: 800 }}>+</span><span style={{ ...boxTag, background: '#F5F2EA' }}>R3 Protocol</span></span>;
 const isProtocolKind = (kind?: string) => kind === 'routine' || kind === 'routine_guidance';
 // Every offer gets a format tag: app-delivered plans are PDF + ROUTINE³, others name their format.
 const APP_PLAN_KINDS = ['routine', 'routine_guidance', 'program', 'journey', 'team_program', 'lead_magnet'];
-const boxTag: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 5, height: 18, padding: '0 8px', border: '1px solid #111827', borderRadius: 2, fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.13em', boxSizing: 'border-box', color: '#111827', textTransform: 'uppercase', whiteSpace: 'nowrap' };
-const OTHER_FORMATS: Record<string, string> = { lead: 'Lead', ebook: 'PDF', recipe_book: 'PDF', one_to_one_call: '1:1 call', group_call: 'Group call', in_person: 'In person', festival: 'Event', product: 'Product' };
+const boxTag: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 5, height: 22, padding: '0 8px', border: '1px solid #111827', borderRadius: 2, background: '#F5F2EA', fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', boxSizing: 'border-box', color: '#111827', textTransform: 'uppercase', whiteSpace: 'nowrap' };
+const OTHER_FORMATS: Record<string, string> = { lead: 'Lead', ebook: 'Printed PDF', recipe_book: 'Printed PDF', one_to_one_call: '1:1 call', group_call: 'Group call', in_person: 'In person', festival: 'Event', product: 'Product' };
 function OfferFormatTag({ kind }: { kind?: string }) {
   if (!kind || APP_PLAN_KINDS.includes(kind)) return <ProtocolFormatTag />;
   const name = OTHER_FORMATS[kind] || 'Online';
-  return <span style={boxTag}>{name === 'PDF' && <FileText size={11} />}{name}</span>;
+  return <span style={boxTag}>{name === 'Printed PDF' && <FileText size={11} />}{name}</span>;
 }
 // Audience line from the offer-creation flow (social_links.audience_details), e.g. "Women · 32–55 · Menopause".
 type AudienceDetail = { min?: number; max?: number; stages?: string[] };

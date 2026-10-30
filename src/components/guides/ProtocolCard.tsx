@@ -29,7 +29,7 @@ export const PROTOCOL_CARD_CSS = `
 .r3-pcard-main:focus-visible{outline:2px solid #9A6A2F;outline-offset:-4px}
 @supports selector(:has(a)){.r3-pcard-main:focus-visible{outline:none}.r3-pcard:has(.r3-pcard-main:focus-visible){outline:2px solid #9A6A2F;outline-offset:2px}}
 .r3-pcard[data-pressed=true]{border-color:#11120F}
-.r3-pcard-actions{position:absolute;top:10px;right:10px;z-index:2;display:flex;gap:6px;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity 300ms var(--ease),transform 300ms var(--ease)}
+.r3-pcard-actions{position:absolute;top:46px;right:10px;z-index:3;display:flex;gap:6px;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity 300ms var(--ease),transform 300ms var(--ease)}
 .r3-pcard:hover .r3-pcard-actions,.r3-pcard:focus-within .r3-pcard-actions{opacity:1;pointer-events:auto;transform:none}
 .r3-pcard-act{position:relative;display:grid;place-items:center;width:34px;height:34px;margin:0;padding:0;border:1px solid rgba(17,18,15,.55);border-radius:4px;background:rgba(255,255,255,.92);color:#11120F;cursor:pointer;transition:background 200ms ease,color 200ms ease,border-color 200ms ease}
 .r3-pcard-act::after{content:"";position:absolute;inset:-5px}
@@ -48,11 +48,10 @@ export const PROTOCOL_CARD_CSS = `
 .r3-pcard-glow{position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(70% 80% at 50% 58%,rgba(196,138,60,.62),rgba(102,114,69,.45) 48%,transparent 80%);transition:opacity 800ms var(--ease)}
 .r3-pcard:hover .r3-pcard-glow,.r3-pcard:focus-within .r3-pcard-glow,.r3-pcard[data-pressed=true] .r3-pcard-glow{opacity:1}
 .r3-pcard-badge{position:absolute;z-index:2;top:12px;left:12px;padding:6px 10px;border-radius:2px;background:#F5F2EA;color:#11120F;font-size:10px;font-weight:700;letter-spacing:.12em;line-height:1;text-transform:uppercase}
-.r3-pcard-corner{position:absolute;z-index:2;top:12px;right:12px;display:flex;flex-direction:column;align-items:flex-end;gap:6px;max-width:calc(100% - 100px)}
-.r3-pcard-corner>*{padding:4px 6px;border-radius:2px;background:rgba(245,242,234,.94);max-width:100%;box-sizing:border-box}
-.r3-pcard-corner>[data-card-owner=yours]{background:#11120F;color:#FFF;border:1px solid rgba(255,255,255,.48);font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
-.r3-pcard-corner>[data-card-visibility]{border:1px solid rgba(17,18,15,.35);color:#11120F;font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
-.r3-pcard-corner>[data-card-visibility=private]{background:#E7E1D6;color:#4B453D}
+.r3-pcard-ownership{position:absolute;z-index:2;top:12px;right:12px;display:flex;align-items:center;gap:6px;max-width:calc(100% - 24px)}
+.r3-pcard-ownership>[data-card-owner],.r3-pcard-ownership>[data-card-visibility]{box-sizing:border-box;padding:5px 8px;border:1px solid rgba(245,242,234,.82);border-radius:2px;background:rgba(17,18,15,.88);color:#F5F2EA;font-family:${sans};font-size:9px;font-weight:800;line-height:1;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap}
+.r3-pcard-corner{position:absolute;z-index:2;left:12px;bottom:12px;display:flex;align-items:center;gap:6px;max-width:calc(100% - 24px)}
+.r3-pcard-corner>*{max-width:100%;box-sizing:border-box}
 .r3-pcard:hover .r3-pcard-img,.r3-pcard:focus-within .r3-pcard-img,.r3-pcard[data-pressed=true] .r3-pcard-img{filter:${COLOUR};transform:scale(1.035)}
 .r3-pcard:hover .r3-pcard-blur,.r3-pcard:focus-within .r3-pcard-blur,.r3-pcard[data-pressed=true] .r3-pcard-blur{filter:${COLOUR} blur(3.5px);transform:scale(1.09)}
 .r3-pcard:hover .r3-pcard-plate,.r3-pcard:focus-within .r3-pcard-plate,.r3-pcard[data-pressed=true] .r3-pcard-plate,.r3-pcard:hover .r3-pcard-plate-slot,.r3-pcard:focus-within .r3-pcard-plate-slot,.r3-pcard[data-pressed=true] .r3-pcard-plate-slot{filter:grayscale(0) brightness(1.05)}
@@ -70,7 +69,7 @@ export const PROTOCOL_CARD_CSS = `
 .r3-pcard-cta{display:inline-flex;flex:0 0 auto;margin-left:auto;align-items:center;gap:8px;font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#11120F}
 .r3-pcard-cta svg{transition:transform 400ms var(--ease)}
 .r3-pcard:hover .r3-pcard-cta svg,.r3-pcard:focus-within .r3-pcard-cta svg{transform:translateX(4px)}
-@container (max-width:330px){.r3-pcard-corner{top:auto;bottom:12px;left:12px;right:auto;align-items:flex-start;max-width:calc(100% - 24px)}}
+@container (max-width:330px){.r3-pcard-corner{max-width:calc(100% - 24px);transform:scale(.9);transform-origin:left bottom}.r3-pcard-ownership{gap:4px}.r3-pcard-ownership>[data-card-owner],.r3-pcard-ownership>[data-card-visibility]{padding:4px 6px}}
 @media (hover:none),(pointer:coarse){
   .r3-pcard-actions{opacity:1;pointer-events:auto;transform:none}
   .r3-pcard-img{filter:${COLOUR}}
@@ -175,7 +174,8 @@ export function ProtocolCard({ title, kicker, tags, copy, imageUrl, by, byAvatar
         {plate ? <span className="r3-pcard-plate-slot" aria-hidden="true">{plate}</span> : <img className="r3-pcard-plate" src={PROTOCOL_PLATE} alt="" loading="lazy" />}
       </>}
       {badge && <span className="r3-pcard-badge">{badge}</span>}
-      {(corner || visibility || owned) && <div className="r3-pcard-corner"><CardOwnershipTags owned={owned} visibility={visibility} />{corner}</div>}
+      {(visibility || owned) && <div className="r3-pcard-ownership"><CardOwnershipTags owned={owned} visibility={visibility} /></div>}
+      {corner && <div className="r3-pcard-corner">{corner}</div>}
     </div>
     <div className="r3-pcard-body">
       {kicker && <span className="r3-pcard-kicker">{kicker}</span>}
