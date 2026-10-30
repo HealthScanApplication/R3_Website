@@ -1253,7 +1253,7 @@ function GuardianFunnel({ profile, offers, ramp, accent, headingFont, reviews = 
   </>;
 }
 
-type SiteHeroCard = { key: string; offerTitle?: string; eyebrow?: string; title: string; copy?: string; href?: string; onClick?: () => void; kind?: string; price?: string };
+type SiteHeroCard = { key: string; offerTitle?: string; eyebrow?: string; title: string; copy?: string; href?: string; onClick?: () => void; kind?: string; price?: string; imageUrl?: string | null };
 const productArt = (kind?: string): TagArt | undefined => kind ? (offerTypeArt as Record<string, TagArt>)[kind] || (freeOfferArt as Record<string, TagArt>)[kind] : undefined;
 // Light version of the dashboard offer card (art, author, title, value stars, price) for the public site and funnel.
 // Review stats for offer cards: average + count of published reviews, or nothing when there are none.
@@ -1437,26 +1437,41 @@ function ReviewsPanel({ userId, slug }: { userId: string; slug: string }) {
     {reviews.length > 0 && <div style={{ display: 'grid', gap: 6, marginTop: 14 }}><span style={label}>Received</span>{reviews.map((r) => <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, borderTop: `1px solid ${line}`, paddingTop: 8, fontSize: 11, opacity: r.status === 'hidden' ? .5 : 1 }}><span style={{ color: acid }}>{'★'.repeat(r.rating)}</span><span style={{ flex: 1, color: ink }}>{r.body} <span style={{ color: muted }}>· {r.reviewer_name}</span></span><button type="button" onClick={() => toggle(r)} style={small}>{r.status === 'published' ? 'Hide' : 'Show'}</button></div>)}</div>}
   </section>;
 }
-function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, accent, headingFont, background, backgroundIsVideo = false, greyscale = false, cards, headlineStyle = 'editorial', reviewSummary = {}, audience }: { audience?: string; reviewSummary?: { rating?: number; reviewCount?: number }; headlineStyle?: HeadlineStyle; name: string; avatarUrl?: string | null; specialties: string[]; headline: string; tags: string[]; bio: string; accent: string; headingFont: string; background?: string | null; backgroundIsVideo?: boolean; greyscale?: boolean; cards: SiteHeroCard[] }) {
-  return <section style={{ position: 'relative', overflow: 'clip', minHeight: '100svh', display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', alignItems: 'center', backgroundImage: background && !backgroundIsVideo ? `linear-gradient(rgba(242,239,231,.66),rgba(242,239,231,.66)),url(${background})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: greyscale ? 'luminosity' : 'normal', color: '#11120F' }}>
-    {background && backgroundIsVideo && <><video src={background} autoPlay muted loop playsInline aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'none' }} /><span aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'rgba(242,239,231,.66)' }} /></>}
-    <div style={{ position: 'relative', zIndex: 2, width: '100%', maxWidth: 1240, margin: '0 auto', boxSizing: 'border-box', padding: 'clamp(40px,7cqw,96px) clamp(24px,6cqw,84px)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,300px),1fr))', gap: 'clamp(28px,5cqw,72px)', alignItems: 'start' }}>
-      <div style={{ display: 'grid', gap: 12, alignSelf: 'center' }}>
-        <span style={{ fontFamily: APP.font, color: APP.greenDark, fontSize: 15, fontWeight: 600 }}>Featured</span>
-        {cards.map((card) => <ProductCard key={card.key} {...reviewSummary} audience={audience} kind={card.kind} eyebrow={card.eyebrow} title={card.title} copy={card.copy} price={card.price} name={name} avatarUrl={avatarUrl} accent={accent} href={card.href} onClick={card.onClick} />)}
-      </div>
-      <div style={{ alignSelf: 'center' }}>
+function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, accent, headingFont, background, backgroundIsVideo = false, greyscale = false, cards, headlineStyle = 'editorial', guideId, sourceOfferId }: { audience?: string; reviewSummary?: { rating?: number; reviewCount?: number }; headlineStyle?: HeadlineStyle; name: string; avatarUrl?: string | null; specialties: string[]; headline: string; tags: string[]; bio: string; accent: string; headingFont: string; background?: string | null; backgroundIsVideo?: boolean; greyscale?: boolean; cards: SiteHeroCard[]; guideId?: string; sourceOfferId?: string | null }) {
+  const [email, setEmail] = useState('');
+  const [captureState, setCaptureState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
+  const heroMedia = background || cards.find((card) => card.imageUrl)?.imageUrl || null;
+  async function capture(event: React.FormEvent) {
+    event.preventDefault();
+    if (!guideId) { document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' }); return; }
+    setCaptureState('sending');
+    try {
+      await submitGuardianOptIn(guideId, { name: email.trim().split('@')[0] || 'Subscriber', email, goal: null, marketingConsent: false, consentText: CONSENT_TEXT, sourceOfferId });
+      setCaptureState('done');
+    } catch { setCaptureState('error'); }
+  }
+  return <section style={{ position: 'relative', overflow: 'clip', minHeight: 'calc(100svh - 64px)', display: 'grid', alignItems: 'end', background: '#151A12', color: '#FFF' }}>
+    {heroMedia && !backgroundIsVideo && <img src={heroMedia} alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />}
+    {heroMedia && backgroundIsVideo && <video src={heroMedia} autoPlay muted loop playsInline aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />}
+    <span aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,rgba(8,10,7,.88) 0%,rgba(8,10,7,.62) 48%,rgba(8,10,7,.18) 100%),linear-gradient(0deg,rgba(8,10,7,.72),transparent 55%)' }} />
+    <div style={{ position: 'relative', zIndex: 2, width: '100%', maxWidth: 1240, margin: '0 auto', boxSizing: 'border-box', padding: 'clamp(52px,8vw,110px) clamp(24px,6vw,84px)', display: 'grid', gridTemplateColumns: 'minmax(0,720px)', alignItems: 'end' }}>
+      <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
           {avatarUrl ? <img src={avatarUrl} alt={name} style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'none' }} /> : <span style={{ width: 56, height: 56, borderRadius: '50%', background: '#D7D4CC', display: 'grid', placeItems: 'center', fontFamily: headingFont, fontSize: 24 }}>{(name || 'G').charAt(0)}</span>}
-          <span style={{ fontFamily: APP.font }}><strong style={{ display: 'block', fontSize: 15, fontWeight: 600, color: APP.text }}>{name || 'Your name'}</strong><span style={{ display: 'block', marginTop: 2, fontSize: 12, fontWeight: 600, color: APP.greenDark }}>{specialties.slice(0, 3).join(' · ') || 'Personal guidance'}</span></span>
+          <span style={{ fontFamily: APP.font }}><strong style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#FFF' }}>{name || 'Your name'}</strong><span style={{ display: 'block', marginTop: 2, fontSize: 12, fontWeight: 700, color: '#D6E7A8' }}>{specialties.slice(0, 3).join(' · ') || 'Personal guidance'}</span></span>
         </div>
-        {/* Headline in the Guardian's chosen style (editorial serif, app bold or statement caps). */}
-        <h1 style={{ ...HEADLINE_STYLES[headlineStyle].hero, margin: '0 0 16px' }}>{HEADLINE_STYLES[headlineStyle].stripStop ? (headline || name).replace(/\.$/, '') : (headline || name)}</h1>
+        <h1 style={{ ...HEADLINE_STYLES[headlineStyle].hero, color: '#FFF', fontSize: 'clamp(48px,7vw,96px)', textShadow: '0 2px 28px rgba(0,0,0,.28)', margin: '0 0 16px' }}>{HEADLINE_STYLES[headlineStyle].stripStop ? (headline || name).replace(/\.$/, '') : (headline || name)}</h1>
         <ExpertiseTags tags={tags} color={accent} />
-        <p style={{ fontFamily: APP.font, color: APP.muted, fontSize: 16, fontWeight: 500, lineHeight: 1.55, maxWidth: 560, margin: 0 }}>{bio}</p>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 28, fontFamily: APP.font }}>
-          <a href="#start" style={{ minHeight: 48, padding: '0 22px', background: '#11120F', color: '#FFF', border: '1px solid #11120F', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase' }}>Follow by email</a>
-          <a href="#catalog" style={{ minHeight: 48, padding: '0 22px', background: 'transparent', color: '#11120F', border: '1px solid #11120F', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase' }}>See all offers</a>
+        <p style={{ fontFamily: APP.font, color: 'rgba(255,255,255,.82)', fontSize: 16, fontWeight: 500, lineHeight: 1.55, maxWidth: 590, margin: 0 }}>{bio}</p>
+        <form onSubmit={capture} style={{ display: 'flex', flexWrap: 'wrap', maxWidth: 590, marginTop: 28, fontFamily: APP.font }}>
+          <label htmlFor="guardian-hero-email" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)' }}>Email address</label>
+          <span style={{ flex: '1 1 260px', minHeight: 54, display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px', boxSizing: 'border-box', background: 'rgba(255,255,255,.95)', color: '#11120F' }}><Mail size={18} /><input id="guardian-hero-email" required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Enter your email address" style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', color: '#11120F', font: 'inherit' }} /></span>
+          <button disabled={captureState === 'sending' || captureState === 'done'} style={{ minHeight: 54, padding: '0 22px', border: '1px solid #D6E7A8', background: '#D6E7A8', color: '#11120F', fontSize: 11, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer' }}>{captureState === 'done' ? 'You’re subscribed' : captureState === 'sending' ? 'Joining…' : 'Follow by email'}</button>
+        </form>
+        {captureState === 'error' && <span role="alert" style={{ display: 'block', color: '#FFD0C8', fontFamily: APP.font, fontSize: 12, marginTop: 8 }}>We could not add your email. Please try again.</span>}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 14, fontFamily: APP.font }}>
+          <a href="#catalog" style={{ minHeight: 46, padding: '0 18px', background: '#FFF', color: '#11120F', border: '1px solid #FFF', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>Explore protocols</a>
+          <a href="#shop" style={{ minHeight: 46, padding: '0 18px', background: 'rgba(8,10,7,.3)', color: '#FFF', border: '1px solid rgba(255,255,255,.7)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>Shop products</a>
         </div>
       </div>
     </div>
@@ -1593,7 +1608,8 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
     <main>
       {/* Shared with the builder preview, so what Guardians build is what they publish. */}
       <GuardianSiteHero audience={audienceLabel(profile.social_links?.audience_details)} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={profile.display_name} avatarUrl={profile.avatar_url} specialties={profile.specialties} headline={profile.headline || profile.display_name} tags={publicExpertiseTags} bio={profile.bio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} greyscale={publicGreyscale}
-        cards={publishedRamps.length ? publishedRamps.slice(0, 1).map((ramp) => ({ key: ramp.id, offerTitle: publishedOffers.find((offer) => offer.id === ramp.offer_ids[0])?.title || ramp.name, eyebrow: ramp.problem || undefined, title: customerFacingOfferTitle(publishedOffers.find((offer) => offer.id === ramp.offer_ids[0])?.title || ramp.name), copy: publishedOffers.find((offer) => offer.id === ramp.offer_ids[0])?.description || '', kind: publishedOffers.find((offer) => offer.id === ramp.offer_ids[0])?.kind, price: publishedOffers.find((offer) => offer.id === ramp.offer_ids[0])?.access_model === 'free' ? 'Free' : undefined, href: pathSlug === encodeURIComponent(ramp.slug) ? '#offers' : `/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}` })) : freeOffers.slice(0, 1).map((offer) => ({ key: offer.id, offerTitle: offer.title, eyebrow: profile.specialties.slice(0, 2).join(' · '), title: customerFacingOfferTitle(offer.title), copy: offer.description || '', kind: offer.kind, price: 'Free', href: '#start' }))} />
+        guideId={profile.user_id} sourceOfferId={freeOffers[0]?.id || null}
+        cards={publishedRamps.length ? publishedRamps.slice(0, 1).map((ramp) => { const offer = publishedOffers.find((item) => item.id === ramp.offer_ids[0]); return { key: ramp.id, offerTitle: offer?.title || ramp.name, eyebrow: ramp.problem || undefined, title: customerFacingOfferTitle(offer?.title || ramp.name), copy: offer?.description || '', kind: offer?.kind, price: offer?.access_model === 'free' ? 'Free' : undefined, imageUrl: offer?.cover_url, href: pathSlug === encodeURIComponent(ramp.slug) ? '#offers' : `/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}` }; }) : freeOffers.slice(0, 1).map((offer) => ({ key: offer.id, offerTitle: offer.title, eyebrow: profile.specialties.slice(0, 2).join(' · '), title: customerFacingOfferTitle(offer.title), copy: offer.description || '', kind: offer.kind, price: 'Free', imageUrl: offer.cover_url, href: '#start' }))} />
       <GuardianOfferCatalog profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} />
       {reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}
       <GuardianFunnel key={selectedRamp?.id || 'default'} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} />
@@ -2958,7 +2974,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           <div id="profile-site-preview" className="g-sticky" style={{ scrollMarginTop: 20 }}><span style={{ ...label, display: 'block', color: acid, marginBottom: 7 }}>Profile site preview <span style={{ color: muted }}>· shows every published offer path</span></span><PreviewFrame device={previewDevice}><div style={{ flex: '1 0 auto', background: pageColor, fontFamily: sans }}>
             {headerStyle !== 'hidden' && <GuardianSiteHeader brandName={brandName.trim()} path={`routine3.com/${displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-') || 'your-name'}`} />}
             <GuardianSiteHero audience={audienceLabel(audienceDetails, audience)} reviewSummary={reviewStats(guardianReviews)} headlineStyle={headlineStyle} name={displayName} avatarUrl={avatarUrl} specialties={chosen} headline={generatedHeadline} tags={expertiseTags} bio={intro || `A practical ${chosen.slice(0, 2).join(' and ').toLowerCase() || 'guidance'} path shaped for ${audience.join(' and ').toLowerCase()}.`} accent={accentColor} headingFont={serif} background={effectiveBackground} backgroundIsVideo={backgroundType === 'video'} greyscale={imageTreatment === 'greyscale'}
-              cards={[{ key: 'first', eyebrow: rampTargetProblem, title: customerFacingOfferTitle(leadMagnetTitle || suggestedFreeOffer.title), copy: freeAudienceValue, kind: freeOfferType, price: 'Free', onClick: () => document.getElementById('value-ramp-funnel-preview')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }]} />
+              cards={[{ key: 'first', eyebrow: rampTargetProblem, title: customerFacingOfferTitle(leadMagnetTitle || suggestedFreeOffer.title), copy: freeAudienceValue, kind: freeOfferType, price: 'Free', imageUrl: effectiveBackground, onClick: () => document.getElementById('value-ramp-funnel-preview')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }]} />
           </div></PreviewFrame></div>
           </div>
         </FunnelStage>
