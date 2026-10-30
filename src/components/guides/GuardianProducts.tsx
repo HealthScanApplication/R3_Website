@@ -11,6 +11,24 @@ import {
 import { listProtocolItems, type AdminProtocol } from '../../utils/protocolAdmin';
 import { generateProtocolPdf } from '../../utils/protocolPdf';
 
+export interface GuardianLocalePreference {
+  region: string;
+  locale: string;
+  currency: string;
+}
+
+const DEFAULT_PRODUCT_CATEGORIES = ['All', 'Books', 'Bundles', 'Creams & skincare', 'Herbal treatments', 'Minerals', 'Other'];
+
+function productCategory(product: GuideProduct): string {
+  const text = `${product.title} ${product.description || ''}`.toLowerCase();
+  if (/\b(book|guide|handbook|self heal|sustain me)\b/.test(text)) return 'Books';
+  if (/\b(bundle|package|collection|kit)\b/.test(text)) return 'Bundles';
+  if (/\b(cream|soap|salve|oil|skin|beauty|yam)\b/.test(text)) return 'Creams & skincare';
+  if (/\b(tea|tincture|herb|reishi|mushroom|comfrey|castor)\b/.test(text)) return 'Herbal treatments';
+  if (/\b(mineral|salt|magnesium|baja)\b/.test(text)) return 'Minerals';
+  return 'Other';
+}
+
 const ink = '#F5F2EA';
 const muted = '#B8B6AF';
 const line = 'rgba(245,242,234,0.24)';
@@ -242,16 +260,25 @@ export function GuardianProducts({ guideId, guardianSlug, commissionPercent, pro
 const APP = { surface: '#FFFFFF', text: '#11120F', muted: '#66645F', border: 'rgba(17,18,15,.2)', greenDark: '#667245', font: sans };
 
 /** Public "Shop" block on a Guardian's site. Renders nothing until there are published products. */
-export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding, protocols = [] }: { guideId: string; guardianSlug: string; guardianName: string; pagePadding: string; protocols?: AdminProtocol[] }) {
+export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding, protocols = [], localePreference, categoryOrder }: { guideId: string; guardianSlug: string; guardianName: string; pagePadding: string; protocols?: AdminProtocol[]; localePreference?: GuardianLocalePreference; categoryOrder?: string }) {
   const [products, setProducts] = useState<GuideProduct[]>([]);
   const [usage, setUsage] = useState<Record<string, string[]>>({});
   const [downloading, setDownloading] = useState('');
   const [message, setMessage] = useState('');
+  const [activeCategory, setActiveCategory] = useState('All');
+  const [rates, setRates] = useState<Record<string, number> | null>(null);
   useEffect(() => {
     let live = true;
     listPublicGuideProducts(guideId).then((rows) => { if (live) setProducts(rows); }).catch(() => { if (live) setProducts([]); });
     return () => { live = false; };
   }, [guideId]);
+  useEffect(() => {
+    let live = true;
+    fetch('https://api.frankfurter.dev/v1/latest?base=EUR').then((response) => response.ok ? response.json() : null).then((data) => {
+      if (live && data?.rates) setRates({ EUR: 1, ...data.rates });
+    }).catch(() => undefined);
+    return () => { live = false; };
+  }, []);
   useEffect(() => {
     let live = true;
     Promise.all(protocols.map(async (protocol) => ({ protocol, items: await listProtocolItems('', protocol.id).catch(() => []) }))).then((rows) => {
@@ -269,6 +296,17 @@ export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding,
     finally { setDownloading(''); }
   }
   if (!products.length) return null;
+  const configured = (categoryOrder || '').split(',').map((value) => value.trim()).filter(Boolean);
+  const categories = ['All', ...(configured.length ? configured : DEFAULT_PRODUCT_CATEGORIES.slice(1))].filter((category, index, all) => all.indexOf(category) === index && (category === 'All' || products.some((product) => productCategory(product) === category)));
+  const shownProducts = activeCategory === 'All' ? products : products.filter((product) => productCategory(product) === activeCategory);
+  const displayPrice = (product: GuideProduct) => {
+    if (product.price_cents == null) return 'See local price';
+    const target = localePreference?.currency || product.currency;
+    const sourceRate = rates?.[product.currency];
+    const targetRate = rates?.[target];
+    if (!rates || !sourceRate || !targetRate || target === product.currency) return formatProductPrice(product.price_cents, product.currency, localePreference?.locale);
+    return `≈ ${formatProductPrice(Math.round(product.price_cents * targetRate / sourceRate), target, localePreference?.locale)}`;
+  };
   return <section id="shop" aria-label={`Shop ${guardianName}'s products`} style={{ padding: `clamp(72px,10vw,132px) ${pagePadding}`, borderTop: '1px solid rgba(17,18,15,.2)', background: '#F2EFE7', color: APP.text }}>
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
     <div style={{ fontFamily: APP.font, margin: '0 0 clamp(30px,5vw,52px)', maxWidth: 760 }}>
@@ -276,9 +314,10 @@ export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding,
       <h2 style={{ fontFamily: serif, fontSize: 'clamp(42px,7vw,82px)', fontWeight: 300, lineHeight: .94, letterSpacing: '-.045em', color: APP.text, margin: '0 0 18px' }}>{guardianName}’s products.</h2>
       <p style={{ color: APP.muted, fontSize: 16, lineHeight: 1.55, margin: 0, maxWidth: 620 }}>Shop products directly, then open the Protocols that use them in ROUTINE³ or keep a printable PDF.</p>
     </div>
+    <div role="tablist" aria-label="Product categories" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '0 0 26px' }}>{categories.map((category) => <button key={category} type="button" role="tab" aria-selected={activeCategory === category} onClick={() => setActiveCategory(category)} style={{ border: `1px solid ${activeCategory === category ? APP.text : APP.border}`, background: activeCategory === category ? APP.text : 'transparent', color: activeCategory === category ? '#FFF' : APP.text, minHeight: 38, padding: '0 14px', fontFamily: APP.font, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{category}</button>)}</div>
     {message && <p role="alert" style={{ color: '#8A3D2F', fontSize: 12 }}>{message}</p>}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,280px),1fr))', gap: 18 }}>
-      {products.map((product) => { const regional = regionalProduct(product); const linkedIds = [...new Set([...product.protocol_ids, ...(product.catalog_product_id ? usage[product.catalog_product_id] || [] : [])])]; const linked = linkedIds.map((id) => protocols.find((protocol) => protocol.id === id)).filter((protocol): protocol is AdminProtocol => !!protocol); return <article key={product.id} style={{ background: APP.surface, border: `1px solid ${APP.border}`, borderRadius: 6, overflow: 'hidden', display: 'flex', flexDirection: 'column', fontFamily: APP.font, color: APP.text }}>
+      {shownProducts.map((product) => { const regional = regionalProduct(product, localePreference?.locale || navigator.language, localePreference?.region || Intl.DateTimeFormat().resolvedOptions().timeZone); const linkedIds = [...new Set([...product.protocol_ids, ...(product.catalog_product_id ? usage[product.catalog_product_id] || [] : [])])]; const linked = linkedIds.map((id) => protocols.find((protocol) => protocol.id === id)).filter((protocol): protocol is AdminProtocol => !!protocol); return <article key={product.id} style={{ background: APP.surface, border: `1px solid ${APP.border}`, borderRadius: 6, overflow: 'hidden', display: 'flex', flexDirection: 'column', fontFamily: APP.font, color: APP.text }}>
         {product.image_url ? <img src={product.image_url} alt="" loading="lazy" style={{ width: '100%', aspectRatio: '1.2', objectFit: 'contain', background: '#EEEAE2', filter: 'grayscale(.18) contrast(1.02)' }} /> : <div style={{ aspectRatio: '1.2', display: 'grid', placeItems: 'center', background: '#EEEAE2', color: APP.muted }}><ShoppingBag size={40} strokeWidth={1.2} /></div>}
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
           <span style={{ color: APP.greenDark, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Product · {product.shop_domain}</span>
@@ -286,9 +325,10 @@ export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding,
           {product.description && <p style={{ color: APP.muted, fontSize: 13, lineHeight: 1.5, margin: 0 }}>{product.description.length > 140 ? `${product.description.slice(0, 139)}…` : product.description}</p>}
           {linked.length > 0 && <details style={{ borderTop: `1px solid ${APP.border}`, marginTop: 8, paddingTop: 12 }}><summary style={{ color: APP.greenDark, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', cursor: 'pointer' }}>Used in {linked.length} Protocol{linked.length === 1 ? '' : 's'} · View</summary>{linked.map((protocol) => <div key={protocol.id} style={{ marginTop: 9 }}><strong style={{ display: 'block', fontFamily: serif, fontSize: 16, fontWeight: 300 }}>{protocol.name.replace(/^R3 Protocol\s*>\s*/i, '')}</strong><span style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}><a href={`/protocol/${encodeURIComponent(protocol.id)}`} style={{ border: `1px solid ${APP.border}`, color: APP.text, padding: '7px 9px', fontSize: 9, fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, textTransform: 'uppercase', letterSpacing: '.07em' }}><Smartphone size={12} />Open in app</a><button type="button" disabled={downloading === protocol.id} onClick={() => void downloadProtocol(protocol)} style={{ border: `1px solid ${APP.border}`, background: 'transparent', color: APP.text, padding: '7px 9px', fontSize: 9, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5, textTransform: 'uppercase', letterSpacing: '.07em' }}><Download size={12} />{downloading === protocol.id ? 'Preparing…' : 'PDF'}</button></span></div>)}</details>}
           <div style={{ marginTop: 'auto', paddingTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-            <strong style={{ fontFamily: serif, fontWeight: 300, fontSize: 20 }}>{regional.price_cents == null ? 'See local price' : formatProductPrice(regional.price_cents, regional.currency)}</strong>
+            <strong style={{ fontFamily: serif, fontWeight: 300, fontSize: 20 }}>{displayPrice(regional)}</strong>
             <a href={buildProductBuyUrl(regional, { medium: 'web', guardianSlug, protocolSlug: linked[0] ? attributionSlug(linked[0].name) : null })} target="_blank" rel="noopener noreferrer" style={{ background: '#11120F', color: '#FFF', borderRadius: 2, padding: '11px 14px', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', textDecoration: 'none' }}>{regional.variant_id ? 'Add to basket' : 'View product'}</a>
           </div>
+          {localePreference && regional.price_cents != null && regional.currency !== localePreference.currency && <span style={{ color: APP.muted, fontSize: 10 }}>Checkout uses {formatProductPrice(regional.price_cents, regional.currency, localePreference.locale)} in the selected regional store.</span>}
           {product.discount_code && <span style={{ color: APP.greenDark, fontSize: 11, fontWeight: 600 }}>Code {product.discount_code} applied at checkout</span>}
         </div>
       </article>; })}

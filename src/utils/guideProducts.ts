@@ -182,7 +182,7 @@ export function buildProductBuyUrl(product: GuideProductLike, context: BuyLinkCo
 /** Europe is served by Tre Lune UK; Australia and New Zealand use the AU storefront. */
 export function regionalProduct<T extends GuideProductLike & { regional_storefronts?: Record<string, Partial<GuideProductLike>> | null }>(product: T, locale = typeof navigator === 'undefined' ? '' : navigator.language, timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone): T {
   const token = `${locale} ${timeZone}`.toLowerCase();
-  const region = /(^|[-_\s])(au|nz)([-_\s]|$)|australia|pacific\/(auckland|chatham)/.test(token) ? 'AU' : /(^|[-_\s])(gb|uk|ie)([-_\s]|$)|europe\//.test(token) ? 'UK' : 'AU';
+  const region = /(^|[-_\s])(au|nz)([-_\s]|$)|australia|new zealand|pacific\/(auckland|chatham)/.test(token) ? 'AU' : /(^|[-_\s])(gb|uk|ie)([-_\s]|$)|united kingdom|eurozone|europe\//.test(token) ? 'UK' : 'AU';
   const override = product.regional_storefronts?.[region] || (region === 'UK' ? product.regional_storefronts?.EU : null);
   return override ? { ...product, ...override } : product;
 }

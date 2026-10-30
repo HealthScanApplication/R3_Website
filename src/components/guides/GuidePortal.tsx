@@ -35,7 +35,7 @@ import { GuardianModal } from './GuardianModal';
 import { BrandKitFields } from './BrandKitFields';
 import { AGE_RANGES, LIFE_STAGES } from '../../utils/audienceTaxonomy';
 import { brandKitLinks, brandKitOf, defaultBrandKit, type BrandKit } from '../../utils/brandKit';
-import { GuardianProducts, GuardianShop } from './GuardianProducts';
+import { GuardianProducts, GuardianShop, type GuardianLocalePreference } from './GuardianProducts';
 import { ActivitiesLibrary } from './ActivitiesLibrary';
 import { CookingEquipment, CookingTechniques } from './CookingLibrary';
 import { CatalogIngredients, CatalogRecipes, FitnessRoutines } from './CatalogBrowsers';
@@ -224,6 +224,18 @@ const languageOptions = [
   { name: 'French', code: 'fr', flag: '🇫🇷' }, { name: 'German', code: 'de', flag: '🇩🇪' }, { name: 'Italian', code: 'it', flag: '🇮🇹' },
   { name: 'Portuguese', code: 'pt', flag: '🇵🇹' }, { name: 'Dutch', code: 'nl', flag: '🇳🇱' }, { name: 'Arabic', code: 'ar', flag: '🇦🇪' },
 ];
+const publicCurrencies = ['GBP', 'EUR', 'USD', 'PLN', 'CAD', 'AUD', 'NZD', 'CHF', 'JPY'] as const;
+const DEFAULT_PROTOCOL_CATEGORIES = ['All', 'Protocols', 'Guides', 'Recipes', 'Sessions', 'Communities', 'Programs'];
+const DEFAULT_PRODUCT_FILTERS = ['Books', 'Bundles', 'Creams & skincare', 'Herbal treatments', 'Minerals', 'Other'];
+
+function offerCategory(offer: GuideOffer): string {
+  if (offer.kind === 'recipe_book') return 'Recipes';
+  if (offer.kind === 'community') return 'Communities';
+  if (offer.kind === 'one_to_one_call' || offer.kind === 'group_call' || offer.kind === 'in_person' || offer.kind === 'festival') return 'Sessions';
+  if (offer.kind === 'ebook' || offer.kind === 'lead_magnet') return 'Guides';
+  if (offer.kind === 'program' || offer.kind === 'journey' || offer.kind === 'team_program') return 'Programs';
+  return 'Protocols';
+}
 function defaultLanguage() {
   if (typeof navigator === 'undefined') return 'English';
   const code = navigator.language.split('-')[0].toLowerCase();
@@ -1517,8 +1529,12 @@ function FreeOfferFlipCard({ profile, offer, protocol, reviews, accent }: { prof
   </div>;
 }
 
-function GuardianOfferCatalog({ profile, offers, ramps, reviews, accent, protocols }: { profile: GuideProfile; offers: GuideOffer[]; ramps: GuideValueRamp[]; reviews: GuardianReview[]; accent: string; protocols: AdminProtocol[] }) {
+function GuardianOfferCatalog({ profile, offers, ramps, reviews, accent, protocols, categoryOrder }: { profile: GuideProfile; offers: GuideOffer[]; ramps: GuideValueRamp[]; reviews: GuardianReview[]; accent: string; protocols: AdminProtocol[]; categoryOrder?: string }) {
+  const [activeCategory, setActiveCategory] = useState('All');
   if (!offers.length) return null;
+  const configured = (categoryOrder || '').split(',').map((value) => value.trim()).filter(Boolean);
+  const categories = ['All', ...(configured.length ? configured : DEFAULT_PROTOCOL_CATEGORIES.slice(1))].filter((category, index, all) => all.indexOf(category) === index && (category === 'All' || offers.some((offer) => offerCategory(offer) === category)));
+  const visibleOffers = activeCategory === 'All' ? offers : offers.filter((offer) => offerCategory(offer) === activeCategory);
   const price = (offer: GuideOffer) => offer.access_model === 'free' ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Enquire';
   const href = (offer: GuideOffer) => {
     if (offer.kind === 'community') return `/guardians/${encodeURIComponent(profile.slug)}/community/${encodeURIComponent(communitySlug(offer.title))}`;
@@ -1534,8 +1550,9 @@ function GuardianOfferCatalog({ profile, offers, ramps, reviews, accent, protoco
         <h2 style={{ fontFamily: serif, fontSize: 'clamp(42px,7vw,82px)', fontWeight: 300, lineHeight: .94, letterSpacing: '-.045em', margin: '0 0 18px' }}>Explore every way to work with {profile.display_name}.</h2>
         <p style={{ color: '#B9B9B0', fontFamily: APP.font, fontSize: 16, lineHeight: 1.55, maxWidth: 620, margin: 0 }}>Browse the full published collection—free resources, protocols, sessions, communities and programs.</p>
       </div>
+      <div role="tablist" aria-label="Offer categories" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '0 0 26px' }}>{categories.map((category) => <button key={category} type="button" role="tab" aria-selected={activeCategory === category} onClick={() => setActiveCategory(category)} style={{ minHeight: 38, padding: '0 14px', border: `1px solid ${activeCategory === category ? '#F2EFE7' : 'rgba(242,239,231,.34)'}`, background: activeCategory === category ? '#F2EFE7' : 'transparent', color: activeCategory === category ? '#11120F' : '#F2EFE7', fontFamily: APP.font, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{category}</button>)}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,300px),1fr))', gap: 18 }}>
-        {offers.map((offer) => {
+        {visibleOffers.map((offer) => {
           const wanted = offerProtocolKey(offer.title);
           const protocol = protocols.find((item) => offerProtocolKey(item.name) === wanted) || protocols.find((item) => offerProtocolKey(item.name).includes(wanted) || wanted.includes(offerProtocolKey(item.name)));
           return offer.access_model === 'free' && offer.kind !== 'community'
@@ -1555,6 +1572,18 @@ function GuardianSiteHeader({ brandName, path, right }: { brandName?: string; pa
   </header>;
 }
 
+function PublicLocaleBar({ value, onChange }: { value: GuardianLocalePreference; onChange: (value: GuardianLocalePreference) => void }) {
+  const field: React.CSSProperties = { border: 0, background: 'transparent', color: '#11120F', fontFamily: APP.font, fontSize: 10, fontWeight: 700, outline: 0, cursor: 'pointer', maxWidth: 116 };
+  return <aside aria-label="Location, language and currency" style={{ position: 'fixed', zIndex: 100, top: 10, right: 12, display: 'flex', alignItems: 'center', gap: 6, minHeight: 42, padding: '0 10px', border: '1px solid rgba(17,18,15,.2)', borderRadius: 4, background: 'rgba(255,255,255,.96)', color: '#11120F', boxShadow: '0 8px 28px rgba(0,0,0,.12)', backdropFilter: 'blur(12px)' }}>
+    <Globe2 size={14} aria-hidden="true" />
+    <select aria-label="Store region" value={value.region} onChange={(event) => { const option = pricingRegions.find((item) => item.region === event.target.value) || pricingRegions[0]; onChange({ ...value, region: option.region, currency: option.currency }); }} style={field}>{pricingRegions.map((option) => <option key={option.region} value={option.region}>{option.region}</option>)}</select>
+    <span aria-hidden="true" style={{ color: 'rgba(17,18,15,.3)' }}>·</span>
+    <select aria-label="Page language" value={value.locale} onChange={(event) => onChange({ ...value, locale: event.target.value })} style={field}>{languageOptions.map((option) => <option key={option.code} value={option.code}>{option.flag} {option.name}</option>)}</select>
+    <span aria-hidden="true" style={{ color: 'rgba(17,18,15,.3)' }}>·</span>
+    <select aria-label="Display currency" value={value.currency} onChange={(event) => onChange({ ...value, currency: event.target.value })} style={{ ...field, width: 54 }}>{publicCurrencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select>
+  </aside>;
+}
+
 export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn: boolean }) {
   const pathSlug = window.location.pathname.match(/\/value-ramp\/([^/]+)\/?$/)?.[1];
   const [reviews, setReviews] = useState<GuardianReview[]>([]);
@@ -1563,6 +1592,13 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   const [offers, setOffers] = useState<GuideOffer[]>([]);
   const [valueRamps, setValueRamps] = useState<GuideValueRamp[]>([]);
   const [guardianProtocols, setGuardianProtocols] = useState<AdminProtocol[]>([]);
+  const [localePreference, setLocalePreference] = useState<GuardianLocalePreference>(() => {
+    const fallback = defaultPricingRegion();
+    const detectedLanguage = languageOptions.find((language) => language.name === defaultLanguage())?.code || 'en';
+    try { return JSON.parse(localStorage.getItem('r3-store-locale') || '') as GuardianLocalePreference; }
+    catch { return { region: fallback.region, locale: detectedLanguage, currency: fallback.currency }; }
+  });
+  const updateLocalePreference = (next: GuardianLocalePreference) => { setLocalePreference(next); try { localStorage.setItem('r3-store-locale', JSON.stringify(next)); } catch { /* storage may be disabled */ } };
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     setLoading(true);
@@ -1585,7 +1621,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   const publicBodyFont = sans;
   const publicPageColor = socials.theme_page_color || '#F2EFE7';
   const publicAccent = socials.theme_accent_color || '#667245';
-  const publicLanguage = languageOptions.find((language) => language.name === socials.language)?.code || 'en';
+  const publicLanguage = localePreference.locale || languageOptions.find((language) => language.name === socials.language)?.code || 'en';
   const publicBackgroundIsVideo = socials.theme_background_type === 'video' || /\.(mp4|webm)(?:\?|$)/i.test(socials.theme_background || '');
   const publicGreyscale = socials.theme_image_treatment === 'greyscale';
   const publicHeadlineStyle = headlineStyleOf(socials.theme_headline_style);
@@ -1594,6 +1630,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   const publicHeaderText = '#11120F';
   const publicExpertiseTags = parseExpertiseTags(socials.expertise_tags);
   return <div lang={publicLanguage} dir={publicLanguage === 'ar' ? 'rtl' : 'ltr'} style={{ minHeight: '100vh', background: publicPageColor, color: '#11120F', fontFamily: publicBodyFont }}>
+    <PublicLocaleBar value={localePreference} onChange={updateLocalePreference} />
     {publicHeaderStyle !== 'hidden' && <header style={{ minHeight: 64, background: publicHeaderBackground, color: publicHeaderText, borderBottom: '1px solid rgba(17,18,15,.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18, padding: '0 clamp(20px,6vw,84px)', flexWrap: 'wrap' }}>
       <a href="/" aria-label="ROUTINE³" style={{ color: publicHeaderText, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 12 }}><RoutineMark size={32} textColor="#16140F" hairline="#16140F" />{socials.brand_name && <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.12em' }}>{socials.brand_name}</span>}</a>
       <div style={{ display: 'flex', gap: 13, alignItems: 'center' }}>
@@ -1610,10 +1647,10 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
       <GuardianSiteHero audience={audienceLabel(profile.social_links?.audience_details)} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={profile.display_name} avatarUrl={profile.avatar_url} specialties={profile.specialties} headline={profile.headline || profile.display_name} tags={publicExpertiseTags} bio={profile.bio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} greyscale={publicGreyscale}
         guideId={profile.user_id} sourceOfferId={freeOffers[0]?.id || null}
         cards={publishedRamps.length ? publishedRamps.slice(0, 1).map((ramp) => { const offer = publishedOffers.find((item) => item.id === ramp.offer_ids[0]); return { key: ramp.id, offerTitle: offer?.title || ramp.name, eyebrow: ramp.problem || undefined, title: customerFacingOfferTitle(offer?.title || ramp.name), copy: offer?.description || '', kind: offer?.kind, price: offer?.access_model === 'free' ? 'Free' : undefined, imageUrl: offer?.cover_url, href: pathSlug === encodeURIComponent(ramp.slug) ? '#offers' : `/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}` }; }) : freeOffers.slice(0, 1).map((offer) => ({ key: offer.id, offerTitle: offer.title, eyebrow: profile.specialties.slice(0, 2).join(' · '), title: customerFacingOfferTitle(offer.title), copy: offer.description || '', kind: offer.kind, price: 'Free', imageUrl: offer.cover_url, href: '#start' }))} />
-      <GuardianOfferCatalog profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} />
+      <GuardianOfferCatalog profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} categoryOrder={socials.protocol_filter_order} />
       {reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}
       <GuardianFunnel key={selectedRamp?.id || 'default'} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} />
-      <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} protocols={guardianProtocols} />
+      <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} protocols={guardianProtocols} localePreference={localePreference} categoryOrder={socials.product_filter_order} />
       <footer style={{ padding: `28px ${PAGE_X}`, borderTop: '1px solid rgba(17,18,15,.2)', color: '#66645F', fontSize: 11, lineHeight: 1.6 }}>
         {profile.display_name} shares general wellbeing guidance, not medical advice. Speak to your GP or doctor before changing medication, diet or exercise, and about any health concern. Individual results vary.
       </footer>
@@ -4125,7 +4162,7 @@ export function SiteProfileForm({ userId, profile, onProfile }: { userId: string
   const [busy, setBusy] = useState<'save' | 'upload' | null>(null);
   const [message, setMessage] = useState('');
   const [stage, setStage] = useState(0);
-  const [open, setOpen] = useState({ contact: true, links: false, booking: false, about: false });
+  const [open, setOpen] = useState({ contact: true, links: false, booking: false, about: false, catalog: false });
   const [stageError, setStageError] = useState('');
   // Saving replaces every brand row, so it waits until the saved brands have loaded; a failed load blocks it.
   const [brandsLoaded, setBrandsLoaded] = useState<'loading' | 'ok' | 'failed'>('loading');
@@ -4222,6 +4259,15 @@ export function SiteProfileForm({ userId, profile, onProfile }: { userId: string
       </label>
     </div>
     <p style={{ color: muted, fontSize: 10, lineHeight: 1.5, margin: '9px 0 0' }}>Language applies to your page and content. Pricing region sets the currency for every paid stage.</p>
+    {isPersonal && <Disclosure id="site-catalog-filters" title="Catalog filters" summary="Choose and order the Product and Protocol tabs on your public site" open={open.catalog} onToggle={() => setOpen((x) => ({ ...x, catalog: !x.catalog }))}>
+      <p style={{ color: muted, fontSize: 11, lineHeight: 1.55, margin: '18px 0 8px' }}>Visitors always get an All tab. Turn categories on or off below; their order here becomes the order on your site.</p>
+      <label style={label}>Product categories</label>
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>{DEFAULT_PRODUCT_FILTERS.map((category) => { const selected = (links.product_filter_order || DEFAULT_PRODUCT_FILTERS.join(',')).split(',').map((value) => value.trim()).includes(category); return <button key={category} type="button" aria-pressed={selected} onClick={() => { const current = (links.product_filter_order || DEFAULT_PRODUCT_FILTERS.join(',')).split(',').map((value) => value.trim()).filter(Boolean); setLinks({ product_filter_order: (selected ? current.filter((value) => value !== category) : [...current, category]).join(',') }); }} style={{ ...btn, minHeight: 34, padding: '0 11px', background: selected ? acid : 'transparent', color: selected ? black : ink, borderColor: selected ? acid : line, textTransform: 'none', letterSpacing: 0 }}>{category}</button>; })}</div>
+      <label style={label}>Product tab order <span style={{ color: muted }}>· comma separated</span></label><input style={input} value={links.product_filter_order || DEFAULT_PRODUCT_FILTERS.join(',')} onChange={(event) => setLinks({ product_filter_order: event.target.value })} />
+      <label style={label}>Protocol and offer categories</label>
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>{DEFAULT_PROTOCOL_CATEGORIES.slice(1).map((category) => { const selected = (links.protocol_filter_order || DEFAULT_PROTOCOL_CATEGORIES.slice(1).join(',')).split(',').map((value) => value.trim()).includes(category); return <button key={category} type="button" aria-pressed={selected} onClick={() => { const current = (links.protocol_filter_order || DEFAULT_PROTOCOL_CATEGORIES.slice(1).join(',')).split(',').map((value) => value.trim()).filter(Boolean); setLinks({ protocol_filter_order: (selected ? current.filter((value) => value !== category) : [...current, category]).join(',') }); }} style={{ ...btn, minHeight: 34, padding: '0 11px', background: selected ? acid : 'transparent', color: selected ? black : ink, borderColor: selected ? acid : line, textTransform: 'none', letterSpacing: 0 }}>{category}</button>; })}</div>
+      <label style={label}>Protocol tab order <span style={{ color: muted }}>· comma separated</span></label><input style={input} value={links.protocol_filter_order || DEFAULT_PROTOCOL_CATEGORIES.slice(1).join(',')} onChange={(event) => setLinks({ protocol_filter_order: event.target.value })} />
+    </Disclosure>}
     <Disclosure id="site-contact" title="Contact" required summary={v.email.trim() || 'Add your email'} open={open.contact} onToggle={() => setOpen((x) => ({ ...x, contact: !x.contact }))}>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12, marginTop: 18 }}>
       <div><label style={label}>Contact email</label><input type="email" style={input} value={v.email} onChange={(e) => set.email(e.target.value)} /></div>
