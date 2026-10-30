@@ -56,6 +56,8 @@ export const PROTOCOL_CARD_CSS = `
 .r3-pcard:hover .r3-pcard-blur,.r3-pcard:focus-within .r3-pcard-blur,.r3-pcard[data-pressed=true] .r3-pcard-blur{filter:${COLOUR} blur(3.5px);transform:scale(1.09)}
 .r3-pcard:hover .r3-pcard-plate,.r3-pcard:focus-within .r3-pcard-plate,.r3-pcard[data-pressed=true] .r3-pcard-plate,.r3-pcard:hover .r3-pcard-plate-slot,.r3-pcard:focus-within .r3-pcard-plate-slot,.r3-pcard[data-pressed=true] .r3-pcard-plate-slot{filter:grayscale(0) brightness(1.05)}
 .r3-pcard-body{display:flex;flex:1;flex-direction:column;padding:20px}
+.r3-pcard-body.has-footer-corner{position:relative;padding-bottom:78px}
+.r3-pcard-footer-corner{position:absolute;right:16px;bottom:14px;z-index:2;display:grid;place-items:center}
 .r3-pcard-kicker{color:#667245;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
 .r3-pcard-title{font-family:${serif};font-size:28px;font-weight:300;line-height:1.14;margin:10px 0 8px;padding:.05em 0 .06em;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .r3-pcard-tags{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;padding:0;list-style:none}
@@ -127,6 +129,8 @@ export interface ProtocolCardProps {
   plate?: ReactNode;
   /** Under the description (a star rating). */
   extra?: ReactNode;
+  /** A compact asset in the white card's lower-right corner, such as the routine QR. */
+  footerCorner?: ReactNode;
   cta?: string;
   /** A link to another page. Without it the card is a button. */
   href?: string;
@@ -148,7 +152,7 @@ export function CardOwnershipTags({ owned = false, visibility }: { owned?: boole
   </>;
 }
 
-export function ProtocolCard({ title, kicker, tags, copy, imageUrl, by, byAvatar, badge, corner, owned = false, visibility, plate, extra, cta = 'View protocol', href, onClick, pressed, inert, onEdit, onDelete }: ProtocolCardProps) {
+export function ProtocolCard({ title, kicker, tags, copy, imageUrl, by, byAvatar, badge, corner, owned = false, visibility, plate, extra, footerCorner, cta = 'View protocol', href, onClick, pressed, inert, onEdit, onDelete }: ProtocolCardProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   // The picture that failed, not a flag: a card that later gets a different picture tries it.
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
@@ -177,7 +181,7 @@ export function ProtocolCard({ title, kicker, tags, copy, imageUrl, by, byAvatar
       {(visibility || owned) && <div className="r3-pcard-ownership"><CardOwnershipTags owned={owned} visibility={visibility} /></div>}
       {corner && <div className="r3-pcard-corner">{corner}</div>}
     </div>
-    <div className="r3-pcard-body">
+    <div className={`r3-pcard-body${footerCorner ? ' has-footer-corner' : ''}`}>
       {kicker && <span className="r3-pcard-kicker">{kicker}</span>}
       <h3 className="r3-pcard-title">{title}</h3>
       {tags && tags.length > 0 && <ul className="r3-pcard-tags">{tags.map((tag) => <li key={`${tag.kind || 'tag'}:${tag.label}`} className="r3-pcard-tag" data-kind={tag.kind} title={tag.label}>{tag.label}</li>)}</ul>}
@@ -187,6 +191,7 @@ export function ProtocolCard({ title, kicker, tags, copy, imageUrl, by, byAvatar
         {(by || byAvatar) && <span className="r3-pcard-by">{byAvatar}{by && <span className="r3-pcard-by-name">{by}</span>}</span>}
         <span className="r3-pcard-cta">{cta}<ArrowRight size={13} aria-hidden="true" /></span>
       </span>
+      {footerCorner && <span className="r3-pcard-footer-corner">{footerCorner}</span>}
     </div>
   </>;
   const main = inert

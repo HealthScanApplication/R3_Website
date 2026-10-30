@@ -26,6 +26,22 @@ export interface RoutineShareLinkProps {
   onToken?: (token: string | null) => void;
 }
 
+/** Compact QR for an owned routine card. Loading the card ensures the routine has its default live share link. */
+export function RoutineCardQr({ protocolId, guardianSlug, size = 58 }: { protocolId: string; guardianSlug?: string; size?: number }) {
+  const [qr, setQr] = useState('');
+  useEffect(() => {
+    let live = true;
+    createRoutineShareLink(protocolId)
+      .then((token) => QRCode.toDataURL(routineShareUrl(token, { source: guardianSlug ? guardianUtmSource(guardianSlug) : null, medium: 'qr' }), { errorCorrectionLevel: 'Q', margin: 1, width: Math.max(160, size * 3) }))
+      .then((data) => { if (live) setQr(data); })
+      .catch(() => undefined);
+    return () => { live = false; };
+  }, [guardianSlug, protocolId, size]);
+  return qr
+    ? <img src={qr} alt="QR code for this routine" width={size} height={size} style={{ display: 'block', width: size, height: size, padding: 3, boxSizing: 'border-box', background: '#FFF', border: '1px solid rgba(17,18,15,.22)', borderRadius: 3 }} />
+    : <span aria-label="Preparing routine QR code" style={{ display: 'grid', placeItems: 'center', width: size, height: size, boxSizing: 'border-box', background: '#FFF', color: '#55574F', border: '1px solid rgba(17,18,15,.22)', borderRadius: 3 }}><QrCode size={Math.round(size * .38)} /></span>;
+}
+
 export function RoutineShareLink({ protocolId, protocolName, guardianSlug, tone = 'dark', paid = false, onToken }: RoutineShareLinkProps) {
   const c = TONES[tone];
   const [token, setToken] = useState<string | null>(null);
@@ -37,12 +53,12 @@ export function RoutineShareLink({ protocolId, protocolName, guardianSlug, tone 
   const [campaign, setCampaign] = useState('');
   const [stats, setStats] = useState<RoutineShareStats | null>(null);
 
-  // Open on an existing link without minting one. A failure here (e.g. the migration is not applied yet) stays quiet
-  // until the Guardian asks for a link.
+  // Every owned routine has a share link by default. The RPC returns the existing live token when there is one,
+  // so mounting this panel is idempotent and never rotates a link.
   useEffect(() => {
     let live = true;
     setToken(null); setMessage(''); setConfirmStop(false); setCopied(false);
-    getRoutineShareLink(protocolId).then((found) => { if (live) setToken(found); }).catch(() => undefined);
+    getRoutineShareLink(protocolId).then((found) => found || createRoutineShareLink(protocolId)).then((found) => { if (live) setToken(found); }).catch(() => undefined);
     return () => { live = false; };
   }, [protocolId]);
 
