@@ -16,6 +16,7 @@ import { copyPrompt, imagePrompt } from '../../utils/brandBrief';
 import { parseRoutineShareParams, routineShareUrl } from '../../utils/routineShare';
 import { postCopy, type CopyKind } from '../../utils/postCopy';
 import { AS_IS, compositionBrief, legacyPlacement, placeBackground, type Placement } from '../../utils/postLayout';
+import { creatorCredit, drawCredit, measureCredit } from '../../utils/postCredit';
 import { connectOpenAI, disconnectOpenAI, generateImage, imageStatus, priceLabel, type ImageQuality, type ImageSource, type ImageStatus } from '../../utils/guardianImages';
 import { recordStillCanvas, type StillMotion } from '../../utils/videoOverlay';
 
@@ -269,11 +270,10 @@ export async function drawPost(canvas: HTMLCanvasElement, fmt: { id: FormatId; w
   const sub = copy.subline ? wrap(ctx, copy.subline, maxW) : [];
   const subW = Math.max(0, ...sub.map((l) => ctx.measureText(l).width));
   const hl = st.head.line * s, sl = st.sub.line * s;
-  // The creator's circular profile and R3 @route open the text package, above the headline.
-  const creditText = copy.credit.toUpperCase(), face = 34 * s, creditLead = face + 10 * s;
-  ctx.font = `600 ${20 * s}px Inter`;
-  const creditW = copy.credit ? ctx.measureText(creditText).width + 14 * s + 5 * s + creditLead : 0;
-  const creditH = copy.credit ? 44 * s + 26 * s : 0;
+  // The creator credit (picture + "From @handle", utils/postCredit.ts) opens the text package, above the headline.
+  const creditBox = measureCredit(ctx, copy.credit, s, maxW);
+  const creditW = creditBox?.w ?? 0;
+  const creditH = creditBox ? creditBox.h + 26 * s : 0;
   const blockH = creditH + head.length * hl + 30 * s + sub.length * sl + 52 * s + boxH;
   // Bottom: 9:16 keeps the Figma position (y 1271) unless long copy would push the CTA off the frame. Top: clear of
   // the app bars on stories. The brand logo moves to the opposite edge from the text.
@@ -287,25 +287,10 @@ export async function drawPost(canvas: HTMLCanvasElement, fmt: { id: FormatId; w
   }
   const strip = (lineW: number, top0: number, lineH: number) => { const px = 16 * s; ctx.fillStyle = '#FFFFFF'; ctx.fillRect(alignRight ? anchor - lineW - px : anchor - px, top0 + lineH * 0.1, lineW + px * 2, lineH * 0.86); };
   ctx.textBaseline = 'alphabetic';
-  if (copy.credit) {
-    // Keep the attribution directly on the image: no label background, just the circular profile and @route.
-    const cx0 = alignRight ? anchor - creditW : anchor, fx = cx0 + 5 * s, fy = y + 5 * s;
-    ctx.save(); ctx.beginPath(); ctx.arc(fx + face / 2, fy + face / 2, face / 2, 0, Math.PI * 2); ctx.clip();
-    if (avatar?.naturalWidth) {
-      const k = Math.max(face / avatar.naturalWidth, face / avatar.naturalHeight);
-      ctx.drawImage(avatar, fx + (face - avatar.naturalWidth * k) / 2, fy + (face - avatar.naturalHeight * k) / 2, avatar.naturalWidth * k, avatar.naturalHeight * k);
-    } else {
-      ctx.fillStyle = '#111111'; ctx.fillRect(fx, fy, face, face);
-      ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'center'; ctx.font = `700 ${17 * s}px Archivo, Inter, sans-serif`;
-      ctx.fillText((creditText.split(' BY ').pop() || creditText).trim().charAt(0), fx + face / 2, fy + face / 2 + 6 * s);
-    }
-    ctx.restore();
-    ctx.save();
-    ctx.shadowColor = st.ink === '#F5F2EA' ? 'rgba(0,0,0,.45)' : 'rgba(255,255,255,.65)';
-    ctx.shadowBlur = 5 * s;
-    ctx.textAlign = 'left'; ctx.font = `700 ${20 * s}px Inter`; ctx.fillStyle = st.ink;
-    ctx.fillText(creditText, fx + creditLead, y + 29 * s);
-    ctx.restore();
+  if (creditBox) {
+    // The creator's profile photo leads the credit; without one, their first brand logo, and without that, their initial.
+    const picture = avatar?.naturalWidth ? { image: avatar, fit: 'cover' as const } : logo?.naturalWidth ? { image: logo, fit: 'contain' as const } : null;
+    drawCredit(ctx, copy.credit, creditBox, alignRight ? anchor - creditW : anchor, y, picture);
     y += creditH;
   }
   ctx.font = headFontCss;
@@ -406,7 +391,7 @@ export function ContentStudio({ creator, avatar = null, audience, problem, offer
   const background = bg || autoBg;
   // TikTok-style handle: routine3.com/@<slug> opens the Guardian's page.
   const handle = guardianHandle(pageUrl ?? siteUrl);
-  const credit = creator ? (handle || `@${creator.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`) : '';
+  const credit = creatorCredit(creator, handle);
   const isGenerated = background === GENERATED && !!generated;
   const bgSrc = isGenerated ? generated!.url : bgUrl(background === GENERATED ? autoBg : background);
   // Library photos are mirrored / moved by their safe-zone metadata; a generated image was composed for its layout.
