@@ -233,6 +233,9 @@ export function buildClip(options: ClipOptions = {}): ClipModel {
     : { color: '#05090a', metalness: 0.3, roughness: 0.05, clearcoat: 1, clearcoatRoughness: 0.02 });
   const screen = add(rig, crystalGeometry(Eb[0]), screenMat, 0, 0, E[1]);
   screen.name = 'screen';
+  // The UV rectangle of the crystal left visible below the button (the button covers UV radius ~0.26 around the
+  // centre); the scene draws the heartbeat trace here. Checked against the octagon and the button in the tests.
+  screen.userData.visibleUV = { u0: 0.28, v0: 0.14, u1: 0.72, v1: 0.235 };
 
   // The button through the crystal and its polished ring, square to the diamond.
   add(rig, new THREE.TorusGeometry(7.95, 0.2, 16, 120), metal('#c4ccc8', 0.25), 0, 0, TOP + 0.05);

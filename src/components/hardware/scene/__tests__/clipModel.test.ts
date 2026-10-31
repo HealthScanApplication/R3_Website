@@ -123,6 +123,40 @@ describe('buildClip', () => {
     expect(texDispose).not.toHaveBeenCalled();
   });
 
+  it('names the visible lower band of the crystal: inside the octagon, clear of the button', () => {
+    const { screen } = buildClip();
+    const uv = screen.userData.visibleUV as { u0: number; v0: number; u1: number; v1: number };
+    expect(uv).toEqual({ u0: 0.28, v0: 0.14, u1: 0.72, v1: 0.235 });
+    // UV -> the screen's own millimetres: 1 UV unit = 31.2 mm, centre (0.5, 0.5).
+    const MM = 31.2;
+    const corners: Array<[number, number]> = [[uv.u0, uv.v0], [uv.u1, uv.v0], [uv.u1, uv.v1], [uv.u0, uv.v1]];
+    for (const [u, v] of corners) {
+      const x = (u - 0.5) * MM, y = (v - 0.5) * MM;
+      expect(Math.abs(x)).toBeLessThanOrEqual(13.1);         // within the crystal's half-width
+      expect(Math.abs(y)).toBeLessThanOrEqual(15.6);         // within the bounding square
+      expect(Math.abs(x) + Math.abs(y)).toBeLessThanOrEqual(18.5); // inside the diamond's slanted edges
+    }
+    // The nearest point of the rectangle to the centre is outside the button disc (r = 8.15 mm incl. its ring).
+    const nx = Math.max((uv.u0 - 0.5) * MM, Math.min(0, (uv.u1 - 0.5) * MM));
+    const ny = Math.max((uv.v0 - 0.5) * MM, Math.min(0, (uv.v1 - 0.5) * MM));
+    expect(Math.hypot(nx, ny)).toBeGreaterThan(8.15);
+    // And every corner lies on the real crystal mesh (point-in-triangle in UV space).
+    const geo = screen.geometry, uvs = geo.getAttribute('uv'), index = geo.getIndex();
+    const tri = (i: number) => (index ? index.getX(i) : i);
+    const count = index ? index.count : uvs.count;
+    const inside = (pu: number, pv: number) => {
+      for (let t = 0; t < count; t += 3) {
+        const [a, b, c] = [tri(t), tri(t + 1), tri(t + 2)].map(k => [uvs.getX(k), uvs.getY(k)]);
+        const s = (p: number[], q: number[]) => (q[0] - p[0]) * (pv - p[1]) - (q[1] - p[1]) * (pu - p[0]);
+        const d1 = s(a, b), d2 = s(b, c), d3 = s(c, a);
+        if (!((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0))) return true;
+      }
+      return false;
+    };
+    for (const [u, v] of corners) expect(inside(u, v)).toBe(true);
+    expect(inside(0.02, 0.02)).toBe(false); // sanity: the cut corner of the bounding square is off the crystal
+  });
+
   it('returns independent groups on each call', () => {
     const a = buildClip({ colour: 'black' });
     const b = buildClip({ colour: 'black' });
