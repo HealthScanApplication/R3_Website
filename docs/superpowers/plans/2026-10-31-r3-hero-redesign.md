@@ -344,3 +344,22 @@ git commit -m "feat(hardware): one-hero /ring page; remove the model-viewer comp
 **Spec coverage:** one full-bleed hero (T7, T9), homepage-style headline with rotating word (T7), both devices in 3D (T5, T6), owner's ring model (T1, T5), clip hanging as a flipping necklace with heartbeat (T3, T4, T5), preorder in the hero (T7, T8, T9), fallback chain (T6), heart-rate fact (T2), model-viewer removal (T9). Out-of-scope items listed in the spec stay out.
 **Type consistency:** `buildClip(options) → ClipModel { group, screen, dispose }` (T4) is consumed in T5; `createHeroScene(container, { ringUrl, reducedMotion, onReady }) → { dispose }` (T5) is consumed in T6; `HeroDevices()` (T6) and `PreorderBlock variant` (T8) are consumed in T7/T9; `GOAL_WORDS` (T7) shared with `HeroSection`.
 **Placeholders:** none; the ported Pod Plan geometry is specified by source location and observable properties, with a smoke test.
+
+---
+
+### Task 10: Homepage wearable section becomes a full-bleed video section with the 3D devices (owner decision 2026-10-31)
+
+> Owner: "the wearable is in its own section at the bottom of home, then its own dedicated page" and chose "Both": the homepage's bottom wearable section (`src/components/HardwarePreorder.tsx`, rendered by `App.tsx` on the home page) gets the same visual language as the `/ring` hero, and links to `/ring`.
+
+**Files:** Modify `src/components/HardwarePreorder.tsx`; modify `src/components/__tests__/HardwarePreorderTeaser.test.tsx`.
+
+**Behavior:**
+1. Full-bleed section (`min-height: 100svh`, fallback `100vh`) with the same background layers as `HardwareHero` (poster `<img>`, `FlutedGlassBackground` from `useHeroBackground()`, warm tint + grain), reusing the shared hook and assets (no duplication of the gating logic).
+2. Left: folio "R³ hardware · first batch", `<h2 id="hardware-preorder-title">` "Meet the R³ Note and R³ Clip." in the homepage `coverStyle` (white, text-shadow) at a slightly smaller size, the existing deck, and ONE primary link `<a href="/ring">` "See the R³ Note — from $179" styled like the homepage hero's primary button, plus the `PREORDER_TERMS` line.
+3. Right: `<HeroDevices />` (live 3D Note ring + clip, drawn fallback while loading) in a container with `aspect-ratio: 4 / 5` (desktop) / `1 / 1` (mobile).
+4. Keep: one h2 (no h1 — the homepage already has one), `aria-labelledby`, no form/inputs/buttons, no fetch of preorder data, only the `$179` price, banned-strings guard. Inline styles only.
+5. Performance: `HeroDevices` lazy-loads three only when this section is near the viewport (wrap it so the dynamic import starts on an `IntersectionObserver` with `rootMargin: '400px'`; before that render the drawn fallback). Add a test that `createHeroScene` is not imported before the section intersects.
+
+**Tests:** update the teaser tests for the new structure (mock `HeroDevices`, `FlutedGlassBackground`, `useHeroBackground`); keep the existing link/price/banned-string/no-form assertions; add the lazy-load test.
+
+**Commit:** `feat(hardware): homepage wearable section with video background and 3D devices`
