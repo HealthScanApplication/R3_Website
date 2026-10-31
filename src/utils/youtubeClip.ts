@@ -6,7 +6,24 @@
  * Pure functions only, so the link, time and clamping rules are tested without a browser or the YouTube API.
  */
 
-export interface YtClip { id: string; start: number; end: number }
+export interface YtClip { id: string; start: number; end: number; /** How far the picture is enlarged to fill the frame. Unset means DEFAULT_ZOOM. */ zoom?: number }
+
+/**
+ * The player is drawn a little larger than its box so its title bar and burned-in captions fall outside it. A 4:3 video sits in
+ * YouTube's 16:9 player with black bars either side; zooming by 4/3 (1.35 or more) fills the frame and crops them off.
+ */
+export const DEFAULT_ZOOM = 1.2;
+export const MIN_ZOOM = 1;
+export const MAX_ZOOM = 3;
+
+/** A zoom typed by a Guardian ("1.4", "140%"): within MIN to MAX, or null for blank / not a number. */
+export function parseZoom(input: string | number | null | undefined): number | null {
+  const text = String(input ?? '').trim().replace(/%$/, '');
+  if (!text || !/^\d+(\.\d+)?$/.test(text)) return null;
+  let value = Number(text);
+  if (String(input).trim().endsWith('%')) value /= 100;
+  return value >= MIN_ZOOM && value <= MAX_ZOOM ? Math.round(value * 100) / 100 : null;
+}
 
 export const MAX_CLIPS = 2;
 export const MIN_CLIP_SECONDS = 2;
@@ -54,7 +71,7 @@ export function formatTime(seconds: number): string {
  * far from the start is pulled in to the longest allowed clip, a start with no end becomes a default-length clip, and
  * an end before the start is refused.
  */
-export function buildClip(link: string, startInput: string | number, endInput: string | number): { clip: YtClip | null; problem: string | null } {
+export function buildClip(link: string, startInput: string | number, endInput: string | number, zoomInput: string | number = ''): { clip: YtClip | null; problem: string | null } {
   const id = parseYouTubeId(link);
   if (!id) return { clip: null, problem: link.trim() ? 'That is not a YouTube link.' : null };
   const start = parseTime(startInput);
@@ -64,7 +81,10 @@ export function buildClip(link: string, startInput: string | number, endInput: s
   let end = rawEnd === null ? start + 8 : rawEnd;
   end = Math.min(end, start + MAX_CLIP_SECONDS);
   if (end - start < MIN_CLIP_SECONDS) return { clip: null, problem: `A clip needs at least ${MIN_CLIP_SECONDS} seconds.` };
-  return { clip: { id, start, end }, problem: null };
+  const zoomText = String(zoomInput ?? '').trim();
+  const zoom = parseZoom(zoomText);
+  if (zoomText && zoom === null) return { clip: null, problem: `Zoom is a number from ${MIN_ZOOM} to ${MAX_ZOOM}, like 1.35.` };
+  return { clip: { id, start, end, ...(zoom !== null && zoom !== DEFAULT_ZOOM ? { zoom } : {}) }, problem: null };
 }
 
 /** The clips saved on a profile (theme_background_clips is a JSON array), keeping only valid ones, at most two. */
@@ -74,16 +94,17 @@ export function clipsFromLinks(value: unknown): YtClip[] {
   if (!Array.isArray(list)) return [];
   const out: YtClip[] = [];
   for (const item of list) {
-    const { id, start, end } = (item || {}) as Partial<YtClip>;
+    const { id, start, end, zoom } = (item || {}) as Partial<YtClip>;
     if (typeof id !== 'string' || !ID.test(id) || typeof start !== 'number' || typeof end !== 'number') continue;
     if (!(start >= 0) || !(end > start) || end - start > MAX_CLIP_SECONDS || end - start < MIN_CLIP_SECONDS) continue;
-    out.push({ id, start: Math.floor(start), end: Math.floor(end) });
+    const validZoom = typeof zoom === 'number' ? parseZoom(zoom) : null;
+    out.push({ id, start: Math.floor(start), end: Math.floor(end), ...(validZoom !== null && validZoom !== DEFAULT_ZOOM ? { zoom: validZoom } : {}) });
     if (out.length === MAX_CLIPS) break;
   }
   return out;
 }
 
-export const clipsToLinks = (clips: YtClip[]): string => JSON.stringify(clips.slice(0, MAX_CLIPS).map(({ id, start, end }) => ({ id, start, end })));
+export const clipsToLinks = (clips: YtClip[]): string => JSON.stringify(clips.slice(0, MAX_CLIPS).map(({ id, start, end, zoom }) => ({ id, start, end, ...(typeof zoom === 'number' ? { zoom } : {}) })));
 
 /** The index of the clip to play after `current`; with one clip it repeats, with two they alternate. */
 export const nextClipIndex = (current: number, count: number): number => (count <= 1 ? 0 : (current + 1) % count);

@@ -7,7 +7,7 @@
  * load the clip falls back to a plain embed of the first clip.
  */
 import { useEffect, useRef, useState } from 'react';
-import { clipEmbedUrl, clipPoster, nextClipIndex, type YtClip } from '../../utils/youtubeClip';
+import { DEFAULT_ZOOM, clipEmbedUrl, clipPoster, nextClipIndex, type YtClip } from '../../utils/youtubeClip';
 
 declare global { interface Window { YT?: any; onYouTubeIframeAPIReady?: () => void } }
 
@@ -29,22 +29,18 @@ function loadYouTubeApi(): Promise<any> {
   return apiLoad;
 }
 
-/**
- * The player draws a title bar along the top for a moment, and many videos have captions burned in along the bottom. The player
- * is drawn a little larger than its box (the box clips it), which crops both off without touching the middle of the picture.
- */
-const OVERSCAN = 1.2;
-
 const prefersReducedMotion = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export function YouTubeClipBackground({ clips, greyscale = false }: { clips: YtClip[]; greyscale?: boolean }) {
   const holder = useRef<HTMLDivElement | null>(null);
   const [reduced] = useState(prefersReducedMotion);
   const [failed, setFailed] = useState(false);
+  const [active, setActive] = useState(0); // the clip that is playing, so each can have its own zoom
   const key = clips.map((clip) => `${clip.id}:${clip.start}-${clip.end}`).join('|');
 
   useEffect(() => {
     setFailed(false);
+    setActive(0);
     if (!clips.length || reduced) return;
     let player: any = null;
     let cancelled = false;
@@ -63,6 +59,7 @@ export function YouTubeClipBackground({ clips, greyscale = false }: { clips: YtC
           onStateChange: (event: any) => {
             if (event.data !== YT.PlayerState.ENDED) return;
             index = nextClipIndex(index, clips.length);
+            setActive(index);
             const next = clips[index];
             event.target.loadVideoById({ videoId: next.id, startSeconds: next.start, endSeconds: next.end });
           },
@@ -74,14 +71,16 @@ export function YouTubeClipBackground({ clips, greyscale = false }: { clips: YtC
   }, [key, reduced]);
 
   if (!clips.length) return null;
+  // The player is drawn larger than its box (the box clips it): this crops off its title bar, burned-in captions and the black bars of a 4:3 video.
+  const zoom = clips[Math.min(active, clips.length - 1)]?.zoom ?? DEFAULT_ZOOM;
   const filter = greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)';
   return (
     <div aria-hidden="true" data-youtube-clip style={{ position: 'absolute', inset: 0, overflow: 'hidden', containerType: 'size', pointerEvents: 'none', background: '#0D0E0B' }}>
       <style>{'.g-yt-cover iframe{position:absolute;inset:0;width:100%;height:100%;border:0}'}</style>
       {/* The poster sits underneath: it is what shows while the video loads, for reduced motion, and if it cannot play. */}
       <img src={clipPoster(clips[0])} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter }} />
-      {!reduced && !failed && <div ref={holder} className="g-yt-cover" style={{ position: 'absolute', top: '50%', left: '50%', width: 'max(100%, 177.78cqh)', height: 'max(100%, 56.25cqw)', transform: `translate(-50%, -50%) scale(${OVERSCAN})`, filter }} />}
-      {!reduced && failed && <iframe src={clipEmbedUrl(clips[0])} title="Background video" tabIndex={-1} allow="autoplay; encrypted-media" referrerPolicy="strict-origin-when-cross-origin" style={{ position: 'absolute', top: '50%', left: '50%', width: 'max(100%, 177.78cqh)', height: 'max(100%, 56.25cqw)', transform: `translate(-50%, -50%) scale(${OVERSCAN})`, border: 0, filter }} />}
+      {!reduced && !failed && <div ref={holder} className="g-yt-cover" style={{ position: 'absolute', top: '50%', left: '50%', width: 'max(100%, 177.78cqh)', height: 'max(100%, 56.25cqw)', transform: `translate(-50%, -50%) scale(${zoom})`, filter }} />}
+      {!reduced && failed && <iframe src={clipEmbedUrl(clips[0])} title="Background video" tabIndex={-1} allow="autoplay; encrypted-media" referrerPolicy="strict-origin-when-cross-origin" style={{ position: 'absolute', top: '50%', left: '50%', width: 'max(100%, 177.78cqh)', height: 'max(100%, 56.25cqw)', transform: `translate(-50%, -50%) scale(${clips[0].zoom ?? DEFAULT_ZOOM})`, border: 0, filter }} />}
     </div>
   );
 }

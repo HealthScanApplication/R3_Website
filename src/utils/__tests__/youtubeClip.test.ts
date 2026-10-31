@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_CLIP_SECONDS, buildClip, clipEmbedUrl, clipsFromLinks, clipsToLinks, formatTime, nextClipIndex, parseTime, parseYouTubeId } from '../youtubeClip';
+import { DEFAULT_ZOOM, MAX_CLIP_SECONDS, buildClip, parseZoom, clipEmbedUrl, clipsFromLinks, clipsToLinks, formatTime, nextClipIndex, parseTime, parseYouTubeId } from '../youtubeClip';
 
 const ID = 'c7rNVcYU_-s'; // Barbara O'Neill - #10 - Heal the Heart and High Blood Pressure
 
@@ -90,5 +90,30 @@ describe('playback helpers', () => {
     expect(p.get('start')).toBe('60'); expect(p.get('end')).toBe('68');
     expect(p.get('mute')).toBe('1'); expect(p.get('controls')).toBe('0'); expect(p.get('autoplay')).toBe('1');
     expect(p.get('loop')).toBe('1'); expect(p.get('playlist')).toBe(ID); expect(p.get('rel')).toBe('0');
+  });
+});
+
+describe('zoom', () => {
+  it('reads a zoom the ways people type it, within 1 to 3', () => {
+    expect(parseZoom('1.35')).toBe(1.35);
+    expect(parseZoom('2')).toBe(2);
+    expect(parseZoom('135%')).toBe(1.35);
+    expect(parseZoom(1.4)).toBe(1.4);
+    for (const value of ['', 'big', '0.5', '3.5', '-1', '1..2', null, undefined]) expect(parseZoom(value as any), String(value)).toBeNull();
+  });
+  it('a clip keeps a zoom that is not the default, and leaves the default out', () => {
+    expect(buildClip(ID, '33:00', '33:08', '1.4').clip).toEqual({ id: ID, start: 1980, end: 1988, zoom: 1.4 });
+    expect(buildClip(ID, '33:00', '33:08', '').clip).toEqual({ id: ID, start: 1980, end: 1988 });
+    expect(buildClip(ID, '33:00', '33:08', String(DEFAULT_ZOOM)).clip).toEqual({ id: ID, start: 1980, end: 1988 });
+  });
+  it('refuses a zoom that is not a number in range, and says so', () => {
+    expect(buildClip(ID, '33:00', '33:08', 'lots')).toEqual({ clip: null, problem: 'Zoom is a number from 1 to 3, like 1.35.' });
+    expect(buildClip(ID, '33:00', '33:08', '9').problem).toMatch(/from 1 to 3/);
+  });
+  it('round-trips through the profile, and drops a bad saved zoom instead of the clip', () => {
+    const zoomed = { id: ID, start: 1980, end: 1988, zoom: 1.4 };
+    expect(clipsFromLinks(clipsToLinks([zoomed]))).toEqual([zoomed]);
+    expect(clipsFromLinks(JSON.stringify([{ id: ID, start: 1980, end: 1988, zoom: 99 }]))).toEqual([{ id: ID, start: 1980, end: 1988 }]);
+    expect(clipsFromLinks(JSON.stringify([{ id: ID, start: 1980, end: 1988, zoom: '1.4' }]))).toEqual([{ id: ID, start: 1980, end: 1988 }]);
   });
 });

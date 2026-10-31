@@ -81,4 +81,18 @@ describe('YouTubeClipFields', () => {
     type('Video 1 end', '5:00');
     expect(latest).toEqual([{ id: 'c7rNVcYU_-s', start: 10, end: 40 }]);
   });
+
+  it('has a Zoom for filling the frame, explains black bars, and saves it with the clip', () => {
+    render(<Harness />);
+    expect(screen.getByText(/Black bars at the sides/)).toBeTruthy();
+    type('Video 1 YouTube link', LINK);
+    type('Video 1 start', '33:00');
+    type('Video 1 end', '33:08');
+    expect(latest).toEqual([{ id: 'c7rNVcYU_-s', start: 1980, end: 1988 }]);
+    type('Video 1 zoom', '1.4');
+    expect(latest).toEqual([{ id: 'c7rNVcYU_-s', start: 1980, end: 1988, zoom: 1.4 }]);
+    type('Video 1 zoom', 'lots');
+    expect(screen.getByRole('alert').textContent).toMatch(/Zoom is a number/);
+    expect(latest).toEqual([]);
+  });
 });
