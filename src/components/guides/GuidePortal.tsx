@@ -38,6 +38,7 @@ import { GuardianModal } from './GuardianModal';
 import { BrandKitFields } from './BrandKitFields';
 import { AGE_RANGES, LIFE_STAGES } from '../../utils/audienceTaxonomy';
 import { convertGuardianAvatar, generatedImageFile } from '../../utils/guardianImages';
+import { HouseStyleAvatarPanel } from './HouseStyleAvatarPanel';
 import { brandKitLinks, brandKitOf, defaultBrandKit, type BrandKit } from '../../utils/brandKit';
 import { GuardianProducts, GuardianShop, type GuardianLocalePreference } from './GuardianProducts';
 import { ActivitiesLibrary } from './ActivitiesLibrary';
@@ -1979,6 +1980,12 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [avatarConverting, setAvatarConverting] = useState(false);
   const [avatarApplying, setAvatarApplying] = useState(false);
+  const [houseStyleOpen, setHouseStyleOpen] = useState(false);
+  const [avatarPreviewMock, setAvatarPreviewMock] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
+  const houseStylePanelId = useId();
+  // A new source portrait (upload or stock pick) makes the last house-style error stale.
+  useEffect(() => { setAvatarError(''); }, [avatarSourceUrl]);
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null);
   const [backgroundType, setBackgroundType] = useState<'image' | 'video'>('image');
   const [uploadingBackground, setUploadingBackground] = useState(false);
@@ -2392,28 +2399,33 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     } finally { setUploading(false); }
   }
 
+  // The house style converts the Guardian's own portrait. A stock avatar (or any local path the function cannot fetch) has nothing of theirs to convert.
+  const avatarSource = avatarSourceUrl || avatarUrl;
+  const avatarNeedsOwnPhoto = !avatarSource || defaultAvatars.some((avatar) => avatar.image === avatarSource) || !/^(https:\/\/|data:image\/)/.test(avatarSource);
+
   async function convertAvatarToHouseStyle() {
-    const source = avatarSourceUrl || avatarUrl;
-    if (!source) { setImportMessage('Upload or choose a portrait first.'); return; }
-    setAvatarConverting(true); setImportMessage('');
+    if (!avatarSource || avatarNeedsOwnPhoto) { setAvatarError('Upload your own photo first, then create your R3 house style.'); return; }
+    setAvatarConverting(true); setAvatarError('');
     try {
-      const result = await convertGuardianAvatar(source, displayName || 'Guardian');
+      const result = await convertGuardianAvatar(avatarSource, displayName || 'Guardian');
+      setAvatarPreviewMock(!!result.mock);
       setAvatarPreviewUrl(result.image);
-      setImportMessage(result.mock ? 'House-style preview ready. Live image generation is currently in test mode.' : 'House-style preview ready. Review it before applying.');
     } catch (error) {
-      setImportMessage(error instanceof Error ? error.message : 'Could not convert that portrait.');
+      setAvatarError(error instanceof Error ? error.message : 'Could not convert that portrait.');
     } finally { setAvatarConverting(false); }
   }
 
   async function applyConvertedAvatar() {
     if (!avatarPreviewUrl) return;
-    setAvatarApplying(true); setImportMessage('');
+    // Test mode returns a placeholder SVG; uploadGuideImage only accepts JPG, PNG, WebP, GIF, MP4 and WebM.
+    if (avatarPreviewMock) { setAvatarError('Live image generation is currently in test mode, so this placeholder cannot be saved as your avatar.'); return; }
+    setAvatarApplying(true); setAvatarError(''); setImportMessage('');
     try {
       const url = await uploadGuideImage(userId, generatedImageFile(avatarPreviewUrl));
-      setAvatarUrl(url); setLogoUrl(url); setAvatarPreviewUrl(null);
+      setAvatarUrl(url); setLogoUrl(url); setAvatarPreviewUrl(null); setHouseStyleOpen(false);
       setImportMessage('R³ house-style avatar applied.');
     } catch (error) {
-      setImportMessage(error instanceof Error ? error.message : 'Could not save the converted avatar.');
+      setAvatarError(error instanceof Error ? error.message : 'Could not save the converted avatar.');
     } finally { setAvatarApplying(false); }
   }
 
@@ -2972,28 +2984,22 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       {/* Profile image: one compact row, like the brand line above. */}
       <PhotoDropzone onFile={uploadPortrait} validate={portraitProblem} onReject={setImportMessage} accept={PORTRAIT_ACCEPT} disabled={uploading}>
         {({ open, dragging }) => (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18, padding: dragging ? 6 : 0, outline: dragging ? `2px dashed ${ink}` : 'none' }}>
+      <>
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginTop: 18, padding: dragging ? 6 : 0, outline: dragging ? `2px dashed ${ink}` : 'none' }}>
         {avatarUrl ? <img src={avatarUrl} alt="Profile" referrerPolicy="no-referrer" style={{ width: 36, height: 36, objectFit: 'cover', border: `1px solid ${line}` }} /> : <span aria-hidden="true" style={{ width: 36, height: 36, display: 'grid', placeItems: 'center', border: `1px solid ${line}`, color: muted, fontFamily: serif, fontSize: 16 }}>{displayName.trim().charAt(0) || 'B'}</span>}
         <span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Profile image · optional</span>
         <button type="button" onClick={open} disabled={uploading} aria-label={avatarUrl ? 'Replace profile image' : 'Upload profile image'} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer', background: 'transparent', border: 0, padding: 0 }}>
           {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}{uploading ? 'Uploading' : avatarUrl ? 'Replace' : 'Upload'}
         </button>
-        {avatarUrl && <button type="button" onClick={convertAvatarToHouseStyle} disabled={avatarConverting || avatarApplying} aria-label="Convert profile image to R3 house style" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 28, padding: '0 9px', border: `1px solid ${line}`, borderRadius: 2, color: ink, fontFamily: sans, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: avatarConverting ? 'wait' : 'pointer', background: 'rgba(245,242,234,.04)' }}>
-          {avatarConverting ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}{avatarConverting ? 'Converting' : 'R³ house style'}
+        {avatarUrl && <button type="button" onClick={() => setHouseStyleOpen((value) => !value)} aria-expanded={houseStyleOpen} aria-controls={houseStylePanelId} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 28, padding: '0 9px', border: `1px solid ${houseStyleOpen ? ink : line}`, borderRadius: 2, color: ink, fontFamily: sans, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer', background: 'rgba(245,242,234,.04)' }}>
+          <Sparkles size={12} />R3 house style
         </button>}
         <span style={{ color: muted, fontSize: 9 }}>{dragging ? 'Drop to upload' : 'or drag a photo here'}</span>
       </div>
+      <HouseStyleAvatarPanel id={houseStylePanelId} open={houseStyleOpen && !!avatarUrl} sourceUrl={avatarSource} needsUpload={avatarNeedsOwnPhoto} converting={avatarConverting} applying={avatarApplying} uploading={uploading} resultUrl={avatarPreviewUrl} resultMock={avatarPreviewMock} error={avatarError} onCreate={convertAvatarToHouseStyle} onUpload={open} onApply={applyConvertedAvatar} onCancel={() => { setAvatarPreviewUrl(null); setAvatarError(''); }} />
+      </>
         )}
       </PhotoDropzone>
-      {avatarPreviewUrl && <div aria-live="polite" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12, maxWidth: 430, marginTop: 14, padding: 12, border: `1px solid ${line}`, background: 'rgba(245,242,234,.025)' }}>
-        <figure style={{ margin: 0 }}><div style={{ aspectRatio: '1', overflow: 'hidden', background: panel }}><img src={avatarSourceUrl || avatarUrl || ''} alt="Original portrait" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div><figcaption style={{ ...label, marginTop: 7, marginBottom: 0 }}>Original</figcaption></figure>
-        <figure style={{ margin: 0 }}><div style={{ aspectRatio: '1', overflow: 'hidden', background: panel }}><img src={avatarPreviewUrl} alt="R3 house-style avatar preview" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'grayscale(1)' }} /></div><figcaption style={{ ...label, marginTop: 7, marginBottom: 0 }}>R³ house style</figcaption></figure>
-        <div style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-          <button type="button" onClick={applyConvertedAvatar} disabled={avatarApplying} style={{ minHeight: 36, padding: '0 14px', border: `1px solid ${ink}`, background: ink, color: black, fontFamily: sans, fontSize: 9, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase', cursor: avatarApplying ? 'wait' : 'pointer' }}>{avatarApplying ? 'Applying…' : 'Use this avatar'}</button>
-          <button type="button" onClick={convertAvatarToHouseStyle} disabled={avatarConverting || avatarApplying} style={{ minHeight: 36, padding: '0 14px', border: `1px solid ${line}`, background: 'transparent', color: ink, fontFamily: sans, fontSize: 9, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase', cursor: avatarConverting ? 'wait' : 'pointer' }}>Try again</button>
-          <button type="button" onClick={() => setAvatarPreviewUrl(null)} disabled={avatarApplying} style={{ minHeight: 36, padding: '0 6px', border: 0, background: 'transparent', color: muted, fontFamily: sans, fontSize: 9, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase', cursor: 'pointer' }}>Cancel</button>
-        </div>
-      </div>}
       {importMessage && <p style={{ color: /applied|ready|imported|uploaded/i.test(importMessage) ? acid : muted, fontSize: 11, lineHeight: 1.5, margin: '10px 0 0' }}>{importMessage}</p>}
       <p style={{ color: muted, fontSize: 10, lineHeight: 1.5, margin: '9px 0 0' }}>Language applies to your page and content. Pricing region sets the currency for every paid stage.</p>
       <Disclosure id="profile-contact" title="Contact" required summary={contactEmail.trim() || 'Add your email'} open={profileOpen.contact} onToggle={() => setProfileOpen((o) => ({ ...o, contact: !o.contact }))}>
