@@ -25,6 +25,8 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const setup = (accountAvatarUrl: string | null) => render(<Onboarding userId="owner" accessToken="t" name="Test Guide" email="guide@example.com" accountAvatarUrl={accountAvatarUrl} onDone={() => {}} />);
+// The photo grid now lives inside this card too; these tests are about the profile image part.
+const panelImages = (panel: HTMLElement) => (within(panel).getAllByRole('img') as HTMLImageElement[]).filter((image) => !image.closest('[aria-label="Your photos"]'));
 const open = async (accountAvatarUrl: string | null) => {
   setup(accountAvatarUrl);
   await screen.findByDisplayValue('Test Guide');
@@ -34,7 +36,7 @@ const open = async (accountAvatarUrl: string | null) => {
 describe('R3 house style panel', () => {
   it('is one full-width, centred card: their photo featured, then the example, with each action once', async () => {
     const panel = await open(OWN_PORTRAIT);
-    const images = within(panel).getAllByRole('img') as HTMLImageElement[];
+    const images = panelImages(panel);
     expect(images.map((image) => image.getAttribute('src'))).toEqual([OWN_PORTRAIT, '/images/guides/house-style/goal-astro.webp']); // their photo, then the one goal image
     for (const image of images) expect((image.getAttribute('alt') || '').length).toBeGreaterThan(10);
     expect(within(panel).getByText('Your photo')).toBeTruthy();
@@ -78,7 +80,7 @@ describe('R3 house style panel', () => {
     expect(await within(panel).findByRole('button', { name: 'Use this avatar' })).toBeTruthy();
     expect(mocks.invoke).toHaveBeenCalledTimes(1);
     expect(mocks.invoke).toHaveBeenCalledWith('guardian-images', { body: { action: 'convert-avatar', image_url: OWN_PORTRAIT, name: 'Test Guide', source: 'house' } });
-    const images = within(panel).getAllByRole('img') as HTMLImageElement[];
+    const images = panelImages(panel);
     // Their pair first, then the house-style example kept beside it as the target to compare against.
     expect(images.map((image) => image.getAttribute('src'))).toEqual([OWN_PORTRAIT, REAL_IMAGE, '/images/guides/house-style/goal-astro.webp']);
     expect(within(panel).queryByRole('button', { name: 'Replace profile image' })).toBeNull(); // the result's own actions replace it

@@ -3137,12 +3137,13 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       <PhotoDropzone onFile={uploadPortrait} validate={portraitProblem} onReject={setImportMessage} accept={PORTRAIT_ACCEPT} disabled={uploading}>
         {({ open, dragging }) => (
       <>
-      <HouseStyleAvatarPanel id={houseStylePanelId} save={saveState} onSave={saveProgress} dragging={dragging} sourceUrl={avatarSource} currentUrl={avatarUrl} needsUpload={avatarNeedsOwnPhoto} converting={avatarConverting} applying={avatarApplying} uploading={uploading} resultUrl={avatarPreviewUrl} resultMock={avatarPreviewMock} error={avatarError} onCreate={convertAvatarToHouseStyle} onUpload={open} onApply={applyConvertedAvatar} onCancel={() => { setAvatarPreviewUrl(null); setAvatarError(''); }} />
+      <HouseStyleAvatarPanel id={houseStylePanelId} save={saveState} onSave={saveProgress} dragging={dragging} sourceUrl={avatarSource} currentUrl={avatarUrl} needsUpload={avatarNeedsOwnPhoto} converting={avatarConverting} applying={avatarApplying} uploading={uploading} resultUrl={avatarPreviewUrl} resultMock={avatarPreviewMock} error={avatarError} onCreate={convertAvatarToHouseStyle} onUpload={open} onApply={applyConvertedAvatar} onCancel={() => { setAvatarPreviewUrl(null); setAvatarError(''); }}>
+        <PhotoGrid embedded photos={sitePhotos} accountAvatarUrl={accountAvatarUrl || null} uploading={photosUploading} onAdd={addSitePhotos} onRemove={(index) => setSitePhotos((current) => current.filter((_, position) => position !== index))} save={saveState} onSave={saveProgress} />
+      </HouseStyleAvatarPanel>
       </>
         )}
       </PhotoDropzone>
       {importMessage && <p style={{ color: /applied|ready|imported|uploaded/i.test(importMessage) ? acid : muted, fontSize: 11, lineHeight: 1.5, margin: '10px 0 0' }}>{importMessage}</p>}
-      <PhotoGrid photos={sitePhotos} accountAvatarUrl={accountAvatarUrl || null} uploading={photosUploading} onAdd={addSitePhotos} onRemove={(index) => setSitePhotos((current) => current.filter((_, position) => position !== index))} save={saveState} onSave={saveProgress} />
       <p style={{ color: muted, fontSize: 10, lineHeight: 1.5, margin: '9px 0 0' }}>Language applies to your page and content. Pricing region sets the currency for every paid stage.</p>
       <Disclosure id="profile-contact" title="Contact" required summary={contactEmail.trim() || 'Add your email'} open={profileOpen.contact} onToggle={() => setProfileOpen((o) => ({ ...o, contact: !o.contact }))}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12, marginTop: 18 }}>

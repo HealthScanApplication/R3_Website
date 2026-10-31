@@ -33,6 +33,21 @@ const setup = (name = 'Test Guide', avatar: string | null = ACCOUNT_AVATAR) => r
 const photos = () => screen.getByRole('region', { name: 'Your photos' });
 
 describe('photo grid', () => {
+  it('lives inside the profile image card, directly under its actions and above the collapsed style reference', async () => {
+    setup();
+    await screen.findByDisplayValue('Test Guide');
+    const card = screen.getByRole('region', { name: 'R3 house style profile image' });
+    expect(card.contains(photos())).toBe(true);
+    const order = [...card.querySelectorAll('button, section[aria-label="Your photos"], details')];
+    const createIndex = order.findIndex((el) => /Create my R3 house style/.test(el.textContent || '') && el.tagName === 'BUTTON');
+    const gridIndex = order.indexOf(card.querySelector('section[aria-label="Your photos"]')!);
+    const referenceIndex = order.indexOf(card.querySelector('details')!);
+    expect(createIndex).toBeGreaterThanOrEqual(0);
+    expect(gridIndex).toBeGreaterThan(createIndex);
+    expect(referenceIndex).toBeGreaterThan(gridIndex);
+    expect((card.querySelector('details') as HTMLDetailsElement).open).toBe(false); // the style reference is collapsed
+  });
+
   it('is a grid of four, the first being the avatar from their account email, with the rest empty and a nudge to add 2 to 4', async () => {
     setup();
     await screen.findByDisplayValue('Test Guide');

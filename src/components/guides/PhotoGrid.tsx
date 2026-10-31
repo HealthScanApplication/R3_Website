@@ -24,14 +24,16 @@ export interface PhotoGridProps {
   onRemove: (index: number) => void;
   save: SaveState;
   onSave: () => void;
+  /** Sits inside another card (the profile image card): no box of its own, just a divider above. */
+  embedded?: boolean;
 }
 
-export function PhotoGrid({ photos, accountAvatarUrl, uploading, onAdd, onRemove, save, onSave }: PhotoGridProps) {
+export function PhotoGrid({ photos, accountAvatarUrl, uploading, onAdd, onRemove, save, onSave, embedded = false }: PhotoGridProps) {
   const filled = photos.slice(0, PHOTO_SLOTS);
   const cells = Array.from({ length: PHOTO_SLOTS }, (_, index) => filled[index] || null);
   const enough = filled.length >= PHOTO_MIN;
   return (
-    <section aria-label="Your photos" style={{ width: '100%', boxSizing: 'border-box', marginTop: 18, padding: 20, border: `1px solid ${line}`, background: 'rgba(245,242,234,.025)', textAlign: 'center' }}>
+    <section aria-label="Your photos" style={embedded ? { width: '100%', boxSizing: 'border-box', marginTop: 20, paddingTop: 18, borderTop: `1px solid ${line}`, textAlign: 'center' } : { width: '100%', boxSizing: 'border-box', marginTop: 18, padding: 20, border: `1px solid ${line}`, background: 'rgba(245,242,234,.025)', textAlign: 'center' }}>
       <h3 style={{ ...label, margin: '0 0 6px', textAlign: 'center' }}>Your photos · add 2 to 4</h3>
       <p style={{ color: enough ? acid : muted, fontSize: 12, lineHeight: 1.6, margin: '0 auto 14px', maxWidth: 520 }}>
         {enough ? `${filled.length} of ${PHOTO_SLOTS} added. Add up to ${PHOTO_SLOTS - filled.length} more if you like.` : `Add at least ${PHOTO_MIN} real photos of you, your work or your space. Pages with real photos feel like a person, not a template.`}
