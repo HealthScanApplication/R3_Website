@@ -55,6 +55,15 @@ describe('HeroDevices', () => {
     await settle();
   });
 
+  it('renders the fallback arts transparent (no full-bleed background rect)', async () => {
+    render(<HeroDevices />);
+    for (const name of [RING, CLIP]) {
+      const svg = screen.getByRole('img', { name });
+      expect(svg.querySelector('svg > rect, :scope > rect')).toBeNull();
+    }
+    await settle();
+  });
+
   it('creates the scene with the ring url and the scene div', async () => {
     render(<HeroDevices />);
     await settle();

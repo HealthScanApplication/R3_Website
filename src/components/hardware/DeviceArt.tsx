@@ -1,6 +1,6 @@
 import React, { useId } from 'react';
 
-export function RingArt() {
+export function RingArt({ transparent = false }: { transparent?: boolean } = {}) {
   const uid = useId().replace(/[^\w-]/g, '');
   const bg = `ring-bg-${uid}`;
   const shell = `ring-shell-${uid}`;
@@ -8,10 +8,12 @@ export function RingArt() {
   return (
     <svg viewBox="0 0 640 520" role="img" aria-label="Concept illustration of the R3 Note smart ring">
       <defs>
-        <radialGradient id={bg} cx="48%" cy="42%" r="70%">
-          <stop offset="0" stopColor="#2a2d29" />
-          <stop offset="1" stopColor="#10110f" />
-        </radialGradient>
+        {!transparent && (
+          <radialGradient id={bg} cx="48%" cy="42%" r="70%">
+            <stop offset="0" stopColor="#2a2d29" />
+            <stop offset="1" stopColor="#10110f" />
+          </radialGradient>
+        )}
         <linearGradient id={shell} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#474a45" />
           <stop offset="0.42" stopColor="#121311" />
@@ -22,7 +24,7 @@ export function RingArt() {
           <feDropShadow dx="0" dy="26" stdDeviation="22" floodColor="#000" floodOpacity=".55" />
         </filter>
       </defs>
-      <rect width="640" height="520" fill={`url(#${bg})`} />
+      {!transparent && <rect width="640" height="520" fill={`url(#${bg})`} />}
       <ellipse cx="320" cy="430" rx="190" ry="32" fill="#000" opacity=".36" />
       <g filter={`url(#${shadow})`} transform="translate(320 248) rotate(-13)">
         <ellipse rx="190" ry="212" fill={`url(#${shell})`} />
@@ -36,7 +38,7 @@ export function RingArt() {
   );
 }
 
-export function ClipArt() {
+export function ClipArt({ transparent = false }: { transparent?: boolean } = {}) {
   const uid = useId().replace(/[^\w-]/g, '');
   const bg = `clip-bg-${uid}`;
   const shellId = `clip-case-${uid}`;
@@ -44,10 +46,12 @@ export function ClipArt() {
   return (
     <svg viewBox="0 0 640 520" role="img" aria-label="Concept illustration of the R3 Clip camera wearable">
       <defs>
-        <radialGradient id={bg} cx="50%" cy="40%" r="75%">
-          <stop offset="0" stopColor="#17332c" />
-          <stop offset="1" stopColor="#09120f" />
-        </radialGradient>
+        {!transparent && (
+          <radialGradient id={bg} cx="50%" cy="40%" r="75%">
+            <stop offset="0" stopColor="#17332c" />
+            <stop offset="1" stopColor="#09120f" />
+          </radialGradient>
+        )}
         <linearGradient id={shellId} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#545852" />
           <stop offset=".38" stopColor="#121412" />
@@ -57,7 +61,7 @@ export function ClipArt() {
           <feDropShadow dx="0" dy="26" stdDeviation="22" floodColor="#000" floodOpacity=".58" />
         </filter>
       </defs>
-      <rect width="640" height="520" fill={`url(#${bg})`} />
+      {!transparent && <rect width="640" height="520" fill={`url(#${bg})`} />}
       <ellipse cx="320" cy="438" rx="176" ry="28" fill="#000" opacity=".38" />
       <g filter={`url(#${shadow})`}>
         <path d="M280 38h80l16 132H264z" fill="#151714" stroke="#4a4e47" strokeWidth="4" />

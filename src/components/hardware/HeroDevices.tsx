@@ -66,8 +66,8 @@ export function HeroDevices() {
     <div style={{ width: '100%', height: '100%', position: 'relative' }} {...a11y}>
       {drawnMounted && (
         <div style={{ display: 'flex', width: '100%', height: '100%', alignItems: 'center' }}>
-          <div style={{ flex: 1, minWidth: 0 }}><RingArt /></div>
-          <div style={{ flex: 1, minWidth: 0 }}><ClipArt /></div>
+          <div style={{ flex: 1, minWidth: 0 }}><RingArt transparent /></div>
+          <div style={{ flex: 1, minWidth: 0 }}><ClipArt transparent /></div>
         </div>
       )}
       {phase !== 'failed' && (
