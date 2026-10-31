@@ -1,5 +1,5 @@
 /**
- * The R³ Retro necklace screen, ported from the owner's Pod Plan artifact (`necklaceScreen`, lines ~1747-1790):
+ * The R³ Retro watch screen, ported from the owner's Pod Plan artifact (`necklaceScreen`, lines ~1747-1790):
  * a pixel heart beating at the measured rate inside a circular pulse trace that spins round, each beat kicking
  * outward and the trail fading out in an ordered (Bayer) dither, as e-paper fades. Time and heart rate run along
  * the right edge, which is the upper-right edge once the case hangs as a diamond.

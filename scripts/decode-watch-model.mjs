@@ -1,22 +1,19 @@
 #!/usr/bin/env node
 /**
- * Turns the Pod Plan artifact's `watch-b64.txt` (the R³ Retro watch, base64) into a compact binary model.
- *
- *  - `--full` (the /ring hero uses this): the WHOLE watch, case plus its closed link bracelet, welded and then
- *    simplified with the ring's quadric-error decimator (scripts/decimate-stl.mjs) to 120,000 triangles, so it fits
- *    Uint16 indices and ~1.1 MB -> public/models/r3-clip-watch.bin.
- *  - default: the watch HEAD only (bracelet and lugs dropped, same filter as the artifact: z > 0.3 and |y| < 0.47),
- *    compacted to the vertices those triangles use (the old necklace asset; the site no longer loads it).
+ * Turns the Pod Plan artifact's `watch-b64.txt` (the R³ Retro watch, base64) into public/models/r3-clip-watch.bin,
+ * the model the /ring hero loads: the WHOLE watch, case plus its closed link bracelet, welded and then simplified
+ * with the ring's quadric-error decimator (scripts/decimate-stl.mjs) to 120,000 triangles, so it fits Uint16 indices
+ * and ~1.1 MB.
  *
  * Format (same as the source, little-endian): uint32 header length, JSON header {min, max, n, ni}, n × 3 Int16
  * quantised positions (value = min + (q + 32768) / 65535 × (max - min)), zero padding to a 4-byte boundary,
  * ni indices: Uint32, or Uint16 when the header says `iw: 2` (written whenever n <= 65535; the artifact's own file has
  * no `iw` and so stays Uint32).
  *
- * To fit Uint16 indices (and the < 1.5 MB budget) the head is welded on a 0.001-model-unit grid (0.038 mm at the
- * artifact's S = 38 mm per unit, far below a pixel), and triangles that collapse are dropped.
+ * Before decimating, the watch is welded on a 0.001-model-unit grid (0.038 mm at the artifact's S = 38 mm per unit,
+ * far below a pixel), and triangles that collapse are dropped.
  *
- * Usage: node scripts/decode-watch-model.mjs <watch-b64.txt> [out.bin] [--full]
+ * Usage: node scripts/decode-watch-model.mjs <watch-b64.txt> [out.bin]
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -58,21 +55,6 @@ export function encodeModel({ positions, indices }) {
   return out;
 }
 
-/** The artifact's head filter, then compaction to used vertices (in first-use order). */
-export function keepHead({ positions, indices }) {
-  const ok = i => positions[i * 3 + 2] > 0.3 && Math.abs(positions[i * 3 + 1]) < 0.47;
-  const remap = new Map(), idx = [], pos = [];
-  for (let t = 0; t < indices.length; t += 3) {
-    const a = indices[t], b = indices[t + 1], c = indices[t + 2];
-    if (!(ok(a) && ok(b) && ok(c))) continue;
-    for (const v of [a, b, c]) {
-      if (!remap.has(v)) { remap.set(v, remap.size); pos.push(positions[v * 3], positions[v * 3 + 1], positions[v * 3 + 2]); }
-      idx.push(remap.get(v));
-    }
-  }
-  return { positions: new Float32Array(pos), indices: new Uint32Array(idx) };
-}
-
 /** Merge vertices that fall in the same `eps` grid cell (keeping the first one's position); drop collapsed triangles. */
 export function weld({ positions, indices }, eps) {
   const cell = new Map(), remap = new Uint32Array(positions.length / 3), pos = [];
@@ -98,14 +80,13 @@ export function keepFull(model, targetTriangles = FULL_TRIANGLES) {
 }
 
 function cli(argv) {
-  const args = argv.slice(2), full = args.includes('--full'), files = args.filter(a => a !== '--full');
-  const [src, out = full ? 'public/models/r3-clip-watch.bin' : 'public/models/r3-clip-retro.bin'] = files;
-  if (!src) { console.error('Usage: node scripts/decode-watch-model.mjs <watch-b64.txt> [out.bin] [--full]'); process.exit(1); }
+  const [src, out = 'public/models/r3-clip-watch.bin'] = argv.slice(2);
+  if (!src) { console.error('Usage: node scripts/decode-watch-model.mjs <watch-b64.txt> [out.bin]'); process.exit(1); }
   const model = decodeModel(Buffer.from(readFileSync(src, 'utf8').trim(), 'base64'));
-  const head = full ? keepFull(model) : weld(keepHead(model), 0.001);
-  const bytes = encodeModel(head);
+  const watch = keepFull(model);
+  const bytes = encodeModel(watch);
   writeFileSync(out, bytes);
-  console.log(`${model.indices.length / 3} -> ${head.indices.length / 3} triangles, ${head.positions.length / 3} vertices, ${bytes.length} bytes -> ${out}`);
+  console.log(`${model.indices.length / 3} -> ${watch.indices.length / 3} triangles, ${watch.positions.length / 3} vertices, ${bytes.length} bytes -> ${out}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) cli(process.argv);

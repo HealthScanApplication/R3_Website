@@ -1,10 +1,10 @@
 // @ts-expect-error - plain .mjs script without type declarations
-import { decodeModel, encodeModel, keepFull, keepHead, weld } from '../decode-watch-model.mjs';
+import { decodeModel, encodeModel, keepFull, weld } from '../decode-watch-model.mjs';
 import { describe, expect, it } from 'vitest';
 
 type Model = { positions: Float32Array; indices: Uint32Array };
 
-// Two triangles: one inside the head filter (z > 0.3, |y| < 0.47), one on the bracelet (y = 0.9).
+// Two triangles: one on the head (z > 0.3, |y| < 0.47), one on the bracelet (y = 0.9), plus an unused vertex.
 const synthetic = (): Model => ({
   positions: new Float32Array([
     0, 0, 0.5, 0.2, 0, 0.6, 0, 0.2, 0.7, // head
@@ -45,13 +45,6 @@ describe('decode-watch-model', () => {
     const w = weld(m, 0.001) as Model;
     expect(w.positions.length).toBe(12);
     expect(Array.from(w.indices)).toEqual([0, 1, 2, 0, 1, 3]);
-  });
-
-  it('keeps only head triangles and compacts to the vertices they use', () => {
-    const head = keepHead(synthetic()) as Model;
-    expect(Array.from(head.indices)).toEqual([0, 1, 2]);
-    expect(head.positions.length).toBe(9);
-    expect(head.positions[8]).toBeCloseTo(0.7, 6);
   });
 
   it('full mode keeps the bracelet triangles as well as the head (and compacts away unused vertices)', () => {

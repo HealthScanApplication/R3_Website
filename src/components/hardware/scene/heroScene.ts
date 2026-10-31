@@ -179,9 +179,9 @@ export async function createHeroScene(container: HTMLElement, options: HeroScene
       const dt = lastNow < 0 ? 0 : Math.min(0.1, Math.max(0, (now - lastNow) / 1000));
       lastNow = now;
       if (!reducedMotion) elapsed += dt;
-      const k = 1 - Math.exp(-(dragging ? DRAG_RATE : RETURN_RATE) * dt);
-      yaw += (targetYaw - yaw) * k;
-      pitch += (targetPitch - pitch) * k;
+      const ease = 1 - Math.exp(-(dragging ? DRAG_RATE : RETURN_RATE) * dt);
+      yaw += (targetYaw - yaw) * ease;
+      pitch += (targetPitch - pitch) * ease;
       if (settled()) { yaw = targetYaw; pitch = targetPitch; }
       rig.rotation.set(pitch, yaw, 0);
       watchTurn.rotation.y = watchYaw(elapsed, reducedMotion);
