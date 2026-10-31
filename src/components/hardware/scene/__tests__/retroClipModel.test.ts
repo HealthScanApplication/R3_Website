@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 // @ts-expect-error - plain .mjs script without type declarations
 import { encodeModel } from '../../../../../scripts/decode-watch-model.mjs';
-import { buildRetroWatch, loopHole, parseWatchModel } from '../retroClipModel';
+import { applyWatchFinish, buildRetroWatch, loopHole, parseWatchModel } from '../retroClipModel';
+import { FINISH_SPECS } from '../finishes';
 import { watchBytes } from './watchFixture';
 
 describe('parseWatchModel', () => {
@@ -109,5 +110,46 @@ describe('buildRetroWatch', () => {
     const u = encodeModel({ positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), indices: new Uint32Array([0, 1, 2]) }) as Uint8Array;
     const { indices } = parseWatchModel(u.buffer.slice(u.byteOffset, u.byteOffset + u.byteLength) as ArrayBuffer);
     expect(indices).toBeInstanceOf(Uint16Array);
+  });
+});
+
+describe('watch finishes', () => {
+  const bodyAndFace = (w: ReturnType<typeof buildRetroWatch>) => {
+    const body = (w.group.getObjectByName('head')!.children.find(o => (o as THREE.Mesh).isMesh && (o as THREE.Mesh).material instanceof THREE.MeshPhysicalMaterial) as THREE.Mesh).material as THREE.MeshPhysicalMaterial;
+    const face = (w.group.getObjectByName('screenGround') as THREE.Mesh).material as THREE.MeshBasicMaterial;
+    return { body, face };
+  };
+
+  it('defaults to black (today\'s body, black face) and builds white with a white face', () => {
+    const black = buildRetroWatch(watchBytes(), { screenTexture: new THREE.Texture() });
+    const b = bodyAndFace(black);
+    expect(b.body.color.getHexString()).toBe('2a2e2d');
+    expect([b.body.metalness, b.body.roughness]).toEqual([1, 0.32]);
+    expect(b.face.color.getHex()).toBe(0x000000);
+    black.dispose();
+    const white = buildRetroWatch(watchBytes(), { screenTexture: new THREE.Texture(), finish: 'white' });
+    const w = bodyAndFace(white);
+    expect(w.body.color.getHexString()).toBe(FINISH_SPECS.white.watch.color.slice(1));
+    expect(w.face.color.getHexString()).toBe(FINISH_SPECS.white.screen.ground.slice(1));
+    white.dispose();
+  });
+
+  it('applyWatchFinish re-colours the same materials, no new geometry', () => {
+    const watch = buildRetroWatch(watchBytes(), { screenTexture: new THREE.Texture(), finish: 'white' });
+    const geos: THREE.BufferGeometry[] = [];
+    watch.group.traverse(o => { if ((o as THREE.Mesh).isMesh) geos.push((o as THREE.Mesh).geometry); });
+    const { body, face } = bodyAndFace(watch);
+    applyWatchFinish(watch, 'silver');
+    const again = bodyAndFace(watch);
+    expect(again.body).toBe(body);
+    expect(again.face).toBe(face);
+    expect(body.color.getHexString()).toBe('c9ced0');
+    expect(body.metalness).toBe(1);
+    expect(face.color.getHex()).toBe(0x000000);
+    const after: THREE.BufferGeometry[] = [];
+    watch.group.traverse(o => { if ((o as THREE.Mesh).isMesh) after.push((o as THREE.Mesh).geometry); });
+    expect(after.length).toBe(geos.length);
+    after.forEach((g, i) => expect(g).toBe(geos[i]));
+    watch.dispose();
   });
 });

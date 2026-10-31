@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { HEART, RETRO_BPM, drawRetroScreen, type RetroScreenContext } from '../retroScreen';
+import { FINISH_SPECS } from '../finishes';
 
 type Call = { op: string; args: unknown[]; fill: string; depth: number };
 
@@ -69,5 +70,18 @@ describe('drawRetroScreen', () => {
     expect(frame(0.1, false)).not.toBe(frame(0.6, false));
     expect(frame(0.1, true)).toBe(frame(0.6, true));
     expect(frame(3.7, true)).toBe(frame(0, true));
+  });
+
+  it('draws in the given scheme: the white finish is black ink on a white ground', () => {
+    const { ink, ground } = FINISH_SPECS.white.screen;
+    const { ctx, calls } = stub();
+    drawRetroScreen(ctx, 200, 0.3, RETRO_BPM, false, { ink, ground });
+    const rects = calls.filter(c => c.op === 'fillRect');
+    expect(rects[0]).toMatchObject({ args: [0, 0, 200, 200], fill: ground });
+    const heart = rects.filter(c => c.depth === 1);
+    expect(heart.length).toBe(heartCells);
+    heart.forEach(c => expect(c.fill).toBe(ink));
+    rects.slice(1).forEach(c => expect(c.fill).toBe(ink));
+    expect(calls.find(c => c.op === 'fillText')!.fill).toBe(ink);
   });
 });

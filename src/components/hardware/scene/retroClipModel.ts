@@ -10,22 +10,24 @@
  * `lensBlend` camera at [12, 14.9, -0.2]; no end caps (the bracelet runs into the case). Helpers ported: `octagon`
  * (~1803), `add` (~940), `lensBlend` (~1897), `crystalMat` (~935), colours from `PRO.black` and `UI.black`.
  *
- * Changed: black colourway only; the screen is a MeshBasicMaterial (the artifact's `displayMat`) showing the
+ * Changed: the finishes in finishes.ts (default black, the artifact's colourway; `applyWatchFinish` re-colours); the screen is a MeshBasicMaterial (the artifact's `displayMat`) showing the
  * caller's texture (the heartbeat, retroScreen.ts, not navigation), with UVs mapping the 27.6 mm square onto
  * [0,1]²; the bracelet's hole is measured (`loopHole`) and exposed as `group.userData.hole` (a Box3 in the group's
  * millimetres, hole axis `userData.holeAxis` = 'x') so the scene can nest the R³ Note ring inside it.
  */
 import * as THREE from 'three';
+import { finishSpec, type Finish } from './finishes';
 
 /** The watch: `group` (with `userData.hole` / `userData.holeAxis`), its `screen` mesh, and `dispose`. */
 export type ClipModel = { group: THREE.Group; screen: THREE.Mesh; dispose(): void };
-export type RetroClipOptions = { screenTexture: THREE.Texture };
+/** `finish` (default 'black', today's look) colours the case, bracelet and the face around the screen. */
+export type RetroClipOptions = { screenTexture: THREE.Texture; finish?: Finish };
 export type HoleBox = { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } };
 type V3 = [number, number, number];
 
 const S = 38;                                  // mm per model unit
-const BODY = '#2a2e2d';                        // PRO.black.body
-const GROUND = '#000000';                      // UI.black.ground
+// Colours come from finishes.ts: black = PRO.black.body '#2a2e2d' and UI.black.ground '#000000'.
+const BODY_MAT = 'watchBody', GROUND_MESH = 'screenGround';
 const ZF = (0.785 - 0.74) * S, Z_SHIFT = -0.74 * S;
 const RAY_BAND = 0.08;                         // model units: vertices this close to a ray count as on it
 const SCREEN_SPAN = 27.6;                      // the texture's square, mm
@@ -112,7 +114,9 @@ export function buildRetroWatch(bytes: ArrayBuffer, options: RetroClipOptions): 
   head.name = 'head';
   group.add(head);
 
-  const mat = new THREE.MeshPhysicalMaterial({ metalness: 1, roughness: 0.32, color: BODY });
+  const spec = finishSpec(options.finish);
+  const mat = new THREE.MeshPhysicalMaterial({ ...spec.watch });
+  mat.name = BODY_MAT;
   const wm = new THREE.Mesh(watchGeo, mat); wm.scale.setScalar(S); wm.position.z = Z_SHIFT; head.add(wm);
   // The screen: the artifact's unlit display material; UVs put the 27.6 mm texture square on the window.
   const winGeo = new THREE.ShapeGeometry(octagon(27, 23.5, 4));
@@ -122,7 +126,8 @@ export function buildRetroWatch(bytes: ArrayBuffer, options: RetroClipOptions): 
   screen.name = 'screen';
   // No metal edge: a ring in the screen's own colour fills the gap to the case, so the screen reads as one sheet of glass.
   const fr = octagon(31.4, 27.9, 4.8); fr.holes.push(octagon(27, 23.5, 4));
-  add(head, new THREE.ShapeGeometry(fr), new THREE.MeshBasicMaterial({ color: GROUND, toneMapped: false }), 0, -0.7, ZF + 0.01);
+  const ground = add(head, new THREE.ShapeGeometry(fr), new THREE.MeshBasicMaterial({ color: spec.screen.ground, toneMapped: false }), 0, -0.7, ZF + 0.01);
+  ground.name = GROUND_MESH;
   add(head, new THREE.ShapeGeometry(octagon(31.4, 27.9, 4.8)), crystalMat(), 0, -0.7, ZF + 0.2);
   lensBlend(head, [12.0, 14.9, -0.2], [-0.707, 0.707, 0], [0.288, 0.288, 0.914], mat);
 
@@ -149,6 +154,26 @@ export function buildRetroWatch(bytes: ArrayBuffer, options: RetroClipOptions): 
     mats.forEach(x => x.dispose());       // material.dispose() leaves its map (the caller's texture) alone
   };
   return { group, screen, dispose };
+}
+
+/**
+ * Re-colour a built watch in place (case, bracelet and the face around the screen): no new geometry. The screen
+ * texture itself belongs to the caller, which repaints it with the finish's screen scheme.
+ */
+export function applyWatchFinish(model: ClipModel, finish: Finish): void {
+  const spec = finishSpec(finish);
+  model.group.traverse(o => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const mat = m.material as THREE.MeshPhysicalMaterial;
+    if (mat.name === BODY_MAT) {
+      mat.color.set(spec.watch.color);
+      mat.metalness = spec.watch.metalness;
+      mat.roughness = spec.watch.roughness;
+    } else if (m.name === GROUND_MESH) {
+      (m.material as THREE.MeshBasicMaterial).color.set(spec.screen.ground);
+    }
+  });
 }
 
 /** Fetch the full watch model and build it. */

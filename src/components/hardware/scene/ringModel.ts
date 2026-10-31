@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { finishSpec, type Finish } from './finishes';
 
 /** Parse, weld, smooth, centre at the origin and scale so the largest dimension is exactly 1. */
 export function buildRingGeometry(stlBytes: ArrayBuffer): THREE.BufferGeometry {
@@ -32,21 +33,28 @@ export function buildRingGeometry(stlBytes: ArrayBuffer): THREE.BufferGeometry {
   return geo;
 }
 
-/** Fetch the STL and return the ring mesh in a dark, glossy brushed-metal finish. */
-export async function loadRing(url: string): Promise<THREE.Mesh> {
+/** Fetch the STL and return the ring mesh in the given finish (default 'black': dark, glossy brushed metal). */
+export async function loadRing(url: string, finish: Finish = 'black'): Promise<THREE.Mesh> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Ring model request failed: status ${res.status} for ${url}`);
   const bytes = await res.arrayBuffer();
   if (!bytes || bytes.byteLength === 0) throw new Error(`Ring model response was empty (status ${res.status}) for ${url}`);
   const geometry = buildRingGeometry(bytes);
   const material = new THREE.MeshPhysicalMaterial({
-    color: 0x1b1c1a,
-    metalness: 0.9,
-    roughness: 0.35,
+    ...finishSpec(finish).ring,
     clearcoat: 0.4,
     clearcoatRoughness: 0.25,
   });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.name = 'ring';
   return mesh;
+}
+
+/** Re-colour a loaded ring in place (no new geometry). */
+export function applyRingFinish(mesh: THREE.Mesh, finish: Finish): void {
+  const { color, metalness, roughness } = finishSpec(finish).ring;
+  const mat = mesh.material as THREE.MeshPhysicalMaterial;
+  mat.color.set(color);
+  mat.metalness = metalness;
+  mat.roughness = roughness;
 }

@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
-import { buildRingGeometry, loadRing } from '../ringModel';
+import { applyRingFinish, buildRingGeometry, loadRing } from '../ringModel';
+import { FINISH_SPECS } from '../finishes';
 
 /** A binary STL of an axis-aligned box (12 triangles), sized sx × sy × sz and offset away from the origin. */
 function boxStl(sx: number, sy: number, sz: number, offset: [number, number, number] = [10, -4, 25]): ArrayBuffer {
@@ -86,5 +87,25 @@ describe('loadRing', () => {
   it('rejects with the status when the body is empty', async () => {
     fetchReturning({ ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(0) });
     await expect(loadRing('/empty.stl')).rejects.toThrow(/empty.*200|200.*empty/i);
+  });
+});
+
+describe('ring finishes', () => {
+  it('loads black by default (today\'s values) and in a given finish; applyRingFinish re-colours in place', async () => {
+    const bytes = boxStl(3, 1, 3);
+    fetchReturning({ ok: true, status: 200, arrayBuffer: async () => bytes });
+    const black = (await loadRing('/r.stl')).material as THREE.MeshPhysicalMaterial;
+    expect(black.color.getHex()).toBe(0x1b1c1a);
+    expect([black.metalness, black.roughness]).toEqual([0.9, 0.35]);
+    const mesh = await loadRing('/r.stl', 'white');
+    const mat = mesh.material as THREE.MeshPhysicalMaterial;
+    expect(mat.color.getHexString()).toBe(FINISH_SPECS.white.ring.color.slice(1));
+    const geo = mesh.geometry;
+    applyRingFinish(mesh, 'silver');
+    expect(mesh.material).toBe(mat);
+    expect(mesh.geometry).toBe(geo);
+    expect(mat.color.getHexString()).toBe('c9ced0');
+    expect(mat.metalness).toBe(1);
+    expect(mat.roughness).toBe(FINISH_SPECS.silver.ring.roughness);
   });
 });
