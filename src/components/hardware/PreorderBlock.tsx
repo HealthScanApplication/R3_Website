@@ -25,11 +25,12 @@ const heroLabel: React.CSSProperties = {
   fontFamily: HERO_FONT, fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#16140F',
 };
 const heroInput: React.CSSProperties = {
-  ...heroLabel, flex: 1, minWidth: 150, maxWidth: 260, height: 42, boxSizing: 'border-box', background: '#FFFFFF',
-  border: '1px solid #FFFFFF', borderRight: 'none', borderRadius: 0, padding: '0 14px', outline: 'none',
+  fontFamily: HERO_FONT, fontSize: 11, fontWeight: 600, letterSpacing: 'normal', color: '#FFFFFF',
+  flex: 1, minWidth: 150, maxWidth: 260, height: 42, boxSizing: 'border-box', background: 'rgba(255,255,255,0.16)',
+  border: '1px solid #FFFFFF', borderRight: 'none', borderRadius: '2px 0 0 2px', padding: '0 14px', outline: 'none',
 };
 const heroButton = (disabled: boolean): React.CSSProperties => ({
-  ...heroLabel, background: '#FFFFFF', border: '1px solid #FFFFFF', borderRadius: 0, height: 42, boxSizing: 'border-box',
+  ...heroLabel, background: '#FFFFFF', border: '1px solid #FFFFFF', borderRadius: '0 2px 2px 0', height: 42, boxSizing: 'border-box',
   padding: '0 16px', lineHeight: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   whiteSpace: 'nowrap', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? .55 : 1,
 });

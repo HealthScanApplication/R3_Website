@@ -321,10 +321,14 @@ describe('PreorderBlock', () => {
       const input = screen.getByLabelText(/email/i) as HTMLInputElement;
       const btn = screen.getByRole('button', { name: 'Reserve →' });
       expect(input.placeholder).toBe('you@email.com');
-      for (const k of ['fontFamily', 'fontSize', 'fontWeight', 'letterSpacing', 'textTransform', 'color'] as const) {
+      for (const k of ['fontFamily', 'fontSize', 'fontWeight'] as const) {
         expect(input.style[k]).toBeTruthy();
         expect(input.style[k]).toBe(btn.style[k]);
       }
+      expect(input.style.textTransform).not.toBe('uppercase');
+      expect(input.style.letterSpacing).toBe('normal');
+      expect(input.style.color).toBe('rgb(255, 255, 255)');
+      expect(input.style.background).toContain('rgba(255, 255, 255, 0.16)');
       await waitFor(() => expect(count).toHaveBeenCalled());
     });
     it('hero product toggles switch the price and show no struck prices', async () => {
