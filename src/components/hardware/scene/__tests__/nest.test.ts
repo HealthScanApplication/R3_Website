@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { RING_FILL, REST_YAW, WATCH_SWING, WATCH_PERIOD, nestRing, watchYaw } from '../nest';
+import { RING_FILL, REST_YAW, WATCH_SWING, MIN_OFF_AXIS, WATCH_PERIOD, nestRing, watchYaw } from '../nest';
 
 // The bracelet's hole (mm, hole axis X): 38 wide, 41 tall inner, 65 deep inner, centred off the origin.
 const hole = { min: { x: -19, y: -20.5, z: -34 }, max: { x: 19, y: 20.5, z: 31 } };
@@ -52,9 +52,11 @@ describe('watchYaw', () => {
     expect(Math.abs(REST_YAW)).toBeLessThanOrEqual(0.85);
   });
 
-  it('eases back and forth within ±50° over ~10 s, so the screen always faces the camera half', () => {
-    expect(WATCH_SWING).toBeCloseTo((50 * Math.PI) / 180, 9);
+  it('eases about the resting view and never turns straight on, so the case never hides the ring', () => {
     expect(WATCH_PERIOD).toBe(10);
+    expect(WATCH_SWING).toBeGreaterThan(0.25);
+    expect(Math.abs(REST_YAW) - WATCH_SWING).toBeCloseTo(MIN_OFF_AXIS, 9);
+    expect(MIN_OFF_AXIS).toBeGreaterThanOrEqual(0.4);
     let lo = Infinity, hi = -Infinity;
     for (let t = 0; t < 20; t += 0.01) {
       const y = watchYaw(t, false);
@@ -62,8 +64,10 @@ describe('watchYaw', () => {
       expect(watchYaw(t + WATCH_PERIOD, false)).toBeCloseTo(y, 9);
       // Eased: the step per 10 ms never jumps.
       expect(Math.abs(watchYaw(t + 0.01, false) - y)).toBeLessThan(0.01);
+      // Never within MIN_OFF_AXIS of facing the camera.
+      expect(Math.abs(y)).toBeGreaterThanOrEqual(MIN_OFF_AXIS - 1e-9);
     }
-    expect(hi).toBeCloseTo(WATCH_SWING, 3);
-    expect(lo).toBeCloseTo(-WATCH_SWING, 3);
+    expect(hi).toBeCloseTo(REST_YAW + WATCH_SWING, 3);
+    expect(lo).toBeCloseTo(REST_YAW - WATCH_SWING, 3);
   });
 });

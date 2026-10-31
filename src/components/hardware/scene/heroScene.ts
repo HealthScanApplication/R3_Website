@@ -3,7 +3,7 @@
  * link bracelet, its e-paper screen showing a beating pixel heart) stands upright, and the R³ Note ring floats INSIDE
  * the bracelet's loop, concentric with it: both hole axes aligned at rest and both centred on one point, which is
  * the scene origin the camera looks at (so it sits at the vertical middle of the devices container). The watch
- * swings in an eased ±50° yaw so its screen stays in view; the ring turns slowly like a turntable inside it and
+ * swings in an eased yaw about its three-quarter view (never straight on, so the ring stays visible); the ring turns slowly like a turntable inside it and
  * counter-rotates about its own hole axis. One renderer, one rAF loop that this module owns (paused off-screen or
  * when the tab is hidden, never started for auto-motion under reduced motion, which shows a static three-quarter
  * view), full disposal. Pure pieces: nest.ts (concentric sizing, yaw), framing.ts (camera), shadowBlob.ts.

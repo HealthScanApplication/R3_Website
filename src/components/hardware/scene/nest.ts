@@ -8,9 +8,13 @@ export type BoxLike = { min: Vec; max: Vec };
 
 /** Ring outer diameter as a fraction of the bracelet's smaller inner diameter. */
 export const RING_FILL = 0.6;
-/** Watch yaw: resting three-quarter view, eased swing of ±50° over a 10 s period. */
+/**
+ * Watch yaw: an eased swing about the resting three-quarter view over a 10 s period. It never comes within
+ * MIN_OFF_AXIS of facing the camera, because straight on the case hides the ring nested behind it.
+ */
 export const REST_YAW = -0.8;
-export const WATCH_SWING = (50 * Math.PI) / 180;
+export const MIN_OFF_AXIS = 0.45;
+export const WATCH_SWING = Math.abs(REST_YAW) - MIN_OFF_AXIS;
 export const WATCH_PERIOD = 10;
 
 const others = (a: Axis): [Axis, Axis] => (a === 'x' ? ['y', 'z'] : a === 'y' ? ['x', 'z'] : ['x', 'y']);
@@ -46,10 +50,8 @@ export function nestRing(hole: BoxLike, ring: BoxLike, holeAxis: Axis, ringAxis:
   return { centre, scale, holeInner, ringOuter, clearance: (holeInner - ringOuter) / 2 };
 }
 
-const PHASE = Math.asin(REST_YAW / WATCH_SWING);
-
 /** The watch's yaw at time t (s): a sine swing that starts at the resting view; static under reduced motion. */
 export function watchYaw(t: number, reducedMotion: boolean): number {
   if (reducedMotion) return REST_YAW;
-  return WATCH_SWING * Math.sin((2 * Math.PI * t) / WATCH_PERIOD + PHASE);
+  return REST_YAW + WATCH_SWING * Math.sin((2 * Math.PI * t) / WATCH_PERIOD);
 }

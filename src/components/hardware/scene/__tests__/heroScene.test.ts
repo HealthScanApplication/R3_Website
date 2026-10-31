@@ -53,7 +53,7 @@ vi.mock('../retroClipModel', async orig => {
 });
 
 import { CLIP_URL, RING_SPIN_RATE, RING_TURN_RATE, createHeroScene as create, type HeroSceneHandle } from '../heroScene';
-import { REST_YAW, WATCH_SWING } from '../nest';
+import { REST_YAW, WATCH_SWING, MIN_OFF_AXIS } from '../nest';
 import { buildRetroWatch } from '../retroClipModel';
 import { watchBytes as headBytes } from './watchFixture';
 
@@ -200,7 +200,7 @@ describe('createHeroScene', () => {
     expect(Math.abs(n.x)).toBeGreaterThan(0.3);    // but turned: three-quarter
   });
 
-  it('swings the watch within ±50° and turns the ring inside it when motion is allowed', async () => {
+  it('swings the watch about the resting view, never straight on, and turns the ring inside it when motion is allowed', async () => {
     await createHeroScene(container, { ringUrl: '/r.stl', reducedMotion: false });
     flush(0);
     const scene = sceneOf(h.renderers[0]);
@@ -212,9 +212,9 @@ describe('createHeroScene', () => {
       flush(t);
       lo = Math.min(lo, turn.rotation.y); hi = Math.max(hi, turn.rotation.y);
     }
-    expect(hi - lo).toBeGreaterThan(1.5);
-    expect(hi).toBeLessThanOrEqual(WATCH_SWING + 1e-9);
-    expect(lo).toBeGreaterThanOrEqual(-WATCH_SWING - 1e-9);
+    expect(hi - lo).toBeGreaterThan(1.5 * WATCH_SWING);
+    expect(hi).toBeLessThanOrEqual(-MIN_OFF_AXIS + 1e-9);
+    expect(lo).toBeGreaterThanOrEqual(REST_YAW - WATCH_SWING - 1e-9);
     // ~12 s of turntable and counter-spin.
     const turned = (holder.rotation.y - REST_YAW + Math.PI * 2) % (Math.PI * 2);
     expect(turned).toBeCloseTo((12 * RING_TURN_RATE) % (Math.PI * 2), 1);
