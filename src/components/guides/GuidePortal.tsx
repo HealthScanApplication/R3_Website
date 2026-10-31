@@ -35,6 +35,8 @@ import { buildRecipesWithAI, computeNutrition, gramsFor, searchCatalogIngredient
 import { APP_STORE_URL } from '../../config/appLinks';
 import { EventProtocolBuilder } from './EventProtocolBuilder';
 import { GuardianModal } from './GuardianModal';
+import { SiteCardGrid, SitePublishBar, SiteStatusTag, type SiteCardData } from './GuardianSiteCards';
+import { sitePublishAction, siteStatus } from '../../utils/guardianSiteStatus';
 import { BrandKitFields } from './BrandKitFields';
 import { AGE_RANGES, LIFE_STAGES } from '../../utils/audienceTaxonomy';
 import { convertGuardianAvatar, generatedImageFile } from '../../utils/guardianImages';
@@ -2666,6 +2668,10 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const guardianSlug = displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || userId.slice(0, 8);
   const valueRampSlug = (leadMagnetTitle || suggestedRoutineName).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'value-ramp';
   const publishedSitePath = `/guardians/${guardianSlug}/value-ramp/${valueRampSlug}`;
+  // One state for both sites: a single save publishes the profile site and the offer path, and an admin makes them live.
+  const profileSiteState = siteStatus(savedStatus);
+  const funnelSiteState = siteStatus(savedStatus, related.ramps.find((ramp) => ramp.slug === valueRampSlug)?.status ?? 'draft');
+  const sitePublish = sitePublishAction(savedStatus);
   useEffect(() => {
     if (rampAudience !== rampTargetAudience) setRampAudience(rampTargetAudience);
     if (rampProblem !== rampTargetProblem) setRampProblem(rampTargetProblem);
@@ -2917,20 +2923,16 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       })}</div>
       <ContentStudio creator={displayName} avatar={avatarUrl} audience={audience.map(describeAudience).join(' · ') || rampTargetAudience} problem={rampTargetProblem} siteUrl={publishedSitePath}
         offers={[{ title: customerFacingOfferTitle(leadMagnetTitle || suggestedRoutineName), free: true, description: freeAudienceValue }, ...orderedUpsells.map((kind) => ({ title: upsellDrafts[kind].title, free: offerAccess[kind] !== 'paid', price: formatMoney(upsellDrafts[kind].price, currency), description: upsellDrafts[kind].audienceValue }))]} />
-      </div> : <div style={{ padding: 22, display: 'grid', gap: 10 }}>
-        {[
-          { key: 'profile-site', type: 'Profile site', title: `${displayName || 'Guardian'} profile`, path: `/guardians/${guardianSlug}`, previewId: 'profile-site-preview' },
-          { key: 'funnel-site', type: 'Offer funnel', title: leadMagnetTitle || 'Offer site', path: publishedSitePath, previewId: 'value-ramp-funnel-preview' },
-        ].map((site) => <div key={site.key} style={{ position: 'relative', border: `1px solid ${line}`, minHeight: 92, padding: 14, display: 'grid', gridTemplateColumns: '82px minmax(0,1fr) auto auto', gap: 16, alignItems: 'center' }}>
-          <img src={effectiveBackground} alt="" style={{ width: 82, height: 62, objectFit: 'cover', filter: 'grayscale(1)' }} />
-          <span><span style={{ display: 'block', color: acid, fontSize: 7, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 5 }}>{site.type}</span><strong style={{ display: 'block', color: ink, fontSize: 13 }}>{site.title}</strong><code style={{ display: 'block', color: muted, fontSize: 9, marginTop: 6 }}>{site.path}</code></span>
-          <span style={{ color: '#D49A74', fontSize: 8, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Draft</span>
-          <button type="button" aria-label={`Actions for ${site.title}`} aria-expanded={inventoryMenu === site.key} onClick={() => setInventoryMenu((current) => current === site.key ? null : site.key)} style={{ width: 38, height: 38, border: `1px solid ${line}`, background: 'transparent', color: ink, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><MoreHorizontal size={19} /></button>
-          {inventoryMenu === site.key && <div role="menu" style={{ position: 'absolute', zIndex: 8, right: 14, top: 64, width: 158, border: `1px solid ${line}`, background: black, boxShadow: '0 14px 28px rgba(0,0,0,.42)', padding: 4 }}>
-            <button type="button" role="menuitem" onClick={() => { setInventoryMenu(null); setSummaryView(null); setStep(5); setSiteStyleStage(site.key === 'profile-site' ? 0 : 2); }} style={{ width: '100%', border: 0, background: 'transparent', color: ink, padding: '10px 12px', textAlign: 'left', fontFamily: sans, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
-            <button type="button" role="menuitem" onClick={() => { setInventoryMenu(null); setSummaryView(null); setStep(5); window.setTimeout(() => document.getElementById(site.previewId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} style={{ width: '100%', border: 0, borderTop: `1px solid ${line}`, background: 'transparent', color: ink, padding: '10px 12px', textAlign: 'left', fontFamily: sans, fontWeight: 700, cursor: 'pointer' }}>Preview and test</button>
-          </div>}
-        </div>)}
+      </div> : <div style={{ padding: 22 }}>
+        <SiteCardGrid
+          openMenu={inventoryMenu}
+          onOpenMenu={setInventoryMenu}
+          sites={[
+            { key: 'profile-site', type: 'Profile site', title: `${displayName || 'Guardian'} profile`, path: `/guardians/${guardianSlug}`, status: profileSiteState, heroKicker: displayName || undefined, heroLine: generatedHeadline, avatarUrl: avatarUrl || null, previewId: 'profile-site-preview' },
+            { key: 'funnel-site', type: 'Offer funnel', title: leadMagnetTitle || 'Offer site', path: publishedSitePath, status: funnelSiteState, heroKicker: displayName || undefined, heroLine: customerFacingOfferTitle(leadMagnetTitle || suggestedFreeOffer.title), avatarUrl: avatarUrl || null, previewId: 'value-ramp-funnel-preview' },
+          ].map((site): SiteCardData => ({ ...site, backgroundUrl: effectiveBackground, backgroundIsVideo: backgroundType === 'video', greyscale: imageTreatment === 'greyscale' }))}
+          onEdit={(site) => { setInventoryMenu(null); setSummaryView(null); setStep(5); setSiteStyleStage(site.key === 'profile-site' ? 0 : 2); }}
+          onPreview={(site) => { setInventoryMenu(null); setSummaryView(null); setStep(5); window.setTimeout(() => document.getElementById(site.previewId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} />
       </div>}
     </section>}
     {!summaryView && <form onSubmit={submit} style={{ maxWidth: step === 5 ? 1440 : 1100 /* step 05 shows two side-by-side previews */, margin: '52px auto', minHeight: 'calc(100vh - 220px)' }}>
@@ -3271,6 +3273,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       {step === 5 && <>
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginBottom: 14 }}><span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Preview on</span><DeviceToggle value={previewDevice} onChange={setPreviewDevice} /></div>
         <FunnelStage number="01" eyebrow="Site 01 · Your profile" title={`${displayName || 'Your'}${displayName ? '’s' : ''} story.`} copy="Your profile site: who you are, and every published offer path.">
+          <SitePublishBar site="Profile site" status={profileSiteState} action={sitePublish} busy={busy} error={error} liveHref={`/guardians/${guardianSlug}`} />
           {/* Builder left, live preview right (stacks on narrow screens). */}
           <div className="g-split" style={{ border: `1px solid ${line}`, background: panel, padding: 16 }}>
           <div>
@@ -3370,6 +3373,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           </div>
         </FunnelStage>
         <FunnelStage number="02" eyebrow="Site 02 · First offer path" title={`${rampTargetAudience} · ${rampTargetProblem} → ${customerFacingOfferTitle(leadMagnetTitle || 'your first offer')}`} copy="Audience, problem, solution: the page a visitor lands on, from the free offer through to the next one." last>
+        <SitePublishBar site="Offer funnel" status={funnelSiteState} action={sitePublish} busy={busy} error={error} liveHref={publishedSitePath} />
         <div id="value-ramp-funnel-preview" style={{ scrollMarginTop: 20, border: `1px solid ${line}`, background: panel, padding: 16, marginBottom: 24 }}>
           <div className="g-split"><div>
           {/* Same pattern as "Style your page": edit what the offer pages say, who they're for, media and upsells. */}
@@ -3523,9 +3527,9 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         <div style={{ border: `1px solid ${acid}`, background: '#20251B', padding: 16, marginTop: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <span style={{ minWidth: 0, display: 'grid', gap: 8 }}>
             <span style={{ ...label, color: acid, marginBottom: 0 }}>Publishing</span>
-            {[['Profile site', `/guardians/${guardianSlug}`], ['First offer path', publishedSitePath]].map(([text, path]) => <a key={text} href={path} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'baseline', gap: 10, color: ink, textDecoration: 'none' }}><span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', minWidth: 104 }}>{text}</span><code style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10, overflowWrap: 'anywhere', borderBottom: `1px solid ${line}` }}>{path}</code><ExternalLink size={11} /></a>)}
+            {([['Profile site', `/guardians/${guardianSlug}`, profileSiteState], ['First offer path', publishedSitePath, funnelSiteState]] as const).map(([text, path, state]) => <a key={text} href={path} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'baseline', gap: 10, color: ink, textDecoration: 'none' }}><span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', minWidth: 104 }}>{text}</span><code style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10, overflowWrap: 'anywhere', borderBottom: `1px solid ${line}` }}>{path}</code><ExternalLink size={11} /><SiteStatusTag status={state} /></a>)}
           </span>
-          <button type="submit" disabled={busy} style={{ ...btn, flex: '0 0 auto' }}>{busy ? 'Publishing…' : 'Publish site'} <ArrowRight size={14} /></button>
+          <button type="submit" disabled={busy} style={{ ...btn, flex: '0 0 auto' }}>{busy ? `${sitePublish.busyLabel}…` : sitePublish.label} <ArrowRight size={14} /></button>
         </div>
       </>}
 
@@ -4355,7 +4359,7 @@ function SiteBuilderOverview({ profile, valueRamps }: { profile: GuideProfile; v
       title: `${profile.display_name} profile`,
       description: 'Your main Guardian website with every published offer, product, event and retreat.',
       href: profilePath,
-      status: profile.status === 'approved' ? 'Published' : 'Draft',
+      status: siteStatus(profile.status).label,
     },
     ...valueRamps.map((ramp) => ({
       id: ramp.id,
@@ -4363,7 +4367,7 @@ function SiteBuilderOverview({ profile, valueRamps }: { profile: GuideProfile; v
       title: ramp.name,
       description: `${ramp.audience || 'Everyone'} · ${ramp.problem || 'Offer path'} · ${ramp.offer_ids.length} offer${ramp.offer_ids.length === 1 ? '' : 's'}`,
       href: `${profilePath}/value-ramp/${encodeURIComponent(ramp.slug)}`,
-      status: ramp.status === 'published' ? 'Published' : 'Draft',
+      status: siteStatus(profile.status, ramp.status).label,
     })),
   ];
 
