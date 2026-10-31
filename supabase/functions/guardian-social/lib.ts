@@ -108,9 +108,15 @@ export function safeReturnTo(raw: unknown, siteUrl: string, extraOrigins = ''): 
 /** No query string: TikTok rejects redirect URIs that carry one. A GET with no action is the callback. */
 export const redirectUri = (supabaseUrl: string) => `${supabaseUrl.replace(/\/$/, '')}/functions/v1/guardian-social`;
 
-export function buildAuthorizeUrl(p: Platform, clientId: string, state: string, redirect: string): string {
+/**
+ * Facebook Login for Business apps sign in with a configuration (config_id) instead of a scope list. When
+ * `<PLATFORM>_CONFIG_ID` is set it replaces `scope`; the code flow needs override_default_response_type.
+ */
+export function buildAuthorizeUrl(p: Platform, clientId: string, state: string, redirect: string, configId?: string): string {
   const spec = PROVIDERS[p];
-  const q = new URLSearchParams({ [spec.clientIdParam]: clientId, redirect_uri: redirect, response_type: 'code', scope: spec.scopes.join(spec.scopeSeparator), state, ...spec.extraAuthParams });
+  const q = new URLSearchParams({ [spec.clientIdParam]: clientId, redirect_uri: redirect, response_type: 'code', state, ...spec.extraAuthParams });
+  if (configId?.trim()) { q.set('config_id', configId.trim()); q.set('override_default_response_type', 'true'); }
+  else q.set('scope', spec.scopes.join(spec.scopeSeparator));
   return `${spec.authorizeUrl}?${q}`;
 }
 

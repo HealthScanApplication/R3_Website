@@ -62,7 +62,7 @@ async function start(req: Request) {
 
   const returnTo = safeReturnTo(body.return_to, SITE, env('SOCIAL_ALLOWED_RETURN_ORIGINS') || '');
   const state = await signState({ u: user.id, b: brandId, p: platform, r: returnTo, n: nonce, exp }, stateSecret);
-  return json({ url: buildAuthorizeUrl(platform, creds.clientId, state, redirectUri(supabaseUrl)) });
+  return json({ url: buildAuthorizeUrl(platform, creds.clientId, state, redirectUri(supabaseUrl), env(`${platform.toUpperCase()}_CONFIG_ID`)) });
 }
 
 /** Atomically claim the single-use nonce; only the one request whose conditional update matches gets the row. */

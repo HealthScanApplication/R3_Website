@@ -17,6 +17,7 @@ Deploy (migration `20261031120000_guide_social_oauth_nonce.sql` first; `--no-ver
 | `FACEBOOK_CLIENT_ID` / `FACEBOOK_CLIENT_SECRET` | Meta app ID + secret (App settings > Basic). Used for Facebook **and** Instagram (Instagram connects through Facebook Login and the Page's linked account) |
 | `TIKTOK_CLIENT_ID` / `TIKTOK_CLIENT_SECRET` | TikTok for Developers app client key + secret |
 | `YOUTUBE_CLIENT_ID` / `YOUTUBE_CLIENT_SECRET` | Google Cloud OAuth 2.0 Web client |
+| `INSTAGRAM_CONFIG_ID` / `FACEBOOK_CONFIG_ID` | Optional. Facebook Login for Business configuration ID (Meta app > Facebook Login for Business > Configurations). When set it replaces the scope list in the sign-in URL; needed if Meta rejects the plain scope sign-in |
 | `PUBLIC_SITE_URL` | Default return origin (default `https://routine3.com`) |
 | `SOCIAL_ALLOWED_RETURN_ORIGINS` | Optional comma list of extra origins `return_to` may use (staging, previews) |
 

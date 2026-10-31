@@ -44,6 +44,13 @@ describe('guardian-social config', () => {
     expect(ig.searchParams.get('scope')).toContain('instagram_content_publish');
     expect(new URL(buildAuthorizeUrl('facebook', 'cid', 'st', redirect)).host).toBe('www.facebook.com');
   });
+  it('uses a Facebook Login for Business config_id in place of scopes when configured', () => {
+    const u = new URL(buildAuthorizeUrl('instagram', 'cid', 'st', 'https://r', ' 123 '));
+    expect(u.searchParams.get('config_id')).toBe('123');
+    expect(u.searchParams.get('override_default_response_type')).toBe('true');
+    expect(u.searchParams.get('scope')).toBeNull();
+    expect(new URL(buildAuthorizeUrl('instagram', 'cid', 'st', 'https://r')).searchParams.get('scope')).toContain('instagram_basic');
+  });
   it('only returns to the site, localhost or allowed origins', () => {
     const site = 'https://routine3.com';
     expect(safeReturnTo('https://routine3.com/guardians/workspace?tab=social', site)).toContain('tab=social');
