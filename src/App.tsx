@@ -12,6 +12,7 @@ import { PageRenderer } from "./components/PageRenderer";
 import { Header, RoutineMark } from "./components/Header";
 import { Footer } from "./components/Footer";
 import { HardwarePreorder } from "./components/HardwarePreorder";
+import { HardwarePage } from "./components/hardware/HardwarePage";
 import { EmailConfirmationBanner } from "./components/EmailConfirmationBanner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ThemeManager } from "./components/ThemeManager";
@@ -587,6 +588,7 @@ function AppContent() {
       </main>
 
       {currentPage === "home" && <HardwarePreorder />}
+      {currentPage === "hardware" && <HardwarePage />}
 
       {/* Footer */}
       {!isGuidePortal && <Footer />}

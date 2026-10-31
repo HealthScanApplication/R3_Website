@@ -29,6 +29,8 @@ export function useUrlParameterHandling({ setCurrentPage }: UseUrlParameterHandl
         window.history.replaceState({}, document.title, path.replace(/^\/(?:guides|guide)/, '/guardians') || '/guardians');
       }
       setCurrentPage('guides');
+    } else if (path === '/ring' || path === '/hardware') {
+      setCurrentPage('hardware');
     }
   }, [setCurrentPage]);
 
