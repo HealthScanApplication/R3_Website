@@ -366,7 +366,8 @@ export interface ImportedGuideProfile {
   topics: string[];
 }
 
-export async function uploadGuideImage(userId: string, file: File): Promise<string> {
+/** `prefix` names the file after what it is for (`profile-…` by default, `ai-image-…` for a generated cover); it is always inside the person's own folder. */
+export async function uploadGuideImage(userId: string, file: File, prefix = 'profile'): Promise<string> {
   const isGif = file.type === 'image/gif';
   const isImage = isGif || /^image\/(?:jpeg|png|webp)$/.test(file.type);
   const isVideo = /^video\/(?:mp4|webm)$/.test(file.type);
@@ -375,7 +376,7 @@ export async function uploadGuideImage(userId: string, file: File): Promise<stri
   const sizeLimit = isVideo ? 25 : isGif ? 15 : 8;
   if (file.size > sizeLimit * 1024 * 1024) throw new Error(`${isVideo ? 'Video' : isGif ? 'GIF' : 'Image'} must be smaller than ${sizeLimit} MB.`);
   const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : isGif ? 'gif' : file.type === 'video/mp4' ? 'mp4' : file.type === 'video/webm' ? 'webm' : 'jpg';
-  const path = `${userId}/profile-${Date.now()}.${extension}`;
+  const path = `${userId}/${prefix.replace(/[^a-z0-9-]/gi, '') || 'profile'}-${Date.now()}.${extension}`;
   const { error } = await db().storage.from('guide-assets').upload(path, file, { contentType: file.type, upsert: false });
   if (error) throw error;
   return db().storage.from('guide-assets').getPublicUrl(path).data.publicUrl;
@@ -586,6 +587,13 @@ export async function createGuideOffer(guideId: string, offer: Pick<GuideOffer, 
 
 export async function updateGuideOfferDetails(guideId: string, offerId: string, patch: Partial<Pick<GuideOffer, 'title' | 'description' | 'price_cents' | 'currency' | 'access_model' | 'status' | 'cover_url'>>): Promise<GuideOffer> {
   const { data, error } = await db().from('guide_offers').update(patch).eq('id', offerId).eq('guide_id', guideId).select().single();
+  if (error) throw error;
+  return data as GuideOffer;
+}
+
+/** Set or clear the picture an offer's card shows. Only the offer's own Guardian can change it (row level security, plus the guide_id match). */
+export async function updateGuideOfferCover(guideId: string, offerId: string, coverUrl: string | null): Promise<GuideOffer> {
+  const { data, error } = await db().from('guide_offers').update({ cover_url: coverUrl }).eq('id', offerId).eq('guide_id', guideId).select().single();
   if (error) throw error;
   return data as GuideOffer;
 }
