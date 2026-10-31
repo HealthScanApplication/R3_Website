@@ -8,12 +8,13 @@ const links = [
   { key: 'how', dropOrder: 2, width: 163 },
   { key: 'faq', dropOrder: 1, width: 67 },
   { key: 'guardians', dropOrder: 99, width: 133 },
+  { key: 'wearables', dropOrder: 98, width: 118 },
 ];
 const measure = (rowWidth: number, over: Partial<HeaderMeasure> = {}): HeaderMeasure => ({ rowWidth, logoWidth: 149, authWidth: 185, triggerWidth: 32, links, gap: 16, linkGap: 4, minInlineWidth: 440, ...over });
 
 describe('header layout', () => {
   it('desktop: every link and the account actions fit, so there is no menu button', () => {
-    expect(chooseHeaderLayout(measure(1300))).toEqual({ inline: ['routines', 'features', 'how', 'faq', 'guardians'], overflow: [], authInline: true, menu: false });
+    expect(chooseHeaderLayout(measure(1300))).toEqual({ inline: ['routines', 'features', 'how', 'faq', 'guardians', 'wearables'], overflow: [], authInline: true, menu: false });
   });
 
   it('tablet: the links that do not fit go into the menu, lowest drop order first; Guardians stays', () => {
@@ -27,11 +28,11 @@ describe('header layout', () => {
     const gone = order.filter((k) => l.overflow.includes(k));
     expect(gone).toEqual(order.slice(0, gone.length));
     // natural order is kept for what stays
-    expect(l.inline).toEqual(['routines', 'features', 'how', 'faq', 'guardians'].filter((k) => l.inline.includes(k)));
+    expect(l.inline).toEqual(['routines', 'features', 'how', 'faq', 'guardians', 'wearables'].filter((k) => l.inline.includes(k)));
   });
 
-  it('820px: Routines and Guardians stay, Features, How It Works and FAQ are in the menu', () => {
-    expect(chooseHeaderLayout(measure(705))).toEqual({ inline: ['routines', 'guardians'], overflow: ['features', 'how', 'faq'], authInline: true, menu: true });
+  it('820px: Guardians and Wearables stay, Routines, Features, How and FAQ are in the menu', () => {
+    expect(chooseHeaderLayout(measure(705))).toEqual({ inline: ['guardians', 'wearables'], overflow: ['routines', 'features', 'how', 'faq'], authInline: true, menu: true });
   });
 
   it('narrower: Guardians is the last link to leave the bar', () => {
@@ -42,7 +43,7 @@ describe('header layout', () => {
 
   it('then the account actions move into the menu so the links can stay', () => {
     const l = chooseHeaderLayout(measure(542)); // 640px viewport: the actions would push Guardians out
-    expect(l).toEqual({ inline: ['routines', 'guardians'], overflow: ['features', 'how', 'faq'], authInline: false, menu: true });
+    expect(l).toEqual({ inline: ['guardians', 'wearables'], overflow: ['routines', 'features', 'how', 'faq'], authInline: false, menu: true });
   });
 
   it('a very wide account cluster (signed in) goes to the menu earlier', () => {

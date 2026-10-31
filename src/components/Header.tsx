@@ -66,9 +66,10 @@ export function RoutineMark({ size = 28, textColor = '#16140F', hairline = '#161
 const NAV_LINKS: { key: string; label: string; section?: string; href?: string; dropOrder: number }[] = [
   { key: 'routines', label: 'Routines', section: 'routines', dropOrder: 4 },
   { key: 'features', label: 'Features', section: 'features', dropOrder: 3 },
-  { key: 'how', label: 'How It Works', section: 'how-it-works', dropOrder: 2 },
+  { key: 'how', label: 'How', section: 'how-it-works', dropOrder: 2 },
   { key: 'faq', label: 'FAQ', section: 'faq', dropOrder: 1 },
   { key: 'guardians', label: 'Guardians', href: '/guardians', dropOrder: 99 },
+  { key: 'wearables', label: 'Wearables', href: '/ring', dropOrder: 98 },
 ];
 
 interface HeaderProps {
