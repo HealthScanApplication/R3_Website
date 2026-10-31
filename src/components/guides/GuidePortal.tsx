@@ -46,6 +46,7 @@ import { HouseStyleAvatarPanel } from './HouseStyleAvatarPanel';
 import { removeGreenBackground } from '../../utils/chromaKey';
 import { YouTubeClipBackground } from './YouTubeClipBackground';
 import { HeroGlassOverlay, heroGlassOn } from './HeroGlassOverlay';
+import { countryForPlace, mapQueryFor } from '../../utils/placeCountry';
 import { YouTubeClipFields } from './YouTubeClipFields';
 import { clipsFromLinks, clipsToLinks, type YtClip } from '../../utils/youtubeClip';
 import { PhotoGrid, PHOTO_SLOTS } from './PhotoGrid';
@@ -1742,15 +1743,24 @@ function WorkspaceEvents({ guideId }: { guideId: string }) {
   </>;
 }
 
-function DestinationHeader({ profile, place, kind }: { profile: GuideProfile; place: string; kind: 'event' | 'retreat' }) {
-  const mapHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`;
-  return <div style={{ position: 'relative', height: 210, overflow: 'hidden', background: kind === 'retreat' ? '#D7D0C2' : '#263024' }}>
-    <div aria-hidden="true" style={{ position: 'absolute', inset: -30, opacity: .82, backgroundImage: `radial-gradient(circle at 18% 25%,transparent 0 34px,rgba(245,242,234,.22) 35px 36px,transparent 37px),radial-gradient(circle at 72% 65%,transparent 0 58px,rgba(245,242,234,.17) 59px 60px,transparent 61px),linear-gradient(31deg,transparent 47%,rgba(245,242,234,.18) 48% 49%,transparent 50%),linear-gradient(126deg,transparent 44%,rgba(245,242,234,.12) 45% 46%,transparent 47%)`, backgroundSize: '220px 180px,300px 240px,120px 120px,170px 170px', transform: 'rotate(-5deg) scale(1.12)' }} />
-    <a href={mapHref} target="_blank" rel="noreferrer" aria-label={`Open ${place} in maps`} style={{ position: 'absolute', inset: 0, color: '#F5F2EA', textDecoration: 'none' }}>
-      <span style={{ position: 'absolute', left: 18, top: 18, maxWidth: '68%', padding: '8px 10px', border: '1px solid rgba(245,242,234,.42)', background: 'rgba(17,18,15,.52)', backdropFilter: 'blur(10px)', fontSize: 9, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>⌖ {place}</span>
-      <span aria-hidden="true" style={{ position: 'absolute', left: '38%', top: '52%', width: 16, height: 16, margin: -8, borderRadius: '50%', background: '#C7D8A3', boxShadow: '0 0 0 7px rgba(199,216,163,.2)' }} />
+/**
+ * The top of an event or retreat card: a real map of the place with its country's flag in the tag. `lines` are every piece of the
+ * place we have (location, venue, title), because the venue alone often has no city or country; the map is asked for all of it.
+ */
+function DestinationHeader({ profile, place, lines = [place], kind, virtual = false }: { profile: GuideProfile; place: string; lines?: Array<string | null | undefined>; kind: 'event' | 'retreat'; virtual?: boolean }) {
+  const query = mapQueryFor(...lines) || place;
+  const online = virtual || /^online$/i.test(place.trim()) || /to be announced/i.test(place); // nothing to put on a map
+  const country = online ? null : countryForPlace(...lines);
+  const mapHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  return <div data-destination-header style={{ position: 'relative', height: 210, overflow: 'hidden', background: kind === 'retreat' ? '#D7D0C2' : '#263024' }}>
+    {!online && <iframe data-place-map src={`https://maps.google.com/maps?q=${encodeURIComponent(query)}&z=12&output=embed`} title={`Map of ${query}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" tabIndex={-1} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, filter: 'saturate(.85) contrast(1.02)' }} />}
+    <a href={mapHref} target="_blank" rel="noreferrer" aria-label={`Open ${query} in maps`} style={{ position: 'absolute', inset: 0, color: '#F5F2EA', textDecoration: 'none' }}>
+      <span data-place-tag style={{ position: 'absolute', left: 18, top: 18, maxWidth: '68%', display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: '1px solid rgba(245,242,234,.42)', background: 'rgba(17,18,15,.72)', backdropFilter: 'blur(10px)', fontSize: 9, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>
+        {country && <span role="img" aria-label={country.name} title={country.name} data-place-flag style={{ fontSize: 15, lineHeight: 1, letterSpacing: 0 }}>{country.flag}</span>}
+        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{place}</span>
+      </span>
     </a>
-    <span style={{ position: 'absolute', right: 18, bottom: 16, display: 'flex', alignItems: 'end', gap: 9 }}><span style={{ padding: '6px 8px', color: '#F5F2EA', background: 'rgba(17,18,15,.52)', backdropFilter: 'blur(10px)', fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{profile.display_name}</span>{profile.avatar_url ? <img src={profile.avatar_url} alt="" style={{ width: 68, height: 68, borderRadius: '50%', objectFit: 'cover', border: '3px solid #F5F2EA', boxShadow: '0 8px 22px rgba(0,0,0,.28)' }} /> : <span style={{ width: 68, height: 68, borderRadius: '50%', display: 'grid', placeItems: 'center', background: '#F5F2EA', color: '#11120F', fontFamily: serif, fontSize: 26 }}>{profile.display_name.charAt(0)}</span>}</span>
+    <span style={{ position: 'absolute', right: 18, bottom: 16, display: 'flex', alignItems: 'end', gap: 9, pointerEvents: 'none' }}><span style={{ padding: '6px 8px', color: '#F5F2EA', background: 'rgba(17,18,15,.52)', backdropFilter: 'blur(10px)', fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{profile.display_name}</span>{profile.avatar_url ? <img src={profile.avatar_url} alt="" style={{ width: 68, height: 68, borderRadius: '50%', objectFit: 'cover', border: '3px solid #F5F2EA', boxShadow: '0 8px 22px rgba(0,0,0,.28)' }} /> : <span style={{ width: 68, height: 68, borderRadius: '50%', display: 'grid', placeItems: 'center', background: '#F5F2EA', color: '#11120F', fontFamily: serif, fontSize: 26 }}>{profile.display_name.charAt(0)}</span>}</span>
   </div>;
 }
 
@@ -1781,7 +1791,7 @@ function EventCommerceCard({ profile, event }: { profile: GuideProfile; event: G
   const href = event.info_url || (event.source_url !== 'manual' ? event.source_url : '');
   const place = event.location || event.venue || (event.format === 'virtual' ? 'Online' : 'Location to be announced');
   return <article style={{ minHeight: 520, border: '1px solid rgba(242,239,231,.28)', display: 'flex', flexDirection: 'column', background: '#171B14', overflow: 'hidden' }}>
-    <DestinationHeader profile={profile} place={place} kind="event" />
+    <DestinationHeader profile={profile} place={place} lines={[event.location, event.venue, event.title]} kind="event" virtual={event.format === 'virtual'} />
     <div style={{ padding: 22, display: 'flex', flex: 1, flexDirection: 'column' }}><div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><span style={{ color: '#C7D8A3', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span><span style={{ border: '1px solid rgba(199,216,163,.5)', borderRadius: 999, color: '#C7D8A3', padding: '4px 7px', fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{eventFormatLabel(event.format)}</span></div><h3 style={{ fontFamily: serif, fontSize: 31, fontWeight: 300, lineHeight: 1.05, margin: '11px 0 9px' }}>{event.title}</h3><p style={{ color: '#B8B6AF', fontSize: 13, lineHeight: 1.5, margin: '0 0 8px' }}>{event.venue || place}</p>{event.description && <p style={{ color: '#9FA897', fontSize: 12, lineHeight: 1.5, margin: '0 0 20px' }}>{clipCopy(event.description, 145)}</p>}<div style={{ marginTop: 'auto', paddingTop: 18, borderTop: '1px solid rgba(242,239,231,.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}><strong style={{ fontFamily: serif, fontSize: 20, fontWeight: 300 }}>{event.price_label || 'See booking price'}</strong>{href && <a href={href} target="_blank" rel="noreferrer" style={publicCommerceCardCta}>Book <ArrowRight size={13} /></a>}</div></div>
   </article>;
 }
@@ -1828,7 +1838,7 @@ function GuardianRetreats({ profile, retreats }: { profile: GuideProfile; retrea
       <span style={{ color: '#667245', fontSize: 11, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>Stay and learn · {retreats.length}</span>
       <h2 style={{ fontFamily: serif, fontSize: 'clamp(46px,7vw,82px)', fontWeight: 300, lineHeight: .96, letterSpacing: '-.04em', margin: '12px 0 34px' }}>Retreats.</h2>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,360px),1fr))', gap: 18 }}>{retreats.map((retreat) => <article key={retreat.id} style={{ border: '1px solid rgba(17,18,15,.2)', background: '#F2EFE7', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <DestinationHeader profile={profile} place={retreat.location || 'Misty Mountain, Australia'} kind="retreat" />
+        <DestinationHeader profile={profile} place={retreat.location || 'Misty Mountain, Australia'} lines={[retreat.location, retreat.title]} kind="retreat" />
         <div style={{ padding: 24, display: 'flex', flex: 1, flexDirection: 'column' }}><span style={{ color: '#667245', fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>{[retreat.duration_days && `${retreat.duration_days} days`, retreat.location || 'Retreat'].filter(Boolean).join(' · ')}</span><h3 style={{ fontFamily: serif, fontSize: 36, fontWeight: 300, lineHeight: 1.05, margin: '10px 0' }}>{retreat.title}</h3><p style={{ color: '#66645F', fontSize: 14, lineHeight: 1.55 }}>{retreat.description}</p><div style={{ marginTop: 'auto', paddingTop: 18, borderTop: '1px solid rgba(17,18,15,.18)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}><strong style={{ fontFamily: serif, fontSize: 23, fontWeight: 300 }}>{retreat.price_label || 'See package price'}</strong><a href={retreat.booking_url || retreat.source_url} target="_blank" rel="noreferrer" style={publicCommerceCardCta}>Book <ArrowRight size={13} /></a></div></div>
       </article>)}</div>
     </div>
