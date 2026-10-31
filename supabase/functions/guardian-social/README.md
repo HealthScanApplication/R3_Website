@@ -3,6 +3,8 @@
 Links a Guardian's Instagram / Facebook / TikTok / YouTube account via each platform's official OAuth.
 Tokens are AES-256-GCM encrypted into `guide_social_connections.token_ciphertext` / `token_iv`; the browser never sees them.
 
+Flow: `start` -> platform -> `callback` (redirects the code back to the site) -> `complete` (the signed-in browser POSTs `{state, code}`; the JWT user must match the user who started, so a forwarded authorize link cannot link someone else's account).
+
 Deploy (migration `20261031120000_guide_social_oauth_nonce.sql` first; `--no-verify-jwt` because the callback is a platform redirect):
 
     supabase functions deploy guardian-social --no-verify-jwt --use-api --project-ref <ref>

@@ -821,6 +821,21 @@ export async function beginGuideSocialOAuth(platform: SocialPlatform, brandId?: 
   return String(payload.url);
 }
 
+/** Second half of the OAuth flow: the signed-in browser hands the platform code back so the server can bind it to this session. */
+export async function completeGuideSocialOAuth(state: string, code: string): Promise<{ platform: SocialPlatform; account_label: string }> {
+  const { data: session } = await db().auth.getSession();
+  const token = session.session?.access_token;
+  if (!token) throw new Error('Sign in before connecting a social account.');
+  const response = await fetch(`https://${projectId}.supabase.co/functions/v1/guardian-social?action=complete`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, apikey: publicAnonKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ state, code }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'Could not finish connecting the account.');
+  return payload;
+}
+
 export async function listGuideRecipes(userId: string): Promise<GuideRecipe[]> {
   const { data, error } = await db().from('guide_recipes').select('*').eq('guide_id', userId).order('created_at', { ascending: false });
   if (error) throw error;
