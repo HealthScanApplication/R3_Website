@@ -89,17 +89,19 @@ function SiteHero({ site }: { site: SiteCardData }) {
   const showPreview = !!site.previewHref && site.status.live;
   const showImage = !showPreview && !!site.backgroundUrl && !site.backgroundIsVideo && !imageFailed;
   const showAvatar = !!site.avatarUrl && !avatarFailed;
+  // The title sits under the picture too, so text over the picture is only for a card whose hero line says something else.
+  const overlay = site.heroLine.trim() !== site.title.trim();
   return <div data-site-hero style={{ position: 'relative', aspectRatio: '4 / 5', overflow: 'hidden', background: '#0D0E0B', borderBottom: `1px solid ${LINE}` }}>
     {showPreview && <ScaledPreview href={site.previewHref!} title={site.title} />}
     {showImage && <img src={site.backgroundUrl} alt="" onError={() => setImageFailed(true)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: site.greyscale ? 'grayscale(1)' : undefined }} />}
-    <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg,rgba(9,10,8,.12) 0%,rgba(9,10,8,.55) 55%,rgba(9,10,8,.9) 100%)' }} />
-    <div style={{ position: 'absolute', left: 14, right: 14, bottom: 12, display: 'flex', alignItems: 'flex-end', gap: 10, minWidth: 0 }}>
+    {overlay && <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg,rgba(9,10,8,.12) 0%,rgba(9,10,8,.55) 55%,rgba(9,10,8,.9) 100%)' }} />}
+    {overlay && <div style={{ position: 'absolute', left: 14, right: 14, bottom: 12, display: 'flex', alignItems: 'flex-end', gap: 10, minWidth: 0 }}>
       {showAvatar && <img src={site.avatarUrl!} alt="" onError={() => setAvatarFailed(true)} style={{ flex: '0 0 auto', width: 34, height: 34, borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(245,242,234,.5)' }} />}
       <span style={{ minWidth: 0 }}>
         {site.heroKicker && <span style={{ display: 'block', color: ACID, fontFamily: sans, fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site.heroKicker}</span>}
         <span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', color: INK, fontFamily: serif, fontSize: 'clamp(17px,2.2vw,22px)', fontWeight: 300, lineHeight: 1.12 }}>{site.heroLine}</span>
       </span>
-    </div>
+    </div>}
   </div>;
 }
 
