@@ -5,10 +5,11 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { Onboarding } from '../../components/guides/GuidePortal';
 import { HOUSE_STYLE_UNAVAILABLE, convertGuardianAvatar, generatedImageFile, houseStyleErrorMessage } from '../guardianImages';
 
-const mocks = vi.hoisted(() => ({ invoke: vi.fn(), upload: vi.fn() }));
+const mocks = vi.hoisted(() => ({ invoke: vi.fn(), upload: vi.fn(), save: vi.fn(), brands: vi.fn(), key: vi.fn() }));
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'owner', app_metadata: {} }, accessToken: null, signOut: () => {} }) }));
 vi.mock('../supabase/client', async (importOriginal) => ({ ...await importOriginal<any>(), getSupabaseClient: () => ({ functions: { invoke: mocks.invoke } }) }));
-vi.mock('../guidePortal', async (importOriginal) => ({ ...await importOriginal<any>(), uploadGuideImage: mocks.upload }));
+vi.mock('../chromaKey', () => ({ removeGreenBackground: (url: string) => mocks.key(url) }));
+vi.mock('../guidePortal', async (importOriginal) => ({ ...await importOriginal<any>(), uploadGuideImage: mocks.upload, getGuideProfile: async () => null, listGuideBrands: async () => [], saveGuideProfile: mocks.save, replaceGuideBrands: mocks.brands }));
 
 const OWN_PORTRAIT = 'https://cdn.example/guide-assets/owner/profile-1.png';
 const REAL_IMAGE = 'data:image/webp;base64,UklGRg==';
@@ -18,6 +19,9 @@ const httpError = (status: number, body: Record<string, unknown>) => ({ data: nu
 beforeEach(() => {
   mocks.invoke.mockReset();
   mocks.upload.mockReset();
+  mocks.save.mockReset(); mocks.brands.mockReset(); mocks.key.mockReset(); mocks.key.mockImplementation(async (url: string) => url);
+  mocks.save.mockImplementation(async (row: any) => ({ ...row }));
+  mocks.brands.mockResolvedValue(undefined);
   mocks.upload.mockResolvedValue('https://cdn.example/guide-assets/owner/profile-2.webp');
   window.history.replaceState({}, '', '/guardians/workspace?step=1');
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => [], text: async () => '[]' }) as Response));
@@ -94,6 +98,24 @@ describe('R3 house style panel', () => {
     expect(within(panel).getAllByText('Example').length).toBe(1);
   });
 
+  it('removes the green background from a real result before showing it, but not from a test-mode placeholder', async () => {
+    const KEYED = 'data:image/png;base64,iVBORw0KGgo=';
+    mocks.key.mockResolvedValue(KEYED);
+    mocks.invoke.mockResolvedValue({ data: { image: REAL_IMAGE, usd: 0.04, mock: false, size: '1024x1024' }, error: null });
+    let panel = await open(OWN_PORTRAIT);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Create my R3 house style' }));
+    await within(panel).findByRole('button', { name: 'Use this avatar' });
+    expect(mocks.key).toHaveBeenCalledWith(REAL_IMAGE);
+    expect(panelImages(panel)[1].getAttribute('src')).toBe(KEYED); // the keyed picture is what they see and what is saved
+    cleanup();
+    mocks.key.mockClear();
+    mocks.invoke.mockResolvedValue({ data: { image: MOCK_IMAGE, usd: 0, mock: true, size: '1024x1024' }, error: null });
+    panel = await open(OWN_PORTRAIT);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Create my R3 house style' }));
+    await within(panel).findByRole('button', { name: 'Use this avatar' });
+    expect(mocks.key).not.toHaveBeenCalled();
+  });
+
   it('shows a busy state while the conversion runs', async () => {
     let finish: (value: unknown) => void = () => {};
     mocks.invoke.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
@@ -154,7 +176,14 @@ describe('R3 house style panel', () => {
     const featured = within(panel).getAllByRole('img')[0] as HTMLImageElement;
     expect(featured.getAttribute('src')).toBe('https://cdn.example/guide-assets/owner/profile-2.webp');
     expect(within(panel).getByText('Your photo')).toBeTruthy();
-    expect(screen.getByText('R³ house-style avatar applied.')).toBeTruthy();
+    expect(screen.getByText('R³ house-style avatar applied and saved.')).toBeTruthy();
+    // Applying saves it: the profile row and the brand carry the new avatar, so the site and the nav show it without a separate Save.
+    await waitFor(() => expect(mocks.save).toHaveBeenCalledTimes(1));
+    const row = mocks.save.mock.calls[0][0];
+    expect(row.avatar_url).toBe('https://cdn.example/guide-assets/owner/profile-2.webp');
+    expect(row.social_links.logo_url).toBe('https://cdn.example/guide-assets/owner/profile-2.webp');
+    await waitFor(() => expect(mocks.brands).toHaveBeenCalledTimes(1));
+    expect(mocks.brands.mock.calls[0][1][0].logo_url).toBe('https://cdn.example/guide-assets/owner/profile-2.webp');
   });
 
   it('shows a failed save inside the panel and keeps the result', async () => {

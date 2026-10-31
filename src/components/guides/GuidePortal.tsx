@@ -43,6 +43,7 @@ import { BrandKitFields } from './BrandKitFields';
 import { AGE_RANGES, LIFE_STAGES } from '../../utils/audienceTaxonomy';
 import { convertGuardianAvatar, generatedImageFile } from '../../utils/guardianImages';
 import { HouseStyleAvatarPanel } from './HouseStyleAvatarPanel';
+import { removeGreenBackground } from '../../utils/chromaKey';
 import { YouTubeClipBackground } from './YouTubeClipBackground';
 import { YouTubeClipFields } from './YouTubeClipFields';
 import { clipsFromLinks, clipsToLinks, type YtClip } from '../../utils/youtubeClip';
@@ -2227,13 +2228,13 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const previewHeaderBackground = '#FFFFFF';
   const previewHeaderText = '#11120F';
 
-  function currentBrandDraft(): BrandDraft {
+  function currentBrandDraft(logoOverride?: string): BrandDraft {
     const current = brandProfiles.find((brand) => brand.localId === activeBrandId);
     return {
       localId: activeBrandId,
       name: displayName.trim() || current?.name || 'Untitled brand',
       kind: current?.kind || 'business',
-      logo_url: logoUrl,
+      logo_url: logoOverride ?? logoUrl,
       contact_email: contactEmail.trim(),
       whatsapp_phone: whatsappPhone.trim(),
       website_url: websiteUrl.trim(),
@@ -2510,7 +2511,8 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     try {
       const result = await convertGuardianAvatar(avatarSource, displayName || 'Guardian');
       setAvatarPreviewMock(!!result.mock);
-      setAvatarPreviewUrl(result.image);
+      // The model paints a flat green background; it becomes real transparency here, before the preview and before it is saved.
+      setAvatarPreviewUrl(result.mock ? result.image : await removeGreenBackground(result.image));
     } catch (error) {
       setAvatarError(error instanceof Error ? error.message : 'Could not convert that portrait.');
     } finally { setAvatarConverting(false); }
@@ -2524,7 +2526,9 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     try {
       const url = await uploadGuideImage(userId, generatedImageFile(avatarPreviewUrl));
       setAvatarUrl(url); setLogoUrl(url); setAvatarPreviewUrl(null);
-      setImportMessage('R³ house-style avatar applied.');
+      // Applying it saves it: the profile and brand are updated now, so the site, the nav and the cards show the new avatar without a separate Save.
+      const saved = await saveProgress({ avatarUrl: url });
+      setImportMessage(saved ? 'R³ house-style avatar applied and saved.' : 'R³ house-style avatar applied. Save your profile to keep it.');
     } catch (error) {
       setAvatarError(error instanceof Error ? error.message : 'Could not save the converted avatar.');
     } finally { setAvatarApplying(false); }
@@ -2666,16 +2670,17 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   }
 
   /** The Guardian's profile row as it is saved, whether they publish (status submitted, step 5) or just save a draft. */
-  const profileRow = (status: GuideProfile['status'], onboardingStep: number, slugOverride?: string | null) => {
+  const profileRow = (status: GuideProfile['status'], onboardingStep: number, slugOverride?: string | null, avatarOverride?: string) => {
     const slug = slugOverride || guardianSlug;
     const audienceText = audience.join(', ').toLowerCase();
     const headline = generatedHeadline;
     const bio = intro.trim() || `I help ${audienceText} with ${chosen.join(', ').toLowerCase()} through ${format.join(', ').toLowerCase()}.`;
-    return { user_id: userId, slug, display_name: displayName, headline, bio, avatar_url: avatarUrl, contact_email: contactEmail.trim(), whatsapp_phone: whatsappPhone.trim(), social_links: { instagram: instagramUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), website: websiteUrl.trim(), language: mainLanguage, pricing_region: pricingRegion, currency, site_goal: websiteGoal, booking_provider: bookingProvider, booking_url: bookingUrl.trim(), brand_name: brandName.trim() || displayName.trim(), logo_url: logoUrl || '', expertise_tags: expertiseTags.join(','), offer_videos: JSON.stringify(offerVideos), photos: JSON.stringify(sitePhotos), roles: roles.join(','), audience_details: JSON.stringify(Object.fromEntries(audience.filter((g) => audienceDetails[g]).map((g) => [g, audienceDetails[g]]))), theme_template: storyTemplate, theme_background: effectiveBackground, theme_background_type: backgroundType, theme_background_clips: clipsToLinks(backgroundClips), theme_image_treatment: imageTreatment, theme_header_style: headerStyle, theme_headline_style: headlineStyle, theme_heading: 'Canela', theme_body: 'Euclid', theme_page_color: pageColor, theme_accent_color: accentColor }, specialties: chosen, status, onboarding_step: onboardingStep };
+    return { user_id: userId, slug, display_name: displayName, headline, bio, avatar_url: avatarOverride ?? avatarUrl, contact_email: contactEmail.trim(), whatsapp_phone: whatsappPhone.trim(), social_links: { instagram: instagramUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), website: websiteUrl.trim(), language: mainLanguage, pricing_region: pricingRegion, currency, site_goal: websiteGoal, booking_provider: bookingProvider, booking_url: bookingUrl.trim(), brand_name: brandName.trim() || displayName.trim(), logo_url: avatarOverride ?? logoUrl ?? '', expertise_tags: expertiseTags.join(','), offer_videos: JSON.stringify(offerVideos), photos: JSON.stringify(sitePhotos), roles: roles.join(','), audience_details: JSON.stringify(Object.fromEntries(audience.filter((g) => audienceDetails[g]).map((g) => [g, audienceDetails[g]]))), theme_template: storyTemplate, theme_background: effectiveBackground, theme_background_type: backgroundType, theme_background_clips: clipsToLinks(backgroundClips), theme_image_treatment: imageTreatment, theme_header_style: headerStyle, theme_headline_style: headlineStyle, theme_heading: 'Canela', theme_body: 'Euclid', theme_page_color: pageColor, theme_accent_color: accentColor }, specialties: chosen, status, onboarding_step: onboardingStep };
   };
 
   /** Save this part of the setup as a draft: the profile (photos, avatar, brand look, audience…) and, once they have loaded, the brands. Never publishes or changes approval. */
-  async function saveProgress() {
+  async function saveProgress(override?: { avatarUrl?: string }): Promise<boolean> {
+    const freshAvatar = typeof override?.avatarUrl === 'string' ? override.avatarUrl : undefined; // state set a moment ago is not in this closure yet
     setSaveState({ status: 'saving' });
     try {
       if (!displayName.trim()) throw new Error('Add the name people should call you, then save.');
@@ -2685,17 +2690,18 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       if (!savedStatus && activeBrandId !== 'personal') throw new Error('Save your personal profile first: open it from "Publishing as", then save.');
       if (writesProfile) {
         const status: GuideProfile['status'] = savedStatus === 'approved' ? 'approved' : savedStatus === 'submitted' ? 'submitted' : 'draft';
-        const saved = await saveGuideProfile(profileRow(status, Math.min(5, Math.max(savedStep, step, 1)), savedSlug)); // an existing public url is kept
+        const saved = await saveGuideProfile(profileRow(status, Math.min(5, Math.max(savedStep, step, 1)), savedSlug, freshAvatar)); // an existing public url is kept
         setSavedStatus(saved.status); setSavedStep(saved.onboarding_step || step);
         if (saved.slug) setSavedSlug(saved.slug);
       }
       // Brands are only replaced once they have loaded, so a failed load can never wipe saved business brands.
       if (brandsLoaded === 'ok') {
-        const brandsToSave = brandProfiles.map((brand) => brand.localId === activeBrandId ? currentBrandDraft() : brand);
+        const brandsToSave = brandProfiles.map((brand) => brand.localId === activeBrandId ? currentBrandDraft(freshAvatar) : brand);
         await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, is_primary: localId === (writesProfile && !savedStatus ? activeBrandId : savedPrimaryId) })));
       }
       setSaveState({ status: 'saved', at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
-    } catch (e) { setSaveState({ status: 'error', message: (e as Error).message || 'Could not save.' }); }
+      return true;
+    } catch (e) { setSaveState({ status: 'error', message: (e as Error).message || 'Could not save.' }); return false; }
   }
 
   async function addSitePhotos(files: FileList | null) {
@@ -3175,8 +3181,8 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       <PhotoDropzone onFile={uploadPortrait} validate={portraitProblem} onReject={setImportMessage} accept={PORTRAIT_ACCEPT} disabled={uploading}>
         {({ open, dragging }) => (
       <>
-      <HouseStyleAvatarPanel id={houseStylePanelId} save={saveState} onSave={saveProgress} dragging={dragging} sourceUrl={avatarSource} currentUrl={avatarUrl} needsUpload={avatarNeedsOwnPhoto} converting={avatarConverting} applying={avatarApplying} uploading={uploading} resultUrl={avatarPreviewUrl} resultMock={avatarPreviewMock} error={avatarError} onCreate={convertAvatarToHouseStyle} onUpload={open} onApply={applyConvertedAvatar} onCancel={() => { setAvatarPreviewUrl(null); setAvatarError(''); }}>
-        <PhotoGrid embedded photos={sitePhotos} accountAvatarUrl={activeBrandId === 'personal' ? accountAvatarUrl || null : null} forBrand={brandProfiles.length > 1 ? displayName.trim() || 'this brand' : undefined} uploading={photosUploading} onAdd={addSitePhotos} onRemove={(index) => setSitePhotos((current) => current.filter((_, position) => position !== index))} save={saveState} onSave={saveProgress} />
+      <HouseStyleAvatarPanel id={houseStylePanelId} save={saveState} onSave={() => saveProgress()} dragging={dragging} sourceUrl={avatarSource} currentUrl={avatarUrl} needsUpload={avatarNeedsOwnPhoto} converting={avatarConverting} applying={avatarApplying} uploading={uploading} resultUrl={avatarPreviewUrl} resultMock={avatarPreviewMock} error={avatarError} onCreate={convertAvatarToHouseStyle} onUpload={open} onApply={applyConvertedAvatar} onCancel={() => { setAvatarPreviewUrl(null); setAvatarError(''); }}>
+        <PhotoGrid embedded photos={sitePhotos} accountAvatarUrl={activeBrandId === 'personal' ? accountAvatarUrl || null : null} forBrand={brandProfiles.length > 1 ? displayName.trim() || 'this brand' : undefined} uploading={photosUploading} onAdd={addSitePhotos} onRemove={(index) => setSitePhotos((current) => current.filter((_, position) => position !== index))} save={saveState} onSave={() => saveProgress()} />
       </HouseStyleAvatarPanel>
       </>
         )}
@@ -3700,7 +3706,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       </>}
 
       {error && <p style={{ color: '#F0A7A7', fontSize: 12 }}>{error}</p>}
-      <div aria-label="Save this step" style={{ display: 'flex', justifyContent: 'center', marginTop: 26 }}><SaveButton state={saveState} onSave={saveProgress} label="Save progress" /></div>
+      <div aria-label="Save this step" style={{ display: 'flex', justifyContent: 'center', marginTop: 26 }}><SaveButton state={saveState} onSave={() => saveProgress()} label="Save progress" /></div>
       {step !== 3 && step !== 5 && (step !== 4 || offerPlanStage === 2) && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', alignItems: 'center', gap: 12, marginTop: 34 }}>
         {step > 1 ? <button type="button" onClick={() => { setError(''); if (step === 3) setAudienceSetupStage(1); else if (step === 4) setOfferPlanStage(1); else setStep((current) => current - 1); }} style={{ ...btn, width: '100%', background: 'transparent', color: ink }}>← Back</button> : <span />}
         {(step !== 4 || offerPlanStage === 2) && (step !== 5 || freeOfferSetupStage === 2) ? step < 5 ? <button type="button" onClick={step === 1 && profileStage === 0 ? goToBrandStage : continueSetup} disabled={importing || (step === 4 && offerPlanStage === 2 && !useCaseReady)} style={{ ...btn, width: '100%' }}>{importing ? <><Loader2 size={14} className="animate-spin" /> Reading profiles</> : <>{step === 1 && profileStage === 0 ? 'Continue to brand' : 'Continue'} <ArrowRight size={14} /></>}</button> : <button disabled={busy} style={{ ...btn, width: '100%' }}>{busy ? 'Creating your Guardian' : 'Create my Guardian profile'} <ArrowRight size={14} /></button> : <span />}
