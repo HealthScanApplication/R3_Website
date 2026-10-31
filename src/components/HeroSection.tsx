@@ -6,6 +6,7 @@ import { ReferralInvitationBanner } from "./ReferralInvitationBanner";
 import { FlutedGlassBackground } from "./FlutedGlassBackground";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
 import { APP_STORE_URL } from "../config/appLinks";
+import { GOAL_WORDS } from "../config/goalWords";
 import heroPoster from "../assets/5f38caf68dd6b8af22362056b70854ea4cf4b933.png";
 import {
   ed,
@@ -60,8 +61,6 @@ interface HeroSectionProps {
   isActive?: boolean;
   referralCode?: string | null;
 }
-
-const GOAL_WORDS = ["weight loss", "clearer skin", "lean muscle", "more energy", "better sleep", "gut health", "healthy kids", "longevity"];
 
 const overline: React.CSSProperties = {
   fontFamily: GRO,

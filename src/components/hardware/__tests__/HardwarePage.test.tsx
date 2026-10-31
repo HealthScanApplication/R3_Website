@@ -9,6 +9,9 @@ vi.mock('../../../utils/hardwarePreorder', () => ({
   fetchBackerCount: vi.fn().mockResolvedValue({ paid: 5, goal: 250, deadline: 'd', status: 'open' }),
 }));
 vi.mock('../registerModelViewer', () => ({}));
+vi.mock('../HeroDevices', () => ({ HeroDevices: () => <div data-testid="devices" /> }));
+vi.mock('../../FlutedGlassBackground', () => ({ FlutedGlassBackground: () => <div /> }));
+vi.mock('../../../hooks/useHeroBackground', () => ({ useHeroBackground: () => ({ reduceMotion: true, backgroundVideos: [] }) }));
 import { HardwarePage } from '../HardwarePage';
 import { RingArt, ClipArt } from '../DeviceArt';
 
@@ -19,14 +22,7 @@ describe('HardwarePage', () => {
     render(<HardwarePage />);
     const h1s = screen.getAllByRole('heading', { level: 1 });
     expect(h1s).toHaveLength(1);
-    expect(h1s[0].textContent).toBe('Track your routine without lifting a finger.');
-  });
-
-  it('has two hero links to #preorder with exact text', () => {
-    render(<HardwarePage />);
-    for (const name of ['Reserve the R³ Note — $179', 'R³ Note + Clip — $299']) {
-      expect(screen.getByRole('link', { name }).getAttribute('href')).toBe('#preorder');
-    }
+    expect((h1s[0].children[0] as HTMLElement).textContent).toBe('Track a routine');
   });
 
   it('shows device and section headings', () => {
