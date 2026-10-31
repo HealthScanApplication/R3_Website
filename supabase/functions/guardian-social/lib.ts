@@ -42,6 +42,9 @@ export function requireSecrets(env: Env): { stateSecret: string; encryptionKey: 
   const stateSecret = env('SOCIAL_STATE_SECRET')?.trim();
   const encryptionKey = env('SOCIAL_TOKEN_ENCRYPTION_KEY')?.trim();
   if (!stateSecret || !encryptionKey) throw new ConfigError('Social OAuth is not configured (set SOCIAL_STATE_SECRET and SOCIAL_TOKEN_ENCRYPTION_KEY).');
+  let keyLength = 0;
+  try { keyLength = unb64(encryptionKey).length; } catch { keyLength = 0; }
+  if (keyLength !== 32) throw new ConfigError('SOCIAL_TOKEN_ENCRYPTION_KEY must be 32 bytes, base64 encoded.');
   return { stateSecret, encryptionKey };
 }
 
@@ -102,7 +105,8 @@ export function safeReturnTo(raw: unknown, siteUrl: string, extraOrigins = ''): 
   return fallback;
 }
 
-export const redirectUri = (supabaseUrl: string) => `${supabaseUrl.replace(/\/$/, '')}/functions/v1/guardian-social?action=callback`;
+/** No query string: TikTok rejects redirect URIs that carry one. A GET with no action is the callback. */
+export const redirectUri = (supabaseUrl: string) => `${supabaseUrl.replace(/\/$/, '')}/functions/v1/guardian-social`;
 
 export function buildAuthorizeUrl(p: Platform, clientId: string, state: string, redirect: string): string {
   const spec = PROVIDERS[p];
@@ -118,14 +122,19 @@ async function jsonOrThrow(res: Response, what: string) {
   if (!res.ok || data?.error) throw new Error(`${what} failed: ${data?.error_description || data?.error?.message || data?.error?.code || data?.message || res.status}`);
   return data;
 }
+async function tokenOrThrow(res: Response, what: string) {
+  const data = await jsonOrThrow(res, what);
+  if (!data?.access_token) throw new Error(`${what} failed: no access token returned`);
+  return data;
+}
 const expiry = (seconds: unknown) => (Number(seconds) > 0 ? new Date(Date.now() + Number(seconds) * 1000).toISOString() : null);
 
 /** Swap the authorization code for tokens and look up the account name. The stored token JSON holds access (+ refresh) tokens. */
 export async function exchangeCode(p: Platform, code: string, creds: { clientId: string; clientSecret: string }, redirect: string, f: Fetch = fetch): Promise<ExchangeResult> {
   const form = (o: Record<string, string>) => ({ method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(o) });
   if (p === 'facebook' || p === 'instagram') {
-    const short = await jsonOrThrow(await f(`https://graph.facebook.com/v21.0/oauth/access_token?${new URLSearchParams({ client_id: creds.clientId, client_secret: creds.clientSecret, redirect_uri: redirect, code })}`), 'Facebook token exchange');
-    const long = await jsonOrThrow(await f(`https://graph.facebook.com/v21.0/oauth/access_token?${new URLSearchParams({ grant_type: 'fb_exchange_token', client_id: creds.clientId, client_secret: creds.clientSecret, fb_exchange_token: short.access_token })}`), 'Facebook long-lived token');
+    const short = await tokenOrThrow(await f(`https://graph.facebook.com/v21.0/oauth/access_token?${new URLSearchParams({ client_id: creds.clientId, client_secret: creds.clientSecret, redirect_uri: redirect, code })}`), 'Facebook token exchange');
+    const long = await tokenOrThrow(await f(`https://graph.facebook.com/v21.0/oauth/access_token?${new URLSearchParams({ grant_type: 'fb_exchange_token', client_id: creds.clientId, client_secret: creds.clientSecret, fb_exchange_token: short.access_token })}`), 'Facebook long-lived token');
     const me = await jsonOrThrow(await f(`https://graph.facebook.com/v21.0/me?${new URLSearchParams({ fields: 'id,name', access_token: long.access_token })}`), 'Facebook profile');
     if (p === 'instagram') {
       const pages = await jsonOrThrow(await f(`https://graph.facebook.com/v21.0/me/accounts?${new URLSearchParams({ fields: 'id,name,access_token,instagram_business_account{id,username}', access_token: long.access_token })}`), 'Instagram account lookup');
@@ -137,13 +146,14 @@ export async function exchangeCode(p: Platform, code: string, creds: { clientId:
     return { token: JSON.stringify({ access_token: long.access_token }), expiresAt: expiry(long.expires_in), providerAccountId: String(me.id || ''), label: me.name || 'Facebook', handle: me.name || '' };
   }
   if (p === 'tiktok') {
-    const tok = await jsonOrThrow(await f('https://open.tiktokapis.com/v2/oauth/token/', form({ client_key: creds.clientId, client_secret: creds.clientSecret, code, grant_type: 'authorization_code', redirect_uri: redirect })), 'TikTok token exchange');
+    const tok = await tokenOrThrow(await f('https://open.tiktokapis.com/v2/oauth/token/', form({ client_key: creds.clientId, client_secret: creds.clientSecret, code, grant_type: 'authorization_code', redirect_uri: redirect })), 'TikTok token exchange');
     const info = await f('https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name', { headers: { Authorization: `Bearer ${tok.access_token}` } }).then((r) => r.json()).catch(() => ({}));
     const name = info?.data?.user?.display_name || '';
     return { token: JSON.stringify({ access_token: tok.access_token, refresh_token: tok.refresh_token }), expiresAt: expiry(tok.expires_in), providerAccountId: String(tok.open_id || ''), label: name || 'TikTok', handle: name };
   }
-  const tok = await jsonOrThrow(await f('https://oauth2.googleapis.com/token', form({ client_id: creds.clientId, client_secret: creds.clientSecret, code, grant_type: 'authorization_code', redirect_uri: redirect })), 'Google token exchange');
+  const tok = await tokenOrThrow(await f('https://oauth2.googleapis.com/token', form({ client_id: creds.clientId, client_secret: creds.clientSecret, code, grant_type: 'authorization_code', redirect_uri: redirect })), 'Google token exchange');
   const ch = await f('https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true', { headers: { Authorization: `Bearer ${tok.access_token}` } }).then((r) => r.json()).catch(() => ({}));
   const channel = ch?.items?.[0];
+  if (!channel?.id) throw new Error('No YouTube channel found on this Google account.');
   return { token: JSON.stringify({ access_token: tok.access_token, refresh_token: tok.refresh_token }), expiresAt: expiry(tok.expires_in), providerAccountId: String(channel?.id || ''), label: channel?.snippet?.title || 'YouTube', handle: channel?.snippet?.customUrl || channel?.snippet?.title || '' };
 }

@@ -1,6 +1,6 @@
 // Guardian social account linking (Instagram, Facebook, TikTok, YouTube) through each platform's official OAuth.
 //   POST ?action=start    (signed-in Guardian) body {platform, brand_id, return_to} -> {url} to send the browser to.
-//   GET  ?action=callback (platform redirect, no JWT)  -> hands the code back to return_to (or reports a provider error).
+//   GET  (no action; platform redirect, no JWT)  -> hands the code back to return_to (or reports a provider error).
 //   POST ?action=complete (signed-in Guardian) body {state, code} -> JWT user must equal the user who started; exchanges the
 //        code and stores the encrypted token. Binding to the session here stops a forwarded authorize link from linking a
 //        stranger's account to the Guardian who sent it.
@@ -37,6 +37,7 @@ async function start(req: Request) {
   const { data: { user } } = await db.auth.getUser(token);
   if (!user) return json({ error: 'Sign in first.' }, 401);
   let body: any; try { body = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'Expected a JSON object.' }, 400);
   if (!isPlatform(body.platform)) return json({ error: 'Unsupported platform.' }, 400);
   const platform: Platform = body.platform;
   const creds = platformCredentials(platform, env);
@@ -76,6 +77,12 @@ async function claimNonce(rowId: string, nonce: string) {
 
 // The platform redirect carries no session, so it cannot prove WHO is authorizing. It only hands the code back to the
 // site; the signed-in browser then calls action=complete, which checks the JWT user equals the user that started the flow.
+/** A failed (re)link must not knock out a working connection: keep 'connected' when a token is already stored. */
+async function recordFailure(rowId: string, message: string) {
+  const { data } = await db.from('guide_social_connections').select('token_ciphertext').eq('id', rowId).maybeSingle();
+  await db.from('guide_social_connections').update({ ...(data?.token_ciphertext ? {} : { status: 'error' }), last_error: message.slice(0, 300) }).eq('id', rowId);
+}
+
 async function callback(url: URL) {
   const { stateSecret } = requireSecrets(env);
   let state;
@@ -86,7 +93,7 @@ async function callback(url: URL) {
   if (providerError || !code) {
     const message = String(providerError || 'Authorization was cancelled.');
     const rowId = await connectionRow(state.u, state.b, platform);
-    if (rowId && await claimNonce(rowId, state.n)) await db.from('guide_social_connections').update({ status: 'error', last_error: message.slice(0, 300) }).eq('id', rowId);
+    if (rowId && await claimNonce(rowId, state.n)) await recordFailure(rowId, message);
     return back(state.r, platform, 'error', message);
   }
   const u = new URL(state.r);
@@ -103,6 +110,7 @@ async function complete(req: Request) {
   if (!user) return json({ error: 'Sign in first.' }, 401);
   const { stateSecret, encryptionKey } = requireSecrets(env);
   let body: any; try { body = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'Expected a JSON object.' }, 400);
   let state;
   try { state = await verifyState(String(body.state || ''), stateSecret); } catch (e) { return json({ error: (e as Error).message }, 400); }
   if (state.u !== user.id) return json({ error: 'This connection was started by a different account. Start again from your own workspace.' }, 403);
@@ -114,15 +122,16 @@ async function complete(req: Request) {
   try {
     const result = await exchangeCode(platform, String(body.code), platformCredentials(platform, env), redirectUri(supabaseUrl));
     const { ciphertext, iv } = await encryptToken(result.token, encryptionKey);
-    const { error } = await db.from('guide_social_connections').update({
+    const { data: updated, error } = await db.from('guide_social_connections').update({
       status: 'connected', token_ciphertext: ciphertext, token_iv: iv, provider_account_id: result.providerAccountId,
       account_label: result.label, account_handle: result.handle, connected_at: new Date().toISOString(), expires_at: result.expiresAt, last_error: null, updated_at: new Date().toISOString(),
-    }).eq('id', rowId);
+    }).eq('id', rowId).select('id');
     if (error) throw new Error(error.message);
+    if (!updated?.length) throw new Error('Could not save the connection.');
     return json({ platform, status: 'connected', account_label: result.label });
   } catch (e) {
     const message = (e as Error).message;
-    await db.from('guide_social_connections').update({ status: 'error', last_error: message.slice(0, 300) }).eq('id', rowId);
+    await recordFailure(rowId, message);
     return json({ error: message }, 502);
   }
 }
@@ -133,7 +142,7 @@ Deno.serve(async (req) => {
   const action = url.searchParams.get('action');
   try {
     if (action === 'start' && req.method === 'POST') return await start(req);
-    if (action === 'callback' && req.method === 'GET') return await callback(url);
+    if ((action === 'callback' || !action) && req.method === 'GET') return await callback(url);
     if (action === 'complete' && req.method === 'POST') return await complete(req);
     return json({ error: 'Unknown action.' }, 400);
   } catch (e) {
