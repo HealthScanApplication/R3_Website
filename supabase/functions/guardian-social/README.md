@@ -24,7 +24,7 @@ Deploy (migration `20261031120000_guide_social_oauth_nonce.sql` first; `--no-ver
 A platform with missing credentials answers `503 {"error":"<Platform> OAuth is not configured (set …)"}`.
 
 ## Redirect URI to register in every developer console
-`https://<project-ref>.supabase.co/functions/v1/guardian-social?action=callback`
+`https://<project-ref>.supabase.co/functions/v1/guardian-social` (no query string; TikTok rejects one)
 (one per Supabase project: ermbkttsyvpenjjxaxcf, mofhvoudjxinvpplsytd)
 
 ## Console setup (done by the account owner)

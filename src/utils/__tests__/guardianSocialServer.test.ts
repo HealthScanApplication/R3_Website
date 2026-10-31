@@ -26,10 +26,12 @@ describe('guardian-social config', () => {
     expect(() => platformCredentials('youtube', (n) => (n === 'YOUTUBE_CLIENT_ID' ? 'id' : undefined))).toThrow(ConfigError);
     expect(platformCredentials('tiktok', (n) => `v-${n}`)).toEqual({ clientId: 'v-TIKTOK_CLIENT_ID', clientSecret: 'v-TIKTOK_CLIENT_SECRET' });
     expect(() => requireSecrets(() => undefined)).toThrow('SOCIAL_STATE_SECRET');
+    expect(() => requireSecrets((n) => (n === 'SOCIAL_STATE_SECRET' ? 's' : btoa('short')))).toThrow('32 bytes');
+    expect(() => requireSecrets((n) => (n === 'SOCIAL_STATE_SECRET' ? 's' : '!!not-base64!!'))).toThrow(ConfigError);
   });
   it('builds each official authorize URL with the callback and state', () => {
     const redirect = redirectUri('https://x.supabase.co/');
-    expect(redirect).toBe('https://x.supabase.co/functions/v1/guardian-social?action=callback');
+    expect(redirect).toBe('https://x.supabase.co/functions/v1/guardian-social');
     const tt = new URL(buildAuthorizeUrl('tiktok', 'ck', 'st', redirect));
     expect(tt.origin + tt.pathname).toBe('https://www.tiktok.com/v2/auth/authorize/');
     expect(tt.searchParams.get('client_key')).toBe('ck');
@@ -64,8 +66,10 @@ describe('guardian-social tokens', () => {
   });
   it('exchanges a TikTok code through the token and user-info endpoints', async () => {
     const calls: string[] = [];
-    const f = (async (url: string) => {
+    const bodies: string[] = [];
+    const f = (async (url: string, init?: RequestInit) => {
       calls.push(String(url));
+      if (init?.body) bodies.push(String(init.body));
       const body = String(url).includes('oauth/token') ? { access_token: 'at', refresh_token: 'rt', expires_in: 86400, open_id: 'oid' } : { data: { user: { display_name: 'Barbara' } } };
       return new Response(JSON.stringify(body), { status: 200 });
     }) as unknown as typeof fetch;
@@ -73,6 +77,15 @@ describe('guardian-social tokens', () => {
     expect(JSON.parse(r.token)).toEqual({ access_token: 'at', refresh_token: 'rt' });
     expect(r).toMatchObject({ providerAccountId: 'oid', label: 'Barbara' });
     expect(calls).toHaveLength(2);
+    const sent = new URLSearchParams(bodies[0]);
+    expect(Object.fromEntries(sent)).toMatchObject({ client_key: 'a', client_secret: 'b', code: 'code', grant_type: 'authorization_code', redirect_uri: 'https://r' });
+  });
+  it('rejects a success response without an access token and a YouTube account without a channel', async () => {
+    const ok = (body: unknown) => (async () => new Response(JSON.stringify(body), { status: 200 })) as unknown as typeof fetch;
+    await expect(exchangeCode('tiktok', 'c', { clientId: 'a', clientSecret: 'b' }, 'https://r', ok({}))).rejects.toThrow('no access token');
+    let n = 0;
+    const yt = (async () => new Response(JSON.stringify(n++ === 0 ? { access_token: 'at' } : { items: [] }), { status: 200 })) as unknown as typeof fetch;
+    await expect(exchangeCode('youtube', 'c', { clientId: 'a', clientSecret: 'b' }, 'https://r', yt)).rejects.toThrow('No YouTube channel');
   });
   it('surfaces provider errors', async () => {
     const f = (async () => new Response(JSON.stringify({ error: 'invalid_grant', error_description: 'bad code' }), { status: 400 })) as unknown as typeof fetch;
