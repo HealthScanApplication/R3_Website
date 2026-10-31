@@ -33,7 +33,9 @@ describe('YouTubeClipBackground', () => {
     await waitFor(() => expect(made.length).toBe(1));
     const { options } = made[0];
     expect(options.videoId).toBe(A.id);
-    expect(options.playerVars).toMatchObject({ autoplay: 1, mute: 1, controls: 0, start: 60, end: 68, rel: 0, playsinline: 1, disablekb: 1 });
+    expect(options.playerVars).toMatchObject({ autoplay: 1, mute: 1, controls: 0, start: 60, end: 68, rel: 0, playsinline: 1, disablekb: 1, cc_load_policy: 0 });
+    // Drawn 20% larger than its clipped box, so the player's title bar and burned-in captions are cropped off the edges.
+    expect((container.querySelector('.g-yt-cover') as HTMLElement).style.transform).toContain('scale(1.2)');
     const root = container.querySelector('[data-youtube-clip]') as HTMLElement;
     expect(root.getAttribute('aria-hidden')).toBe('true'); // decorative
     expect(root.style.pointerEvents).toBe('none');
