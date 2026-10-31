@@ -29,6 +29,12 @@ function loadYouTubeApi(): Promise<any> {
   return apiLoad;
 }
 
+/**
+ * The player draws a title bar along the top for a moment, and many videos have captions burned in along the bottom. The player
+ * is drawn a little larger than its box (the box clips it), which crops both off without touching the middle of the picture.
+ */
+const OVERSCAN = 1.2;
+
 const prefersReducedMotion = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export function YouTubeClipBackground({ clips, greyscale = false }: { clips: YtClip[]; greyscale?: boolean }) {
@@ -50,7 +56,7 @@ export function YouTubeClipBackground({ clips, greyscale = false }: { clips: YtC
       const first = clips[0];
       player = new YT.Player(target, {
         videoId: first.id,
-        playerVars: { autoplay: 1, mute: 1, controls: 0, disablekb: 1, fs: 0, rel: 0, modestbranding: 1, iv_load_policy: 3, playsinline: 1, start: first.start, end: first.end, origin: window.location.origin },
+        playerVars: { autoplay: 1, mute: 1, controls: 0, disablekb: 1, fs: 0, rel: 0, modestbranding: 1, iv_load_policy: 3, cc_load_policy: 0, playsinline: 1, start: first.start, end: first.end, origin: window.location.origin },
         events: {
           onReady: (event: any) => { event.target.mute(); event.target.playVideo(); },
           // A clip ends at its end time: play the next one (the same one again when there is only one).
@@ -74,8 +80,8 @@ export function YouTubeClipBackground({ clips, greyscale = false }: { clips: YtC
       <style>{'.g-yt-cover iframe{position:absolute;inset:0;width:100%;height:100%;border:0}'}</style>
       {/* The poster sits underneath: it is what shows while the video loads, for reduced motion, and if it cannot play. */}
       <img src={clipPoster(clips[0])} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter }} />
-      {!reduced && !failed && <div ref={holder} className="g-yt-cover" style={{ position: 'absolute', top: '50%', left: '50%', width: 'max(100%, 177.78cqh)', height: 'max(100%, 56.25cqw)', transform: 'translate(-50%, -50%)', filter }} />}
-      {!reduced && failed && <iframe src={clipEmbedUrl(clips[0])} title="Background video" tabIndex={-1} allow="autoplay; encrypted-media" referrerPolicy="strict-origin-when-cross-origin" style={{ position: 'absolute', top: '50%', left: '50%', width: 'max(100%, 177.78cqh)', height: 'max(100%, 56.25cqw)', transform: 'translate(-50%, -50%)', border: 0, filter }} />}
+      {!reduced && !failed && <div ref={holder} className="g-yt-cover" style={{ position: 'absolute', top: '50%', left: '50%', width: 'max(100%, 177.78cqh)', height: 'max(100%, 56.25cqw)', transform: `translate(-50%, -50%) scale(${OVERSCAN})`, filter }} />}
+      {!reduced && failed && <iframe src={clipEmbedUrl(clips[0])} title="Background video" tabIndex={-1} allow="autoplay; encrypted-media" referrerPolicy="strict-origin-when-cross-origin" style={{ position: 'absolute', top: '50%', left: '50%', width: 'max(100%, 177.78cqh)', height: 'max(100%, 56.25cqw)', transform: `translate(-50%, -50%) scale(${OVERSCAN})`, border: 0, filter }} />}
     </div>
   );
 }
