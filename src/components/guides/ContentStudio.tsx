@@ -9,7 +9,7 @@
  * points at the offer's mini-site. Rendered on a canvas so the download IS the preview.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, Download, ExternalLink } from 'lucide-react';
+import { Copy, Download, ExternalLink, Film, Loader2 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { ensureBrandFont, type BrandKit, type ButtonColours } from '../../utils/brandKit';
 import { copyPrompt, imagePrompt } from '../../utils/brandBrief';
@@ -17,6 +17,7 @@ import { parseRoutineShareParams, routineShareUrl } from '../../utils/routineSha
 import { postCopy, type CopyKind } from '../../utils/postCopy';
 import { AS_IS, compositionBrief, legacyPlacement, placeBackground, type Placement } from '../../utils/postLayout';
 import { connectOpenAI, disconnectOpenAI, generateImage, imageStatus, priceLabel, type ImageQuality, type ImageSource, type ImageStatus } from '../../utils/guardianImages';
+import { recordStillCanvas, type StillMotion } from '../../utils/videoOverlay';
 
 /** A Guardian brand's look on posts: its typeface for headline and button, CTA colours and logo. */
 export interface PostBrand { name: string; font: string; cta: ButtonColours; logo: string | null; kit?: BrandKit | null }
@@ -57,6 +58,7 @@ const bgUrl = (file: string) => `/images/content/${file}.webp`;
 /** The background picker's value for the generated image (held in state as a data URL, not a library file). */
 const GENERATED = '__generated';
 const FIT_COLOUR = { good: '#7FB069', ok: '#E0B354', poor: '#D9695F' } as const;
+const FOOD_SUBJECTS = ['Vegetables', 'Leafy greens', 'Tomatoes', 'Mushrooms', 'Berries', 'Citrus', 'Legumes', 'Whole grains', 'Herbs', 'Nuts & seeds'] as const;
 
 /** `days`, `ingredients`, `minutes`: facts the default copy can use (a Protocol's length, a recipe's size). */
 export interface StudioOffer { title: string; free: boolean; price?: string; description?: string; days?: number | null; ingredients?: number | null; minutes?: number | null }
@@ -75,6 +77,18 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+
+/** The compact R³ app mark used by RoutineMark: a black tile, inset hairline and the R³ monogram. */
+function drawR3Mark(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  ctx.save();
+  ctx.fillStyle = '#111111'; roundRect(ctx, x, y, size, size, size * 0.06); ctx.fill();
+  ctx.lineWidth = Math.max(1, size * 0.035); ctx.strokeStyle = '#FFFFFF';
+  roundRect(ctx, x + size * 0.12, y + size * 0.12, size * 0.76, size * 0.76, size * 0.03); ctx.stroke();
+  ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `700 ${size * 0.4}px Archivo, Inter, sans-serif`;
+  ctx.fillText('R³', x + size / 2, y + size / 2 + size * 0.02);
+  ctx.restore();
 }
 
 /**
@@ -151,11 +165,7 @@ export function drawQr(ctx: CanvasRenderingContext2D, text: string, x: number, y
   // The R³ mark in the app logo's style (RoutineMark): Archivo Bold, white on a black tile with a hairline outline.
   // Half a module inside the clear square so the code's edge stays crisp.
   const inset = cell * 0.5, t = m - inset * 2, tx = mx + inset, ty = my + inset;
-  ctx.fillStyle = '#111111'; roundRect(ctx, tx, ty, t, t, t * 0.06); ctx.fill();
-  ctx.lineWidth = Math.max(1, t * 0.035); ctx.strokeStyle = '#FFFFFF';
-  roundRect(ctx, tx + t * 0.12, ty + t * 0.12, t * 0.76, t * 0.76, t * 0.03); ctx.stroke();
-  ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = `700 ${t * 0.4}px Archivo, Inter, sans-serif`; ctx.fillText('R³', mx + m / 2, my + m / 2 + t * 0.02);
+  drawR3Mark(ctx, tx, ty, t);
   ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
 }
 
@@ -242,15 +252,13 @@ export async function drawPost(canvas: HTMLCanvasElement, fmt: { id: FormatId; w
   const label = copy.cta.toUpperCase();
   const tracking = 28 * s * 0.3;
   const textW = [...label].reduce((sum, ch) => sum + ctx.measureText(ch).width + tracking, -tracking);
-  // The button leads with a ROUTINE³ segment, like the app logo's lockup, then a hairline and the call to action.
-  const PREFIX = 'ROUTINE³', prefixSize = 24 * s, prefixTrack = prefixSize * 0.13;
-  ctx.font = `700 ${prefixSize}px Archivo, Inter, sans-serif`;
-  const prefixTextW = [...PREFIX].reduce((sum, ch) => sum + ctx.measureText(ch).width + prefixTrack, -prefixTrack);
+  // The button leads with the actual compact R³ app mark, then a hairline and the call to action.
+  const markSize = 52 * s;
   // The QR sits in the corner diagonally opposite the text, so the text keeps its full width. Small (180) is the
   // least that still decoded with the post scaled to a phone's width (390 px); medium still reads at 270 px.
   const qrBase = { small: 180, medium: 250, large: 320 }[copy.qrStyle?.size || 'small'];
   const qrSize = copy.qr ? qrBase * (fmt.id === 'thumb' ? 0.8 : 1) * s : 0;
-  const prefixW = prefixTextW + 52 * s;
+  const prefixW = 94 * s;
   const boxW = prefixW + textW + 64 * s, boxH = 95 * s;
   const maxW = (fmt.id === 'thumb' ? 640 : st.maxW) * s;
   const headFontCss = `${st.head.weight} ${st.head.size * s}px ${headFont}`, subFontCss = `${st.sub.weight} ${st.sub.size * s}px ${st.sub.font}`;
@@ -261,7 +269,7 @@ export async function drawPost(canvas: HTMLCanvasElement, fmt: { id: FormatId; w
   const sub = copy.subline ? wrap(ctx, copy.subline, maxW) : [];
   const subW = Math.max(0, ...sub.map((l) => ctx.measureText(l).width));
   const hl = st.head.line * s, sl = st.sub.line * s;
-  // The creator credit (photo + "Guidance by …") opens the text package, above the headline.
+  // The creator's circular profile and R3 @route open the text package, above the headline.
   const creditText = copy.credit.toUpperCase(), face = 34 * s, creditLead = face + 10 * s;
   ctx.font = `600 ${20 * s}px Inter`;
   const creditW = copy.credit ? ctx.measureText(creditText).width + 14 * s + 5 * s + creditLead : 0;
@@ -280,9 +288,8 @@ export async function drawPost(canvas: HTMLCanvasElement, fmt: { id: FormatId; w
   const strip = (lineW: number, top0: number, lineH: number) => { const px = 16 * s; ctx.fillStyle = '#FFFFFF'; ctx.fillRect(alignRight ? anchor - lineW - px : anchor - px, top0 + lineH * 0.1, lineW + px * 2, lineH * 0.86); };
   ctx.textBaseline = 'alphabetic';
   if (copy.credit) {
-    // The creator's profile photo leads the credit as a circle inside the tag; without one, their initial.
+    // Keep the attribution directly on the image: no label background, just the circular profile and @route.
     const cx0 = alignRight ? anchor - creditW : anchor, fx = cx0 + 5 * s, fy = y + 5 * s;
-    ctx.fillStyle = 'rgba(255,255,255,0.88)'; ctx.fillRect(cx0, y, creditW, 44 * s);
     ctx.save(); ctx.beginPath(); ctx.arc(fx + face / 2, fy + face / 2, face / 2, 0, Math.PI * 2); ctx.clip();
     if (avatar?.naturalWidth) {
       const k = Math.max(face / avatar.naturalWidth, face / avatar.naturalHeight);
@@ -293,8 +300,12 @@ export async function drawPost(canvas: HTMLCanvasElement, fmt: { id: FormatId; w
       ctx.fillText((creditText.split(' BY ').pop() || creditText).trim().charAt(0), fx + face / 2, fy + face / 2 + 6 * s);
     }
     ctx.restore();
-    ctx.textAlign = 'left'; ctx.font = `600 ${20 * s}px Inter`; ctx.fillStyle = '#111111';
+    ctx.save();
+    ctx.shadowColor = st.ink === '#F5F2EA' ? 'rgba(0,0,0,.45)' : 'rgba(255,255,255,.65)';
+    ctx.shadowBlur = 5 * s;
+    ctx.textAlign = 'left'; ctx.font = `700 ${20 * s}px Inter`; ctx.fillStyle = st.ink;
     ctx.fillText(creditText, fx + creditLead, y + 29 * s);
+    ctx.restore();
     y += creditH;
   }
   ctx.font = headFontCss;
@@ -319,9 +330,7 @@ export async function drawPost(canvas: HTMLCanvasElement, fmt: { id: FormatId; w
   ctx.fillStyle = btn.background; ctx.fillRect(bx, y, boxW, boxH);
   ctx.lineWidth = 2 * s; ctx.strokeStyle = btn.border; ctx.strokeRect(bx, y, boxW, boxH);
   ctx.fillStyle = btn.color;
-  ctx.font = `700 ${prefixSize}px Archivo, Inter, sans-serif`;
-  let px = bx + 26 * s;
-  for (const ch of PREFIX) { ctx.fillText(ch, px, y + boxH / 2 + prefixSize * 0.36); px += ctx.measureText(ch).width + prefixTrack; }
+  drawR3Mark(ctx, bx + (prefixW - markSize) / 2, y + (boxH - markSize) / 2, markSize);
   ctx.fillRect(bx + prefixW - s, y, 2 * s, boxH);
   ctx.font = `600 ${28 * s}px ${ctaFont}`;
   let cx = bx + prefixW + 32 * s;
@@ -382,6 +391,9 @@ export function ContentStudio({ creator, avatar = null, audience, problem, offer
   const [qrLogo, setQrLogo] = useState<QrLogoSize>('large');
   const [qrSizeId, setQrSizeId] = useState<QrLogoSize>('small');
   const [copied, setCopied] = useState('');
+  const [foods, setFoods] = useState<string[]>(['Vegetables']);
+  const [stillMotion, setStillMotion] = useState<StillMotion>('drift');
+  const [recording, setRecording] = useState<number | null>(null);
   const [generated, setGenerated] = useState<{ url: string; fmt: FormatId; position: TextPosition; mock: boolean } | null>(null);
   const [genOpen, setGenOpen] = useState(false);
   useEffect(() => {
@@ -394,7 +406,7 @@ export function ContentStudio({ creator, avatar = null, audience, problem, offer
   const background = bg || autoBg;
   // TikTok-style handle: routine3.com/@<slug> opens the Guardian's page.
   const handle = guardianHandle(pageUrl ?? siteUrl);
-  const credit = creator ? `Guidance by ${creator}${handle ? ` · ${handle}` : ''}` : '';
+  const credit = creator ? (handle || `@${creator.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`) : '';
   const isGenerated = background === GENERATED && !!generated;
   const bgSrc = isGenerated ? generated!.url : bgUrl(background === GENERATED ? autoBg : background);
   // Library photos are mirrored / moved by their safe-zone metadata; a generated image was composed for its layout.
@@ -415,9 +427,19 @@ export function ContentStudio({ creator, avatar = null, audience, problem, offer
   };
   const download = () => { const url = canvasRef.current?.toDataURL('image/png'); if (!url) return; const a = document.createElement('a'); a.href = url; a.download = `${tag}-${fmt.id}-${fmt.w}x${fmt.h}.png`; a.click(); };
   // Ready-to-paste prompts for image/video and copy tools, in the selected brand's voice and visual language.
-  const promptCtx = { brandName: brand?.name || creator, kit: brand?.kit || null, audience, focus: problem, offer: offer.title, format: `${fmt.label} (${fmt.platforms.split(' · ')[0]})`, headline, cta, layout: compositionBrief(fmt.id, position) };
+  const foodDirection = foods.length ? ` Feature ${foods.join(', ').toLowerCase()} as the food subjects.` : '';
+  const promptCtx = { brandName: brand?.name || creator, kit: brand?.kit || null, audience, focus: `${problem}.${foodDirection}`, offer: offer.title, format: `${fmt.label} (${fmt.platforms.split(' · ')[0]})`, headline, cta, layout: compositionBrief(fmt.id, position) };
   const prompts: Record<string, string> = { 'Image & video': imagePrompt(promptCtx), Copy: copyPrompt(promptCtx) };
   const copy = (key: string) => { navigator.clipboard?.writeText(({ ...captions, ...prompts })[key]).then(() => { setCopied(key); window.setTimeout(() => setCopied(''), 1600); }); };
+  const animateStill = async () => {
+    if (!canvasRef.current) return;
+    setRecording(0);
+    try {
+      const { blob, ext } = await recordStillCanvas(canvasRef.current, 6, stillMotion, setRecording);
+      const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = `${tag}-${fmt.id}-motion.${ext}`; a.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } finally { setRecording(null); }
+  };
   const ink = '#F5F2EA', muted = '#B8B6AF', line = 'rgba(245,242,234,0.24)', acid = '#C7D8A3';
   const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', height: 38, border: `1px solid ${line}`, background: '#090A08', color: ink, padding: '0 10px', fontSize: 13, borderRadius: 2 };
   const lab: React.CSSProperties = { display: 'block', color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', margin: '0 0 5px' };
@@ -446,6 +468,7 @@ export function ContentStudio({ creator, avatar = null, audience, problem, offer
         <label><span style={lab}>Headline</span><input value={headline} onChange={(e) => setHeadline(e.target.value)} style={field} /></label>
         <label><span style={lab}>Subline</span><input value={subline} onChange={(e) => setSubline(e.target.value)} style={field} /></label>
         <label><span style={lab}>Button</span><input value={cta} onChange={(e) => setCta(e.target.value)} style={field} /></label>
+        <div><span style={lab}>Food subjects · choose 1–6 <span style={{ color: acid }}>· vegetables suggested</span></span><div role="group" aria-label="Food subjects" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>{FOOD_SUBJECTS.map((food) => { const on = foods.includes(food); return <button key={food} type="button" aria-pressed={on} onClick={() => setFoods((current) => on ? (current.length > 1 ? current.filter((item) => item !== food) : current) : current.length < 6 ? [...current, food] : current)} style={{ border: `1px solid ${on ? acid : line}`, background: on ? '#20251B' : 'transparent', color: on ? acid : ink, padding: '6px 9px', fontSize: 10, cursor: 'pointer' }}>{food}</button>; })}</div><span style={{ display: 'block', color: muted, fontSize: 9.5, marginTop: 5 }}>{foods.length}/6 selected. These guide suggested image and video prompts.</span></div>
         <div><span style={lab}>Background {bg ? '' : '· auto'}<span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400, marginLeft: 6 }}>· dot = how clear the subject sits of the text</span></span><div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 5 }}>{BACKGROUNDS.map((b) => {
           // Previewed as it will be placed for the chosen format and text position (mirrored and/or moved down).
           const p = placeBackground(b.file, fmtId, position);
@@ -460,7 +483,8 @@ export function ContentStudio({ creator, avatar = null, audience, problem, offer
         {genOpen && <ImageGenerator ink={ink} muted={muted} line={line} acid={acid} field={field} lab={lab} aspect={fmt.label as '9:16' | '4:5' | '1:1' | '16:9'} defaultPrompt={imagePrompt(promptCtx)}
           madeFor={generated && (generated.fmt !== fmtId || generated.position !== position) ? `${FORMATS.find((f) => f.id === generated.fmt)!.label}, ${generated.position.replace('-', ' ')} text` : null}
           onImage={(url, mock) => { setGenerated({ url, fmt: fmtId, position, mock }); setBg(GENERATED); }} />}
-        <button type="button" onClick={download} style={{ height: 42, border: `1px solid ${ink}`, background: ink, color: '#090A08', fontSize: 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}><Download size={14} /> Download {fmt.w}×{fmt.h} PNG</button>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 7 }}><button type="button" onClick={download} style={{ height: 42, border: `1px solid ${ink}`, background: ink, color: '#090A08', fontSize: 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}><Download size={14} /> Still PNG</button><button type="button" disabled={recording !== null} onClick={animateStill} style={{ height: 42, border: `1px solid ${acid}`, background: 'transparent', color: acid, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, cursor: recording === null ? 'pointer' : 'wait' }}>{recording !== null ? <Loader2 size={13} className="animate-spin" /> : <Film size={13} />}{recording !== null ? `Recording ${Math.round(recording * 100)}%` : 'Record animated still'}</button></div>
+        <label><span style={lab}>Still-image animation</span><select value={stillMotion} onChange={(event) => setStillMotion(event.target.value as StillMotion)} style={field}><option value="drift">Slow horizontal drift</option><option value="zoom">Slow cinematic zoom</option><option value="orbit">Moving graphic glow</option></select></label>
         <div style={{ display: 'grid', gap: 8 }}>{Object.keys(captions).map((k) => <div key={k} style={{ border: `1px solid ${line}`, padding: 10 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}><span style={{ ...lab, margin: 0, color: acid }}>{k} caption</span><button type="button" onClick={() => copy(k)} style={{ border: 0, background: 'transparent', color: muted, fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}><Copy size={12} />{copied === k ? 'Copied' : 'Copy'}</button></div>
           <p style={{ margin: 0, color: ink, fontSize: 11.5, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{captions[k]}</p>

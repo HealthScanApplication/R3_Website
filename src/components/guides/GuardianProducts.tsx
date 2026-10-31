@@ -5,7 +5,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Check, Copy, Download, ExternalLink, Grid2X2, List, Loader2, Pencil, Plus, ShoppingBag, Smartphone, Trash2, X } from 'lucide-react';
 import { deleteGuideProduct, listGuideProducts, listPublicGuideProducts, saveGuideProduct, type GuideProduct } from '../../utils/guidePortal';
 import {
-  attributionSlug, buildCartPermalink, buildProductBuyUrl, effectiveCommissionPercent, formatProductPrice, importShopifyProduct, normalizeDiscountCode, parsePriceToCents, parseShopifyProductUrl, regionalProduct,
+  attributionSlug, buildCartPermalink, buildProductBuyUrl, effectiveCommissionPercent, formatProductPrice, importShopifyProduct, normalizeDiscountCode, parsePriceToCents, parseShopifyProductUrl, regionalProduct, regionalProductOrNull,
   type ImportedShopifyVariant,
 } from '../../utils/guideProducts';
 import { listProtocolItems, type AdminProtocol } from '../../utils/protocolAdmin';
@@ -18,6 +18,20 @@ export interface GuardianLocalePreference {
 }
 
 const DEFAULT_PRODUCT_CATEGORIES = ['All', 'Books', 'Bundles', 'Creams & skincare', 'Herbal treatments', 'Minerals', 'Other'];
+
+const PRODUCT_IMAGE_FALLBACKS: Record<string, string> = {
+  trelune_wild_yam_cream_teen: 'https://cdn.shopify.com/s/files/1/0912/6196/0527/files/TreLuneWildYamTeen-FrontInternational_shopify.webp?v=1776704396',
+  trelune_wild_yam_cream_male: 'https://cdn.shopify.com/s/files/1/0912/6196/0527/files/TreLuneWildYamMale-FrontInternational_shopify_9b83c6b5-fc66-4f8f-bc56-5976bb665e05.webp?v=1776704766',
+};
+
+function PublicProductImage({ product, regional }: { product: GuideProduct; regional: GuideProduct }) {
+  const fallback = product.catalog_product_id ? PRODUCT_IMAGE_FALLBACKS[product.catalog_product_id] : undefined;
+  const initial = regional.image_url || product.image_url || fallback || '';
+  const [src, setSrc] = useState(initial);
+  useEffect(() => setSrc(initial), [initial]);
+  if (!src) return <div style={{ width: '100%', aspectRatio: '1', display: 'grid', placeItems: 'center', background: '#EEEAE2', color: APP.muted }}><ShoppingBag size={40} strokeWidth={1.2} /></div>;
+  return <div style={{ position: 'relative', width: '100%', aspectRatio: '1', overflow: 'hidden', background: '#EEEAE2' }}><img src={src} alt={product.title} loading="lazy" onError={() => { if (fallback && src !== fallback) setSrc(fallback); else setSrc(''); }} style={{ position: 'absolute', inset: -12, width: 'calc(100% + 24px)', height: 'calc(100% + 24px)', maxWidth: 'none', objectFit: 'cover', objectPosition: 'center', filter: 'grayscale(.18) contrast(1.02)', transform: 'translate3d(var(--product-px, 0px), var(--product-py, 0px), 0) scale(1.025)', transition: 'transform 500ms cubic-bezier(.16,1,.3,1), filter 500ms ease', willChange: 'transform' }} /></div>;
+}
 
 function productCategory(product: GuideProduct): string {
   const text = `${product.title} ${product.description || ''}`.toLowerCase();
@@ -336,9 +350,13 @@ export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding,
     finally { setDownloading(''); }
   }
   if (!products.length) return null;
+  const regionalProducts = products.map((product) => ({ source: product, regional: regionalProductOrNull(product, localePreference?.locale || navigator.language, localePreference?.region || Intl.DateTimeFormat().resolvedOptions().timeZone) })).filter((entry): entry is { source: GuideProduct; regional: GuideProduct } => !!entry.regional);
   const configured = (categoryOrder || '').split(',').map((value) => value.trim()).filter(Boolean);
-  const categories = ['All', ...(configured.length ? configured : DEFAULT_PRODUCT_CATEGORIES.slice(1))].filter((category, index, all) => all.indexOf(category) === index && (category === 'All' || products.some((product) => productCategory(product) === category)));
-  const shownProducts = activeCategory === 'All' ? products : products.filter((product) => productCategory(product) === activeCategory);
+  const categories = ['All', ...(configured.length ? configured : DEFAULT_PRODUCT_CATEGORIES.slice(1))].filter((category, index, all) => all.indexOf(category) === index && (category === 'All' || regionalProducts.some(({ source }) => productCategory(source) === category)));
+  const shownProducts = activeCategory === 'All' ? regionalProducts : regionalProducts.filter(({ source }) => productCategory(source) === activeCategory);
+  const shopHeading = guardianSlug === 'barbara-oneill'
+    ? `${guardianName}’s endorsed products.`
+    : `${guardianName}’s products.`;
   const displayPrice = (product: GuideProduct) => {
     if (product.price_cents == null) return 'See local price';
     const target = localePreference?.currency || product.currency;
@@ -350,17 +368,17 @@ export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding,
   return <section id="shop" aria-label={`Shop ${guardianName}'s products`} style={{ padding: `clamp(72px,10vw,132px) ${pagePadding}`, borderTop: '1px solid rgba(242,239,231,.18)', background: '#11120F', color: '#F2EFE7' }}>
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
     <div style={{ fontFamily: APP.font, margin: '0 0 clamp(30px,5vw,52px)', maxWidth: 760 }}>
-      <span style={{ display: 'block', color: '#CADA91', fontSize: 12, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 12 }}>Complete shop · {products.length} products</span>
-      <h2 style={{ fontFamily: serif, fontSize: 'clamp(42px,7vw,82px)', fontWeight: 300, lineHeight: .94, letterSpacing: '-.045em', color: '#F2EFE7', margin: '0 0 18px' }}>{guardianName}’s products.</h2>
+      <span style={{ display: 'block', color: '#CADA91', fontSize: 12, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 12 }}>Local shop · {regionalProducts.length} products</span>
+      <h2 style={{ fontFamily: serif, fontSize: 'clamp(42px,7vw,82px)', fontWeight: 300, lineHeight: .94, letterSpacing: '-.045em', color: '#F2EFE7', margin: '0 0 18px' }}>{shopHeading}</h2>
       <p style={{ color: '#B8B6AF', fontSize: 16, lineHeight: 1.55, margin: 0, maxWidth: 620 }}>Shop products directly, then open the Protocols that use them in ROUTINE³ or keep a printable PDF.</p>
     </div>
     <div role="tablist" aria-label="Product categories" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '0 0 26px' }}>{categories.map((category) => <button key={category} type="button" role="tab" aria-selected={activeCategory === category} onClick={() => setActiveCategory(category)} style={{ border: `1px solid ${activeCategory === category ? '#F2EFE7' : 'rgba(242,239,231,.34)'}`, background: activeCategory === category ? '#F2EFE7' : 'transparent', color: activeCategory === category ? '#11120F' : '#F2EFE7', minHeight: 38, padding: '0 14px', fontFamily: APP.font, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{category}</button>)}</div>
     {message && <p role="alert" style={{ color: '#8A3D2F', fontSize: 12 }}>{message}</p>}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,280px),1fr))', gap: 18 }}>
-      {shownProducts.map((product) => { const regional = regionalProduct(product, localePreference?.locale || navigator.language, localePreference?.region || Intl.DateTimeFormat().resolvedOptions().timeZone); const linkedIds = [...new Set([...product.protocol_ids, ...(product.catalog_product_id ? usage[product.catalog_product_id] || [] : [])])]; const linked = linkedIds.map((id) => protocols.find((protocol) => protocol.id === id)).filter((protocol): protocol is AdminProtocol => !!protocol); return <article key={product.id} {...publicProductCardMotion} style={publicProductCardStyle} onPointerDown={(event) => { if (event.pointerType !== 'mouse') event.currentTarget.style.setProperty('--product-lift', '-2px'); }} onPointerUp={(event) => { if (event.pointerType !== 'mouse') event.currentTarget.style.setProperty('--product-lift', '0px'); }}>
-        {product.image_url ? <div style={{ position: 'relative', width: '100%', aspectRatio: '1', overflow: 'hidden', background: '#EEEAE2' }}><img src={product.image_url} alt="" loading="lazy" style={{ position: 'absolute', inset: -12, width: 'calc(100% + 24px)', height: 'calc(100% + 24px)', maxWidth: 'none', objectFit: 'cover', objectPosition: 'center', filter: 'grayscale(.18) contrast(1.02)', transform: 'translate3d(var(--product-px, 0px), var(--product-py, 0px), 0) scale(1.025)', transition: 'transform 500ms cubic-bezier(.16,1,.3,1), filter 500ms ease', willChange: 'transform' }} /></div> : <div style={{ width: '100%', aspectRatio: '1', display: 'grid', placeItems: 'center', background: '#EEEAE2', color: APP.muted }}><ShoppingBag size={40} strokeWidth={1.2} /></div>}
+      {shownProducts.map(({ source: product, regional }) => { const linkedIds = [...new Set([...product.protocol_ids, ...(product.catalog_product_id ? usage[product.catalog_product_id] || [] : [])])]; const linked = linkedIds.map((id) => protocols.find((protocol) => protocol.id === id)).filter((protocol): protocol is AdminProtocol => !!protocol); return <article key={product.id} {...publicProductCardMotion} style={publicProductCardStyle} onPointerDown={(event) => { if (event.pointerType !== 'mouse') event.currentTarget.style.setProperty('--product-lift', '-2px'); }} onPointerUp={(event) => { if (event.pointerType !== 'mouse') event.currentTarget.style.setProperty('--product-lift', '0px'); }}>
+        <PublicProductImage product={product} regional={regional} />
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
-          <span style={{ color: APP.greenDark, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Product · {product.shop_domain}</span>
+          <span style={{ color: APP.greenDark, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Product · {regional.shop_domain}</span>
           <h3 style={{ fontFamily: serif, fontSize: 27, fontWeight: 300, margin: 0, lineHeight: 1.08 }}>{product.title}</h3>
           {product.description && <p style={{ color: APP.muted, fontSize: 13, lineHeight: 1.5, margin: 0 }}>{product.description.length > 140 ? `${product.description.slice(0, 139)}…` : product.description}</p>}
           {linked.length > 0 && <details style={{ borderTop: `1px solid ${APP.border}`, marginTop: 8, paddingTop: 12 }}><summary style={{ color: APP.greenDark, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', cursor: 'pointer' }}>Used in {linked.length} Protocol{linked.length === 1 ? '' : 's'} · View</summary>{linked.map((protocol) => <div key={protocol.id} style={{ marginTop: 9 }}><strong style={{ display: 'block', fontFamily: serif, fontSize: 16, fontWeight: 300 }}>{protocol.name.replace(/^R3 Protocol\s*>\s*/i, '')}</strong><span style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}><a href={`/protocol/${encodeURIComponent(protocol.id)}`} style={{ border: `1px solid ${APP.border}`, color: APP.text, padding: '7px 9px', fontSize: 9, fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, textTransform: 'uppercase', letterSpacing: '.07em' }}><Smartphone size={12} />Open in app</a><button type="button" disabled={downloading === protocol.id} onClick={() => void downloadProtocol(protocol)} style={{ border: `1px solid ${APP.border}`, background: 'transparent', color: APP.text, padding: '7px 9px', fontSize: 9, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5, textTransform: 'uppercase', letterSpacing: '.07em' }}><Download size={12} />{downloading === protocol.id ? 'Preparing…' : 'PDF'}</button></span></div>)}</details>}

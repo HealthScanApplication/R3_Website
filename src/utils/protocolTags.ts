@@ -130,3 +130,20 @@ export function protocolTags(source: ProtocolTagSource, options: { category?: bo
   if (!label || NOT_A_SUBJECT.test(label.toLowerCase()) || protocolWhen(label) || audience.some((t) => t.label.toLowerCase() === label.toLowerCase())) return audience;
   return [{ label, kind: 'category' }, ...audience];
 }
+
+/**
+ * The complete metadata row used by cards. Database utilities keep unknown
+ * targeting as null, while the visual card explicitly communicates the broad
+ * fallback so every protocol has category, gender and age context.
+ */
+export function completeProtocolTags(source: ProtocolTagSource, options: { category?: boolean; label?: string | null } = {}): ProtocolTag[] {
+  const tags = protocolTags(source, options);
+  const category = tags.some((tag) => tag.kind === 'category')
+    ? tags
+    : [{ label: protocolTheme(source) === 'Other' ? 'Wellness' : protocolTheme(source), kind: 'category' as const }, ...tags];
+  return [
+    ...category,
+    ...(category.some((tag) => tag.kind === 'gender') ? [] : [{ label: 'Everyone', kind: 'gender' as const }]),
+    ...(category.some((tag) => tag.kind === 'age') ? [] : [{ label: 'All ages', kind: 'age' as const }]),
+  ];
+}

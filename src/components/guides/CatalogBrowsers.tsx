@@ -13,9 +13,10 @@ import { ProtocolHomeScreen } from '../mockups/ProtocolHomeScreen';
 import { PhoneFrame } from '../mockups/PhoneFrame';
 import { NUTRIENTS } from '../../utils/recipeNutrients';
 import { Header } from './GuardianBuilders';
-import { ProtocolCard, ProtocolCardGrid, clipCopy } from './ProtocolCard';
+import { ProtocolCard, ProtocolCardGrid, ProtocolOutputTags, clipCopy } from './ProtocolCard';
+import { RoutineCardQr } from './RoutineShareLink';
 import { AVOID_TITLE, isMealRuleTitle, ruleGroupFor } from '../../utils/protocolRules';
-import { protocolTags, type ProtocolTag } from '../../utils/protocolTags';
+import { completeProtocolTags, type ProtocolTag } from '../../utils/protocolTags';
 
 const ink = '#F5F2EA', muted = '#B8B6AF', line = 'rgba(245,242,234,0.24)', acid = '#C7D8A3', panel = '#11120F', warn = '#E8B07A', danger = '#E88A7A';
 const field: React.CSSProperties = { height: 40, border: `1px solid ${line}`, background: '#090A08', color: ink, padding: '0 10px', fontSize: 13 };
@@ -410,7 +411,7 @@ export function routineCategoryLabel(category: string | null): string | null {
 }
 /** A routine's tags: its category in the section's words (Fitness, Strength, Hygiene …), then who it is for. */
 export function routineTags(r: FitnessRoutine): ProtocolTag[] {
-  return protocolTags({ category: r.category, tags: r.tags, name: r.name, description: r.description, target_gender: r.gender, target_age_min: r.ageMin, target_age_max: r.ageMax }, { label: routineCategoryLabel(r.category) });
+  return completeProtocolTags({ category: r.category, tags: r.tags, name: r.name, description: r.description, target_gender: r.gender, target_age_min: r.ageMin, target_age_max: r.ageMax }, { label: routineCategoryLabel(r.category) });
 }
 /** Remove redundant clock-period wording from workout labels; the UI already shows Morning/Evening and a time. */
 export function routineGroupLabel(group?: string | null): string | null {
@@ -556,7 +557,7 @@ export function FitnessRoutines({ accessToken, section = 'fitness', Icon = Dumbb
     <h3 style={{ ...kicker, color: acid, margin: '0 0 8px' }}>{period} <span style={{ color: muted }}>· {group.length}</span></h3>
     <ProtocolCardGrid>
       {group.map((r) => <Fragment key={r.id}>
-        <ProtocolCard pressed={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)} imageUrl={r.image} kicker={routinePeriod(r)} tags={routineTags(r)} title={r.name} copy={clipCopy(descriptionParagraphs(r.description)[0])} owned={r.tags.includes('your plan')} visibility={r.tags.includes('your plan') ? 'private' : 'public'} cta={open === r.id ? 'Hide steps' : 'View steps'} />
+        <ProtocolCard pressed={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)} imageUrl={r.image} kicker={routinePeriod(r)} tags={routineTags(r)} title={r.name} copy={clipCopy(descriptionParagraphs(r.description)[0])} owned={r.tags.includes('your plan')} visibility={r.tags.includes('your plan') ? 'private' : 'public'} corner={<ProtocolOutputTags />} footerCorner={<RoutineCardQr protocolId={r.id} href={`https://routine3.com/protocol/${r.id}`} />} cta={open === r.id ? 'Hide steps' : 'View steps'} />
         {open === r.id && <div role="region" aria-label={`${r.name} steps`} style={{ gridColumn: '1 / -1', border: `1px solid ${acid}`, background: '#141611', padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 20, alignItems: 'start' }}>
           <div aria-label="As in the app" style={{ display: 'grid', justifyItems: 'center', gap: 8 }}>
             <div style={{ ...kicker, margin: 0 }}>As in the app{days > 1 ? (weekdays ? ` · ${dayName(day)}` : ` · day ${day} of ${days}${days > 7 ? ` · week ${Math.ceil(day / 7)}` : ''}`) : ''}</div>
