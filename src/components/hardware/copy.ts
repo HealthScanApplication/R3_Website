@@ -11,7 +11,18 @@ export function formatUsd(cents: number): string {
   return `$${Number.isInteger(dollars) ? dollars : dollars.toFixed(2)}`;
 }
 
-export const HERO_FEATURE_WORDS = ['meals', 'workouts', 'thoughts', 'moments', 'ideas', 'heartbeats'];
+/** The hero's rotating word and the background clip that plays while it shows, in order. */
+export const HERO_MOMENTS = [
+  { word: 'meals', clip: 'meal' },
+  { word: 'workouts', clip: 'activity' },
+  { word: 'thoughts', clip: 'journal' },
+  { word: 'moments', clip: 'reel' },
+  { word: 'ideas', clip: 'task' },
+  { word: 'heartbeats', clip: 'sleep' },
+] as const;
+export const HERO_FEATURE_WORDS: string[] = HERO_MOMENTS.map((m) => m.word);
+/** The /wearables hero background clips, one per word in HERO_MOMENTS. */
+export const HERO_CLIPS: string[] = HERO_MOMENTS.map((m) => `/videos/hero/${m.clip}.mp4`);
 
 // ---- Task 17: owner-approved use-case copy (planned features; no numbers beyond the brief) ----
 
@@ -80,8 +91,6 @@ export const SPEC_CLIP: SpecRow[] = [
   ['Privacy', 'Physical slider cuts the camera, microphones, and radios; red LED while the camera is on'],
 ];
 
-/** The /wearables hero background clips, played in this order: one first-person moment per gesture. */
-export const HERO_CLIPS = ['meal', 'navigate', 'activity', 'music', 'reel'].map((id) => `/videos/hero/${id}.mp4`);
 
 /** "One clip, three ways to wear it": the R³ Clip as a watch, on a cap's bill, and on a chain. */
 export type WearModeId = 'watch' | 'clip' | 'necklace';

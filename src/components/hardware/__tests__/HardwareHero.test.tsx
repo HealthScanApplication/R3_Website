@@ -2,12 +2,18 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen, within } from '@testing-library/react';
-import { HERO_CLIPS, HERO_FEATURE_WORDS } from '../copy';
+import { HERO_CLIPS, HERO_FEATURE_WORDS, HERO_MOMENTS } from '../copy';
 
 const bg = { reduceMotion: false, allowVideo: false, backgroundVideos: [] as string[] };
 vi.mock('../HeroDevices', () => ({ HeroDevices: () => <div data-testid="devices" /> }));
 vi.mock('../PreorderBlock', () => ({ PreorderBlock: () => <button type="button">Continue to payment</button> }));
-vi.mock('../../FlutedGlassBackground', () => ({ FlutedGlassBackground: ({ videos }: { videos: string[] }) => <div data-testid="fluted" data-videos={videos.join(',')} /> }));
+const glass: { onClipStart?: (i: number) => void } = {};
+vi.mock('../../FlutedGlassBackground', () => ({
+  FlutedGlassBackground: ({ videos, onClipStart }: { videos: string[]; onClipStart?: (i: number) => void }) => {
+    glass.onClipStart = onClipStart;
+    return <div data-testid="fluted" data-videos={videos.join(',')} />;
+  },
+}));
 vi.mock('../../../hooks/useHeroBackground', () => ({ useHeroBackground: () => bg }));
 import { HardwareHero } from '../HardwareHero';
 
@@ -16,7 +22,7 @@ const line = (i: number) => (screen.getByRole('heading', { level: 1 }).children[
 const line1 = () => line(0);
 const line2 = () => line(1);
 
-beforeEach(() => { bg.reduceMotion = false; bg.allowVideo = false; bg.backgroundVideos = []; });
+beforeEach(() => { bg.reduceMotion = false; bg.allowVideo = false; bg.backgroundVideos = []; glass.onClipStart = undefined; });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('HardwareHero', () => {
@@ -75,8 +81,28 @@ describe('HardwareHero', () => {
     expect(screen.queryByTestId('fluted')).toBeNull();
   });
 
-  it('the hero clips are the five first-person moments, in order', () => {
-    expect(HERO_CLIPS).toEqual(['meal', 'navigate', 'activity', 'music', 'reel'].map(id => `/videos/hero/${id}.mp4`));
+  it('pairs each word with its clip, in order', () => {
+    expect(HERO_MOMENTS.map(m => [m.word, m.clip])).toEqual([
+      ['meals', 'meal'], ['workouts', 'activity'], ['thoughts', 'journal'], ['moments', 'reel'], ['ideas', 'task'], ['heartbeats', 'sleep'],
+    ]);
+    expect(HERO_CLIPS).toEqual(['meal', 'activity', 'journal', 'reel', 'task', 'sleep'].map(id => `/videos/hero/${id}.mp4`));
+  });
+
+  it('once the clips play, each clip start sets its word and the timer stops rotating', () => {
+    vi.useFakeTimers();
+    bg.allowVideo = true;
+    render(<HardwareHero />);
+    act(() => { glass.onClipStart?.(0); });
+    act(() => { vi.advanceTimersByTime(10000); });
+    expect(line1()).toBe('Capture your meals');
+    act(() => { glass.onClipStart?.(3); });
+    act(() => { vi.advanceTimersByTime(320); });
+    expect(line1()).toBe('Capture your moments');
+    act(() => { vi.advanceTimersByTime(10000); });
+    expect(line1()).toBe('Capture your moments');
+    act(() => { glass.onClipStart?.(5); });
+    act(() => { vi.advanceTimersByTime(320); });
+    expect(line1()).toBe('Capture your heartbeats');
   });
 
   it('centres the devices column vertically in the hero (the grid fills the height, the stage self-centres)', () => {

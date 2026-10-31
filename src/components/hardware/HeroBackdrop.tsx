@@ -9,9 +9,10 @@ const fill: React.CSSProperties = { position: 'absolute', inset: 0 };
 
 /**
  * The hero background: poster, fluted-glass video (gated by useHeroBackground), warm tint, vignette and grain.
- * The glass plays the given `clips` in order; without them it plays the produce clips the hook fetches.
+ * The glass plays the given `clips` in order, reporting each start to `onClipStart`; without them it plays
+ * the produce clips the hook fetches.
  */
-export function HeroBackdrop({ clips }: { clips?: readonly string[] }) {
+export function HeroBackdrop({ clips, onClipStart }: { clips?: readonly string[]; onClipStart?: (index: number) => void }) {
   const { reduceMotion, allowVideo, backgroundVideos } = useHeroBackground({ produce: !clips });
   const [posterLoaded, setPosterLoaded] = useState(false);
   const videos = clips ? (allowVideo ? [...clips] : []) : backgroundVideos;
@@ -27,7 +28,7 @@ export function HeroBackdrop({ clips }: { clips?: readonly string[] }) {
         style={{ ...fill, width: '100%', height: '100%', objectFit: 'cover', filter: 'saturate(0.95) contrast(1.03)', opacity: posterLoaded ? 1 : 0, transition: 'opacity 1.1s ease' }}
       />
       {!reduceMotion && videos.length > 0 && (
-        <FlutedGlassBackground videos={videos} poster={heroPoster} style={{ ...fill, width: '100%', height: '100%', display: 'block' }} />
+        <FlutedGlassBackground videos={videos} poster={heroPoster} onClipStart={clips ? onClipStart : undefined} style={{ ...fill, width: '100%', height: '100%', display: 'block' }} />
       )}
       <div style={{ ...fill, background: 'linear-gradient(150deg, rgba(197,106,58,0.16) 0%, rgba(224,169,106,0.06) 55%, rgba(176,90,54,0.14) 100%)', mixBlendMode: 'soft-light' }} />
       <div style={{ ...fill, background: 'linear-gradient(158deg, rgba(250,245,236,0.30) 0%, rgba(250,245,236,0.40) 40%, rgba(250,245,236,0.72) 78%, rgba(250,245,236,0.88) 100%)' }} />

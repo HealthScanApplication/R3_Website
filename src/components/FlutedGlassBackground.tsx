@@ -203,16 +203,21 @@ export function FlutedGlassBackground({
   videos = [],
   poster,
   style,
+  onClipStart,
 }: {
   /** Video URLs (CORS-enabled) to sample through the fluted glass, cycled in turn. */
   videos?: string[];
   /** Still image shown through the glass until a video is ready (and as a fallback). */
   poster?: string;
   style?: React.CSSProperties;
+  /** Called with a clip's index in `videos` each time that clip starts playing. */
+  onClipStart?: (index: number) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videosRef = useRef<string[]>(videos);
   videosRef.current = videos;
+  const onClipStartRef = useRef(onClipStart);
+  onClipStartRef.current = onClipStart;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -322,6 +327,7 @@ export function FlutedGlassBackground({
       video.play().catch(() => {});
     };
     video.addEventListener("ended", () => playIndex(vIdx + 1));
+    video.addEventListener("playing", () => onClipStartRef.current?.(vIdx));
     video.addEventListener("error", () => playIndex(vIdx + 1));
 
     const resize = () => {

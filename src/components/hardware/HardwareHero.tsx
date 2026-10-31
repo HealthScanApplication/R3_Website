@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ed, GRO, coverStyle, deckStyle } from '../../config/editorialTheme';
 import { useHeroBackground } from '../../hooks/useHeroBackground';
 import { HeroBackdrop } from './HeroBackdrop';
@@ -13,21 +13,37 @@ export function HardwareHero() {
   const { reduceMotion } = useHeroBackground();
   const [wordIndex, setWordIndex] = useState(0);
   const [wordVisible, setWordVisible] = useState(true);
+  // Once the background clips play, each clip start sets the word (HERO_MOMENTS pairs them); until then,
+  // or when there is no video, the word rotates on its own.
+  const [clipDriven, setClipDriven] = useState(false);
+  const wordRef = useRef(0);
+  wordRef.current = wordIndex;
+  const fadeRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => { if (fadeRef.current) clearTimeout(fadeRef.current); }, []);
+
+  const showWord = useCallback((i: number) => {
+    setClipDriven(true);
+    if (i === wordRef.current) return;
+    setWordVisible(false);
+    if (fadeRef.current) clearTimeout(fadeRef.current);
+    fadeRef.current = setTimeout(() => { setWordIndex(i); setWordVisible(true); }, 320);
+  }, []);
 
   // Same rotation as HeroSection.tsx: 3200 ms interval, 320 ms fade.
   useEffect(() => {
     if (reduceMotion) { setWordIndex(0); setWordVisible(true); return; }
+    if (clipDriven) return;
     let fade: ReturnType<typeof setTimeout> | undefined;
     const t = setInterval(() => {
       setWordVisible(false);
       fade = setTimeout(() => { setWordIndex((i) => (i + 1) % HERO_FEATURE_WORDS.length); setWordVisible(true); }, 320);
     }, 3200);
     return () => { clearInterval(t); if (fade) clearTimeout(fade); };
-  }, [reduceMotion]);
+  }, [reduceMotion, clipDriven]);
 
   return (
     <section id="hardware-hero" aria-labelledby="hardware-hero-title" style={{ position: 'relative', minHeight: '100svh', background: ed.paper, overflow: 'hidden' }}>
-      <HeroBackdrop clips={HERO_CLIPS} />
+      <HeroBackdrop clips={HERO_CLIPS} onClipStart={showWord} />
 
       <div style={{ position: 'relative', zIndex: 2, minHeight: '100svh', display: 'flex', flexDirection: 'column', maxWidth: 1440, margin: '0 auto', paddingLeft: 'clamp(20px, 5vw, 72px)', paddingRight: 'clamp(20px, 5vw, 72px)', paddingTop: 'clamp(88px, 9vh, 104px)', paddingBottom: 'clamp(32px, 5vh, 56px)', boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderTop: `1px solid ${ed.hair}`, paddingTop: 14, paddingLeft: 'clamp(16px, 2vw, 28px)', paddingRight: 'clamp(16px, 2vw, 28px)' }}>
