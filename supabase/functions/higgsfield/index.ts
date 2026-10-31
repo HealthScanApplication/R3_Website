@@ -23,7 +23,14 @@ const ENC = Deno.env.get('HIGGSFIELD_ENCRYPTION_KEY') || '';
 const MAX_ACTIVE = 3, MAX_PER_DAY = Number(Deno.env.get('HIGGSFIELD_DAILY_LIMIT') || 20);
 const BUCKET = 'guardian-videos';
 const SELF = `${Deno.env.get('SUPABASE_URL')}/functions/v1/higgsfield`; // OAuth redirect URI (deploy with --no-verify-jwt)
-const RETURN_ORIGINS = (Deno.env.get('HIGGSFIELD_RETURN_ORIGINS') || 'https://routine3.com,https://www.routine3.com,http://localhost:3000,http://localhost:5173').split(',').map((o) => o.trim()).filter(Boolean);
+// Keep both local hostname forms available even when production supplies an explicit origin list. Vite may be
+// opened as either localhost or 127.0.0.1; OAuth must return to the exact origin that started the login so the
+// Guardian keeps the same Supabase session and workspace URL.
+const LOCAL_RETURN_ORIGINS = ['http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:3000', 'http://127.0.0.1:5173'];
+const RETURN_ORIGINS = [...new Set([
+  ...(Deno.env.get('HIGGSFIELD_RETURN_ORIGINS') || 'https://routine3.com,https://www.routine3.com').split(',').map((o) => o.trim()).filter(Boolean),
+  ...LOCAL_RETURN_ORIGINS,
+])];
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 const fail = (error: string, status = 400) => json({ error }, status);
@@ -49,7 +56,7 @@ async function connectionFor(userId: string): Promise<Connection | null> {
   if (data.method !== 'oauth') return { method: 'api_key', creds: sealed };
   let tokens: hf.OAuthTokens = sealed.oauth;
   if (hf.needsRefresh(tokens) && tokens.refresh_token) { // refresh quietly; keep the old token if it fails
-    const clientId = await oauthClientId().catch(() => null);
+    const clientId = await oauthClientId(SELF).catch(() => null);
     const res = clientId ? await fetch(hf.OAUTH.token, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token, client_id: clientId, resource: hf.MCP_URL }) }).catch(() => null) : null;
     const next = res?.ok ? hf.tokensFrom(await res.json().catch(() => null), Date.now(), tokens.refresh_token) : null;
     if (next) { tokens = next; await saveConnection(userId, 'oauth', { oauth: next }); }
@@ -70,13 +77,13 @@ async function saveConnection(userId: string, method: 'api_key' | 'oauth', secre
 }
 
 /** Our OAuth client at Higgsfield, registered once per environment (dynamic client registration) and remembered. */
-async function oauthClientId(): Promise<string> {
-  const { data } = await service.from('higgsfield_oauth_clients').select('client_id').eq('redirect_uri', SELF).maybeSingle();
+async function oauthClientId(redirectUri = SELF): Promise<string> {
+  const { data } = await service.from('higgsfield_oauth_clients').select('client_id').eq('redirect_uri', redirectUri).maybeSingle();
   if (data?.client_id) return data.client_id;
-  const res = await fetch(hf.OAUTH.register, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(hf.registrationBody(SELF)) });
+  const res = await fetch(hf.OAUTH.register, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(hf.registrationBody(redirectUri)) });
   const body = await res.json().catch(() => null);
-  if (!res.ok || !body?.client_id) throw new Error('Higgsfield login is not available right now.');
-  const saved = await service.from('higgsfield_oauth_clients').upsert({ redirect_uri: SELF, client_id: body.client_id });
+  if (!res.ok || !body?.client_id) throw new Error(body?.error === 'invalid_redirect_uri' ? 'Higgsfield has not approved this ROUTINE³ login address yet. Use an API key for now.' : 'Higgsfield login is not available right now.');
+  const saved = await service.from('higgsfield_oauth_clients').upsert({ redirect_uri: redirectUri, client_id: body.client_id });
   if (saved.error) console.warn('higgsfield oauth client not saved', saved.error.message); // the login carries its client id in its state, so it still completes
   return body.client_id;
 }
@@ -108,8 +115,8 @@ async function oauthCallback(url: URL): Promise<Response> {
   const code = url.searchParams.get('code');
   if (!code) return back(url.searchParams.get('error') === 'access_denied' ? 'cancelled' : 'error');
   try {
-    const clientId = state.client_id || await oauthClientId(); // the client the login started with, never a fresh registration
-    const res = await fetch(hf.OAUTH.token, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: SELF, client_id: clientId, code_verifier: state.verifier, resource: hf.MCP_URL }) });
+    const clientId = state.client_id || await oauthClientId(state.redirect_uri || SELF); // the client the login started with, never a fresh registration
+    const res = await fetch(hf.OAUTH.token, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: state.redirect_uri || SELF, client_id: clientId, code_verifier: state.verifier, resource: hf.MCP_URL }) });
     const body = await res.json().catch(() => null);
     const tokens = res.ok ? hf.tokensFrom(body) : null;
     if (!tokens) { console.warn('higgsfield oauth token exchange', res.status); return back('error'); }
@@ -170,11 +177,34 @@ Deno.serve(async (req) => {
     const returnTo = hf.safeReturn(String(body.return_to || ''), RETURN_ORIGINS);
     if (!returnTo) return fail('Logging in with Higgsfield isn’t enabled for this site address yet.');
     try {
+      const returnUrl = new URL(returnTo);
+      const loopback = returnUrl.hostname === 'localhost' || returnUrl.hostname === '127.0.0.1';
+      // Keep the workspace tab in the loopback callback. Without ?tab=content the app returns to the
+      // default workspace view, VideoStudio never mounts, and the browser cannot complete the code exchange.
+      const redirectUri = loopback ? returnUrl.toString() : SELF;
       const verifier = hf.pkceVerifier();
-      const clientId = await oauthClientId();
-      const state = await hf.sealState({ user_id: user.id, verifier, return_to: returnTo, exp: Date.now() + 15 * 60 * 1000, client_id: clientId }, ENC);
-      return json({ url: hf.authorizeUrl({ clientId, redirectUri: SELF, state, challenge: await hf.pkceChallenge(verifier) }) });
+      const clientId = await oauthClientId(redirectUri);
+      const state = await hf.sealState({ user_id: user.id, verifier, return_to: returnTo, redirect_uri: redirectUri, exp: Date.now() + 15 * 60 * 1000, client_id: clientId }, ENC);
+      return json({ url: hf.authorizeUrl({ clientId, redirectUri, state, challenge: await hf.pkceChallenge(verifier) }) });
     } catch (e) { return fail((e as Error).message, 502); }
+  }
+
+  if (action === 'oauth_complete') {
+    const state = await hf.openState(String(body.state || ''), ENC);
+    if (!state || state.user_id !== user.id) return fail('This Higgsfield login link has expired.', 400);
+    if (body.error) return json({ outcome: body.error === 'access_denied' ? 'cancelled' : 'error' });
+    const code = String(body.code || '');
+    if (!code) return fail('Higgsfield did not return a login code.');
+    try {
+      const clientId = state.client_id || await oauthClientId(state.redirect_uri || SELF);
+      const res = await fetch(hf.OAUTH.token, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: state.redirect_uri || SELF, client_id: clientId, code_verifier: state.verifier, resource: hf.MCP_URL }) });
+      const payload = await res.json().catch(() => null);
+      const tokens = res.ok ? hf.tokensFrom(payload) : null;
+      if (!tokens) return fail('Higgsfield could not finish the login.', 502);
+      const { error } = await saveConnection(user.id, 'oauth', { oauth: tokens }, hf.emailHint(payload?.id_token));
+      if (error) return fail('Could not save the Higgsfield connection.', 500);
+      return json({ outcome: 'connected' });
+    } catch { return fail('Higgsfield could not finish the login.', 502); }
   }
 
   if (action === 'tools') {

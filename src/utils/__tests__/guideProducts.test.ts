@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   buildCartPermalink, buildProductBuyUrl, effectiveCommissionPercent, formatProductPrice, groupProductsByShop, importShopifyProduct,
-  normalizeDiscountCode, normalizeShopDomain, parsePriceToCents, parseShopifyProductUrl, type GuideProductLike,
+  normalizeDiscountCode, normalizeShopDomain, parsePriceToCents, parseShopifyProductUrl, regionalProduct, regionalProductOrNull, type GuideProductLike,
 } from '../guideProducts';
 
 const product = (overrides: Partial<GuideProductLike> = {}): GuideProductLike => ({
@@ -103,5 +103,22 @@ describe('small helpers', () => {
     expect(formatProductPrice(null, 'EUR')).toBe('');
     expect(effectiveCommissionPercent({ commission_percent: null }, 15)).toBe(15);
     expect(effectiveCommissionPercent({ commission_percent: 20 }, 15)).toBe(20);
+  });
+
+  it('selects the configured regional storefront from the explicit visitor region', () => {
+    const regional = regionalProduct({ ...product(), regional_storefronts: { UK: { shop_domain: 'uk.example.com', currency: 'GBP', price_cents: 2500 } } }, 'en-GB', 'United Kingdom');
+    expect(regional.shop_domain).toBe('uk.example.com');
+    expect(regional.currency).toBe('GBP');
+  });
+
+  it('serves Europe from the UK store and North America from the US store without cross-region fallback', () => {
+    const configured = { ...product(), regional_storefronts: {
+      AU: { shop_domain: 'au.example.com', currency: 'AUD' },
+      UK: { shop_domain: 'uk.example.com', currency: 'GBP' },
+      US: { shop_domain: 'us.example.com', currency: 'USD' },
+    } };
+    expect(regionalProductOrNull(configured, 'de-DE', 'Eurozone')?.shop_domain).toBe('uk.example.com');
+    expect(regionalProductOrNull(configured, 'en-US', 'United States')?.shop_domain).toBe('us.example.com');
+    expect(regionalProductOrNull({ ...product(), regional_storefronts: { AU: { shop_domain: 'au.example.com' } } }, 'en-GB', 'United Kingdom')).toBeNull();
   });
 });

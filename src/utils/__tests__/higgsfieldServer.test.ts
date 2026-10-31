@@ -253,11 +253,18 @@ describe('higgsfield Edge Function', () => {
       const s = oauthServer();
       const { auth } = await login(s);
       expect(auth.origin + auth.pathname).toBe(hf.OAUTH.authorize);
-      expect(Object.fromEntries(['client_id', 'redirect_uri', 'code_challenge_method', 'resource', 'scope'].map((k) => [k, auth.searchParams.get(k)]))).toEqual({ client_id: 'client-123', redirect_uri: CALLBACK, code_challenge_method: 'S256', resource: hf.MCP_URL, scope: 'openid email offline_access' });
+      expect(Object.fromEntries(['client_id', 'redirect_uri', 'code_challenge_method', 'resource', 'scope'].map((k) => [k, auth.searchParams.get(k)]))).toEqual({ client_id: 'client-123', redirect_uri: 'http://localhost:5173/guardians/workspace?tab=content', code_challenge_method: 'S256', resource: hf.MCP_URL, scope: 'openid email offline_access' });
       expect(auth.searchParams.get('state')).not.toContain('guardian'); // sealed, not readable
-      await s.call({ action: 'oauth_start', return_to: 'http://localhost:5173/' });
+      await s.call({ action: 'oauth_start', return_to: 'http://localhost:5173/guardians/workspace?tab=content' });
       expect(s.calls.filter((c) => c.url === hf.OAUTH.register)).toHaveLength(1);
-      expect(JSON.parse(s.calls.find((c) => c.url === hf.OAUTH.register)!.init.body)).toMatchObject({ redirect_uris: [CALLBACK], token_endpoint_auth_method: 'none' });
+      expect(JSON.parse(s.calls.find((c) => c.url === hf.OAUTH.register)!.init.body)).toMatchObject({ redirect_uris: ['http://localhost:5173/guardians/workspace?tab=content'], token_endpoint_auth_method: 'none' });
+    });
+
+    it('accepts the 127.0.0.1 Vite address and returns to the exact workspace URL', async () => {
+      const s = oauthServer();
+      const { start, callback } = await login(s, 'http://127.0.0.1:3000/guardians/workspace?tab=content');
+      expect(start.status).toBe(200);
+      expect(callback.headers.get('Location')).toBe('http://127.0.0.1:3000/guardians/workspace?tab=content&higgsfield=connected');
     });
 
     it('swaps the code (with the PKCE verifier) for tokens, stores them encrypted and returns to the site', async () => {

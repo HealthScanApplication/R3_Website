@@ -1,6 +1,5 @@
-import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { ArrowRight, Pencil, Trash2 } from 'lucide-react';
-import { resolveImageSources } from '../../utils/imageLoading';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { ArrowRight, FileText, Pencil, Trash2 } from 'lucide-react';
 
 /**
  * Protocol card: the Guardian profile card (dark picture on top, small-caps kicker, serif title, a short description,
@@ -30,7 +29,7 @@ export const PROTOCOL_CARD_CSS = `
 .r3-pcard-main:focus-visible{outline:2px solid #9A6A2F;outline-offset:-4px}
 @supports selector(:has(a)){.r3-pcard-main:focus-visible{outline:none}.r3-pcard:has(.r3-pcard-main:focus-visible){outline:2px solid #9A6A2F;outline-offset:2px}}
 .r3-pcard[data-pressed=true]{border-color:#11120F}
-.r3-pcard-actions{position:absolute;top:10px;right:10px;z-index:2;display:flex;gap:6px;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity 300ms var(--ease),transform 300ms var(--ease)}
+.r3-pcard-actions{position:absolute;top:46px;right:10px;z-index:3;display:flex;gap:6px;opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity 300ms var(--ease),transform 300ms var(--ease)}
 .r3-pcard:hover .r3-pcard-actions,.r3-pcard:focus-within .r3-pcard-actions{opacity:1;pointer-events:auto;transform:none}
 .r3-pcard-act{position:relative;display:grid;place-items:center;width:34px;height:34px;margin:0;padding:0;border:1px solid rgba(17,18,15,.55);border-radius:4px;background:rgba(255,255,255,.92);color:#11120F;cursor:pointer;transition:background 200ms ease,color 200ms ease,border-color 200ms ease}
 .r3-pcard-act::after{content:"";position:absolute;inset:-5px}
@@ -38,7 +37,9 @@ export const PROTOCOL_CARD_CSS = `
 .r3-pcard-act.danger:hover{background:#B4472F;border-color:#B4472F}
 .r3-pcard-act:focus-visible{outline:2px solid #9A6A2F;outline-offset:2px}
 .r3-pcard-media{position:relative;height:220px;flex:0 0 auto;background:#171812;overflow:hidden;container-type:inline-size}
-.r3-pcard-img,.r3-pcard-blur{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;filter:${GRADE};transform:scale(1.001);transition:filter 800ms var(--ease),transform 1000ms var(--ease)}
+.r3-pcard-media[data-preview]{background-position:center;background-size:cover}
+.r3-pcard-img,.r3-pcard-blur{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;filter:${GRADE};transform:scale(1.001);transition:filter 800ms var(--ease),transform 1000ms var(--ease),opacity 450ms ease}
+.r3-pcard-img{opacity:0}.r3-pcard-img[data-loaded=true]{opacity:1}
 .r3-pcard-blur{pointer-events:none;filter:${GRADE} blur(7px);transform:scale(1.07)}
 .r3-pcard-blur.top{-webkit-mask-image:linear-gradient(to bottom,#000 0,#000 8%,transparent 36%);mask-image:linear-gradient(to bottom,#000 0,#000 8%,transparent 36%)}
 .r3-pcard-blur.bottom{-webkit-mask-image:linear-gradient(to top,#000 0,#000 8%,transparent 36%);mask-image:linear-gradient(to top,#000 0,#000 8%,transparent 36%)}
@@ -47,14 +48,18 @@ export const PROTOCOL_CARD_CSS = `
 .r3-pcard-plate-slot{width:max-content}
 .r3-pcard-plate-slot>*{max-width:none}
 .r3-pcard-glow{position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(70% 80% at 50% 58%,rgba(196,138,60,.62),rgba(102,114,69,.45) 48%,transparent 80%);transition:opacity 800ms var(--ease)}
+.r3-pcard-progress{position:absolute;z-index:1;left:0;right:0;bottom:0;height:2px;overflow:hidden;background:rgba(255,255,255,.16);transition:opacity 250ms ease}.r3-pcard-progress::after{content:"";display:block;width:38%;height:100%;background:rgba(255,255,255,.86);animation:r3-image-load 1.05s ease-in-out infinite}.r3-pcard-progress[data-loaded=true]{opacity:0;pointer-events:none}@keyframes r3-image-load{from{transform:translateX(-110%)}to{transform:translateX(370%)}}
 .r3-pcard:hover .r3-pcard-glow,.r3-pcard:focus-within .r3-pcard-glow,.r3-pcard[data-pressed=true] .r3-pcard-glow{opacity:1}
-.r3-pcard-badge{position:absolute;z-index:2;top:12px;left:12px;padding:6px 10px;border-radius:2px;background:#F5F2EA;color:#11120F;font-size:10px;font-weight:700;letter-spacing:.12em;line-height:1;text-transform:uppercase}
-.r3-pcard-corner{position:absolute;z-index:2;top:12px;right:12px;display:flex;flex-direction:column;align-items:flex-end;gap:6px;max-width:calc(100% - 100px)}
-.r3-pcard-corner>*{padding:4px 6px;border-radius:2px;background:rgba(245,242,234,.94);max-width:100%;box-sizing:border-box}
+.r3-pcard-badge{position:absolute;z-index:2;top:12px;left:12px;padding:6px 10px;border:1px solid rgba(255,255,255,.78);border-radius:3px;background:rgba(24,28,25,.22);-webkit-backdrop-filter:blur(12px) saturate(1.35);backdrop-filter:blur(12px) saturate(1.35);color:#FFF;font-size:10px;font-weight:800;letter-spacing:.12em;line-height:1;text-transform:uppercase;text-shadow:0 1px 3px rgba(0,0,0,.75);box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 3px 12px rgba(0,0,0,.12)}
+.r3-pcard-ownership{position:absolute;z-index:2;top:12px;right:12px;display:flex;align-items:center;gap:6px;max-width:calc(100% - 24px)}
+.r3-pcard-ownership>[data-card-owner],.r3-pcard-ownership>[data-card-visibility]{box-sizing:border-box;padding:5px 8px;border:1px solid rgba(255,255,255,.72);border-radius:3px;background:rgba(24,28,25,.2);-webkit-backdrop-filter:blur(12px) saturate(1.35);backdrop-filter:blur(12px) saturate(1.35);color:#FFF;text-shadow:0 1px 3px rgba(0,0,0,.8);font-family:${sans};font-size:9px;font-weight:800;line-height:1;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap}
+.r3-pcard-corner{position:absolute;z-index:2;left:12px;bottom:12px;display:flex;align-items:center;gap:6px;max-width:calc(100% - 24px)}
+.r3-pcard-corner>*{max-width:100%;box-sizing:border-box}
 .r3-pcard:hover .r3-pcard-img,.r3-pcard:focus-within .r3-pcard-img,.r3-pcard[data-pressed=true] .r3-pcard-img{filter:${COLOUR};transform:scale(1.035)}
 .r3-pcard:hover .r3-pcard-blur,.r3-pcard:focus-within .r3-pcard-blur,.r3-pcard[data-pressed=true] .r3-pcard-blur{filter:${COLOUR} blur(3.5px);transform:scale(1.09)}
 .r3-pcard:hover .r3-pcard-plate,.r3-pcard:focus-within .r3-pcard-plate,.r3-pcard[data-pressed=true] .r3-pcard-plate,.r3-pcard:hover .r3-pcard-plate-slot,.r3-pcard:focus-within .r3-pcard-plate-slot,.r3-pcard[data-pressed=true] .r3-pcard-plate-slot{filter:grayscale(0) brightness(1.05)}
 .r3-pcard-body{display:flex;flex:1;flex-direction:column;padding:20px}
+.r3-pcard-footer-corner{position:absolute;right:12px;top:191px;z-index:4;display:grid;place-items:center;filter:none!important}
 .r3-pcard-kicker{color:#667245;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
 .r3-pcard-title{font-family:${serif};font-size:28px;font-weight:300;line-height:1.14;margin:10px 0 8px;padding:.05em 0 .06em;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .r3-pcard-tags{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;padding:0;list-style:none}
@@ -65,10 +70,11 @@ export const PROTOCOL_CARD_CSS = `
 .r3-pcard-foot{margin-top:auto;padding-top:20px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 12px}
 .r3-pcard-by{display:flex;flex:1 1 100px;align-items:center;gap:8px;min-width:0;color:#66645F;font-size:11px}
 .r3-pcard-by-name{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.r3-pcard-cta{display:inline-flex;flex:0 0 auto;margin-left:auto;align-items:center;gap:8px;font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#11120F}
+.r3-pcard-cta{display:inline-flex;flex:0 0 auto;min-height:42px;box-sizing:border-box;margin-left:auto;padding:0 15px;align-items:center;justify-content:center;gap:8px;border:1px solid #11120F;border-radius:2px;background:#11120F;color:#FFF;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;transition:background 240ms ease,color 240ms ease,transform 240ms var(--ease)}
 .r3-pcard-cta svg{transition:transform 400ms var(--ease)}
+.r3-pcard:hover .r3-pcard-cta,.r3-pcard:focus-within .r3-pcard-cta{background:#000;transform:translateY(-1px)}
 .r3-pcard:hover .r3-pcard-cta svg,.r3-pcard:focus-within .r3-pcard-cta svg{transform:translateX(4px)}
-@container (max-width:330px){.r3-pcard-corner{top:auto;bottom:12px;left:12px;right:auto;align-items:flex-start;max-width:calc(100% - 24px)}}
+@container (max-width:330px){.r3-pcard-corner{top:auto;bottom:12px;left:12px;right:auto;max-width:calc(100% - 24px);transform:scale(.9);transform-origin:left bottom}.r3-pcard-ownership{gap:4px}.r3-pcard-ownership>[data-card-owner],.r3-pcard-ownership>[data-card-visibility]{padding:4px 6px}}
 @media (hover:none),(pointer:coarse){
   .r3-pcard-actions{opacity:1;pointer-events:auto;transform:none}
   .r3-pcard-img{filter:${COLOUR}}
@@ -80,6 +86,7 @@ export const PROTOCOL_CARD_CSS = `
   .r3-pcard,.r3-pcard-img,.r3-pcard-blur,.r3-pcard-plate,.r3-pcard-plate-slot,.r3-pcard-glow,.r3-pcard-cta svg,.r3-pcard-actions,.r3-pcard-act{transition:none!important}
   .r3-pcard{transform:none!important}
   .r3-pcard-img,.r3-pcard-blur{transform:none!important}
+  .r3-pcard-progress::after{animation:none;width:100%}
 }
 `;
 
@@ -92,8 +99,14 @@ if (typeof document !== 'undefined') {
 }
 
 /** The grid the cards sit in, with the cards' one stylesheet. Anything else placed in the grid (an open detail row) spans it with `gridColumn: '1 / -1'`. */
-export function ProtocolCardGrid({ children, min = 250, style }: { children: ReactNode; min?: number; style?: CSSProperties }) {
+export function ProtocolCardGrid({ children, min = 290, style }: { children: ReactNode; min?: number; style?: CSSProperties }) {
   return <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill,minmax(${min}px,1fr))`, gap: 14, ...style }}><style>{PROTOCOL_CARD_CSS}</style>{children}</div>;
+}
+
+/** The standard outputs shown on every R³ protocol card image. */
+export function ProtocolOutputTags() {
+  const chip: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 5, height: 22, padding: '0 8px', border: '1px solid rgba(255,255,255,.78)', borderRadius: 3, background: 'rgba(24,28,25,.2)', WebkitBackdropFilter: 'blur(12px) saturate(1.35)', backdropFilter: 'blur(12px) saturate(1.35)', color: '#FFF', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.16),0 3px 12px rgba(0,0,0,.12)', textShadow: '0 1px 3px rgba(0,0,0,.8)', fontFamily: sans, fontSize: 9, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', whiteSpace: 'nowrap' };
+  return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#FFF' }}><span style={chip}><FileText size={11} aria-hidden="true" />Printed PDF</span><span aria-hidden="true" style={{ fontWeight: 800 }}>+</span><span style={chip}>R3 app protocol</span></span>;
 }
 
 /** A description cut to a short line at a word boundary. */
@@ -101,6 +114,20 @@ export function clipCopy(text: string | null | undefined, max = 110): string | u
   const t = (text || '').replace(/\s+/g, ' ').trim();
   if (!t) return undefined;
   return t.length > max ? `${t.slice(0, max).replace(/\s+\S*$/, '')}…` : t;
+}
+
+/** Supabase Storage's image renderer gives cards a tiny preview and appropriately sized responsive files. */
+export function protocolImageUrl(source: string, width: number, quality = 78): string {
+  try {
+    const url = new URL(source);
+    const marker = '/storage/v1/object/public/';
+    if (!url.hostname.endsWith('.supabase.co') || !url.pathname.includes(marker)) return source;
+    url.pathname = url.pathname.replace(marker, '/storage/v1/render/image/public/');
+    url.searchParams.set('width', String(width));
+    url.searchParams.set('quality', String(quality));
+    url.searchParams.set('resize', 'cover');
+    return url.toString();
+  } catch { return source; }
 }
 
 export interface ProtocolCardProps {
@@ -119,10 +146,15 @@ export interface ProtocolCardProps {
   badge?: ReactNode;
   /** On the picture, top right: format tags. Each child sits on a light chip. */
   corner?: ReactNode;
+  /** Ownership and visibility shown together at the top right. `Yours` is rendered only when owned is true. */
+  owned?: boolean;
+  visibility?: 'public' | 'private';
   /** Shown on the plate when there is no photo, in place of the default plate picture. */
   plate?: ReactNode;
   /** Under the description (a star rating). */
   extra?: ReactNode;
+  /** A compact asset in the white card's lower-right corner, such as the routine QR. */
+  footerCorner?: ReactNode;
   cta?: string;
   /** A link to another page. Without it the card is a button. */
   href?: string;
@@ -136,16 +168,41 @@ export interface ProtocolCardProps {
   onDelete?: () => void;
 }
 
-export function ProtocolCard({ title, kicker, tags, copy, imageUrl, by, byAvatar, badge, corner, plate, extra, cta = 'View protocol', href, onClick, pressed, inert, onEdit, onDelete }: ProtocolCardProps) {
+export function CardOwnershipTags({ owned = false, visibility }: { owned?: boolean; visibility?: 'public' | 'private' }) {
+  if (!visibility && !owned) return null;
+  return <>
+    {owned && <span data-card-owner="yours">Yours</span>}
+    {visibility && <span data-card-visibility={visibility}>{visibility === 'public' ? 'Public' : 'Private'}</span>}
+  </>;
+}
+
+export function ProtocolCard({ title, kicker, tags, copy, imageUrl, by, byAvatar, badge, corner, owned = false, visibility, plate, extra, footerCorner, cta = 'View protocol', href, onClick, pressed, inert, onEdit, onDelete }: ProtocolCardProps) {
   const ref = useRef<HTMLDivElement | null>(null);
+  const imageRef = useRef<HTMLImageElement | null>(null);
   // The picture that failed, not a flag: a card that later gets a different picture tries it.
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [useOriginalImage, setUseOriginalImage] = useState(false);
   const photo = imageUrl && imageUrl !== failedUrl ? imageUrl : null;
-  // A card shows its picture about 300px wide: take a copy of that size from Storage (the blurred layers, 160px), and the
-  // original if the copy will not load. Pictures elsewhere are used as they are.
-  const [fullSizeUrl, setFullSizeUrl] = useState<string | null>(null);
-  const sharp = useMemo(() => (photo && photo !== fullSizeUrl ? resolveImageSources(photo, { proportional: true, widths: [480, 960] }) : null), [photo, fullSizeUrl]);
-  const soft = useMemo(() => (photo && photo !== fullSizeUrl ? resolveImageSources(photo, { proportional: true, widths: [160] }) : null), [photo, fullSizeUrl]);
+  const hasTransformedAsset = !!photo && protocolImageUrl(photo, 960) !== photo;
+  useEffect(() => {
+    setImageLoaded(false);
+    setUseOriginalImage(false);
+    const timer = hasTransformedAsset ? window.setTimeout(() => setUseOriginalImage(true), 4500) : undefined;
+    return () => { if (timer) window.clearTimeout(timer); };
+  }, [photo, hasTransformedAsset]);
+  const preview = photo ? protocolImageUrl(photo, 48, 28) : null;
+  // A single right-sized request is more reliable than srcset here: some storage
+  // render endpoints leave a chosen srcset candidate pending instead of emitting an
+  // error. After 4.5s (or an explicit error) the card retries the original asset.
+  const displayPhoto = photo;
+  const responsive = photo && hasTransformedAsset && !useOriginalImage
+    ? [320, 640, 960].map((width) => `${protocolImageUrl(photo, width)} ${width}w`).join(', ')
+    : undefined;
+  useEffect(() => {
+    const image = imageRef.current;
+    if (image?.complete && image.naturalWidth > 0) setImageLoaded(true);
+  }, [displayPhoto]);
   // The lean is written straight to CSS variables: no render per pointer move across a grid of cards.
   const lean = (event: React.PointerEvent<HTMLDivElement>) => {
     const el = ref.current;
@@ -157,18 +214,21 @@ export function ProtocolCard({ title, kicker, tags, copy, imageUrl, by, byAvatar
   };
   const rest = () => { ref.current?.style.removeProperty('--tx'); ref.current?.style.removeProperty('--ty'); };
   const inner = <>
-    <div className="r3-pcard-media">
+    <div className="r3-pcard-media" data-preview={preview ? 'true' : undefined} style={preview ? { backgroundImage: `url("${preview.replace(/"/g, '%22')}")` } : undefined}>
       {photo ? <>
-        <img className="r3-pcard-img" src={sharp?.src ?? photo} srcSet={sharp?.srcSet} sizes={sharp?.srcSet ? '(max-width: 640px) 100vw, 360px' : undefined} alt="" loading="lazy" decoding="async" onError={() => (sharp?.transformed ? setFullSizeUrl(photo) : setFailedUrl(photo))} />
-        <img className="r3-pcard-blur top" src={soft?.src ?? photo} alt="" aria-hidden="true" loading="lazy" decoding="async" />
-        <img className="r3-pcard-blur bottom" src={soft?.src ?? photo} alt="" aria-hidden="true" loading="lazy" decoding="async" />
+        <img ref={imageRef} className="r3-pcard-img" data-loaded={imageLoaded ? 'true' : undefined} src={displayPhoto || photo} srcSet={responsive} sizes={responsive ? '(max-width: 700px) 92vw, (max-width: 1200px) 44vw, 360px' : undefined} alt="" loading="lazy" decoding="async" onLoad={() => setImageLoaded(true)} onError={() => { if (hasTransformedAsset && !useOriginalImage) setUseOriginalImage(true); else setFailedUrl(photo); }} />
+        <img className="r3-pcard-blur top" src={preview || photo} alt="" aria-hidden="true" loading="eager" decoding="async" />
+        <img className="r3-pcard-blur bottom" src={preview || photo} alt="" aria-hidden="true" loading="eager" decoding="async" />
+        <span className="r3-pcard-progress" data-loaded={imageLoaded ? 'true' : undefined} aria-hidden="true" />
       </> : <>
         <span className="r3-pcard-glow" aria-hidden="true" />
         {plate ? <span className="r3-pcard-plate-slot" aria-hidden="true">{plate}</span> : <img className="r3-pcard-plate" src={PROTOCOL_PLATE} alt="" loading="lazy" />}
       </>}
       {badge && <span className="r3-pcard-badge">{badge}</span>}
+      {(visibility || owned) && <div className="r3-pcard-ownership"><CardOwnershipTags owned={owned} visibility={visibility} /></div>}
       {corner && <div className="r3-pcard-corner">{corner}</div>}
     </div>
+    {footerCorner && <span className="r3-pcard-footer-corner">{footerCorner}</span>}
     <div className="r3-pcard-body">
       {kicker && <span className="r3-pcard-kicker">{kicker}</span>}
       <h3 className="r3-pcard-title">{title}</h3>

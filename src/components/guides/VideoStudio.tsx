@@ -12,10 +12,11 @@ import { Copy, Download, Film, ImageDown, KeyRound, LogIn, Loader2, RotateCcw, T
 import { RatioGlyph, StyleThumb, drawPost, guardianHandle, qrLink, TEXT_POSITIONS, TEXT_STYLES, type PostBrand, type TextPosition, type TextStyleId } from './ContentStudio';
 import { draftVideoScript, parseScript, scriptPrompt, scriptText } from '../../utils/videoScript';
 import { OVERLAY_FORMATS, recordWithOverlay } from '../../utils/videoOverlay';
+import { creatorCredit } from '../../utils/postCredit';
 import { buildVideoPrompt, VIDEO_ASPECTS, VIDEO_PROMPT_MAX, type VideoAspect } from '../../utils/videoPrompt';
 import type { BrandKit } from '../../utils/brandKit';
 import { postCopy, type CopyKind, type CopyOffer } from '../../utils/postCopy';
-import { connectHiggsfield, costCopy, startHiggsfieldLogin, takeLoginOutcome, disconnectHiggsfield, estimateVideo, generateVideo, higgsfieldStatus, isFinished, listVideos, pollDelay, pollVideo, progressOf, type HiggsfieldStatus, type VideoEstimate, type VideoJob } from '../../utils/higgsfieldVideo';
+import { completeHiggsfieldLogin, connectHiggsfield, costCopy, startHiggsfieldLogin, takeLoginOutcome, disconnectHiggsfield, estimateVideo, generateVideo, higgsfieldStatus, isFinished, listVideos, pollDelay, pollVideo, progressOf, type HiggsfieldStatus, type VideoEstimate, type VideoJob } from '../../utils/higgsfieldVideo';
 
 const ink = '#F5F2EA', muted = '#B8B6AF', line = 'rgba(245,242,234,0.24)', acid = '#C7D8A3', warn = '#E8B07A';
 const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', height: 38, border: `1px solid ${line}`, background: '#090A08', color: ink, padding: '0 10px', fontSize: 13, borderRadius: 2 };
@@ -71,13 +72,19 @@ export function VideoStudio({ creator, avatar = null, audience, problem, focusKi
   const [, tick] = useState(0);
 
   useEffect(() => {
-    // Back from the Higgsfield login page?
-    const outcome = takeLoginOutcome();
-    if (outcome === 'connected') setNotice('Logged in with Higgsfield.');
-    else if (outcome === 'cancelled') setNotice('Higgsfield login was cancelled.');
-    else if (outcome === 'error') setError('Higgsfield login didn’t finish. Try again, or connect with an API key.');
-    higgsfieldStatus().then((s) => { setStatus(s); if (s.connected) listVideos().then((r) => setRecent(r.jobs)).catch(() => {}); })
-      .catch((e) => setSetupError((e as Error).message || 'Video generation is not available here yet.'));
+    let live = true;
+    (async () => {
+      await completeHiggsfieldLogin();
+      const outcome = takeLoginOutcome();
+      if (!live) return;
+      if (outcome === 'connected') setNotice('Logged in with Higgsfield.');
+      else if (outcome === 'cancelled') setNotice('Higgsfield login was cancelled.');
+      else if (outcome === 'error') setError('Higgsfield login didn’t finish. Try again, or connect with an API key.');
+      const s = await higgsfieldStatus();
+      if (!live) return;
+      setStatus(s); if (s.connected) listVideos().then((r) => live && setRecent(r.jobs)).catch(() => {});
+    })().catch((e) => live && setSetupError((e as Error).message || 'Video generation is not available here yet.'));
+    return () => { live = false; };
   }, []);
 
   // Poll the running job with backoff (2 s → 10 s); stop when it finishes or the component unmounts.
@@ -105,11 +112,12 @@ export function VideoStudio({ creator, avatar = null, audience, problem, focusKi
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const fmt = OVERLAY_FORMATS[aspect];
   const qr = siteUrl ? qrLink(siteUrl) : undefined;
+  const credit = creatorCredit(creator, guardianHandle(pageUrl ?? siteUrl)); // "From @handle", the same line the image posts carry
   useEffect(() => {
     let stale = false;
-    if (overlayRef.current && showText) drawPost(overlayRef.current, fmt, '', { headline, subline, cta, credit: creator ? `Guidance by ${creator}${guardianHandle(pageUrl ?? siteUrl) ? ` · ${guardianHandle(pageUrl ?? siteUrl)}` : ''}` : '', qr, brand: postBrand, style: textStyle, position, avatar }, () => stale).catch(() => {}); // a font or logo that fails to load just leaves the layer as is
+    if (overlayRef.current && showText) drawPost(overlayRef.current, fmt, '', { headline, subline, cta, credit, qr, brand: postBrand, style: textStyle, position, avatar }, () => stale).catch(() => {}); // a font or logo that fails to load just leaves the layer as is
     return () => { stale = true; };
-  }, [fmt, headline, subline, cta, creator, qr, postBrand, textStyle, position, showText, status?.connected, avatar]);
+  }, [fmt, headline, subline, cta, credit, qr, postBrand, textStyle, position, showText, status?.connected, avatar]);
   const copyText = (key: string, text: string) => { navigator.clipboard?.writeText(text).then(() => { setCopied(key); window.setTimeout(() => setCopied(''), 1600); }); };
   const fileBase = `routine3-${problem.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'video'}-${aspect.replace(':', 'x')}`;
   const downloadTextLayer = () => overlayRef.current?.toBlob((b) => b && saveBlob(b, `${fileBase}-text.png`), 'image/png');
@@ -231,7 +239,7 @@ export function VideoStudio({ creator, avatar = null, audience, problem, focusKi
         {showText && <>
           <div><span style={lab}>Text style</span><div role="group" aria-label="Video text style" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6 }}>
 {TEXT_STYLES.map((t) => <button key={t.id} type="button" aria-pressed={textStyle === t.id} aria-label={`${t.label} text style`} onClick={() => setTextStyle(t.id)} style={{ border: `1px solid ${textStyle === t.id ? acid : line}`, outline: textStyle === t.id ? `1px solid ${acid}` : 'none', background: '#090A08', padding: 4, cursor: 'pointer', display: 'grid', gap: 4 }}>
-            <StyleThumb styleId={t.id} bg="/images/content/12-evening-reset.webp" headline={headline} subline={subline} cta={cta} credit={creator ? `Guidance by ${creator}${guardianHandle(pageUrl ?? siteUrl) ? ` · ${guardianHandle(pageUrl ?? siteUrl)}` : ''}` : ''} brand={postBrand} position={position} fontsReady={0} />
+            <StyleThumb styleId={t.id} bg="/images/content/12-evening-reset.webp" headline={headline} subline={subline} cta={cta} credit={credit} brand={postBrand} position={position} fontsReady={0} />
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: textStyle === t.id ? acid : muted, padding: '1px 0 2px' }}>{t.label}</span></button>)}</div></div>
           <label><span style={lab}>Text position</span><select aria-label="Video text position" value={position} onChange={(e) => setPosition(e.target.value as TextPosition)} style={field}>{TEXT_POSITIONS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
           {([['Headline', headline, setHeadline, headEdited, resetHead], ['Subline', subline, setSubline, subEdited, resetSub], ['Button', cta, setCta, ctaEdited, resetCta]] as const).map(([name, value, set, isEdited, reset]) => <div key={name}>

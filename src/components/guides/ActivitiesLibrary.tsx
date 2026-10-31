@@ -54,7 +54,7 @@ const tag: React.CSSProperties = { border: `1px solid ${line}`, borderRadius: 3,
 
 function Card({ a, on, onPick }: { a: ActivityPick; on: boolean; onPick: (a: ActivityPick) => void }) {
   return <button type="button" onClick={() => onPick(a)} aria-pressed={on} style={{ textAlign: 'left', border: `1px solid ${on ? acid : line}`, background: panel, color: ink, padding: 0, cursor: 'pointer', overflow: 'hidden' }}>
-    <div style={{ aspectRatio: '4 / 3', background: a.image ? `url(${a.image}) center/cover` : '#1B1C18' }} />
+    <div style={{ position: 'relative', aspectRatio: '4 / 3', background: a.image ? `url(${a.image}) center/cover` : '#1B1C18' }}><span style={{ position: 'absolute', top: 6, right: 6, padding: '3px 6px', border: `1px solid ${line}`, background: 'rgba(9,10,8,.82)', color: ink, fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>Public</span></div>
     <div style={{ padding: '8px 10px 10px' }}>
       <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.25 }}>{a.name}</div>
       <div style={{ color: muted, fontSize: 10, marginTop: 4 }}>{[a.bodyParts?.length ? muscleGroupOf(a) : null, activitySetting(a.name), a.minutes ? `${a.minutes} min` : null].filter(Boolean).join(' · ') || a.category}</div>

@@ -22,6 +22,16 @@ describe('guardian-images lib', () => {
     expect(gi.shapeImageRequest({ prompt: 'A calm evening at home.', aspect_ratio: '9:16', source: 'someone-else' }).ok).toBe(false);
     expect(gi.shapeImageRequest({ prompt: 'A calm evening at home.', aspect_ratio: '9:16', quality: 'ultra', source: 'house' })).toMatchObject({ ok: true, quality: 'medium' });
   });
+  it('shapes a circle-safe house avatar edit without changing identity', () => {
+    const result = gi.shapeAvatarRequest({ image_url: 'https://cdn.example/portrait.jpg', name: "Barbara O'Neill", source: 'house' });
+    expect(result).toMatchObject({ ok: true, aspect: '1:1', quality: 'medium', usd: 0.042, size: '1024x1024' });
+    if (!result.ok) return;
+    expect(result.prompt).toContain("Barbara O'Neill");
+    expect(result.prompt).toContain("Preserve the person's identity");
+    expect(result.prompt).toContain('circle-safe');
+    expect(gi.shapeAvatarRequest({ image_url: 'http://private.test/avatar.jpg', source: 'house' }).ok).toBe(false);
+    expect(gi.shapeAvatarRequest({ image_url: 'https://cdn.example/avatar.jpg', source: 'other' }).ok).toBe(false);
+  });
   it('recognises OpenAI keys and only ever shows a hint', () => {
     expect(gi.looksLikeOpenAIKey('sk-proj-abcdefghijklmnopqrstuvwxyz123456')).toBe(true);
     expect(gi.looksLikeOpenAIKey('pk_live_abcdefghijklmnopqrstuvwxyz')).toBe(false);

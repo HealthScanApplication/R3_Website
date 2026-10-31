@@ -478,6 +478,82 @@ app.post('/make-server-ed0fe4c2/guides/import-profile', async (c) => {
   }
 })
 
+app.post('/make-server-ed0fe4c2/guides/import-events', async (c) => {
+  try {
+    const accessToken = c.req.header('Authorization')?.replace('Bearer ', '')
+    const { data: { user } } = accessToken ? await supabase.auth.getUser(accessToken) : { data: { user: null } } as any
+    const { guideId, sourceUrl: requestedSourceUrl } = await c.req.json()
+    if (!guideId) return c.json({ error: 'Guardian is required' }, 400)
+    const { data: savedSource } = await supabase.from('guide_event_sources').select('source_url,last_synced_at').eq('guide_id', guideId).maybeSingle()
+    if (requestedSourceUrl && guideId !== user?.id) return c.json({ error: 'Only this Guardian can change the events source URL' }, 403)
+    const sourceUrl = requestedSourceUrl || savedSource?.source_url
+    if (!sourceUrl) return c.json({ error: 'This Guardian has not added an events page yet' }, 404)
+    let source: URL
+    try { source = new URL(String(sourceUrl || '')) } catch { return c.json({ error: 'Enter a valid events page URL' }, 400) }
+    if (source.protocol !== 'https:') return c.json({ error: 'The events source must use HTTPS' }, 400)
+    if (/^(localhost|127\.|0\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1\]?)/i.test(source.hostname)) return c.json({ error: 'Private network URLs cannot be used as event sources' }, 400)
+    if (requestedSourceUrl) {
+      const { error: sourceError } = await supabase.from('guide_event_sources').upsert({ guide_id: guideId, source_url: source.toString(), source_name: source.hostname, updated_at: new Date().toISOString() }, { onConflict: 'guide_id' })
+      if (sourceError) throw sourceError
+    }
+    const pageResponse = await fetch(source.toString(), { headers: { 'User-Agent': 'Mozilla/5.0 ROUTINE3 event importer' }, signal: AbortSignal.timeout(12000) })
+    if (!pageResponse.ok) return c.json({ error: `The events page returned ${pageResponse.status}` }, 400)
+    const html = await pageResponse.text()
+    const clean = (value: unknown) => String(value || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&#160;/gi, ' ').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/\s+/g, ' ').trim()
+    const list: any[] = []
+    const mahinaShop = html.match(/Shopify\.shop\s*=\s*["']([^"']+)/)?.[1]
+    if (mahinaShop) {
+      const mahina = await fetch(`https://mahina.app/app/${encodeURIComponent(mahinaShop)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shop: mahinaShop, page: 1 }), signal: AbortSignal.timeout(12000) })
+      if (mahina.ok) {
+        const payload = await mahina.json()
+        for (const event of Array.isArray(payload?.events) ? payload.events : []) list.push({ id: `mahina:${event.id}`, title: event.title, description: event.description, start: event.startDate, end: event.endDate, timezone: event.timezone, venue: event.location?.name, location: event.location?.name, format: event.location?.medium === 'online' ? 'virtual' : 'in_person', image: event.image, url: event.tickets?.links?.[0]?.link, sourceName: 'Official events calendar' })
+      }
+    }
+    if (!list.length) for (const match of html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+      try {
+        const value = JSON.parse(match[1]); const nodes = Array.isArray(value) ? value : value?.['@graph'] || [value]
+        for (const event of nodes) if (String(event?.['@type'] || '').toLowerCase().includes('event')) list.push({ id: `jsonld:${event['@id'] || event.url || `${event.name}:${event.startDate}`}`, title: event.name, description: event.description, start: event.startDate, end: event.endDate, venue: event.location?.name, location: event.location?.address?.addressLocality || event.location?.address?.streetAddress, format: String(event.eventAttendanceMode || '').toLowerCase().includes('online') ? 'virtual' : 'in_person', image: Array.isArray(event.image) ? event.image[0] : event.image, url: event.url, sourceName: source.hostname })
+      } catch { /* skip malformed structured data */ }
+    }
+    const rows = list.filter((event) => event.title && event.start && !Number.isNaN(Date.parse(event.start))).slice(0, 100).map((event) => ({ guide_id: guideId, title: clean(event.title).slice(0, 180), description: clean(event.description).slice(0, 3000) || null, start_at: new Date(event.start).toISOString(), end_at: event.end && !Number.isNaN(Date.parse(event.end)) ? new Date(event.end).toISOString() : null, timezone: clean(event.timezone).slice(0, 80) || null, venue: clean(event.venue).slice(0, 180) || null, location: clean(event.location).slice(0, 180) || null, format: ['virtual', 'hybrid'].includes(event.format) ? event.format : 'in_person', image_url: /^https:\/\//.test(String(event.image || '')) ? event.image : null, info_url: /^https:\/\//.test(String(event.url || '')) ? event.url : source.toString(), source_url: source.toString(), source_name: clean(event.sourceName).slice(0, 100) || source.hostname, source_external_id: String(event.id).slice(0, 300), status: 'published', last_synced_at: new Date().toISOString(), updated_at: new Date().toISOString() }))
+    if (!rows.length) return c.json({ error: 'No structured events were found on this page' }, 422)
+    const { error } = await supabase.from('guide_events').upsert(rows, { onConflict: 'guide_id,source_external_id' })
+    if (error) throw error
+    await supabase.from('guide_event_sources').update({ last_synced_at: new Date().toISOString() }).eq('guide_id', guideId)
+    const { data: allEvents, error: listError } = await supabase.from('guide_events').select('*').eq('guide_id', guideId).eq('status', 'published').order('start_at')
+    if (listError) throw listError
+    return c.json({ events: allEvents || [], imported: rows.length, sourceUrl: source.toString() })
+  } catch (error: any) { return c.json({ error: error?.message || 'Event import failed' }, 400) }
+})
+
+app.post('/make-server-ed0fe4c2/guides/import-retreats', async (c) => {
+  try {
+    const accessToken = c.req.header('Authorization')?.replace('Bearer ', '')
+    const { data: { user } } = accessToken ? await supabase.auth.getUser(accessToken) : { data: { user: null } } as any
+    const { guideId, sourceUrl: requestedSourceUrl } = await c.req.json()
+    if (!guideId) return c.json({ error: 'Guardian is required' }, 400)
+    const { data: existing } = await supabase.from('guide_retreats').select('source_url').eq('guide_id', guideId).limit(1).maybeSingle()
+    if (requestedSourceUrl && user?.id !== guideId) return c.json({ error: 'Only this Guardian can change the retreats source URL' }, 403)
+    const sourceUrl = requestedSourceUrl || existing?.source_url
+    if (!sourceUrl) return c.json({ error: 'This Guardian has not added a retreats page yet' }, 404)
+    const source = new URL(sourceUrl)
+    if (source.protocol !== 'https:' || /^(localhost|127\.|0\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(source.hostname)) return c.json({ error: 'Use a public HTTPS retreats page' }, 400)
+    const response = await fetch(source.toString(), { headers: { 'User-Agent': 'Mozilla/5.0 ROUTINE3 retreat importer' }, signal: AbortSignal.timeout(12000) })
+    if (!response.ok) return c.json({ error: `The retreats page returned ${response.status}` }, 400)
+    const html = await response.text()
+    const clean = (value: string) => value.replace(/<[^>]*>/g, ' ').replace(/&amp;/gi, '&').replace(/&#39;|&apos;/gi, "'").replace(/\s+/g, ' ').trim()
+    const title = clean(html.match(/class=["'][^"']*banner__heading[^"']*["'][^>]*>([\s\S]*?)<\/h[1-4]>/i)?.[1] || html.match(/<h[1-4][^>]*>([^<]*retreat[^<]*)<\/h[1-4]>/i)?.[1] || 'Retreat')
+    const description = clean(html.match(/Barbara\s*&amp;\s*Michael[^<]{0,180}/i)?.[0] || html.match(/Barbara\s*&\s*Michael[^<]{0,180}/i)?.[0] || '')
+    const imageRaw = html.match(/(?:src|href)=["'](\/\/[^"']*(?:misty|retreat)[^"']*\.(?:png|jpe?g|webp)[^"']*)/i)?.[1]
+    const bookingUrl = html.match(/href=["'](https:\/\/[^"']+)["'][^>]*>[\s\S]{0,120}(?:Book|Misty)/i)?.[1] || html.match(/href=["'](https:\/\/www\.mmh\.com\.au[^"']*)/i)?.[1]
+    const row = { guide_id: guideId, title, description: description || null, location: /misty/i.test(title) ? 'Misty Mountain, Australia' : null, image_url: imageRaw ? `https:${imageRaw}` : null, booking_url: bookingUrl || source.toString(), source_url: source.toString(), source_external_id: `official:${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`, status: 'published', updated_at: new Date().toISOString() }
+    const { error } = await supabase.from('guide_retreats').upsert(row, { onConflict: 'guide_id,source_external_id' })
+    if (error) throw error
+    const { data } = await supabase.from('guide_retreats').select('*').eq('guide_id', guideId).eq('status', 'published').order('title')
+    return c.json({ retreats: data || [], imported: 1, sourceUrl: source.toString() })
+  } catch (error: any) { return c.json({ error: error?.message || 'Retreat import failed' }, 400) }
+})
+
 const PROTOCOL_ITEM_RULES = `Item rules (strict):
 - Every item must be something the person can tick off at a specific time: give "time" (HH:MM) or an "anchor" ("wake", "bedtime", "before_meal", "after_meal") with "offset_minutes". Never "all day".
 - Action titles are an imperative verb + noun, with a measurable amount when it fits: "Walk 20 minutes", "Run 5 km", "Practise yoga 30 minutes". Never vague ("Practice light exercise", "Be active", "Self-care").

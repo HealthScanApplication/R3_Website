@@ -179,6 +179,30 @@ export function buildProductBuyUrl(product: GuideProductLike, context: BuyLinkCo
     : `https://${product.shop_domain}${page}`;
 }
 
+/** Europe is served by Tre Lune UK; the US and Canada use the US storefront; Australia and New Zealand use AU. */
+function storefrontRegion(locale = typeof navigator === 'undefined' ? '' : navigator.language, regionHint = Intl.DateTimeFormat().resolvedOptions().timeZone): 'AU' | 'UK' | 'US' {
+  const token = `${locale} ${regionHint}`.toLowerCase();
+  if (/(^|[-_\s])(us|ca)([-_\s]|$)|united states|canada|america\//.test(token)) return 'US';
+  if (/(^|[-_\s])(gb|uk|ie)([-_\s]|$)|united kingdom|eurozone|europe\//.test(token)) return 'UK';
+  return 'AU';
+}
+
+/** Returns the regional record, or the base product for globally configured products. */
+export function regionalProduct<T extends GuideProductLike & { regional_storefronts?: Record<string, Partial<GuideProductLike>> | null }>(product: T, locale = typeof navigator === 'undefined' ? '' : navigator.language, regionHint = Intl.DateTimeFormat().resolvedOptions().timeZone): T {
+  const region = storefrontRegion(locale, regionHint);
+  const override = product.regional_storefronts?.[region] || (region === 'UK' ? product.regional_storefronts?.EU : null);
+  return override ? { ...product, ...override } : product;
+}
+
+/** Region-managed products must exist in the selected storefront; they never silently fall back to another country. */
+export function regionalProductOrNull<T extends GuideProductLike & { regional_storefronts?: Record<string, Partial<GuideProductLike>> | null }>(product: T, locale = typeof navigator === 'undefined' ? '' : navigator.language, regionHint = Intl.DateTimeFormat().resolvedOptions().timeZone): T | null {
+  const storefronts = product.regional_storefronts || {};
+  if (!Object.keys(storefronts).length) return product;
+  const region = storefrontRegion(locale, regionHint);
+  const override = storefronts[region] || (region === 'UK' ? storefronts.EU : null);
+  return override ? { ...product, ...override } : null;
+}
+
 /** Products grouped by store, in first-seen order, for "Buy all from …" checkouts. */
 export function groupProductsByShop<T extends GuideProductLike>(products: T[]): { shopDomain: string; products: T[] }[] {
   const groups = new Map<string, T[]>();
