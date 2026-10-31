@@ -43,6 +43,9 @@ import { BrandKitFields } from './BrandKitFields';
 import { AGE_RANGES, LIFE_STAGES } from '../../utils/audienceTaxonomy';
 import { convertGuardianAvatar, generatedImageFile } from '../../utils/guardianImages';
 import { HouseStyleAvatarPanel } from './HouseStyleAvatarPanel';
+import { GuardianOfferShelf } from './GuardianOfferShelf';
+import { TreatsTalksManager } from './TreatsTalksManager';
+import { isTreatKind } from '../../utils/treatOffers';
 import { removeGreenBackground } from '../../utils/chromaKey';
 import { YouTubeClipBackground } from './YouTubeClipBackground';
 import { YouTubeClipFields } from './YouTubeClipFields';
@@ -605,6 +608,8 @@ const supportArt = atlas('/images/guides/tags/support-v3.webp', 3, 2, ['ROUTINE�
 const offerArt: Record<string, TagArt> = atlas('/images/guides/tags/offers-v2.webp', 4, 3, ['Starter guide', 'Recipe pack', 'ROUTINE³', '1:1 call', 'Group call', 'Journey', 'Event', 'eBook', 'Recipe book', 'Team program', 'Upload', 'Paid'], .75);
 const offerTypeArt = atlas('/images/guides/tags/offer-types-v3.webp', 4, 2, ['routine', 'ebook', 'recipe_book', 'routine_guidance', 'festival', 'group_call', 'one_to_one_call', 'in_person']);
 (offerTypeArt as Record<string, TagArt>).community = offerTypeArt.group_call;
+(offerTypeArt as Record<string, TagArt>).treat = offerTypeArt.in_person;
+(offerTypeArt as Record<string, TagArt>).talk = offerTypeArt.group_call;
 const freeOfferArt: Record<FreeOfferKind, TagArt> = {
   ebook: offerArt.eBook,
   one_to_one_call: offerArt['1:1 call'],
@@ -1382,7 +1387,7 @@ const isProtocolKind = (kind?: string) => kind === 'routine' || kind === 'routin
 // Every offer gets a format tag: app-delivered plans are PDF + ROUTINE³, others name their format.
 const APP_PLAN_KINDS = ['routine', 'routine_guidance', 'program', 'journey', 'team_program', 'lead_magnet'];
 const boxTag: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 5, height: 22, padding: '0 8px', border: '1px solid rgba(255,255,255,.78)', borderRadius: 3, background: 'rgba(24,28,25,.2)', WebkitBackdropFilter: 'blur(12px) saturate(1.35)', backdropFilter: 'blur(12px) saturate(1.35)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.16),0 3px 12px rgba(0,0,0,.12)', textShadow: '0 1px 3px rgba(0,0,0,.8)', fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', boxSizing: 'border-box', color: '#FFF', textTransform: 'uppercase', whiteSpace: 'nowrap' };
-const OTHER_FORMATS: Record<string, string> = { lead: 'Lead', ebook: 'Printed PDF', recipe_book: 'Printed PDF', one_to_one_call: '1:1 call', group_call: 'Group call', community: 'Digital community', course: 'Course', in_person: 'In person', festival: 'Event', product: 'Product' };
+const OTHER_FORMATS: Record<string, string> = { treat: 'Treat', talk: 'Talk', lead: 'Lead', ebook: 'Printed PDF', recipe_book: 'Printed PDF', one_to_one_call: '1:1 call', group_call: 'Group call', community: 'Digital community', course: 'Course', in_person: 'In person', festival: 'Event', product: 'Product' };
 function OfferFormatTag({ kind }: { kind?: string }) {
   if (!kind || APP_PLAN_KINDS.includes(kind)) return <ProtocolFormatTag />;
   const name = OTHER_FORMATS[kind] || 'Online';
@@ -1523,7 +1528,10 @@ function ReviewsPanel({ userId, slug }: { userId: string; slug: string }) {
     {reviews.length > 0 && <div style={{ display: 'grid', gap: 6, marginTop: 14 }}><span style={label}>Received</span>{reviews.map((r) => <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, borderTop: `1px solid ${line}`, paddingTop: 8, fontSize: 11, opacity: r.status === 'hidden' ? .5 : 1 }}><span style={{ color: acid }}>{'★'.repeat(r.rating)}</span><span style={{ flex: 1, color: ink }}>{r.body} <span style={{ color: muted }}>· {r.reviewer_name}</span></span><button type="button" onClick={() => toggle(r)} style={small}>{r.status === 'published' ? 'Hide' : 'Show'}</button></div>)}</div>}
   </section>;
 }
-function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, accent, headingFont, background, backgroundIsVideo = false, clips = [], greyscale = false, cards, headlineStyle = 'editorial', guideId, sourceOfferId }: { audience?: string; reviewSummary?: { rating?: number; reviewCount?: number }; headlineStyle?: HeadlineStyle; name: string; avatarUrl?: string | null; specialties: string[]; headline: string; tags: string[]; bio: string; accent: string; headingFont: string; background?: string | null; backgroundIsVideo?: boolean; clips?: YtClip[]; greyscale?: boolean; cards: SiteHeroCard[]; guideId?: string; sourceOfferId?: string | null }) {
+/** The section links under the hero's sign-up. Treats and Talks join them when the Guardian has published some. */
+const HERO_SECTIONS: Array<[string, string]> = [['catalog', 'Routines'], ['shop', 'Products'], ['events', 'Events'], ['retreats', 'Retreats']];
+
+function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, accent, headingFont, background, backgroundIsVideo = false, clips = [], sections = HERO_SECTIONS, greyscale = false, cards, headlineStyle = 'editorial', guideId, sourceOfferId }: { audience?: string; reviewSummary?: { rating?: number; reviewCount?: number }; headlineStyle?: HeadlineStyle; name: string; avatarUrl?: string | null; specialties: string[]; headline: string; tags: string[]; bio: string; accent: string; headingFont: string; background?: string | null; backgroundIsVideo?: boolean; clips?: YtClip[]; sections?: Array<[string, string]>; greyscale?: boolean; cards: SiteHeroCard[]; guideId?: string; sourceOfferId?: string | null }) {
   const [email, setEmail] = useState('');
   const [captureState, setCaptureState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
   const heroMedia = background || cards.find((card) => card.imageUrl)?.imageUrl || null;
@@ -1564,7 +1572,7 @@ function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, a
         </form>
         {captureState === 'error' && <span role="alert" style={{ display: 'block', color: '#FFD0C8', fontFamily: APP.font, fontSize: 12, marginTop: 8 }}>We could not add your email. Please try again.</span>}
         <nav aria-label={`${name} profile sections`} style={{ display: 'flex', gap: 0, flexWrap: 'wrap', marginTop: 14, fontFamily: APP.font }}>
-          {[['catalog','Routines'],['shop','Products'],['events','Events'],['retreats','Retreats']].map(([id, text]) => <a key={id} href={`#${id}`} onClick={goTo(id)} style={{ minHeight: 44, padding: '0 16px', background: 'rgba(8,10,7,.24)', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)', color: '#FFF', border: '1px solid rgba(255,255,255,.72)', marginLeft: -1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{text}</a>)}
+          {sections.map(([id, text]) => <a key={id} href={`#${id}`} onClick={goTo(id)} style={{ minHeight: 44, padding: '0 16px', background: 'rgba(8,10,7,.24)', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)', color: '#FFF', border: '1px solid rgba(255,255,255,.72)', marginLeft: -1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{text}</a>)}
         </nav>
       </div>
     </div>
@@ -1950,7 +1958,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
     </header>}
     <main style={{ paddingTop: publicHeaderStyle === 'hidden' ? 0 : 64 }}>
       {/* Shared with the builder preview, so what Guardians build is what they publish. */}
-      <GuardianSiteHero audience={heroAudience} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={profile.display_name} avatarUrl={profile.avatar_url} specialties={heroSpecialties} headline={heroHeadline} tags={heroTags} bio={heroBio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} clips={clipsFromLinks(socials.theme_background_clips)} greyscale={publicGreyscale}
+      <GuardianSiteHero audience={heroAudience} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={profile.display_name} avatarUrl={profile.avatar_url} specialties={heroSpecialties} headline={heroHeadline} tags={heroTags} bio={heroBio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} clips={clipsFromLinks(socials.theme_background_clips)} sections={[...HERO_SECTIONS.slice(0, 3), ...(publishedOffers.some((offer) => offer.kind === 'talk') ? [['talks', 'Talks'] as [string, string]] : []), ...(publishedOffers.some((offer) => offer.kind === 'treat') ? [['treats', 'Treats'] as [string, string]] : []), HERO_SECTIONS[3]]} greyscale={publicGreyscale}
         guideId={profile.user_id} sourceOfferId={heroSourceOfferId}
         cards={publishedRamps.length ? (onOfferPath ? [selectedRamp!] : publishedRamps).slice(0, 1).map((ramp) => { const offer = publishedOffers.find((item) => item.id === ramp.offer_ids[0]); return { key: ramp.id, offerTitle: offer?.title || ramp.name, eyebrow: ramp.problem || undefined, title: customerFacingOfferTitle(offer?.title || ramp.name), copy: offer?.description || '', kind: offer?.kind, price: offer?.access_model === 'free' ? 'Free' : undefined, imageUrl: offer?.cover_url, href: pathSlug === encodeURIComponent(ramp.slug) ? '#offers' : `/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}` }; }) : freeOffers.slice(0, 1).map((offer) => ({ key: offer.id, offerTitle: offer.title, eyebrow: profile.specialties.slice(0, 2).join(' · '), title: customerFacingOfferTitle(offer.title), copy: offer.description || '', kind: offer.kind, price: 'Free', imageUrl: offer.cover_url, href: '#start' }))} />
       {publicBrands.filter((brand) => brand.kind === 'business').length > 0 && <section aria-labelledby="guardian-brands-title" style={{ padding: `clamp(54px,7vw,100px) ${PAGE_X}`, background: '#11120F', color: ink }}>
@@ -1964,6 +1972,8 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
       <GuardianOfferCatalog profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} categoryOrder={socials.protocol_filter_order} />
       <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} protocols={guardianProtocols} localePreference={localePreference} categoryOrder={socials.product_filter_order} />
       <GuardianEvents profile={profile} events={events} sourceUrl={eventSource} canEditSource={isSignedIn && user?.id === profile.user_id} onImported={setEvents} onSourceChanged={setEventSource} />
+      <GuardianOfferShelf kind="talk" profile={profile} offers={offers} pagePadding={PAGE_X} />
+      <GuardianOfferShelf kind="treat" profile={profile} offers={offers} pagePadding={PAGE_X} />
       <GuardianRetreats profile={profile} retreats={retreats} />
       {reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}
       <GuardianFunnel key={selectedRamp?.id || 'default'} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} />
@@ -4778,7 +4788,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
         {tab === 'community' && user && <WorkspaceCommunity profile={profile} userId={user.id} />}
         {tab === 'library' && user && <GuideLibrary guideId={user.id} selectedIds={selectedLibraryIds} onSelectedIds={setSelectedLibraryIds} onUse={(destination, sources) => { setBuilderLibrarySources(sources); setTab(destination === 'protocol' ? 'protocols' : 'offer_builder'); }} />}
         {(tab === 'offer_builder' || tab === 'value_ramps' || tab === 'products') && !protocolId && !recipeId && <div role="tablist" aria-label="Offers" style={{ display: 'inline-flex', border: `1px solid ${line}`, marginBottom: 18 }}>{([['offer_builder', 'Offer builder'], ['value_ramps', 'Offer paths'], ['products', 'My products']] as const).map(([id, text], index) => <button type="button" role="tab" key={id} aria-selected={tab === id} onClick={() => setTab(id)} style={{ height: 36, padding: '0 16px', border: 0, borderLeft: index ? `1px solid ${line}` : 0, background: tab === id ? ink : 'transparent', color: tab === id ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer' }}>{text}</button>)}</div>}
-        {tab === 'offer_builder' && <OfferBuilder profile={profile} protocols={protocols} offers={offers} recipes={recipes} librarySources={builderLibrarySources} onOpenProtocols={() => setTab('protocols')} onOpenContent={() => setTab('content')} onCreated={(offer) => setOffers((current) => [offer, ...current])} onUpdated={(offer) => setOffers((current) => current.map((item) => item.id === offer.id ? offer : item))} onDeleted={(id) => setOffers((current) => current.filter((offer) => offer.id !== id))} />}
+        {tab === 'offer_builder' && <><OfferBuilder profile={profile} protocols={protocols} offers={offers.filter((offer) => !isTreatKind(offer.kind))} recipes={recipes} librarySources={builderLibrarySources} onOpenProtocols={() => setTab('protocols')} onOpenContent={() => setTab('content')} onCreated={(offer) => setOffers((current) => [offer, ...current])} onUpdated={(offer) => setOffers((current) => current.map((item) => item.id === offer.id ? offer : item))} onDeleted={(id) => setOffers((current) => current.filter((offer) => offer.id !== id))} /><TreatsTalksManager profile={profile} offers={offers} onChange={setOffers} /></>}
         {tab === 'products' && user && <GuardianProducts guideId={user.id} guardianSlug={profile.slug} commissionPercent={profile.commission_percent} protocols={protocols} onOpenContentBuilder={() => setTab('content')} />}
         {tab === 'leads' && !protocolId && !recipeId && user && <ReviewsPanel userId={user.id} slug={profile.slug} />}
         {selectedLead && user && <LeadProfileModal lead={selectedLead} guideId={user.id} authorId={user.id} onClose={() => setSelectedLead(null)} />}

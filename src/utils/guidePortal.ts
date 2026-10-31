@@ -177,7 +177,7 @@ export async function importGuideEvents(guideId: string, sourceUrl?: string): Pr
 export interface GuideOffer {
   id: string;
   guide_id: string;
-  kind: 'lead_magnet' | 'ebook' | 'recipe_book' | 'routine' | 'routine_guidance' | 'one_to_one_call' | 'group_call' | 'community' | 'course' | 'in_person' | 'journey' | 'festival' | 'team_program' | 'product' | 'program';
+  kind: 'lead_magnet' | 'ebook' | 'recipe_book' | 'routine' | 'routine_guidance' | 'one_to_one_call' | 'group_call' | 'community' | 'course' | 'in_person' | 'journey' | 'festival' | 'team_program' | 'product' | 'program' | 'treat' | 'talk';
   title: string;
   description: string | null;
   cover_url?: string | null;
@@ -585,7 +585,7 @@ export async function createGuideOffer(guideId: string, offer: Pick<GuideOffer, 
   return data as GuideOffer;
 }
 
-export async function updateGuideOfferDetails(guideId: string, offerId: string, patch: Partial<Pick<GuideOffer, 'title' | 'description' | 'price_cents' | 'currency' | 'access_model' | 'status' | 'cover_url'>>): Promise<GuideOffer> {
+export async function updateGuideOfferDetails(guideId: string, offerId: string, patch: Partial<Pick<GuideOffer, 'title' | 'description' | 'price_cents' | 'currency' | 'access_model' | 'status' | 'cover_url' | 'booking_url'>>): Promise<GuideOffer> {
   const { data, error } = await db().from('guide_offers').update(patch).eq('id', offerId).eq('guide_id', guideId).select().single();
   if (error) throw error;
   return data as GuideOffer;
