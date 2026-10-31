@@ -11,6 +11,7 @@
 import React, { Suspense, useEffect, useState } from 'react';
 import { Moon, Sun } from 'lucide-react';
 import { CatalogQADashboard } from './CatalogQADashboard';
+import { SocialAccountsPanel } from './SocialAccountsPanel';
 import './adminTheme.css';
 
 // Keep SimplifiedAdminPanel lazy (it's large) — same code-split as before.
@@ -18,7 +19,7 @@ const SimplifiedAdminPanel = React.lazy(() =>
   import('../SimplifiedAdminPanel').then((m) => ({ default: m.SimplifiedAdminPanel })),
 );
 
-type AdminTab = 'panel' | 'qa';
+type AdminTab = 'panel' | 'qa' | 'social';
 
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
@@ -52,6 +53,7 @@ export function AdminWorkspace({ user, accessToken }: { user: any; accessToken: 
         <div className="flex">
           <TabButton active={tab === 'panel'} onClick={() => setTab('panel')}>Admin Panel</TabButton>
           <TabButton active={tab === 'qa'} onClick={() => setTab('qa')}>Data QA</TabButton>
+          <TabButton active={tab === 'social'} onClick={() => setTab('social')}>Social Accounts</TabButton>
         </div>
         <button type="button" onClick={() => setDark((d) => !d)} className="sb-btn sb-btn-sm" style={{ marginBottom: 6 }}
           title={dark ? 'Switch to light mode' : 'Switch to dark mode'}>
@@ -64,6 +66,8 @@ export function AdminWorkspace({ user, accessToken }: { user: any; accessToken: 
         <Suspense fallback={<div className="p-6 text-sm text-gray-400">Loading admin…</div>}>
           <SimplifiedAdminPanel user={user} accessToken={accessToken} initialSearch={jumpSearch} />
         </Suspense>
+      ) : tab === 'social' ? (
+        <SocialAccountsPanel />
       ) : (
         <CatalogQADashboard onOpenInAdmin={openInAdmin} />
       )}
