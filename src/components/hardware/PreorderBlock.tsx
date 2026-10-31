@@ -174,7 +174,7 @@ export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig
     <div
       data-variant={variant}
       style={hero
-        ? { display: 'grid', gap: 12, color: ed.ink, maxWidth: 460 }
+        ? { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 12, color: ed.ink, maxWidth: 460 }
         : { display: 'grid', gap: 20, color: ed.onDark }}
     >
       {hero ? (
@@ -215,7 +215,7 @@ export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig
       )}
 
       {step === 'details' && (
-        <form onSubmit={begin} aria-label="Hardware preorder" style={{ display: 'grid', gap: hero ? 10 : 14 }}>
+        <form onSubmit={begin} aria-label="Hardware preorder" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: hero ? 10 : 14 }}>
           <label htmlFor="preorder-email" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Email address</label>
           {hero ? (
             <div style={{ display: 'flex', width: '100%', alignItems: 'center' }}>

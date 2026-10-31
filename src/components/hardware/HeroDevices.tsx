@@ -22,26 +22,23 @@ function webglAvailable(): boolean {
 }
 
 /**
- * The /ring hero devices. The drawn art paints first; the three.js scene fades in over it once its first frame has
- * rendered, and the drawn layer is removed after the fade. Any failure leaves the drawn art in place.
+ * The /ring hero devices. The stage stays empty while the three.js scene loads (no drawn placeholder to flash), then
+ * the scene fades in once its first frame has rendered. Only when WebGL is missing or the scene fails does the drawn
+ * art appear, so the hero is never left without devices.
  */
 export function HeroDevices() {
   const sceneRef = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<Phase>('loading');
-  const [drawnMounted, setDrawnMounted] = useState(true);
   const [reduced] = useState(prefersReducedMotion);
 
   useEffect(() => {
     let cancelled = false;
     let handle: HeroSceneHandle | null = null;
-    let timer: ReturnType<typeof setTimeout> | undefined;
     const fail = () => { if (!cancelled) setPhase('failed'); };
     if (!webglAvailable()) { fail(); return () => { cancelled = true; }; }
     const onReady = () => {
       if (cancelled) return;
       setPhase('ready');
-      if (reduced) setDrawnMounted(false);
-      else timer = setTimeout(() => { if (!cancelled) setDrawnMounted(false); }, FADE_MS);
     };
     import('./scene/heroScene')
       .then(m => m.createHeroScene(sceneRef.current as HTMLElement, { ringUrl: RING_URL, reducedMotion: reduced, onReady }))
@@ -52,7 +49,6 @@ export function HeroDevices() {
       .catch(fail);
     return () => {
       cancelled = true;
-      if (timer) clearTimeout(timer);
       handle?.dispose();
       handle = null;
     };
@@ -64,7 +60,7 @@ export function HeroDevices() {
     : {};
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }} {...a11y}>
-      {drawnMounted && (
+      {phase === 'failed' && (
         <div style={{ display: 'flex', width: '100%', height: '100%', alignItems: 'center' }}>
           <div style={{ flex: 1, minWidth: 0 }}><RingArt transparent /></div>
           <div style={{ flex: 1, minWidth: 0 }}><ClipArt transparent /></div>

@@ -59,7 +59,7 @@ export function HardwarePreorder() {
       </div>
       <style>{`@supports not (min-height: 100svh) { #hardware-preorder, #hardware-preorder > div { min-height: 100vh !important; } }
 .r3-hw-teaser-devices svg { width: 100%; height: 100%; display: block; }
-@media (max-width: 800px) { .r3-hw-teaser-grid { grid-template-columns: 1fr !important; align-content: end; } .r3-hw-teaser-devices { aspect-ratio: 1 / 1 !important; min-height: 0 !important; max-height: 52svh; } }`}</style>
+@media (max-width: 800px) { .r3-hw-teaser-grid { grid-template-columns: minmax(0, 1fr) !important; align-content: end; } .r3-hw-teaser-devices { aspect-ratio: 1 / 1 !important; min-height: 0 !important; max-height: 52svh; } }`}</style>
     </section>
   );
 }

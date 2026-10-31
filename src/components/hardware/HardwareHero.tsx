@@ -36,10 +36,10 @@ export function HardwareHero() {
 
         <div className="r3-hw-hero-grid" style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 0.9fr)', gap: 'clamp(28px, 5vw, 80px)', alignItems: 'end', paddingTop: 'clamp(24px, 5vh, 80px)' }}>
           <div style={{ alignSelf: 'center' }}>
-            <h1 id="hardware-hero-title" style={{ ...coverStyle, color: '#FFFFFF', textShadow: '0 4px 24px rgba(0,0,0,0.38)' }}>
+            <h1 id="hardware-hero-title" style={{ ...coverStyle, color: ed.ink }}>
               <span style={{ display: 'block' }}>
                 Capture your{' '}
-                <span style={{ fontStyle: 'italic', color: ed.ink, textShadow: 'none', transition: reduceMotion ? undefined : 'opacity 320ms ease', opacity: wordVisible ? 1 : 0 }}>
+                <span style={{ display: 'block', fontStyle: 'italic', color: '#FFFFFF', textShadow: '0 4px 24px rgba(0,0,0,0.38)', transition: reduceMotion ? undefined : 'opacity 320ms ease', opacity: wordVisible ? 1 : 0 }}>
                   {HERO_FEATURE_WORDS[reduceMotion ? 0 : wordIndex]}
                 </span>
               </span>
@@ -56,7 +56,7 @@ export function HardwareHero() {
         </div>
       </div>
       <style>{`@supports not (min-height: 100svh) { #hardware-hero, #hardware-hero > div { min-height: 100vh !important; } }
-@media (max-width: 800px) { .r3-hw-hero-grid { grid-template-columns: 1fr !important; align-content: end; } .r3-hw-hero-devices { aspect-ratio: 1 / 1 !important; min-height: 0 !important; max-height: 52svh; } }`}</style>
+@media (max-width: 800px) { .r3-hw-hero-grid { grid-template-columns: minmax(0, 1fr) !important; align-content: end; } .r3-hw-hero-devices { aspect-ratio: 1 / 1 !important; min-height: 0 !important; max-height: 52svh; } }`}</style>
     </section>
   );
 }

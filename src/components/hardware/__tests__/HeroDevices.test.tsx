@@ -43,10 +43,10 @@ afterEach(() => {
 });
 
 describe('HeroDevices', () => {
-  it('first paint shows both drawn arts and an invisible scene layer over them', async () => {
+  it('first paint shows no drawn placeholder (nothing to flash), only an invisible scene layer', async () => {
     const { container } = render(<HeroDevices />);
-    expect(screen.getByRole('img', { name: RING })).toBeTruthy();
-    expect(screen.getByRole('img', { name: CLIP })).toBeTruthy();
+    expect(screen.queryByRole('img', { name: RING })).toBeNull();
+    expect(screen.queryByRole('img', { name: CLIP })).toBeNull();
     const root = container.firstElementChild as HTMLElement;
     expect(root.style.position).toBe('relative');
     expect(scene()!.style.opacity).toBe('0');
@@ -56,7 +56,9 @@ describe('HeroDevices', () => {
   });
 
   it('renders the fallback arts transparent (no full-bleed background rect)', async () => {
+    h.create.mockRejectedValue(new Error('no gl'));
     render(<HeroDevices />);
+    await settle();
     for (const name of [RING, CLIP]) {
       const svg = screen.getByRole('img', { name });
       expect(svg.querySelector('svg > rect, :scope > rect')).toBeNull();
@@ -72,23 +74,18 @@ describe('HeroDevices', () => {
     expect(captured!.el).toBe(scene());
   });
 
-  it('on ready fades the scene in, then unmounts the drawn layer after 500 ms', async () => {
+  it('on ready fades the scene in, with no drawn art at any point', async () => {
     render(<HeroDevices />);
     await settle();
-    vi.useFakeTimers();
     act(() => captured!.opts.onReady());
     expect(scene()!.style.opacity).toBe('1');
     expect(scene()!.style.transition).toMatch(/500ms/);
-    expect(screen.queryByRole('img', { name: RING })).toBeTruthy();
-    act(() => { vi.advanceTimersByTime(499); });
-    expect(screen.queryByRole('img', { name: RING })).toBeTruthy();
-    act(() => { vi.advanceTimersByTime(1); });
     expect(screen.queryByRole('img', { name: RING })).toBeNull();
     expect(screen.queryByRole('img', { name: CLIP })).toBeNull();
     expect(screen.getByRole('img', { name: 'R³ Note and R³ Clip, interactive 3D view; drag to turn' })).toBeTruthy();
   });
 
-  it('under reduced motion passes reducedMotion and unmounts the drawn layer immediately', async () => {
+  it('under reduced motion passes reducedMotion and shows the scene without a fade', async () => {
     stubMotion(true);
     render(<HeroDevices />);
     await settle();
