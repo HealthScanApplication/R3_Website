@@ -39,6 +39,20 @@ describe('UseCases', () => {
     expect(screen.queryByTestId(`usecase-placeholder-${u.id}`)).toBeNull();
   });
 
+  it('each card has a how box: what you do → what the devices do, then the gesture line', () => {
+    render(<UseCases />);
+    for (const u of USE_CASES) {
+      expect(u.how.from.length).toBeGreaterThan(0);
+      expect(u.how.to.length).toBeGreaterThan(0);
+      const box = screen.getByTestId(`usecase-how-${u.id}`);
+      const icons = [...box.querySelectorAll('[data-how-icon]')].map(e => e.getAttribute('data-how-icon'));
+      expect(icons).toEqual([...u.how.from, ...u.how.to]);
+      expect(box.textContent).toBe(u.gesture);
+    }
+    const meal = screen.getByTestId('usecase-how-meal');
+    expect([...meal.querySelectorAll('[data-how-icon]')].map(e => e.getAttribute('data-how-icon'))).toEqual(['ring-tap', 'camera', 'mic']);
+  });
+
   it('every use case ships with its own still', () => {
     for (const u of USE_CASES) expect(u.image).toBe(`/images/hardware/use-cases/${u.id}.webp`);
   });

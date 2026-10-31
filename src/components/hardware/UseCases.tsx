@@ -1,6 +1,7 @@
 import React from 'react';
 import { DISPLAY, GRO, ed } from '../../config/editorialTheme';
 import { USE_CASES, USE_CASES_TITLE, type UseCase } from './copy';
+import { HowStrip } from './HowStrip';
 
 const ACCENT = '#C7D99F';
 const smallCaps = { fontFamily: GRO, fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase' } as const;
@@ -35,7 +36,7 @@ export function UseCaseCard({ item }: { item: UseCase }) {
     <article style={{ borderTop: `1px solid ${ed.onDarkHair}`, paddingTop: 20 }}>
       <UseCaseMedia item={item} />
       <h3 style={{ margin: '0 0 10px', fontFamily: DISPLAY, fontSize: 'clamp(1.4rem, 1.9vw, 1.9rem)', fontWeight: 400, lineHeight: 1.1 }}>{item.title}</h3>
-      <p style={{ ...smallCaps, margin: '0 0 12px', lineHeight: 1.5, color: ACCENT }}>{item.gesture}</p>
+      <HowStrip item={item} textStyle={{ ...smallCaps, lineHeight: 1.5, color: ACCENT }} />
       <p style={{ margin: 0, fontFamily: GRO, fontSize: 16, lineHeight: 1.55, color: ed.onDarkSoft }}>{item.result}</p>
     </article>
   );
