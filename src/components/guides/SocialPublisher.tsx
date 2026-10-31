@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ComponentType } from 'react';
 import { CalendarClock, Check, ExternalLink, Facebook, Instagram, Loader2, Youtube } from 'lucide-react';
 import {
-  beginGuideSocialOAuth, createGuideSocialPost, listGuideBrands, listGuideSocialConnections, listGuideSocialPosts,
+  beginGuideSocialOAuth, completeGuideSocialOAuth, createGuideSocialPost, listGuideBrands, listGuideSocialConnections, listGuideSocialPosts,
   type GuideBrand, type GuideProfile, type GuideSocialConnection, type GuideSocialPost, type SocialPlatform,
 } from '../../utils/guidePortal';
 
@@ -35,6 +35,23 @@ export function SocialPublisher({ profile }: { profile: GuideProfile }) {
     setBrands(b); setConnections(c); setPosts(p); setBrandId((current) => current || b.find((x) => x.is_primary)?.id || b[0]?.id || '');
   };
   useEffect(() => { reload().catch((error) => setMessage(error.message)); }, [profile.user_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Returning from a platform: finish the connection as this signed-in user, then clean the URL.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get('social');
+    if (!result) return;
+    const state = params.get('social_state'), code = params.get('social_code'), failure = params.get('social_error');
+    ['social', 'platform', 'social_state', 'social_code', 'social_error'].forEach((k) => params.delete(k));
+    window.history.replaceState(null, '', `${window.location.pathname}${params.size ? `?${params}` : ''}${window.location.hash}`);
+    if (result === 'error') { setMessage(failure || 'The platform did not allow the connection.'); return; }
+    if (result === 'pending' && state && code) {
+      setBusy('connect'); setMessage('Finishing connection…');
+      completeGuideSocialOAuth(state, code)
+        .then((done) => { setMessage(`${done.account_label || 'Account'} connected.`); return reload(); })
+        .catch((error) => setMessage(error instanceof Error ? error.message : 'Could not finish connecting the account.'))
+        .finally(() => setBusy(''));
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const connection = useMemo(() => new Map(connections.filter((x) => !brandId || x.brand_id === brandId).map((x) => [x.platform, x])), [connections, brandId]);
   const connect = async (platform: SocialPlatform) => {
     setBusy(platform); setMessage('');
