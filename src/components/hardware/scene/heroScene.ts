@@ -248,7 +248,7 @@ export async function createHeroScene(container: HTMLElement, options: HeroScene
       spin.rotation.y = (elapsed * SPIN_RATE) % (Math.PI * 2);
       if (!reducedMotion && elapsed - lastPaint >= 1 / TEXTURE_FPS) { paint(elapsed); lastPaint = elapsed; }
       renderer.render(scene, camera);
-      if (!ready) { ready = true; options.onReady?.(); }
+      if (!ready) { ready = true; try { options.onReady?.(); } catch { /* a throwing callback must not stop the loop */ } }
       // Auto-motion keeps the loop alive; under reduced motion only a drag (and its ease back) does.
       if (inView && pageVisible() && (!reducedMotion || !settled())) request();
     }

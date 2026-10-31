@@ -127,6 +127,16 @@ describe('createHeroScene', () => {
     expect(onReady).toHaveBeenCalledTimes(1);
   });
 
+  it('a throwing onReady cannot stop the render loop', async () => {
+    const onReady = vi.fn(() => { throw new Error('boom'); });
+    await createHeroScene(container, { ringUrl: '/r.stl', reducedMotion: false, onReady });
+    expect(() => flush(16)).not.toThrow();
+    expect(onReady).toHaveBeenCalledTimes(1);
+    expect(frames).toHaveLength(1);
+    flush(32);
+    expect(h.renderers[0].render).toHaveBeenCalledTimes(2);
+  });
+
   it('puts the ring, the clip on a pivot and the screen emissive level in the scene', async () => {
     await createHeroScene(container, { ringUrl: '/r.stl', reducedMotion: false });
     flush();
