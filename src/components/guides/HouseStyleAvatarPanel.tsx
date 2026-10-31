@@ -7,6 +7,7 @@
  * Presentational: GuidePortal owns the state and the handlers (convert, apply, upload), this only lays them out.
  */
 import { Loader2, Sparkles, Upload } from 'lucide-react';
+import { SaveButton, type SaveState } from './SaveButton';
 
 const ink = '#F5F2EA', muted = '#B8B6AF', line = 'rgba(245,242,234,0.24)', black = '#090A08', panel = '#11120F', acid = '#C7D8A3';
 const sans = '"EuclidCircularA", "DM Sans", "Helvetica Neue", Arial, sans-serif';
@@ -41,6 +42,9 @@ export interface HouseStyleAvatarPanelProps {
   onUpload: () => void;
   onApply: () => void;
   onCancel: () => void;
+  /** Saves the profile (including this avatar) as a draft. */
+  save?: SaveState;
+  onSave?: () => void;
 }
 
 /** One square picture with a caption; `tag` is the small badge laid over the corner (Example, Test image). */
@@ -56,7 +60,7 @@ function Shot({ src, alt, caption, tag, grey, size }: { src: string; alt: string
   );
 }
 
-export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, converting, applying, uploading, dragging, resultUrl, resultMock, error, onCreate, onUpload, onApply, onCancel }: HouseStyleAvatarPanelProps) {
+export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, converting, applying, uploading, dragging, resultUrl, resultMock, error, onCreate, onUpload, onApply, onCancel, save, onSave }: HouseStyleAvatarPanelProps) {
   const busy = converting || applying;
   const noteId = `${id}-note`;
   const featured = resultUrl ? sourceUrl : currentUrl || sourceUrl;
@@ -99,6 +103,7 @@ export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, 
           </>
         )}
       </div>
+      {save && onSave && <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}><SaveButton state={save} onSave={onSave} label="Save profile image" /></div>}
       <p style={{ color: muted, fontSize: 11, lineHeight: 1.5, margin: '10px 0 0' }}>
         {dragging ? 'Drop to upload' : needsUpload ? 'This is a stock image. Replace it with your own photo to create your house style, or drag one here.' : 'or drag a photo here'}
       </p>
