@@ -9,12 +9,40 @@ const smallCaps = { fontFamily: GRO, fontSize: 11, fontWeight: 700, letterSpacin
 const GRAIN = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.55 0"/></filter><rect width="100%" height="100%" filter="url(#n)"/></svg>')}")`;
 const media = { position: 'relative', aspectRatio: '16 / 9', overflow: 'hidden', margin: '0 0 20px' } as const;
 
-/** The 16:9 picture: the item's image, or a styled placeholder (never a broken image) until one exists. */
+const fill = { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' } as const;
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+/** The card's looping clip over its still: plays muted only while on screen; the still stays as the poster. */
+function UseCaseVideo({ item }: { item: UseCase }) {
+  const ref = React.useRef<HTMLVideoElement>(null);
+  React.useEffect(() => {
+    const v = ref.current;
+    if (!v || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) v.play().catch(() => {});
+      else v.pause();
+    }, { threshold: 0.35 });
+    io.observe(v);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <div style={media}>
+      <video ref={ref} src={item.video} poster={item.image} muted loop playsInline preload="none" aria-label={item.scene} style={fill} />
+    </div>
+  );
+}
+
+/** The 16:9 picture: the item's clip, its image, or a styled placeholder (never a broken image) until one exists. */
 function UseCaseMedia({ item }: { item: UseCase }) {
+  if (item.video && item.image && !prefersReducedMotion()) return <UseCaseVideo item={item} />;
   if (item.image) {
     return (
       <div style={media}>
-        <img src={item.image} alt={item.scene} loading="lazy" decoding="async" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        <img src={item.image} alt={item.scene} loading="lazy" decoding="async" style={fill} />
       </div>
     );
   }

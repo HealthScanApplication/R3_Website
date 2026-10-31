@@ -30,13 +30,40 @@ describe('UseCases', () => {
   });
 
   it('a card with an image renders <img alt=scene>', () => {
-    const u = { ...USE_CASES[1], image: '/images/r3/activity.jpg' };
+    const u = { ...USE_CASES[1], image: '/images/r3/activity.jpg', video: undefined };
     const { container } = render(<UseCaseCard item={u} />);
     const img = container.querySelector('img') as HTMLImageElement;
     expect(img).toBeTruthy();
     expect(img.getAttribute('alt')).toBe(u.scene);
     expect(img.getAttribute('src')).toBe(u.image);
     expect(screen.queryByTestId(`usecase-placeholder-${u.id}`)).toBeNull();
+  });
+
+  it('a card with a clip renders a muted looping <video> with the still as poster, lazily loaded', () => {
+    const u = { ...USE_CASES[2], video: '/videos/use-cases/task.mp4' };
+    const { container } = render(<UseCaseCard item={u} />);
+    const v = container.querySelector('video') as HTMLVideoElement;
+    expect(v).toBeTruthy();
+    expect(v.getAttribute('src')).toBe(u.video);
+    expect(v.getAttribute('poster')).toBe(u.image);
+    expect(v.muted).toBe(true);
+    expect(v.loop).toBe(true);
+    expect(v.hasAttribute('playsinline')).toBe(true);
+    expect(v.getAttribute('preload')).toBe('none');
+    expect(v.getAttribute('aria-label')).toBe(u.scene);
+  });
+
+  it('with reduced motion a card with a clip shows only its still', () => {
+    const orig = window.matchMedia;
+    window.matchMedia = ((q: string) => ({ matches: q.includes('reduce'), media: q, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
+    try {
+      const u = { ...USE_CASES[2], video: '/videos/use-cases/task.mp4' };
+      const { container } = render(<UseCaseCard item={u} />);
+      expect(container.querySelector('video')).toBeNull();
+      expect(container.querySelector('img')?.getAttribute('src')).toBe(u.image);
+    } finally {
+      window.matchMedia = orig;
+    }
   });
 
   it('each card has a how box: what you do → what the devices do, then the gesture line', () => {
@@ -54,7 +81,10 @@ describe('UseCases', () => {
   });
 
   it('every use case ships with its own still', () => {
-    for (const u of USE_CASES) expect(u.image).toBe(`/images/hardware/use-cases/${u.id}.webp`);
+    for (const u of USE_CASES) {
+      expect(u.image).toBe(`/images/hardware/use-cases/${u.id}.webp`);
+      expect(u.video).toBe(`/videos/use-cases/${u.id}.mp4`);
+    }
   });
 
   it('lays out 3 / 2 / 1 columns with scoped media queries', () => {
