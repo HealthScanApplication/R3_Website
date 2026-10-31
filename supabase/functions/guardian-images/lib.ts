@@ -6,9 +6,11 @@
 // function.
 
 export const OPENAI_BASE = 'https://api.openai.com/v1';
-export const DEFAULT_MODEL = 'gpt-image-1';
-/** The price list below is gpt-image-1's, so only that model is accepted; any other configured model falls back to it. */
-export const SUPPORTED_MODELS = ['gpt-image-1'];
+// gpt-image-1 was shut down by OpenAI on 2026-10-23 (requests now fail with "The model `gpt-image-1` does not exist"), so the
+// default is its successor. Check OpenAI's deprecations page before adding another model here.
+export const DEFAULT_MODEL = 'gpt-image-2';
+/** The price list below is an estimate for this model family, so only these models are accepted; any other configured model falls back to the default. */
+export const SUPPORTED_MODELS = ['gpt-image-2'];
 export const pickModel = (configured?: string | null) => (configured && SUPPORTED_MODELS.includes(configured) ? configured : DEFAULT_MODEL);
 export const PROMPT_MAX = 4000;
 
@@ -18,10 +20,10 @@ export type Quality = 'low' | 'medium' | 'high';
 export const QUALITIES: Quality[] = ['low', 'medium', 'high'];
 export type Source = 'house' | 'own';
 
-/** The nearest size gpt-image-1 renders; the post's frame crops it (cover-fit), and the prompt warns of the crop. */
+/** The nearest size gpt-image-2 renders; the post's frame crops it (cover-fit), and the prompt warns of the crop. */
 export const SIZE: Record<Aspect, '1024x1536' | '1024x1024' | '1536x1024'> = { '9:16': '1024x1536', '4:5': '1024x1536', '1:1': '1024x1024', '16:9': '1536x1024' };
 
-/** Published per-image prices for gpt-image-1 (USD), shown before generating. Square is cheaper than portrait or
+/** Estimated per-image prices for gpt-image-2 (USD), shown before generating. Square is cheaper than portrait or
  *  landscape. Approximate: OpenAI bills tokens, and these are its own per-image figures. */
 export const PRICE_USD: Record<Quality, { square: number; wide: number }> = {
   low: { square: 0.011, wide: 0.016 },

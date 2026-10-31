@@ -541,6 +541,6 @@ function ImageGenerator({ aspect, defaultPrompt, madeFor, onImage, ink, muted, l
       {busy ? 'Working…' : !status ? 'Loading…' : !status.live ? 'Generate test image · free' : `Generate image · ${price}${source === 'own' ? ' on your OpenAI account' : ''}`}
     </button>
     {error && <span role="alert" style={{ color: '#E8A39B', fontSize: 11 }}>{error}</span>}
-    <span style={{ color: ink, opacity: 0.5, fontSize: 9.5 }}>Prices are OpenAI’s published per-image figures for {status?.model || 'gpt-image-1'}.</span>
+    <span style={{ color: ink, opacity: 0.5, fontSize: 9.5 }}>Prices are OpenAI’s published per-image figures for {status?.model || 'gpt-image-2'}.</span>
   </div>;
 }

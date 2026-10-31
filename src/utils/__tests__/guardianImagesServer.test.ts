@@ -10,7 +10,7 @@ describe('guardian-images lib', () => {
     const r = gi.shapeImageRequest({ prompt: '  A calm   evening at home.\nComposition: subject upper right. ', aspect_ratio: '9:16', quality: 'medium', source: 'house' });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.body).toEqual({ model: 'gpt-image-1', prompt: 'A calm evening at home.\nComposition: subject upper right.', size: '1024x1536', quality: 'medium', n: 1, output_format: 'webp', moderation: 'auto' });
+    expect(r.body).toEqual({ model: 'gpt-image-2', prompt: 'A calm evening at home.\nComposition: subject upper right.', size: '1024x1536', quality: 'medium', n: 1, output_format: 'webp', moderation: 'auto' });
     expect(r.usd).toBe(0.063);
     expect(gi.shapeImageRequest({ prompt: 'A square scene of morning light.', aspect_ratio: '1:1', quality: 'low', source: 'own' })).toMatchObject({ ok: true, usd: 0.011, body: { size: '1024x1024' } });
     expect(gi.shapeImageRequest({ prompt: 'A wide scene of morning light.', aspect_ratio: '16:9', source: 'own' })).toMatchObject({ ok: true, quality: 'medium', body: { size: '1536x1024' } });
@@ -65,7 +65,9 @@ describe('guardian-images lib', () => {
 
 import { pickModel, DEFAULT_MODEL } from '../../../supabase/functions/guardian-images/lib';
 it('only accepts the model the price list belongs to', () => {
-  expect(pickModel('gpt-image-1')).toBe('gpt-image-1');
+  expect(DEFAULT_MODEL).toBe('gpt-image-2');
+  expect(pickModel('gpt-image-2')).toBe('gpt-image-2');
+  expect(pickModel('gpt-image-1')).toBe(DEFAULT_MODEL); // shut down by OpenAI on 2026-10-23
   expect(pickModel('gpt-image-1.5')).toBe(DEFAULT_MODEL);
   expect(pickModel(undefined)).toBe(DEFAULT_MODEL);
 });
