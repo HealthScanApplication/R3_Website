@@ -14,7 +14,7 @@
  * thin dark bezel at the face's edge, `screenBezel`); the screen is a MeshBasicMaterial (the artifact's `displayMat`) showing the
  * caller's texture (the heartbeat, retroScreen.ts, not navigation), with UVs mapping the 27.6 mm square onto
  * [0,1]²; the bracelet's hole is measured (`loopHole`) and exposed as `group.userData.hole` (a Box3 in the group's
- * millimetres, hole axis `userData.holeAxis` = 'x') so the scene can nest the R³ Note ring inside it.
+ * millimetres, hole axis `userData.holeAxis` = 'x') so the scene can nest the R³ Ring ring inside it.
  */
 import * as THREE from 'three';
 import { finishSpec, type Finish } from './finishes';

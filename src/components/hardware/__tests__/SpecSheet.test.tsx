@@ -17,9 +17,9 @@ describe('SpecSheet', () => {
     expect(screen.getByText('Planned specifications. Final details are confirmed before manufacturing.')).toBeTruthy();
   });
 
-  it('lists the R³ Note rows, keeping Control and Works with, with Music on the phone side', () => {
+  it('lists the R³ Ring rows, keeping Control and Works with, with Music on the phone side', () => {
     render(<SpecSheet />);
-    expect(rowsOf('R³ Note')).toEqual([
+    expect(rowsOf('R³ Ring')).toEqual([
       ['Control', 'Touch and slide'],
       ['Gestures', 'Tap, double tap, press and hold, swipe'],
       ['Tracks', 'Heart rate, sleep, activity'],

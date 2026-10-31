@@ -176,7 +176,7 @@ export function DevicePair() {
         <div className="r3-hw-pair" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'clamp(24px, 4vw, 56px)' }}>
           <DeviceCard
             device="ring"
-            title="R³ Note"
+            title="R³ Ring"
             eyebrow="Controller"
             copy="A controller worn on the finger. Its touch and slide surface controls the clip. Final ring specifications are not published yet."
           />

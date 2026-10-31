@@ -25,7 +25,7 @@ export function SpecSheet() {
         <h2 id="specs-title" style={{ margin: '0 0 16px', fontFamily: DISPLAY, fontSize: 'clamp(2.2rem, 4.4vw, 4.4rem)', fontWeight: 380, lineHeight: 1, letterSpacing: '-0.03em' }}>Specifications</h2>
         <p style={{ margin: '0 0 40px', fontFamily: GRO, fontSize: 15, color: ed.onDarkSoft }}>Planned specifications. Final details are confirmed before manufacturing.</p>
         <div className="r3-hw-specs" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'clamp(24px, 4vw, 56px)', alignItems: 'start' }}>
-          <SpecList title="R³ Note" rows={SPEC_RING} />
+          <SpecList title="R³ Ring" rows={SPEC_RING} />
           <SpecList title="R³ Clip" rows={SPEC_CLIP} />
         </div>
       </div>

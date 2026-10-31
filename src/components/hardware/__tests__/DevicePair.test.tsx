@@ -18,7 +18,7 @@ vi.mock('../scene/deviceScene', () => {
 
 import { DevicePair } from '../DevicePair';
 
-const RING = 'Concept illustration of the R3 Note smart ring';
+const RING = 'Concept illustration of the R3 Ring smart ring';
 const CLIP = 'Concept illustration of the R3 Clip camera wearable';
 
 let ios: Array<{ cb: IntersectionObserverCallback; options?: IntersectionObserverInit; el?: Element; disconnect: ReturnType<typeof vi.fn> }>;
@@ -55,7 +55,7 @@ afterEach(() => {
 describe('DevicePair', () => {
   it('keeps the copy and shows a finish radio group under each card, White selected', () => {
     render(<DevicePair />);
-    for (const title of ['R³ Note', 'R³ Clip']) {
+    for (const title of ['R³ Ring', 'R³ Clip']) {
       const group = within(card(title)).getByRole('radiogroup', { name: `${title} finish` });
       const radios = within(group).getAllByRole('radio');
       expect(radios.map(r => r.getAttribute('aria-label'))).toEqual(['White', 'Black', 'Silver']);
@@ -70,7 +70,7 @@ describe('DevicePair', () => {
   it('lists Inputs / Outputs / Value under each card with the exact text', () => {
     render(<DevicePair />);
     const expected: Record<string, string[][]> = {
-      'R³ Note': [
+      'R³ Ring': [
         ['Inputs', 'Tap, double tap, press and hold, swipe. Heart rate, sleep and activity sensors.'],
         ['Outputs', "Commands to the R³ Clip's camera and microphone, and to your phone: music and your AI agent."],
         ['Value', 'Log anything without taking your phone out.'],
@@ -118,7 +118,7 @@ describe('DevicePair', () => {
     const layer = screen.getByTestId('device-scene-ring');
     expect(layer.style.opacity).toBe('1');
     expect(layer.style.transition).toMatch(/500ms/);
-    expect(screen.getByRole('img', { name: /R³ Note in White, interactive 3D view/ })).toBeTruthy();
+    expect(screen.getByRole('img', { name: /R³ Ring in White, interactive 3D view/ })).toBeTruthy();
     expect(screen.queryByRole('img', { name: RING })).toBeNull();
   });
 
@@ -132,11 +132,11 @@ describe('DevicePair', () => {
     const watchHandle = calls.find(c => c.opts.device === 'watch')!.handle;
     ringHandle.setFinish.mockClear();
     watchHandle.setFinish.mockClear();
-    const silver = within(card('R³ Note')).getByRole('radio', { name: 'Silver' });
+    const silver = within(card('R³ Ring')).getByRole('radio', { name: 'Silver' });
     fireEvent.click(silver);
     expect(silver.getAttribute('aria-checked')).toBe('true');
-    expect(within(card('R³ Note')).getByRole('radio', { name: 'White' }).getAttribute('aria-checked')).toBe('false');
-    expect(within(card('R³ Note')).getByText('Silver')).toBeTruthy();
+    expect(within(card('R³ Ring')).getByRole('radio', { name: 'White' }).getAttribute('aria-checked')).toBe('false');
+    expect(within(card('R³ Ring')).getByText('Silver')).toBeTruthy();
     expect(ringHandle.setFinish).toHaveBeenCalledWith('silver');
     expect(watchHandle.setFinish).not.toHaveBeenCalled();
     expect(within(card('R³ Clip')).getByRole('radio', { name: 'White' }).getAttribute('aria-checked')).toBe('true');

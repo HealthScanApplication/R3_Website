@@ -1,6 +1,6 @@
 export const PRODUCTS = {
-  ring:   { key: 'ring'   as const, name: 'R³ Note',        priceCents: 17900, regPriceCents: 19900 },
-  bundle: { key: 'bundle' as const, name: 'R³ Note + Clip', priceCents: 29900, regPriceCents: 34900 },
+  ring:   { key: 'ring'   as const, name: 'R³ Ring',        priceCents: 17900, regPriceCents: 19900 },
+  bundle: { key: 'bundle' as const, name: 'R³ Ring + Clip', priceCents: 29900, regPriceCents: 34900 },
 };
 export type ProductKey = keyof typeof PRODUCTS;
 export const BATCH_GOAL = 250;
@@ -48,7 +48,7 @@ export type UseCase = { id: string; title: string; gesture: string; result: stri
 export const USE_CASES_TITLE = 'What you can do with it';
 export const USE_CASES: UseCase[] = [
   { id: 'meal', title: 'Log a meal, drink or supplement', gesture: 'Tap: photo · Double tap: photo + voice note', result: "The R³ Clip captures it and it's added to today's routine as something you consumed.", scene: 'A hand holding a tray of takoyaki at a pastel Osaka street stall, the other hand tapping the black ring.', image: '/images/hardware/use-cases/meal.webp', video: '/videos/use-cases/meal.mp4', how: { from: ['ring-tap'], to: ['camera', 'mic'] } },
-  { id: 'activity', title: 'Log an activity', gesture: 'Tap: photo or video · Double tap: add a voice note', result: 'Your workout, walk or session is logged with what you saw and said.', scene: 'A pastel gym, a raised wrist showing the R³ Note screen while the other hand lifts a dumbbell.', image: '/images/hardware/use-cases/activity.webp', video: '/videos/use-cases/activity.mp4', how: { from: ['ring-tap'], to: ['video', 'mic'] } },
+  { id: 'activity', title: 'Log an activity', gesture: 'Tap: photo or video · Double tap: add a voice note', result: 'Your workout, walk or session is logged with what you saw and said.', scene: 'A pastel gym, a raised wrist showing the R³ Ring screen while the other hand lifts a dumbbell.', image: '/images/hardware/use-cases/activity.webp', video: '/videos/use-cases/activity.mp4', how: { from: ['ring-tap'], to: ['video', 'mic'] } },
   { id: 'task', title: 'Add a task or routine', gesture: 'Double tap: say it', result: 'Say the task and it lands in your routine and calendar.', scene: 'Speaking a quick task to the wrist in a pastel kitchen, the TASKS screen on the watch.', image: '/images/hardware/use-cases/task.webp', video: '/videos/use-cases/task.mp4', how: { from: ['ring-double'], to: ['mic', 'calendar'] } },
   { id: 'journal', title: 'Voice or video journal', gesture: 'Double tap: start recording', result: 'Capture a thought or a moment as a journal entry, in your own words.', scene: 'Golden-hour bench by an Osaka river, recording a short voice entry into the wrist.', image: '/images/hardware/use-cases/journal.webp', video: '/videos/use-cases/journal.mp4', how: { from: ['ring-double'], to: ['mic', 'video'] } },
   { id: 'navigate', title: 'Get to your next event', gesture: 'Glance at the R³ Clip', result: 'The watch guides you from where your phone is to the location of your next calendar event.', scene: 'Riding a mint-green bike down a pastel Osaka street, the watch on the wrist at the handlebar.', image: '/images/hardware/use-cases/navigate.webp', video: '/videos/use-cases/navigate.mp4', how: { from: ['watch'], to: ['arrow'] } },
@@ -60,7 +60,7 @@ export const USE_CASES: UseCase[] = [
   { id: 'sleep', title: 'Sleep and recovery', gesture: 'Just wear them', result: "The ring and watch track your night, and your agent adjusts tomorrow's plan.", scene: 'Morning light on a mint bedside table, the watch and ring resting side by side.', image: '/images/hardware/use-cases/sleep.webp', video: '/videos/use-cases/sleep.mp4', how: { from: ['ring', 'watch'], to: ['moon'] } },
 ];
 
-/** Spec rows, shown under the "Planned specifications" notice. No device lists phone pairing, so Music sits under R³ Note. */
+/** Spec rows, shown under the "Planned specifications" notice. No device lists phone pairing, so Music sits under R³ Ring. */
 export type SpecRow = [string, string];
 export const SPEC_RING: SpecRow[] = [
   ['Control', 'Touch and slide'],

@@ -6,7 +6,7 @@ export function RingArt({ transparent = false }: { transparent?: boolean } = {})
   const shell = `ring-shell-${uid}`;
   const shadow = `ring-shadow-${uid}`;
   return (
-    <svg viewBox="0 0 640 520" role="img" aria-label="Concept illustration of the R3 Note smart ring">
+    <svg viewBox="0 0 640 520" role="img" aria-label="Concept illustration of the R3 Ring smart ring">
       <defs>
         {!transparent && (
           <radialGradient id={bg} cx="48%" cy="42%" r="70%">

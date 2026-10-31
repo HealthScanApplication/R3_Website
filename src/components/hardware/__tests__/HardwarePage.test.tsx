@@ -31,7 +31,7 @@ describe('HardwarePage', () => {
     render(<HardwarePage />);
     const articles = screen.getAllByRole('article');
     const names = articles.map((a) => within(a).getByRole('heading').textContent);
-    expect(names).toEqual(expect.arrayContaining(['R³ Note', 'R³ Clip']));
+    expect(names).toEqual(expect.arrayContaining(['R³ Ring', 'R³ Clip']));
     for (const name of [
       'One ring, four gestures',
       'Two devices, one routine',
@@ -59,7 +59,6 @@ describe('HardwarePage', () => {
     for (const w of ['touch', 'slide', 'necklace', 'watch', 'routine', 'calendar', 'email']) {
       expect(text.toLowerCase()).toContain(w);
     }
-    expect(text).not.toContain('R³ Ring');
     expect(text).not.toMatch(/\bHeart\b(?!\s+rate)/);
     const prices = Array.from(new Set(text.match(/\$\d+(?:\.\d+)?/g) ?? [])).sort();
     expect(prices).toEqual(['$179', '$299']); // hero preorder shows no struck regular prices
@@ -77,7 +76,7 @@ describe('HardwarePage', () => {
 
   it('closing band links to #preorder', () => {
     render(<HardwarePage />);
-    const link = screen.getByRole('link', { name: 'Reserve the R³ Note — $179' });
+    const link = screen.getByRole('link', { name: 'Reserve the R³ Ring — $179' });
     expect(link.getAttribute('href')).toBe('#preorder');
     expect((link as HTMLElement).style.background).toBe('rgb(199, 217, 159)');
   });

@@ -1,5 +1,5 @@
 /**
- * "Rings in the same centre" (pure, no three.js): the R³ Note ring nested inside the R³ Retro watch's closed
+ * "Rings in the same centre" (pure, no three.js): the R³ Ring ring nested inside the R³ Retro watch's closed
  * bracelet, concentric with the bracelet's hole, and the watch's eased yaw.
  */
 export type Axis = 'x' | 'y' | 'z';

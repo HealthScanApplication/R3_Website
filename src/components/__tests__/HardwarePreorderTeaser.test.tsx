@@ -38,9 +38,9 @@ afterEach(() => {
 describe('HardwarePreorder teaser', () => {
   it('has one call to action: a plain link to /ring', () => {
     render(<HardwarePreorder />);
-    const link = screen.getByRole('link', { name: /See the R³ Note/ });
+    const link = screen.getByRole('link', { name: /See the R³ Ring/ });
     expect(link.getAttribute('href')).toBe('/ring');
-    expect(link.textContent).toBe('See the R³ Note — from $179');
+    expect(link.textContent).toBe('See the R³ Ring — from $179');
     expect(screen.getAllByRole('link')).toHaveLength(1);
   });
 
@@ -49,7 +49,7 @@ describe('HardwarePreorder teaser', () => {
     expect(screen.getByText('R³ hardware · first batch')).toBeTruthy();
     const h2s = screen.getAllByRole('heading', { level: 2 });
     expect(h2s).toHaveLength(1);
-    expect(h2s[0].textContent).toBe('Meet the R³ Note and R³ Clip.');
+    expect(h2s[0].textContent).toBe('Meet the R³ Ring and R³ Clip.');
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
   });
 
@@ -72,7 +72,7 @@ describe('HardwarePreorder teaser', () => {
   it('carries none of the old copy and shows only the $179 price', () => {
     const { container } = render(<HardwarePreorder />);
     const text = container.textContent ?? '';
-    for (const banned of ['R³ Ring', 'Heart', 'Nothing records', 'ambient', 'camera off by default', 'Capture the moment']) {
+    for (const banned of ['Heart', 'Nothing records', 'ambient', 'camera off by default', 'Capture the moment']) {
       expect(text).not.toContain(banned);
     }
     expect(text.match(/\$\d+/g)).toEqual(['$179']);

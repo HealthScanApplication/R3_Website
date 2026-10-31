@@ -13,7 +13,7 @@ vi.mock('../scene/heroScene', () => {
 
 import { HeroDevices } from '../HeroDevices';
 
-const RING = 'Concept illustration of the R3 Note smart ring';
+const RING = 'Concept illustration of the R3 Ring smart ring';
 const CLIP = 'Concept illustration of the R3 Clip camera wearable';
 type Opts = { ringUrl: string; reducedMotion: boolean; onReady: () => void };
 
@@ -82,7 +82,7 @@ describe('HeroDevices', () => {
     expect(scene()!.style.transition).toMatch(/500ms/);
     expect(screen.queryByRole('img', { name: RING })).toBeNull();
     expect(screen.queryByRole('img', { name: CLIP })).toBeNull();
-    expect(screen.getByRole('img', { name: 'R³ Note and R³ Clip, interactive 3D view; drag to turn' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'R³ Ring and R³ Clip, interactive 3D view; drag to turn' })).toBeTruthy();
   });
 
   it('under reduced motion passes reducedMotion and shows the scene without a fade', async () => {

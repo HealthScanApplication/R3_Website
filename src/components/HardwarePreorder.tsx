@@ -42,12 +42,12 @@ export function HardwarePreorder() {
         <div className="r3-hw-teaser-grid" style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 0.9fr)', gap: 'clamp(28px, 5vw, 80px)', alignItems: 'end', paddingTop: 'clamp(24px, 5vh, 80px)' }}>
           <div style={{ alignSelf: 'center' }}>
             <h2 id="hardware-preorder-title" style={{ ...coverStyle, fontSize: 'clamp(2.8rem, 7vw, 7.5rem)', color: '#FFFFFF', textShadow: '0 4px 24px rgba(0,0,0,0.38)' }}>
-              Meet the R³ Note and R³ Clip.
+              Meet the R³ Ring and R³ Clip.
             </h2>
             <p style={{ ...deckStyle, color: ed.ink, marginTop: 'clamp(20px, 3vw, 36px)', maxWidth: '34ch' }}>{DECK}</p>
             <div style={{ marginTop: 'clamp(28px, 4vh, 48px)', maxWidth: 560 }}>
               <a href="/ring" style={{ display: 'inline-flex', alignItems: 'center', height: 42, boxSizing: 'border-box', padding: '0 16px', background: '#FFFFFF', color: '#16140F', border: '1px solid #FFFFFF', borderRadius: 2, fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' }}>
-                {`See the R³ Note — from ${formatUsd(PRODUCTS.ring.priceCents)}`}
+                {`See the R³ Ring — from ${formatUsd(PRODUCTS.ring.priceCents)}`}
               </a>
               <p style={{ margin: '16px 0 0', fontFamily: GRO, fontSize: 14, lineHeight: 1.55, color: ed.ink }}>{PREORDER_TERMS}</p>
             </div>

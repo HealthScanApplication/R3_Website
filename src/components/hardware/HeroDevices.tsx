@@ -56,7 +56,7 @@ export function HeroDevices() {
 
   const ready = phase === 'ready';
   const a11y = ready
-    ? { role: 'img' as const, 'aria-label': 'R³ Note and R³ Clip, interactive 3D view; drag to turn' }
+    ? { role: 'img' as const, 'aria-label': 'R³ Ring and R³ Clip, interactive 3D view; drag to turn' }
     : {};
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }} {...a11y}>

@@ -6,7 +6,7 @@ import { HeroDevices } from './HeroDevices';
 import { PreorderBlock } from './PreorderBlock';
 import { HERO_CLIPS, HERO_FEATURE_WORDS } from './copy';
 
-const DECK = 'See it, say it, do it — in real time, without a phone. Tap the R³ Note and the R³ Clip takes the photo, logs the activity or saves the voice note.';
+const DECK = 'See it, say it, do it — in real time, without a phone. Tap the R³ Ring and the R³ Clip takes the photo, logs the activity or saves the voice note.';
 const overline: React.CSSProperties = { fontFamily: GRO, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.2em', color: ed.inkSoft, margin: 0 };
 
 export function HardwareHero() {

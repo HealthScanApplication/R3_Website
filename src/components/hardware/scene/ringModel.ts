@@ -1,5 +1,5 @@
 /**
- * The owner's R³ Note: a binary STL (public/models/r3-ring.stl, simplified to 50k triangles) turned into a smooth,
+ * The owner's R³ Ring: a binary STL (public/models/r3-ring.stl, simplified to 50k triangles) turned into a smooth,
  * centred, unit-sized mesh. The model's ring axis (through the finger hole) is its Y axis; the scene stands it up.
  */
 import * as THREE from 'three';

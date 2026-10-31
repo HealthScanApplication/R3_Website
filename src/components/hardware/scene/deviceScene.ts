@@ -1,5 +1,5 @@
 /**
- * One R³ device on its own, for the "Two devices, one routine" cards: the R³ Note ring or the R³ Retro watch (its
+ * One R³ device on its own, for the "Two devices, one routine" cards: the R³ Ring ring or the R³ Retro watch (its
  * screen showing the beating pixel heart), centred and framed, in a finish from finishes.ts that `setFinish`
  * changes in place (materials and the screen's inks only, never a new download or parse).
  *

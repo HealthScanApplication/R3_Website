@@ -11,7 +11,7 @@ vi.mock('../../FlutedGlassBackground', () => ({ FlutedGlassBackground: () => <di
 vi.mock('../../../hooks/useHeroBackground', () => ({ useHeroBackground: () => bg }));
 import { HardwareHero } from '../HardwareHero';
 
-const DECK = 'See it, say it, do it — in real time, without a phone. Tap the R³ Note and the R³ Clip takes the photo, logs the activity or saves the voice note.';
+const DECK = 'See it, say it, do it — in real time, without a phone. Tap the R³ Ring and the R³ Clip takes the photo, logs the activity or saves the voice note.';
 const line = (i: number) => (screen.getByRole('heading', { level: 1 }).children[i] as HTMLElement).textContent;
 const line1 = () => line(0);
 const line2 = () => line(1);
