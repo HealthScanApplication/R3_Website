@@ -1,5 +1,5 @@
 /**
- * The /ring hero scene: the owner's R³ Ring resting on the left, the R³ Clip hanging on a cord on the right, its
+ * The /ring hero scene: the owner's R³ Note resting on the left, the R³ Clip hanging on a cord on the right, its
  * crystal showing a live heartbeat. One renderer, one rAF loop that this module owns (paused off-screen or when the
  * tab is hidden, never started for auto-motion under reduced motion), full disposal. Camera framing lives in
  * framing.ts and the contact shadow in shadowBlob.ts.

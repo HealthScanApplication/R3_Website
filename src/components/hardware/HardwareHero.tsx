@@ -20,11 +20,11 @@ export function HardwareHero() {
             Track your routine without lifting a finger.
           </h1>
           <p style={{ margin: '28px 0 32px', maxWidth: 560, fontFamily: GRO, fontSize: 'clamp(16px, 1.4vw, 20px)', lineHeight: 1.55, color: ed.onDarkSoft }}>
-            Touch or slide the R³ Ring to control the R³ Clip's camera, record a voice note, or hand a request to your AI assistant.
+            Touch or slide the R³ Note to control the R³ Clip's camera, record a voice note, or hand a request to your AI assistant.
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 32 }}>
-            <a href="#preorder" style={{ ...linkBase, background: ACCENT, color: ed.dark }}>Reserve the R³ Ring — {formatUsd(PRODUCTS.ring.priceCents)}</a>
-            <a href="#preorder" style={{ ...linkBase, border: `1px solid ${ed.onDark}`, color: ed.onDark }}>Ring + Clip — {formatUsd(PRODUCTS.bundle.priceCents)}</a>
+            <a href="#preorder" style={{ ...linkBase, background: ACCENT, color: ed.dark }}>Reserve the R³ Note — {formatUsd(PRODUCTS.ring.priceCents)}</a>
+            <a href="#preorder" style={{ ...linkBase, border: `1px solid ${ed.onDark}`, color: ed.onDark }}>R³ Note + Clip — {formatUsd(PRODUCTS.bundle.priceCents)}</a>
           </div>
           <BackerBar />
         </div>

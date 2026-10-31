@@ -40,8 +40,8 @@ afterEach(cleanup);
 describe('PreorderBlock', () => {
   it('shows both prices with ring selected by default', async () => {
     setup();
-    expect(screen.getByRole('button', { name: /R³ Ring \$179/ }).getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getByRole('button', { name: /R³ Ring \+ Clip \$299/ }).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('button', { name: /R³ Note \$179/ }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: /R³ Note \+ Clip \$299/ }).getAttribute('aria-pressed')).toBe('false');
     expect(screen.getByText('$199')).toBeTruthy();
     expect(screen.getByText('$349')).toBeTruthy();
     expect(screen.getByText(/Full payment today\. Ships Q3 2027\. If we don't reach the first-batch goal by the deadline, you're refunded in full\./)).toBeTruthy();
@@ -50,7 +50,7 @@ describe('PreorderBlock', () => {
 
   it('toggling the product changes the primary price', async () => {
     setup();
-    fireEvent.click(screen.getByRole('button', { name: /R³ Ring \+ Clip/ }));
+    fireEvent.click(screen.getByRole('button', { name: /R³ Note \+ Clip/ }));
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'qa@example.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'Continue to payment' }));
     expect(await screen.findByRole('button', { name: 'Pay $299' })).toBeTruthy();
@@ -78,7 +78,7 @@ describe('PreorderBlock', () => {
     expect(mount.mock.calls[0][0]).toBeInstanceOf(HTMLElement);
     expect(mount.mock.calls[0][1]).toBe('cs');
     fireEvent.click(pay);
-    expect(await screen.findByText(/You're in — R³ Ring reserved\./)).toBeTruthy();
+    expect(await screen.findByText(/You're in — R³ Note reserved\./)).toBeTruthy();
     expect(handle.confirm).toHaveBeenCalledWith('qa@example.com');
     expect(confirm).toHaveBeenCalledWith('p1');
     await waitFor(() => expect(count).toHaveBeenCalledTimes(2));
@@ -240,8 +240,8 @@ describe('PreorderBlock', () => {
       expect(screen.getAllByRole('status').some(n => n.textContent === 'The first batch is closed.')).toBe(true);
       expect((screen.getByRole('button', { name: 'Continue to payment' }) as HTMLButtonElement).disabled).toBe(true);
       expect((screen.getByLabelText(/email/i) as HTMLInputElement).disabled).toBe(true);
-      expect((screen.getByRole('button', { name: /R³ Ring \$179/ }) as HTMLButtonElement).disabled).toBe(true);
-      expect((screen.getByRole('button', { name: /R³ Ring \+ Clip/ }) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByRole('button', { name: /R³ Note \$179/ }) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByRole('button', { name: /R³ Note \+ Clip/ }) as HTMLButtonElement).disabled).toBe(true);
       expect(screen.queryByText(/Campaign ends/)).toBeNull();
       submit();
       await new Promise(r => setTimeout(r, 0));

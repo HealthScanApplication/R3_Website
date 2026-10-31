@@ -16,7 +16,7 @@ export function HardwarePreorder() {
           <div>
             <p style={{ ...label, margin: '0 0 18px', fontSize: 12, letterSpacing: '0.18em' }}>R³ hardware · first batch</p>
             <h2 id="hardware-preorder-title" style={{ margin: 0, maxWidth: 920, fontFamily: DISPLAY, fontSize: 'clamp(3.5rem, 7.4vw, 8.2rem)', fontWeight: 380, lineHeight: 0.9, letterSpacing: '-0.045em' }}>
-              Meet the R³ Ring and R³ Clip.
+              Meet the R³ Note and R³ Clip.
             </h2>
           </div>
           <p style={{ ...body, fontSize: 'clamp(16px, 1.4vw, 21px)' }}>
@@ -28,7 +28,7 @@ export function HardwarePreorder() {
           <article style={{ padding: 'clamp(28px, 4vw, 54px) clamp(0px, 3vw, 48px) clamp(42px, 5vw, 68px) 0', borderRight: `1px solid ${ed.onDarkHair}` }}>
             <div style={{ overflow: 'hidden', aspectRatio: '1.23 / 1', marginBottom: 30 }}><RingArt /></div>
             <p style={label}>Controller</p>
-            <h3 style={name}>R³ Ring</h3>
+            <h3 style={name}>R³ Note</h3>
             <p style={body}>A controller worn on the finger. Its touch and slide surface controls the clip.</p>
           </article>
           <article style={{ padding: 'clamp(28px, 4vw, 54px) 0 clamp(42px, 5vw, 68px) clamp(0px, 3vw, 48px)' }}>
@@ -41,7 +41,7 @@ export function HardwarePreorder() {
 
         <div style={{ paddingTop: 'clamp(40px, 6vw, 72px)' }}>
           <a href="/ring" style={{ display: 'inline-flex', alignItems: 'center', minHeight: 60, background: ACCENT, color: ed.dark, padding: '0 28px', fontFamily: GRO, fontSize: 12, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', textDecoration: 'none' }}>
-            {`See the R³ Ring — from ${formatUsd(PRODUCTS.ring.priceCents)}`}
+            {`See the R³ Note — from ${formatUsd(PRODUCTS.ring.priceCents)}`}
           </a>
           <p style={{ margin: '18px 0 0', fontFamily: GRO, fontSize: 15, lineHeight: 1.55, color: ed.onDarkSoft }}>
             {PREORDER_TERMS}

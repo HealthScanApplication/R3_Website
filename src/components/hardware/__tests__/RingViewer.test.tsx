@@ -57,7 +57,7 @@ describe('RingViewer', () => {
     expect(el).not.toBeNull();
     expect(el.getAttribute('src')).toBe('/models/r3-ring.glb');
     expect(el.getAttribute('poster')).toBe('/models/r3-ring-poster.webp');
-    expect(el.getAttribute('alt')).toBe('R³ Ring — drag to rotate');
+    expect(el.getAttribute('alt')).toBe('R³ Note — drag to rotate');
     expect(el.getAttribute('camera-controls')).not.toBeNull();
     expect(el.getAttribute('shadow-intensity')).not.toBeNull();
     await waitFor(() => expect(reg.loads).toBe(1));
@@ -87,7 +87,7 @@ describe('RingViewer', () => {
 
   it('is never blank: the SVG shows and the viewer is transparent before load', async () => {
     const { container } = render(<RingViewer />);
-    expect(screen.getByRole('img', { name: 'R³ Ring' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'R³ Note' })).toBeTruthy();
     expect(viewer(container)!.style.opacity).toBe('0');
     await waitFor(() => expect(reg.loads).toBe(1));
   });
@@ -96,7 +96,7 @@ describe('RingViewer', () => {
     const { container } = render(<RingViewer />);
     await waitFor(() => expect(reg.loads).toBe(1));
     fireEvent(viewer(container)!, new Event('load'));
-    await waitFor(() => expect(screen.queryByRole('img', { name: 'R³ Ring' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('img', { name: 'R³ Note' })).toBeNull());
     expect(viewer(container)!.style.opacity).toBe('1');
   });
 
@@ -105,7 +105,7 @@ describe('RingViewer', () => {
     await waitFor(() => expect(reg.loads).toBe(1));
     fireEvent(viewer(container)!, new CustomEvent('error', { detail: { type: 'loadfailure' } }));
     await waitFor(() => expect(viewer(container)).toBeNull());
-    expect(screen.getByRole('img', { name: 'R³ Ring' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'R³ Note' })).toBeTruthy();
   });
 
   it('gives each instance a distinct gradient id', async () => {
@@ -121,7 +121,7 @@ describe('RingViewer', () => {
     reg.fail = true;
     await loadComponent();
     const { container } = render(<RingViewer />);
-    expect(await screen.findByRole('img', { name: 'R³ Ring' })).toBeTruthy();
+    expect(await screen.findByRole('img', { name: 'R³ Note' })).toBeTruthy();
     expect(viewer(container)).toBeNull();
   });
 
@@ -129,7 +129,7 @@ describe('RingViewer', () => {
     vi.stubGlobal('customElements', undefined);
     Object.defineProperty(window, 'customElements', { value: undefined, configurable: true });
     const { container } = render(<RingViewer />);
-    expect(screen.getByRole('img', { name: 'R³ Ring' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'R³ Note' })).toBeTruthy();
     expect(viewer(container)).toBeNull();
     await new Promise((r) => setTimeout(r, 20));
     expect(reg.loads).toBe(0);

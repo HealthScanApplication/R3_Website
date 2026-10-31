@@ -17,7 +17,7 @@ function RingFallback() {
       <svg
         viewBox="0 0 400 400"
         role="img"
-        aria-label="R³ Ring"
+        aria-label="R³ Note"
         style={{ width: '100%', height: '100%', maxHeight: 480 }}
       >
         <defs>
@@ -81,7 +81,7 @@ export function RingViewer() {
           ref={ref}
           src={MODEL_SRC}
           poster={POSTER_SRC}
-          alt="R³ Ring — drag to rotate"
+          alt="R³ Note — drag to rotate"
           camera-controls=""
           shadow-intensity="1"
           {...(reduceMotion ? {} : { 'auto-rotate': '', 'rotation-per-second': '12deg' })}

@@ -1,6 +1,6 @@
 export const PRODUCTS = {
-  ring:   { key: 'ring'   as const, name: 'R³ Ring',        priceCents: 17900, regPriceCents: 19900 },
-  bundle: { key: 'bundle' as const, name: 'R³ Ring + Clip', priceCents: 29900, regPriceCents: 34900 },
+  ring:   { key: 'ring'   as const, name: 'R³ Note',        priceCents: 17900, regPriceCents: 19900 },
+  bundle: { key: 'bundle' as const, name: 'R³ Note + Clip', priceCents: 29900, regPriceCents: 34900 },
 };
 export type ProductKey = keyof typeof PRODUCTS;
 export const BATCH_GOAL = 250;

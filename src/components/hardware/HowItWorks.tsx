@@ -2,7 +2,7 @@ import React from 'react';
 import { DISPLAY, GRO, ed } from '../../config/editorialTheme';
 
 const STEPS = [
-  { title: 'Touch or slide', body: 'The R³ Ring has a touch and slide surface that controls the R³ Clip.' },
+  { title: 'Touch or slide', body: 'The R³ Note has a touch and slide surface that controls the R³ Clip.' },
   { title: 'Capture', body: 'The R³ Clip captures your food, activity, voice notes, and AI requests.' },
   { title: 'Your assistant handles it', body: 'Your AI assistant manages your routine, your calendar, and your email.' },
 ];

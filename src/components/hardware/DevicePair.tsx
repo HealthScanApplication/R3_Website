@@ -16,7 +16,7 @@ export function DevicePair() {
           <article>
             <div style={art}><RingArt /></div>
             <p style={label}>Controller</p>
-            <h3 style={name}>R³ Ring</h3>
+            <h3 style={name}>R³ Note</h3>
             <p style={body}>A controller worn on the finger. Its touch and slide surface controls the clip. Final ring specifications are not published yet.</p>
           </article>
           <article>

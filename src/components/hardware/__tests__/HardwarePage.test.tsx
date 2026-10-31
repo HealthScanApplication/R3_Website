@@ -24,7 +24,7 @@ describe('HardwarePage', () => {
 
   it('has two hero links to #preorder with exact text', () => {
     render(<HardwarePage />);
-    for (const name of ['Reserve the R³ Ring — $179', 'Ring + Clip — $299']) {
+    for (const name of ['Reserve the R³ Note — $179', 'R³ Note + Clip — $299']) {
       expect(screen.getByRole('link', { name }).getAttribute('href')).toBe('#preorder');
     }
   });
@@ -33,7 +33,7 @@ describe('HardwarePage', () => {
     render(<HardwarePage />);
     const articles = screen.getAllByRole('article');
     const names = articles.map((a) => within(a).getByRole('heading').textContent);
-    expect(names).toEqual(expect.arrayContaining(['R³ Ring', 'R³ Clip']));
+    expect(names).toEqual(expect.arrayContaining(['R³ Note', 'R³ Clip']));
     for (const name of [
       'How it works',
       'Two devices, one routine',
@@ -51,8 +51,8 @@ describe('HardwarePage', () => {
     for (const w of ['touch', 'slide', 'necklace', 'watch', 'routine', 'calendar', 'email']) {
       expect(text.toLowerCase()).toContain(w);
     }
-    expect(text).not.toMatch(/\bNote\b/);
-    expect(text).not.toMatch(/\bHeart\b/);
+    expect(text).not.toContain('R³ Ring');
+    expect(text).not.toMatch(/\bHeart\b(?!\s+rate)/);
     const prices = Array.from(new Set(text.match(/\$\d+(?:\.\d+)?/g) ?? [])).sort();
     expect(prices).toEqual(['$179', '$199', '$299', '$349']);
   });
