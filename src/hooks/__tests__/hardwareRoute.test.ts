@@ -7,13 +7,21 @@ function at(path: string) {
   window.history.replaceState({}, '', path);
 }
 
-describe('/ring route', () => {
+describe('/wearables route', () => {
   beforeEach(() => at('/'));
-  it('maps /ring to the hardware page', () => {
-    at('/ring');
+  it('maps /wearables to the hardware page', () => {
+    at('/wearables');
     const setCurrentPage = vi.fn();
     renderHook(() => useUrlParameterHandling({ setCurrentPage }));
     expect(setCurrentPage).toHaveBeenCalledWith('hardware');
+    expect(window.location.pathname).toBe('/wearables');
+  });
+  it('sends old /ring links to /wearables, keeping the query and hash', () => {
+    at('/ring?ref=ig#preorder');
+    const setCurrentPage = vi.fn();
+    renderHook(() => useUrlParameterHandling({ setCurrentPage }));
+    expect(setCurrentPage).toHaveBeenCalledWith('hardware');
+    expect(window.location.pathname + window.location.search + window.location.hash).toBe('/wearables?ref=ig#preorder');
   });
   it('does not map /hardware to the hardware page', () => {
     at('/hardware');

@@ -7,7 +7,7 @@ import { HERO_CLIPS, HERO_FEATURE_WORDS } from '../copy';
 const bg = { reduceMotion: false, allowVideo: false, backgroundVideos: [] as string[] };
 vi.mock('../HeroDevices', () => ({ HeroDevices: () => <div data-testid="devices" /> }));
 vi.mock('../PreorderBlock', () => ({ PreorderBlock: () => <button type="button">Continue to payment</button> }));
-vi.mock('../../FlutedGlassBackground', () => ({ FlutedGlassBackground: () => <div data-testid="fluted" /> }));
+vi.mock('../../FlutedGlassBackground', () => ({ FlutedGlassBackground: ({ videos }: { videos: string[] }) => <div data-testid="fluted" data-videos={videos.join(',')} /> }));
 vi.mock('../../../hooks/useHeroBackground', () => ({ useHeroBackground: () => bg }));
 import { HardwareHero } from '../HardwareHero';
 
@@ -62,27 +62,17 @@ describe('HardwareHero', () => {
     expect(container.querySelector(`#${id}`)?.tagName).toBe('H1');
   });
 
-  it('plays the R³ hero clips (never the produce layer) once video is allowed, and not under reduced motion', () => {
-    const clipSrcs = (c: HTMLElement) => [...c.querySelectorAll('video[data-hero-clip]')].map(v => v.getAttribute('src'));
-    const r1 = render(<HardwareHero />);
-    expect(clipSrcs(r1.container)).toEqual([]);
-    r1.unmount();
+  it('plays the R³ hero clips (not the produce clips) behind the fluted glass once video is allowed, never under reduced motion', () => {
+    render(<HardwareHero />).unmount();
+    expect(screen.queryByTestId('fluted')).toBeNull();
     bg.allowVideo = true;
     bg.backgroundVideos = ['a.mp4'];
     const r2 = render(<HardwareHero />);
-    expect(screen.queryByTestId('fluted')).toBeNull();
-    const current = r2.container.querySelector('video[data-hero-clip="current"]') as HTMLVideoElement;
-    expect(current.getAttribute('src')).toBe(HERO_CLIPS[0]);
-    expect(current.muted).toBe(true);
-    expect(current.hasAttribute('playsinline')).toBe(true);
-    expect(r2.container.querySelector('video[data-hero-clip="next"]')?.getAttribute('src')).toBe(HERO_CLIPS[1]);
-    act(() => { current.dispatchEvent(new Event('ended')); });
-    expect(r2.container.querySelector('video[data-hero-clip="current"]')?.getAttribute('src')).toBe(HERO_CLIPS[1]);
-    expect(r2.container.querySelector('video[data-hero-clip="next"]')?.getAttribute('src')).toBe(HERO_CLIPS[2]);
+    expect(screen.getByTestId('fluted').getAttribute('data-videos')).toBe(HERO_CLIPS.join(','));
     r2.unmount();
     bg.reduceMotion = true;
-    const r3 = render(<HardwareHero />);
-    expect(clipSrcs(r3.container)).toEqual([]);
+    render(<HardwareHero />);
+    expect(screen.queryByTestId('fluted')).toBeNull();
   });
 
   it('the hero clips are the five first-person moments, in order', () => {

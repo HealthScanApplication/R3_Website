@@ -69,7 +69,7 @@ const NAV_LINKS: { key: string; label: string; section?: string; href?: string; 
   { key: 'how', label: 'How', section: 'how-it-works', dropOrder: 2 },
   { key: 'faq', label: 'FAQ', section: 'faq', dropOrder: 1 },
   { key: 'guardians', label: 'Guardians', href: '/guardians', dropOrder: 99 },
-  { key: 'wearables', label: 'Wearables', href: '/ring', dropOrder: 98 },
+  { key: 'wearables', label: 'Wearables', href: '/wearables', dropOrder: 98 },
 ];
 
 interface HeaderProps {

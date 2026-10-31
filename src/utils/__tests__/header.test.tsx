@@ -62,12 +62,12 @@ it('phone: only the lockup and the menu button; the menu holds every link and th
   expect(rows(open())).toEqual(['Routines', 'Features', 'How', 'FAQ', 'Guardians', 'Wearables', 'Sign in', 'Subscribe']);
 });
 
-it('Wearables is a link to /ring, right after Guardians, in the bar and in the menu', () => {
+it('Wearables is a link to /wearables, right after Guardians, in the bar and in the menu', () => {
   rowWidth = 1300;
   render(<Header />);
   const links = [...bar().querySelectorAll('a, button')].map((el) => el.textContent!.trim());
   expect(links.slice(links.indexOf('Guardians'), links.indexOf('Guardians') + 2)).toEqual(['Guardians', 'Wearables']);
-  expect(bar().querySelector('a[href="/ring"]')!.textContent).toBe('Wearables');
+  expect(bar().querySelector('a[href="/wearables"]')!.textContent).toBe('Wearables');
 });
 
 it('a menu row works: Sign in opens the sign-in dialog and the menu closes; Guardians is a real link', () => {

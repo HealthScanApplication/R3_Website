@@ -22,7 +22,7 @@ function webglAvailable(): boolean {
 }
 
 /**
- * The /ring hero devices. The stage stays empty while the three.js scene loads (no drawn placeholder to flash), then
+ * The /wearables hero devices. The stage stays empty while the three.js scene loads (no drawn placeholder to flash), then
  * the scene fades in once its first frame has rendered. Only when WebGL is missing or the scene fails does the drawn
  * art appear, so the hero is never left without devices.
  */

@@ -36,10 +36,10 @@ afterEach(() => {
 });
 
 describe('HardwarePreorder teaser', () => {
-  it('has one call to action: a plain link to /ring', () => {
+  it('has one call to action: a plain link to /wearables', () => {
     render(<HardwarePreorder />);
     const link = screen.getByRole('link', { name: /See the R³ Ring/ });
-    expect(link.getAttribute('href')).toBe('/ring');
+    expect(link.getAttribute('href')).toBe('/wearables');
     expect(link.textContent).toBe('See the R³ Ring — from $179');
     expect(screen.getAllByRole('link')).toHaveLength(1);
   });

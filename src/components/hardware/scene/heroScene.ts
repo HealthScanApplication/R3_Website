@@ -1,5 +1,5 @@
 /**
- * The /ring hero scene: "rings in the same centre". The R³ Retro watch (the full measured retro watch on its closed
+ * The /wearables hero scene: "rings in the same centre". The R³ Retro watch (the full measured retro watch on its closed
  * link bracelet, its e-paper screen showing a beating pixel heart) stands upright, and the R³ Ring ring floats INSIDE
  * the bracelet's loop, concentric with it: both hole axes aligned at rest and both centred on one point, which is
  * the scene origin the camera looks at (so it sits at the vertical middle of the devices container). The watch
