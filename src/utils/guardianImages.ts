@@ -52,11 +52,13 @@ export async function convertGuardianAvatar(imageUrl: string, name: string, sour
   catch (error) { throw new GuardianImageError(houseStyleErrorMessage(error), error instanceof GuardianImageError ? error.status : undefined); }
 }
 
-export function generatedImageFile(dataUrl: string, filename = 'guardian-avatar.webp'): File {
+export function generatedImageFile(dataUrl: string, filename?: string): File {
   const match = dataUrl.match(/^data:([^;,]+);base64,(.+)$/);
   if (!match) throw new Error('The generated avatar could not be prepared for upload.');
   const bytes = Uint8Array.from(atob(match[2]), (character) => character.charCodeAt(0));
-  return new File([bytes], filename, { type: match[1] || 'image/webp' });
+  const type = match[1] || 'image/webp';
+  // A keyed avatar is a PNG (it needs an alpha channel); the name follows the real type.
+  return new File([bytes], filename || `guardian-avatar.${type === 'image/png' ? 'png' : 'webp'}`, { type });
 }
 
 /** The per-image price shown on the button, from the function's price list (square is cheaper). */

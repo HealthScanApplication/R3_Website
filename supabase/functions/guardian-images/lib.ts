@@ -62,9 +62,6 @@ export const AVATAR_STYLE_REFERENCES = [
   'https://www.as-tro.com/assets/plates/384/people/teresa-of-avila.webp',
 ];
 
-/** True when OpenAI's 400 is about the `background` parameter, so the request can be retried without transparency. */
-export const rejectedBackground = (status: number, body: any): boolean => status === 400 && /background|transparen/i.test(String(body?.error?.message || ''));
-
 export function avatarPrompt(name?: unknown): string {
   const person = String(name || 'the person').replace(/[\r\n]+/g, ' ').trim().slice(0, 100) || 'the person';
   return `Create an image of ${person} in the exact visual house style of the attached AS-TRO reference images. The FIRST attached image is a photograph of ${person}: portray this very person from it. Preserve the person's identity, facial structure, age, expression, hair and distinguishing features exactly, so they are clearly recognisable. The other attached images are AS-TRO style references only: match their style, never their faces, clothing or poses.
@@ -72,14 +69,14 @@ STYLE
 Timeless esoteric fine-art illustration, classical engraved portraiture blended with delicate painterly realism. Inspired by antique astronomical manuscripts, Renaissance illustrations, alchemical drawings and museum-quality historical artwork. Match the references in colour palette, contrast, illustration technique, texture, lighting, linework and overall artistic character.
 COMPOSITION
 One central subject, visually dominant, head and shoulders. Balanced, elegant, historically appropriate composition. Detailed subject with subtle, natural shading and fine textures. Preserve a consistent illustration style across all AS-TRO images. No unnecessary decorative elements. Square composition with generous circle-safe space around the head and shoulders, so a circular crop never cuts the subject.
-TRANSPARENCY - CRITICAL
-Generate on a fully transparent alpha background (RGBA). No solid background colour, white canvas or rectangular backdrop. No environment, scenery, gradient or background texture. The subject must be cleanly isolated, with soft, naturally feathered edges where appropriate. No artificial halo, glow, drop shadow or background vignette. Transparency must be genuine, not a simulated checkerboard pattern.
+BACKGROUND - CRITICAL
+Place the subject on a perfectly flat, solid, pure chroma-key green background (#00FF00, RGB 0,255,0), edge to edge, so the green can be removed afterwards. The green must be completely uniform: no gradient, no vignette, no texture, no shadow, no floor, no reflection, and never a checkerboard or any transparency pattern. There must be no green anywhere on the subject, its clothing or its edges, and no green light spilling onto it. Keep a clean, crisp edge between the subject and the green.
 RENDERING
 Sophisticated historical fine art, intricate detailing, muted natural colours, subtle antique texture applied only to the subject, realistic proportions, delicate chiaroscuro lighting.
 AVOID
 Cartoon, anime, modern 3D, photorealistic stock photography, neon colours, excessive gold, fantasy effects, generic mystical backgrounds, typography, logos, borders, frames or watermarks. Do not beautify, de-age, change ethnicity or add accessories.
 OUTPUT
-One isolated illustration, centred, with the subject entirely within the canvas and comfortable margins.`;
+One illustration on the flat green, centred, with the subject entirely within the canvas and comfortable margins.`;
 }
 
 export function shapeAvatarRequest(input: AvatarInput) {
