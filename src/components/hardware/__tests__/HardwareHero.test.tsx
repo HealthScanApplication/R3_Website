@@ -48,7 +48,7 @@ describe('HardwareHero', () => {
     const { container } = render(<HardwareHero />);
     expect(screen.getByText(DECK)).toBeTruthy();
     expect(screen.getByText('R³ hardware · first batch')).toBeTruthy();
-    const wrap = container.querySelector('#hero-preorder') as HTMLElement;
+    const wrap = container.querySelector('#preorder') as HTMLElement;
     expect(within(wrap).getAllByRole('button', { name: 'Continue to payment' })).toHaveLength(1);
     expect(screen.getByTestId('devices')).toBeTruthy();
     const img = container.querySelector('img') as HTMLImageElement;

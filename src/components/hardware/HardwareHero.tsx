@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ed, GRO, coverStyle, deckStyle, folioStyle } from '../../config/editorialTheme';
+import { ed, GRO, coverStyle, deckStyle } from '../../config/editorialTheme';
 import { GOAL_WORDS } from '../../config/goalWords';
 import { useHeroBackground } from '../../hooks/useHeroBackground';
 import { FlutedGlassBackground } from '../FlutedGlassBackground';
@@ -55,7 +55,6 @@ export function HardwareHero() {
       <div style={{ position: 'relative', zIndex: 2, minHeight: '100svh', display: 'flex', flexDirection: 'column', maxWidth: 1440, margin: '0 auto', paddingLeft: 'clamp(20px, 5vw, 72px)', paddingRight: 'clamp(20px, 5vw, 72px)', paddingTop: 'clamp(88px, 9vh, 104px)', paddingBottom: 'clamp(32px, 5vh, 56px)', boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderTop: `1px solid ${ed.hair}`, paddingTop: 14, paddingLeft: 'clamp(16px, 2vw, 28px)', paddingRight: 'clamp(16px, 2vw, 28px)' }}>
           <p style={overline}>R³ hardware · first batch</p>
-          <p style={folioStyle}>Early-backer preorder</p>
         </div>
 
         <div style={{ flex: 1, minHeight: 'clamp(24px, 5vh, 80px)' }} />
@@ -72,8 +71,8 @@ export function HardwareHero() {
               </span>
             </h1>
             <p style={{ ...deckStyle, color: ed.ink, marginTop: 'clamp(20px, 3vw, 36px)', maxWidth: '34ch' }}>{DECK}</p>
-            <div id="hero-preorder" style={{ marginTop: 'clamp(28px, 4vh, 48px)', maxWidth: 560 }}>
-              <PreorderBlock />
+            <div id="preorder" style={{ scrollMarginTop: 'calc(64px + 64px + 16px)', marginTop: 'clamp(28px, 4vh, 48px)', maxWidth: 560 }}>
+              <PreorderBlock variant="hero" />
             </div>
           </div>
           <div className="r3-hw-hero-devices" style={{ position: 'relative', width: '100%', aspectRatio: '4 / 5', minHeight: 420 }}>

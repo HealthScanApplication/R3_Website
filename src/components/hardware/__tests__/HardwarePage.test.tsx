@@ -2,13 +2,14 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
+import fs from 'node:fs';
+import path from 'node:path';
 
 vi.mock('../../../utils/hardwarePreorder', () => ({
   createPreorderIntent: vi.fn(),
   confirmPreorder: vi.fn(),
   fetchBackerCount: vi.fn().mockResolvedValue({ paid: 5, goal: 250, deadline: 'd', status: 'open' }),
 }));
-vi.mock('../registerModelViewer', () => ({}));
 vi.mock('../HeroDevices', () => ({ HeroDevices: () => <div data-testid="devices" /> }));
 vi.mock('../../FlutedGlassBackground', () => ({ FlutedGlassBackground: () => <div /> }));
 vi.mock('../../../hooks/useHeroBackground', () => ({ useHeroBackground: () => ({ reduceMotion: true, backgroundVideos: [] }) }));
@@ -35,10 +36,11 @@ describe('HardwarePage', () => {
       'Two devices, one routine',
       'A personal assistant for your routine',
       'Specifications',
-      'Reserve your early-backer price',
+      'Ready when you are.',
     ]) {
       expect(screen.getByRole('heading', { level: 2, name })).toBeTruthy();
     }
+    expect(screen.queryByRole('heading', { name: 'Reserve your early-backer price' })).toBeNull();
   });
 
   it('contains the required words and no invented device names or prices', () => {
@@ -53,11 +55,20 @@ describe('HardwarePage', () => {
     expect(prices).toEqual(['$179', '$199', '$299', '$349']);
   });
 
-  it('has a #preorder section with the checkout button', () => {
+  it('has one #preorder inside the hero with the only checkout, and one email field', () => {
     const { container } = render(<HardwarePage />);
+    expect(container.querySelectorAll('#preorder')).toHaveLength(1);
     const section = container.querySelector('#preorder') as HTMLElement;
-    expect(section).toBeTruthy();
+    expect(section.closest('#hardware-hero')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Continue to payment' })).toHaveLength(1);
     expect(within(section).getByRole('button', { name: 'Continue to payment' })).toBeTruthy();
+    expect(container.querySelectorAll('#preorder-email')).toHaveLength(1);
+  });
+
+  it('closing band links to #preorder', () => {
+    render(<HardwarePage />);
+    const link = screen.getByRole('link', { name: 'Reserve the R³ Note — $179' });
+    expect(link.getAttribute('href')).toBe('#preorder');
   });
 
   it('renders no main, footer or banner inside the page', () => {
@@ -117,5 +128,24 @@ describe('DeviceArt', () => {
   it('promises no email anywhere on the page', () => {
     render(<HardwarePage />);
     expect(document.body.textContent).not.toMatch(/email you/);
+  });
+});
+
+describe('model-viewer removal', () => {
+  it('nothing under src imports the old viewer and package.json drops it', () => {
+    const root = path.resolve(__dirname, '../../../..');
+    const hits: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) walk(full);
+        else if (/\.(tsx?|jsx?)$/.test(e.name) && full !== __filename) {
+          if (/RingViewer|registerModelViewer|@google\/model-viewer/.test(fs.readFileSync(full, 'utf8'))) hits.push(full);
+        }
+      }
+    };
+    walk(path.join(root, 'src'));
+    expect(hits).toEqual([]);
+    expect(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).not.toContain('@google/model-viewer');
   });
 });
