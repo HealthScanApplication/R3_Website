@@ -18,7 +18,7 @@ describe('UseCases', () => {
   });
 
   it('a card without an image renders the placeholder with the scene text and no <img>', () => {
-    const u = USE_CASES[0];
+    const u = { ...USE_CASES[0], image: undefined };
     const { container } = render(<UseCaseCard item={u} />);
     expect(container.querySelector('img')).toBeNull();
     const ph = screen.getByTestId(`usecase-placeholder-${u.id}`);
@@ -37,6 +37,10 @@ describe('UseCases', () => {
     expect(img.getAttribute('alt')).toBe(u.scene);
     expect(img.getAttribute('src')).toBe(u.image);
     expect(screen.queryByTestId(`usecase-placeholder-${u.id}`)).toBeNull();
+  });
+
+  it('every use case ships with its own still', () => {
+    for (const u of USE_CASES) expect(u.image).toBe(`/images/hardware/use-cases/${u.id}.webp`);
   });
 
   it('lays out 3 / 2 / 1 columns with scoped media queries', () => {
