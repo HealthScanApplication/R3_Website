@@ -768,200 +768,163 @@ git commit -m "feat(hardware): live backer progress bar"
 
 ---
 
-### Task 9: `PreorderBlock` — product toggle + checkout states
+### Task 9: Stripe Payment Element helper (`mountPayment`)
+
+> **Plan revision (controller ruling, found before dispatch):** the original Tasks 9–10 had a one-step email form and a `confirmPayment({clientSecret})` call with no card field, which cannot collect card details. This revision mirrors the Guardian checkout (`GuidePortal.tsx`): `stripe.elements({clientSecret})`, a mounted Payment Element, and `confirmPayment({ elements, redirect: 'if_required', ... })`. The publishable key and the production hold come from `getGuardianStripeConfiguration()` (`src/utils/guardianStripe.ts`), reused as-is. Task order is swapped: the helper (this task) comes before the checkout block (Task 10).
 
 **Files:**
-- Create: `src/components/hardware/PreorderBlock.tsx`
-- Test: `src/components/hardware/__tests__/PreorderBlock.test.tsx`
+- Create: `src/utils/hardwareStripe.ts`
+- Test: `src/utils/__tests__/hardwareStripe.test.ts`
 
 **Interfaces:**
-- Consumes: `PRODUCTS`, `formatUsd`, `SHIP_WINDOW`, `BackerBar`, `createPreorderIntent`/`confirmPreorder`. Stripe confirmation is isolated behind an injectable `payWithCard` prop (default wires `@stripe/stripe-js`) so the component is testable without Stripe.
-- Produces: `<PreorderBlock />` with product selection, price display, email entry, submit → success state that bumps `BackerBar`.
+- Consumes: `loadStripe` from `@stripe/stripe-js` (already a dependency); `getGuardianStripeConfiguration(): { enabled: boolean; publishableKey: string | null; error: string | null; environment: ... }` from `./guardianStripe`.
+- Produces (Task 10 relies on these exact names):
+  - `export type PaymentHandle = { confirm(email: string): Promise<void>; destroy(): void };`
+  - `export type MountPayment = (container: HTMLElement, clientSecret: string) => Promise<PaymentHandle>;`
+  - `export const mountPayment: MountPayment`
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write the failing test** (`// @vitest-environment jsdom` first line)
 
-```tsx
+```ts
+// @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-vi.mock('../../../utils/hardwarePreorder', () => ({ createPreorderIntent: vi.fn(), confirmPreorder: vi.fn(), fetchBackerCount: vi.fn().mockResolvedValue({ paid: 10, goal: 250, deadline: 'd', status: 'open' }) }));
-import { createPreorderIntent, confirmPreorder } from '../../../utils/hardwarePreorder';
-import { PreorderBlock } from '../PreorderBlock';
 
-beforeEach(() => vi.clearAllMocks());
+const mount = vi.fn();
+const destroy = vi.fn();
+const create = vi.fn(() => ({ mount, destroy }));
+const elementsFactory = vi.fn(() => ({ create }));
+const confirmPayment = vi.fn();
+vi.mock('@stripe/stripe-js', () => ({ loadStripe: vi.fn().mockResolvedValue({ elements: elementsFactory, confirmPayment }) }));
+const config = { enabled: true, publishableKey: 'pk_test_abc', error: null as string | null };
+vi.mock('../guardianStripe', () => ({ getGuardianStripeConfiguration: () => config }));
+import { loadStripe } from '@stripe/stripe-js';
+import { mountPayment } from '../hardwareStripe';
 
-describe('PreorderBlock', () => {
-  it('shows both prices and defaults to the ring', () => {
-    render(<PreorderBlock payWithCard={vi.fn()} />);
-    expect(screen.getByText('$179')).toBeTruthy();
-    expect(screen.getByText('$299')).toBeTruthy();
+beforeEach(() => { vi.clearAllMocks(); config.enabled = true; config.publishableKey = 'pk_test_abc'; config.error = null; });
+
+describe('mountPayment', () => {
+  it('refuses when checkout is not enabled for this environment', async () => {
+    config.enabled = false; config.publishableKey = null; config.error = 'Live payments are disabled pending full staging verification.';
+    await expect(mountPayment(document.createElement('div'), 'cs')).rejects.toThrow('Live payments are disabled');
+    expect(loadStripe).not.toHaveBeenCalled();
   });
-  it('runs intent -> pay -> confirm and shows success', async () => {
-    (createPreorderIntent as any).mockResolvedValue({ purchase_id: 'p1', client_secret: 'cs', amount_cents: 17900, currency: 'USD' });
-    (confirmPreorder as any).mockResolvedValue({ status: 'paid' });
-    const payWithCard = vi.fn().mockResolvedValue(undefined);
-    render(<PreorderBlock payWithCard={payWithCard} />);
-    fireEvent.change(screen.getByPlaceholderText(/email/i), { target: { value: 'qa@example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: /reserve/i }));
-    await waitFor(() => expect(screen.getByText(/you're in/i)).toBeTruthy());
-    expect(createPreorderIntent).toHaveBeenCalledWith('ring', 'qa@example.com', undefined);
-    expect(payWithCard).toHaveBeenCalledWith('cs');
-    expect(confirmPreorder).toHaveBeenCalledWith('p1');
+  it('creates elements from the client secret and mounts a payment element', async () => {
+    const container = document.createElement('div');
+    await mountPayment(container, 'cs_123');
+    expect(loadStripe).toHaveBeenCalledWith('pk_test_abc');
+    expect(elementsFactory.mock.calls[0][0].clientSecret).toBe('cs_123');
+    expect(create).toHaveBeenCalledWith('payment');
+    expect(mount).toHaveBeenCalledWith(container);
+  });
+  it('confirms in place with the receipt email and no redirect when possible', async () => {
+    confirmPayment.mockResolvedValue({ paymentIntent: { status: 'succeeded' } });
+    const handle = await mountPayment(document.createElement('div'), 'cs');
+    await handle.confirm('qa@example.com');
+    const arg = confirmPayment.mock.calls[0][0];
+    expect(arg.redirect).toBe('if_required');
+    expect(arg.confirmParams.receipt_email).toBe('qa@example.com');
+    expect(arg.elements).toBeTruthy();
+  });
+  it('throws Stripe\'s message when confirmation errors', async () => {
+    confirmPayment.mockResolvedValue({ error: { message: 'Your card was declined.' } });
+    const handle = await mountPayment(document.createElement('div'), 'cs');
+    await expect(handle.confirm('qa@example.com')).rejects.toThrow('Your card was declined.');
+  });
+  it('throws when the intent is neither succeeded nor processing', async () => {
+    confirmPayment.mockResolvedValue({ paymentIntent: { status: 'requires_payment_method' } });
+    const handle = await mountPayment(document.createElement('div'), 'cs');
+    await expect(handle.confirm('qa@example.com')).rejects.toThrow('Payment did not complete.');
+  });
+  it('destroy tears down the payment element', async () => {
+    const handle = await mountPayment(document.createElement('div'), 'cs');
+    handle.destroy();
+    expect(destroy).toHaveBeenCalled();
   });
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 2: Run to verify it fails**
 
-Run: `npx vitest run src/components/hardware/__tests__/PreorderBlock.test.tsx`
-Expected: FAIL (module missing).
+Run: `npx vitest run src/utils/__tests__/hardwareStripe.test.ts` — Expected: FAIL (module missing).
 
 - [ ] **Step 3: Write minimal implementation**
 
-```tsx
-import React, { FormEvent, useState } from 'react';
-import { ed, DISPLAY, GRO } from '../../config/editorialTheme';
-import { PRODUCTS, ProductKey, formatUsd, SHIP_WINDOW } from './copy';
-import { BackerBar } from './BackerBar';
-import { createPreorderIntent, confirmPreorder } from '../../utils/hardwarePreorder';
+```ts
+import { loadStripe } from '@stripe/stripe-js';
+import { getGuardianStripeConfiguration } from './guardianStripe';
 
-// Default card step: load Stripe.js, confirm the PaymentIntent. Injectable for tests.
-async function defaultPayWithCard(_clientSecret: string): Promise<void> {
-  // Implemented against @stripe/stripe-js Elements at wire-up; throws if confirmation fails.
-  throw new Error('Stripe is not configured in this environment.');
-}
+export type PaymentHandle = { confirm(email: string): Promise<void>; destroy(): void };
+export type MountPayment = (container: HTMLElement, clientSecret: string) => Promise<PaymentHandle>;
 
-export function PreorderBlock({ payWithCard = defaultPayWithCard }: { payWithCard?: (clientSecret: string) => Promise<void> }) {
-  const [product, setProduct] = useState<ProductKey>('ring');
-  const [email, setEmail] = useState('');
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [message, setMessage] = useState('');
-  const [bump, setBump] = useState(0);
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!email.trim()) return;
-    setStatus('loading'); setMessage('');
-    try {
-      const intent = await createPreorderIntent(product, email.trim(), undefined);
-      await payWithCard(intent.client_secret);
-      const result = await confirmPreorder(intent.purchase_id);
-      if (result.status !== 'paid') throw new Error('Payment did not complete.');
-      setStatus('success'); setMessage(`You're in — ${PRODUCTS[product].name} reserved.`); setBump(b => b + 1);
-    } catch (err) {
-      setStatus('error'); setMessage(err instanceof Error ? err.message : 'Could not complete your preorder.');
-    }
+// Mirrors the Guardian checkout (GuidePortal.tsx): Elements from the client secret, one Payment Element, confirm in place.
+export const mountPayment: MountPayment = async (container, clientSecret) => {
+  const config = getGuardianStripeConfiguration();
+  if (!config.enabled || !config.publishableKey) throw new Error(config.error || 'Checkout is unavailable.');
+  const stripe = await loadStripe(config.publishableKey);
+  if (!stripe) throw new Error('Could not load the payment form.');
+  const elements = stripe.elements({ clientSecret, appearance: { theme: 'night', variables: { colorPrimary: '#C7D99F', borderRadius: '0px' } } });
+  const payment = elements.create('payment');
+  payment.mount(container);
+  return {
+    async confirm(email: string) {
+      const { error, paymentIntent } = await stripe.confirmPayment({ elements, redirect: 'if_required', confirmParams: { return_url: window.location.href, receipt_email: email } });
+      if (error) throw new Error(error.message || 'Payment failed.');
+      if (!paymentIntent || (paymentIntent.status !== 'succeeded' && paymentIntent.status !== 'processing')) throw new Error('Payment did not complete.');
+    },
+    destroy() { payment.destroy(); },
   };
-
-  return (
-    <section style={{ display: 'grid', gap: 24 }}>
-      <BackerBar refreshKey={bump} />
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        {(Object.keys(PRODUCTS) as ProductKey[]).map(key => (
-          <button key={key} type="button" aria-pressed={product === key} onClick={() => setProduct(key)}
-            style={{ border: `1px solid ${product === key ? ed.onDark : ed.onDarkHair}`, background: product === key ? ed.onDark : 'transparent', color: product === key ? ed.dark : ed.onDark, padding: '14px 18px', fontFamily: GRO, cursor: 'pointer', textAlign: 'left', display: 'grid', gap: 4 }}>
-            <span style={{ fontFamily: DISPLAY, fontSize: 18 }}>{PRODUCTS[key].name}</span>
-            <span><b style={{ fontSize: 20 }}>{formatUsd(PRODUCTS[key].priceCents)}</b> <s style={{ color: ed.onDarkSoft }}>{formatUsd(PRODUCTS[key].regPriceCents)}</s></span>
-          </button>
-        ))}
-      </div>
-      <form onSubmit={submit} style={{ display: 'grid', gap: 12, maxWidth: 520 }}>
-        <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="Enter your email address"
-          style={{ minHeight: 56, border: `1px solid ${ed.onDarkHair}`, background: 'rgba(255,255,255,.04)', color: ed.onDark, padding: '0 18px', fontFamily: GRO }} />
-        <button type="submit" disabled={status === 'loading' || status === 'success'}
-          style={{ minHeight: 56, border: 0, background: '#C7D99F', color: ed.dark, fontFamily: GRO, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', cursor: 'pointer' }}>
-          {status === 'loading' ? 'Processing…' : status === 'success' ? 'Reserved' : `Reserve — ${formatUsd(PRODUCTS[product].priceCents)}`}
-        </button>
-        <p style={{ fontFamily: GRO, fontSize: 13, color: ed.onDarkSoft, margin: 0 }}>Full payment today. {SHIP_WINDOW}. If we don't reach the first-batch goal by the deadline, you're refunded in full.</p>
-        {message && <p role="status" style={{ fontFamily: GRO, fontSize: 13, color: status === 'error' ? '#F3A89A' : '#C7D99F', margin: 0 }}>{message}</p>}
-      </form>
-    </section>
-  );
-}
+};
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 4: Run to verify it passes**
 
-Run: `npx vitest run src/components/hardware/__tests__/PreorderBlock.test.tsx`
-Expected: PASS.
+Run: `npx vitest run src/utils/__tests__/hardwareStripe.test.ts` — Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/components/hardware/PreorderBlock.tsx src/components/hardware/__tests__/PreorderBlock.test.tsx
-git commit -m "feat(hardware): preorder block with product toggle and checkout flow"
+git add src/utils/hardwareStripe.ts src/utils/__tests__/hardwareStripe.test.ts
+git commit -m "feat(hardware): Stripe payment element helper mirroring guardian checkout"
 ```
 
 ---
 
-### Task 10: Wire the Stripe card step (`defaultPayWithCard`)
+### Task 10: `PreorderBlock` — product toggle and two-step checkout
 
 **Files:**
-- Create: `src/utils/hardwareStripe.ts`
-- Modify: `src/components/hardware/PreorderBlock.tsx` (import the real `payWithCard` default)
-- Test: `src/utils/__tests__/hardwareStripe.test.ts`
+- Create: `src/components/hardware/PreorderBlock.tsx`
+- Test: `src/components/hardware/__tests__/PreorderBlock.test.tsx` (`// @vitest-environment jsdom` first line; `afterEach(cleanup)`)
+- Modify: `src/utils/__tests__/hardwarePreorder.test.ts` (add the request-body test below)
 
 **Interfaces:**
-- Consumes: `@stripe/stripe-js` `loadStripe`; a publishable key from `src/utils/supabase/info` or env (follow how `guardianStripe.ts` sources its key).
-- Produces: `payWithCard(clientSecret: string): Promise<void>` — confirms the PaymentIntent, throws on failure.
+- Consumes: `PRODUCTS`, `ProductKey`, `formatUsd`, `SHIP_WINDOW` (Task 1); `BackerBar` with `refreshKey` prop (Task 8); `createPreorderIntent`, `confirmPreorder` (Task 7); `mountPayment`, `MountPayment`, `PaymentHandle` (Task 9); `getGuardianStripeConfiguration` from `../../utils/guardianStripe`.
+- Produces: `export function PreorderBlock(props: { mountPayment?: MountPayment; stripeConfig?: { enabled: boolean; error: string | null } })` — defaults: `mountPayment` from `../../utils/hardwareStripe`, `stripeConfig` from `getGuardianStripeConfiguration()`. Task 12 renders `<PreorderBlock />`.
 
-- [ ] **Step 1: Write the failing test**
+**Behavior (all must be covered by tests):**
+1. Two product buttons (R³ Ring $179, R³ Ring + Clip $299, with the regular price struck through); default `ring`; the primary button shows the selected price. Prices come from `PRODUCTS`/`formatUsd`.
+2. Step 1 (details): email input + button "Continue to payment". If `stripeConfig.enabled` is false, show `stripeConfig.error` (fallback "Preorders open soon.") and disable the button.
+3. Continue → `createPreorderIntent(product, email.trim(), undefined)`. **Fail closed**: if the response lacks a string `client_secret` or string `purchase_id`, show "Could not start checkout. Please try again." and stay on step 1. If the call rejects with a `TypeError` (network), show "Network problem — check your connection and try again."; any other `Error` shows its own message. The button is disabled while the request is in flight (no double submit).
+4. Step 2 (payment): a container `<div>` (ref) receives the Payment Element via `mountPayment(container, client_secret)`; if mounting rejects, show the message and return to step 1. Show the selected product/price, a "Pay $179" (selected price) button, and a "Change details" button that calls `handle.destroy()` and returns to step 1.
+5. Pay → `handle.confirm(email)` then `confirmPreorder(purchase_id)`; only a `paid` status shows success "You're in — {product name} reserved." and bumps `BackerBar`'s `refreshKey`; anything else shows "Payment did not complete." If `confirm` throws, show its message and stay on step 2 with the Pay button enabled again (retry). Pay is disabled while in flight.
+6. Copy under the form: "Full payment today. {SHIP_WINDOW}. If we don't reach the first-batch goal by the deadline, you're refunded in full."
+7. On unmount, `handle.destroy()` is called if a payment element is mounted.
+8. Inline styles only via `ed`/`DISPLAY`/`GRO` (editorial theme tokens as in the existing homepage section); no Tailwind classes.
 
-```ts
-import { describe, expect, it, vi } from 'vitest';
-const confirmPayment = vi.fn();
-vi.mock('@stripe/stripe-js', () => ({ loadStripe: vi.fn().mockResolvedValue({ confirmPayment }) }));
-vi.mock('../supabase/info', () => ({ projectId: 'p', publicAnonKey: 'a', stripePublishableKey: 'pk_test_x' }));
-import { payWithCard } from '../hardwareStripe';
+- [ ] **Step 1: Write the failing tests** — inject `mountPayment` (a vi.fn returning a fake handle `{ confirm: vi.fn(), destroy: vi.fn() }`) and `stripeConfig={{ enabled: true, error: null }}`; mock `../../../utils/hardwarePreorder` (`createPreorderIntent`, `confirmPreorder`, `fetchBackerCount` resolving `{ paid: 10, goal: 250, deadline: 'd', status: 'open' }`). Cases: prices shown and ring default; product toggle changes the primary price; disabled with the config error when `enabled: false`; happy path (type email, click "Continue to payment" → `createPreorderIntent` called with `('ring', 'qa@example.com', undefined)` and no price argument; `mountPayment` called with an `HTMLElement` and `'cs'`; click "Pay $179" → `handle.confirm('qa@example.com')`, `confirmPreorder('p1')`, "You're in" shown, `fetchBackerCount` called twice); fail-closed when `client_secret` missing; friendly network message on `TypeError('Failed to fetch')`; confirm throwing keeps step 2 with the error and a re-enabled Pay button; unpaid status shows "Payment did not complete."; "Change details" destroys the handle and returns to step 1; unmount destroys the handle; Continue is disabled while the request is in flight.
 
-describe('hardwareStripe', () => {
-  it('throws when Stripe returns an error', async () => {
-    confirmPayment.mockResolvedValue({ error: { message: 'card declined' } });
-    await expect(payWithCard('cs')).rejects.toThrow('card declined');
-  });
-});
-```
+Request-body test to add to `src/utils/__tests__/hardwarePreorder.test.ts` (client file otherwise unchanged): calling `createPreorderIntent('bundle', 'a@b.co', 'Ann')` posts to `https://proj.supabase.co/functions/v1/hardware-preorders` with headers `Content-Type: application/json` and `Authorization: Bearer anon`, and the parsed body's keys are exactly `['action', 'product', 'email', 'name']` (so it can never carry a price).
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 2: Run to verify they fail** — `npx vitest run src/components/hardware/__tests__/PreorderBlock.test.tsx src/utils/__tests__/hardwarePreorder.test.ts` — Expected: FAIL (component missing; body test fails or is new).
 
-Run: `npx vitest run src/utils/__tests__/hardwareStripe.test.ts`
-Expected: FAIL (module missing).
+- [ ] **Step 3: Implement `PreorderBlock.tsx`** to satisfy the behavior list above (a `step: 'details' | 'payment' | 'success'` state, `intent` state `{ purchaseId, clientSecret }`, a `handleRef`, a `containerRef`, an effect that mounts the payment element when `step === 'payment'`).
 
-- [ ] **Step 3: Write minimal implementation**
-
-Check `src/utils/guardianStripe.ts` for the exact publishable-key source and Elements usage, and follow it. Minimal shape:
-
-```ts
-import { loadStripe } from '@stripe/stripe-js';
-import { stripePublishableKey } from './supabase/info';
-
-export async function payWithCard(clientSecret: string): Promise<void> {
-  const stripe = await loadStripe(stripePublishableKey);
-  if (!stripe) throw new Error('Could not load the payment form.');
-  const { error } = await stripe.confirmPayment({ clientSecret, confirmParams: { return_url: window.location.href }, redirect: 'if_required' });
-  if (error) throw new Error(error.message || 'Payment failed.');
-}
-```
-
-Then in `PreorderBlock.tsx` replace the throwing `defaultPayWithCard` with an import:
-
-```tsx
-import { payWithCard as defaultPayWithCard } from '../../utils/hardwareStripe';
-```
-
-(and delete the local stub).
-
-> If `stripePublishableKey` is not exported from `supabase/info`, add it there sourced the same way `guardianStripe.ts` sources its key; do not hardcode a key.
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `npx vitest run src/utils/__tests__/hardwareStripe.test.ts`
-Expected: PASS.
+- [ ] **Step 4: Run to verify they pass** — same command — Expected: PASS, output pristine (no act warnings).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/utils/hardwareStripe.ts src/components/hardware/PreorderBlock.tsx src/utils/__tests__/hardwareStripe.test.ts src/utils/supabase/info*
-git commit -m "feat(hardware): wire Stripe card confirmation"
+git add src/components/hardware/PreorderBlock.tsx src/components/hardware/__tests__/PreorderBlock.test.tsx src/utils/__tests__/hardwarePreorder.test.ts
+git commit -m "feat(hardware): preorder block with two-step Stripe Payment Element checkout"
 ```
 
 ---
