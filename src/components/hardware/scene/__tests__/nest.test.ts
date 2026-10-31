@@ -49,14 +49,14 @@ describe('watchYaw', () => {
     expect(watchYaw(0, false)).toBeCloseTo(REST_YAW, 9);
     for (const t of [0, 3, 50]) expect(watchYaw(t, true)).toBe(REST_YAW);
     expect(Math.abs(REST_YAW)).toBeGreaterThan(0.3);
-    expect(Math.abs(REST_YAW)).toBeLessThanOrEqual(0.85);
+    expect(Math.abs(REST_YAW)).toBeLessThanOrEqual(1.0);
   });
 
   it('eases about the resting view and never turns straight on, so the case never hides the ring', () => {
     expect(WATCH_PERIOD).toBe(10);
-    expect(WATCH_SWING).toBeGreaterThan(0.25);
+    expect(WATCH_SWING).toBeGreaterThanOrEqual(0.2);
     expect(Math.abs(REST_YAW) - WATCH_SWING).toBeCloseTo(MIN_OFF_AXIS, 9);
-    expect(MIN_OFF_AXIS).toBeGreaterThanOrEqual(0.4);
+    expect(MIN_OFF_AXIS).toBeGreaterThanOrEqual(0.7);
     let lo = Infinity, hi = -Infinity;
     for (let t = 0; t < 20; t += 0.01) {
       const y = watchYaw(t, false);
