@@ -194,6 +194,15 @@ describe('createHeroScene', () => {
     expect(frames.length).toBe(1);
   });
 
+  it('repaints the screen texture as time runs (needsUpdate bumps its version)', async () => {
+    await createHeroScene(container, { ringUrl: '/r.stl', reducedMotion: false });
+    flush(0);
+    const tex = ((sceneOf(h.renderers[0]).getObjectByName('screen') as THREE.Mesh).material as THREE.MeshBasicMaterial).map!;
+    const v0 = tex.version;
+    for (let t = 16; t <= 500; t += 16) flush(t);
+    expect(tex.version - v0).toBeGreaterThan(5);
+  });
+
   it('under reduced motion renders one static frame and requests no further frames', async () => {
     const onReady = vi.fn();
     await createHeroScene(container, { ringUrl: '/r.stl', reducedMotion: true, onReady });

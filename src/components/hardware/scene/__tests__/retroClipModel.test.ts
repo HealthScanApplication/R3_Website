@@ -49,6 +49,26 @@ describe('buildRetroClip', () => {
     clip.dispose();
   });
 
+  it('faces the screen to +Z (the camera at yaw 0), unoccluded: ring has a hole, crystal is additive and see-through', () => {
+    const clip = buildRetroClip(headBytes(), { screenTexture: new THREE.Texture() });
+    clip.group.updateMatrixWorld(true);
+    const n = new THREE.Vector3(0, 0, 1).transformDirection(clip.screen.matrixWorld);
+    expect(n.z).toBeGreaterThan(0.999);
+    const head = clip.group.getObjectByName('head')!;
+    const front = head.children.filter(o => (o as THREE.Mesh).isMesh && o !== clip.screen && o.position.z > clip.screen.position.z) as THREE.Mesh[];
+    expect(front.length).toBe(2);
+    const [ring, crystal] = front.sort((a, b) => a.position.z - b.position.z);
+    // The ring covers no point of the window's centre: its triangles all lie outside the 27 x 23.5 window.
+    const p = ring.geometry.attributes.position;
+    for (let i = 0; i < p.count; i++) expect(Math.abs(p.getX(i)) >= 13.4 || Math.abs(p.getY(i)) >= 11.7 || Math.abs(p.getX(i)) + Math.abs(p.getY(i)) >= 20.7).toBe(true);
+    const cm = crystal.material as THREE.MeshStandardMaterial;
+    expect(cm.transparent).toBe(true);
+    expect(cm.blending).toBe(THREE.AdditiveBlending);
+    expect(cm.depthWrite).toBe(false);
+    expect(cm.color.getHex()).toBe(0x000000); // additive black adds only reflections, never covers the screen
+    clip.dispose();
+  });
+
   it('dispose frees the geometries and materials it made, but not the caller-owned screen texture', () => {
     const tex = new THREE.Texture();
     const texDispose = vi.spyOn(tex, 'dispose');
