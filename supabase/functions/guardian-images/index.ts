@@ -194,16 +194,28 @@ Deno.serve(async (req) => {
     return streamed(async () => {
     let response: Response; let output: any;
     try {
-      const form = new FormData();
-      form.append('model', MODEL);
-      form.append('image', await referenceBlob(shaped.imageUrl), 'source-portrait.png');
-      form.append('prompt', shaped.prompt);
-      form.append('size', shaped.size);
-      form.append('quality', shaped.quality);
-      form.append('n', '1');
-      form.append('output_format', 'webp');
-      response = await fetch(`${gi.OPENAI_BASE}/images/edits`, { method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form });
+      // Their photo first, then the As-Tro style references (any that will not load are skipped, never fatal).
+      const photo = await referenceBlob(shaped.imageUrl);
+      const styleRefs = (await Promise.all(gi.AVATAR_STYLE_REFERENCES.map(async (url) => {
+        try { const res = await fetch(url, { signal: AbortSignal.timeout(8000) }); return res.ok ? await res.blob() : null; } catch { return null; }
+      }))).filter((blob): blob is Blob => !!blob && blob.type.startsWith('image/'));
+      const edit = (transparent: boolean) => {
+        const form = new FormData();
+        form.append('model', MODEL);
+        form.append('image[]', photo, 'source-portrait.png');
+        styleRefs.forEach((blob, index) => form.append('image[]', blob, `as-tro-style-${index + 1}.webp`));
+        form.append('prompt', shaped.prompt);
+        form.append('size', shaped.size);
+        form.append('quality', shaped.quality);
+        form.append('n', '1');
+        form.append('output_format', 'webp'); // webp keeps the alpha channel
+        if (transparent) form.append('background', 'transparent');
+        return fetch(`${gi.OPENAI_BASE}/images/edits`, { method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form });
+      };
+      response = await edit(true);
       output = await response.json().catch(() => ({}));
+      // Transparency is a preview option on some models; if this one rejects it, retry once with a plain background.
+      if (!response.ok && gi.rejectedBackground(response.status, output)) { response = await edit(false); output = await response.json().catch(() => ({})); }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not reach the image service.';
       await finish('failed', message);

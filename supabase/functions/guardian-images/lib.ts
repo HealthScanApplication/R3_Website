@@ -51,9 +51,35 @@ export function shapeImageRequest(input: GenerateInput, model: string = DEFAULT_
   return { ok: true, source, aspect, quality, usd: priceFor(aspect, quality), body: { model, prompt, size: SIZE[aspect], quality, n: 1, output_format: 'webp', moderation: 'auto' } };
 }
 
+/**
+ * As-Tro plates sent beside the Guardian's photo as style references (the prompt below was written for ChatGPT with "the
+ * attached AS-TRO reference images"). They teach the engraved fine-art look only; the prompt forbids copying their faces.
+ * Only 384 px plates exist on as-tro.com. A reference that cannot be fetched is skipped, never fatal.
+ */
+export const AVATAR_STYLE_REFERENCES = [
+  'https://www.as-tro.com/assets/plates/384/people/abraham.webp',
+  'https://www.as-tro.com/assets/plates/384/people/james-son-of-alphaeus.webp',
+  'https://www.as-tro.com/assets/plates/384/people/teresa-of-avila.webp',
+];
+
+/** True when OpenAI's 400 is about the `background` parameter, so the request can be retried without transparency. */
+export const rejectedBackground = (status: number, body: any): boolean => status === 400 && /background|transparen/i.test(String(body?.error?.message || ''));
+
 export function avatarPrompt(name?: unknown): string {
   const person = String(name || 'the person').replace(/[\r\n]+/g, ' ').trim().slice(0, 100) || 'the person';
-  return `Create a refined R³ Guardian profile image of ${person} from the supplied photograph, as a carved stone bust in the R³ house style. Preserve the person's identity, facial structure, age, expression, hair and distinguishing features exactly, as if a master sculptor had carved this very person in weathered grey stone. Strictly monochrome greyscale stone with visible grain, fine chisel marks, a few soft chips and a gentle patina; the hair, skin and clothing are all carved stone, never painted or glossy. Head and shoulders only, the shoulders cut cleanly, resting on a low round stone base (a circular plinth) that is fully visible at the bottom of the frame and centred under the bust. One soft key light from the upper left with gentle shadows, quiet museum lighting. Plain near-black background so the stone glows. Square composition with generous circle-safe space around the bust and its base, so a circular crop never cuts either. No text, letters, logos, watermark, other people or colour. Do not beautify, de-age, change ethnicity or add accessories.`;
+  return `Create an image of ${person} in the exact visual house style of the attached AS-TRO reference images. The FIRST attached image is a photograph of ${person}: portray this very person from it. Preserve the person's identity, facial structure, age, expression, hair and distinguishing features exactly, so they are clearly recognisable. The other attached images are AS-TRO style references only: match their style, never their faces, clothing or poses.
+STYLE
+Timeless esoteric fine-art illustration, classical engraved portraiture blended with delicate painterly realism. Inspired by antique astronomical manuscripts, Renaissance illustrations, alchemical drawings and museum-quality historical artwork. Match the references in colour palette, contrast, illustration technique, texture, lighting, linework and overall artistic character.
+COMPOSITION
+One central subject, visually dominant, head and shoulders. Balanced, elegant, historically appropriate composition. Detailed subject with subtle, natural shading and fine textures. Preserve a consistent illustration style across all AS-TRO images. No unnecessary decorative elements. Square composition with generous circle-safe space around the head and shoulders, so a circular crop never cuts the subject.
+TRANSPARENCY - CRITICAL
+Generate on a fully transparent alpha background (RGBA). No solid background colour, white canvas or rectangular backdrop. No environment, scenery, gradient or background texture. The subject must be cleanly isolated, with soft, naturally feathered edges where appropriate. No artificial halo, glow, drop shadow or background vignette. Transparency must be genuine, not a simulated checkerboard pattern.
+RENDERING
+Sophisticated historical fine art, intricate detailing, muted natural colours, subtle antique texture applied only to the subject, realistic proportions, delicate chiaroscuro lighting.
+AVOID
+Cartoon, anime, modern 3D, photorealistic stock photography, neon colours, excessive gold, fantasy effects, generic mystical backgrounds, typography, logos, borders, frames or watermarks. Do not beautify, de-age, change ethnicity or add accessories.
+OUTPUT
+One isolated illustration, centred, with the subject entirely within the canvas and comfortable margins.`;
 }
 
 export function shapeAvatarRequest(input: AvatarInput) {

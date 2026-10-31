@@ -73,10 +73,20 @@ it('only accepts the model the price list belongs to', () => {
 });
 
 describe('avatar house style prompt', () => {
-  it('asks for a carved stone bust on a round base against near-black, and keeps the identity', () => {
+  it('is the As-Tro engraved fine-art prompt, keeps the identity and asks for transparency', () => {
     const prompt = gi.avatarPrompt('Ada Lovelace');
     expect(prompt).toMatch(/Ada Lovelace/);
-    for (const needle of [/carved stone bust/, /round stone base/, /near-black/, /monochrome greyscale/, /Preserve the person's identity/, /No text, letters, logos/]) expect(prompt).toMatch(needle);
-    expect(prompt).not.toMatch(/black-and-white photography|warm-light-grey/);
+    for (const needle of [/exact visual house style of the attached AS-TRO reference images/, /classical engraved portraiture/, /fully transparent alpha background/, /Preserve the person's identity/, /circle-safe/, /typography, logos, borders, frames or watermarks/, /never their faces/]) expect(prompt).toMatch(needle);
+    expect(prompt).not.toMatch(/stone bust|near-black/);
+  });
+  it('sends As-Tro plates as style references over https', () => {
+    expect(gi.AVATAR_STYLE_REFERENCES.length).toBeGreaterThanOrEqual(2);
+    for (const url of gi.AVATAR_STYLE_REFERENCES) expect(url).toMatch(/^https:\/\/www\.as-tro\.com\/assets\/plates\/384\/people\/[a-z-]+\.webp$/);
+  });
+  it('retries without transparency only when OpenAI rejects the background option', () => {
+    expect(gi.rejectedBackground(400, { error: { message: "Unknown parameter: 'background'." } })).toBe(true);
+    expect(gi.rejectedBackground(400, { error: { message: 'Transparent background is not supported for this model.' } })).toBe(true);
+    expect(gi.rejectedBackground(400, { error: { message: 'Invalid image size.' } })).toBe(false);
+    expect(gi.rejectedBackground(429, { error: { message: 'background rate limit' } })).toBe(false);
   });
 });
