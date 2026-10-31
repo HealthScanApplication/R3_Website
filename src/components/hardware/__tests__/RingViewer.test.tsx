@@ -1,0 +1,133 @@
+// @vitest-environment jsdom
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react';
+
+const reg = vi.hoisted(() => ({
+  loads: 0,
+  fail: false,
+  gate: null as Promise<void> | null,
+}));
+
+let RingViewer: typeof import('../RingViewer').RingViewer;
+
+async function loadComponent() {
+  vi.resetModules();
+  vi.doMock('../registerModelViewer', async () => {
+    reg.loads += 1;
+    if (reg.gate) await reg.gate;
+    if (reg.fail) throw new Error('registration failed');
+    return {};
+  });
+  ({ RingViewer } = await import('../RingViewer'));
+}
+
+function stubMotion(reduce: boolean) {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: reduce && query.includes('prefers-reduced-motion'),
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    onchange: null,
+    dispatchEvent: () => false,
+  }));
+}
+
+beforeEach(async () => {
+  reg.loads = 0;
+  reg.fail = false;
+  reg.gate = null;
+  stubMotion(false);
+  await loadComponent();
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+const viewer = (container: HTMLElement) => container.querySelector('model-viewer');
+
+describe('RingViewer', () => {
+  it('renders a model-viewer with the model, poster, alt and controls', async () => {
+    const { container } = render(<RingViewer />);
+    const el = viewer(container)!;
+    expect(el).not.toBeNull();
+    expect(el.getAttribute('src')).toBe('/models/r3-ring.glb');
+    expect(el.getAttribute('poster')).toBe('/models/r3-ring-poster.webp');
+    expect(el.getAttribute('alt')).toBe('R³ Ring — drag to rotate');
+    expect(el.getAttribute('camera-controls')).not.toBeNull();
+    expect(el.getAttribute('shadow-intensity')).not.toBeNull();
+    await waitFor(() => expect(reg.loads).toBe(1));
+  });
+
+  it('auto-rotates normally', async () => {
+    const { container } = render(<RingViewer />);
+    expect(viewer(container)!.getAttribute('auto-rotate')).not.toBeNull();
+    await waitFor(() => expect(reg.loads).toBe(1));
+  });
+
+  it('omits auto-rotate under reduced motion', async () => {
+    stubMotion(true);
+    const { container } = render(<RingViewer />);
+    expect(viewer(container)!.getAttribute('auto-rotate')).toBeNull();
+    await waitFor(() => expect(reg.loads).toBe(1));
+  });
+
+  it('tolerates matchMedia being undefined', async () => {
+    vi.stubGlobal('matchMedia', undefined);
+    const { container } = render(<RingViewer />);
+    expect(viewer(container)!.getAttribute('auto-rotate')).not.toBeNull();
+    await waitFor(() => expect(reg.loads).toBe(1));
+  });
+
+  it('swaps in the SVG fallback when the element fires error', async () => {
+    const { container } = render(<RingViewer />);
+    await waitFor(() => expect(reg.loads).toBe(1));
+    fireEvent(viewer(container)!, new CustomEvent('error', { detail: { type: 'loadfailure' } }));
+    expect(await screen.findByRole('img', { name: 'R³ Ring' })).toBeTruthy();
+    expect(viewer(container)).toBeNull();
+  });
+
+  it('shows the fallback when registration fails', async () => {
+    reg.fail = true;
+    await loadComponent();
+    const { container } = render(<RingViewer />);
+    expect(await screen.findByRole('img', { name: 'R³ Ring' })).toBeTruthy();
+    expect(viewer(container)).toBeNull();
+  });
+
+  it('shows the fallback without registering when customElements is missing', async () => {
+    vi.stubGlobal('customElements', undefined);
+    Object.defineProperty(window, 'customElements', { value: undefined, configurable: true });
+    const { container } = render(<RingViewer />);
+    expect(screen.getByRole('img', { name: 'R³ Ring' })).toBeTruthy();
+    expect(viewer(container)).toBeNull();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(reg.loads).toBe(0);
+  });
+
+  it('requests registration exactly once', async () => {
+    const { rerender } = render(<RingViewer />);
+    await waitFor(() => expect(reg.loads).toBe(1));
+    rerender(<RingViewer />);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(reg.loads).toBe(1);
+  });
+
+  it('does not warn or set state when unmounted before the import settles', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let release!: () => void;
+    reg.gate = new Promise<void>((r) => { release = r; });
+    reg.fail = true;
+    await loadComponent();
+    const { unmount } = render(<RingViewer />);
+    await waitFor(() => expect(reg.loads).toBe(1));
+    unmount();
+    release();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+});
