@@ -99,10 +99,10 @@ export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, 
         <span style={{ ...label, textAlign: 'center' }}>The R3 house style to aim for</span>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,160px))', gap: 14, justifyContent: 'center', marginTop: 12 }}>
           <Shot src={HOUSE_STYLE_EXAMPLE.before} alt="A stone bust of a young man on a plain white background, with an open book at its base." caption="Before" tag="Example" size={320} />
-          <Shot src={HOUSE_STYLE_EXAMPLE.after} alt="The same bust without the book, framed head and shoulders in black and white on a soft warm grey backdrop with gentle window light." caption="After" tag="Example" size={320} />
+          <Shot src={HOUSE_STYLE_EXAMPLE.after} alt="The same bust without the book, framed head and shoulders in grey carved stone on a soft grey backdrop with gentle side light." caption="After" tag="Example" size={320} />
         </div>
         <p style={{ color: muted, fontSize: 12, lineHeight: 1.6, margin: '12px auto 0', maxWidth: 520 }}>
-          R3 house style makes a calm editorial portrait: black and white, soft window light, a warm grey backdrop, framed head and shoulders. It keeps you looking like you, with no retouching.
+          R3 house style turns your photo into a carved stone bust, like the figures on As-Tro: grey stone with visible grain, one soft side light, a round stone base and a near-black backdrop. It keeps you looking like you.
         </p>
       </div>
     </section>

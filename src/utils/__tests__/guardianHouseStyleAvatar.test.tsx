@@ -41,8 +41,8 @@ describe('R3 house style panel', () => {
     expect(within(panel).getByText('Before')).toBeTruthy();
     expect(within(panel).getByText('After')).toBeTruthy();
     expect(within(panel).getAllByText('Example').length).toBe(2);
-    expect(panel.textContent).toMatch(/black and white/);
-    expect(panel.textContent).toMatch(/no retouching/);
+    expect(panel.textContent).toMatch(/carved stone bust/);
+    expect(panel.textContent).toMatch(/round stone base/);
     expect((panel as HTMLElement).style.width).toBe('100%');
     expect((panel as HTMLElement).style.textAlign).toBe('center');
     // Replace and Create each exist exactly once on the whole form, and there is no separate toggle button any more.
