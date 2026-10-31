@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, ExternalLink, MoreHorizontal } from 'lucide-react';
 import type { SitePublishAction, SiteStatus } from '../../utils/guardianSiteStatus';
 
@@ -56,16 +56,41 @@ export type SiteCardData = {
   backgroundIsVideo?: boolean;
   greyscale?: boolean;
   previewId: string;
+  /** The public page. When the site is live this is drawn as a scaled, non-interactive preview of the real page. */
+  previewHref?: string;
 };
+
+const PREVIEW_WIDTH = 1280;
+
+/** A live, non-interactive preview of a page: the real page at desktop width, scaled down to fit the card. */
+function ScaledPreview({ href, title }: { href: string; title: string }) {
+  const box = useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = useState(0.25);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const fit = () => setScale(Math.max(0.1, el.clientWidth / PREVIEW_WIDTH));
+    fit();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(fit);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return <div ref={box} data-site-preview style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: '#F2EFE7' }}>
+    <iframe src={href} title={`${title} website preview`} loading="lazy" tabIndex={-1} aria-hidden="true" style={{ width: PREVIEW_WIDTH, height: Math.ceil(PREVIEW_WIDTH * 1.25), border: 0, pointerEvents: 'none', transformOrigin: '0 0', transform: `scale(${scale})`, background: '#F2EFE7' }} />
+  </div>;
+}
 
 function SiteHero({ site }: { site: SiteCardData }) {
   const [imageFailed, setImageFailed] = useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
   useEffect(() => setImageFailed(false), [site.backgroundUrl]);
   useEffect(() => setAvatarFailed(false), [site.avatarUrl]);
-  const showImage = !!site.backgroundUrl && !site.backgroundIsVideo && !imageFailed;
+  const showPreview = !!site.previewHref && site.status.live;
+  const showImage = !showPreview && !!site.backgroundUrl && !site.backgroundIsVideo && !imageFailed;
   const showAvatar = !!site.avatarUrl && !avatarFailed;
-  return <div data-site-hero style={{ position: 'relative', aspectRatio: '16 / 9', overflow: 'hidden', background: '#0D0E0B', borderBottom: `1px solid ${LINE}` }}>
+  return <div data-site-hero style={{ position: 'relative', aspectRatio: '4 / 5', overflow: 'hidden', background: '#0D0E0B', borderBottom: `1px solid ${LINE}` }}>
+    {showPreview && <ScaledPreview href={site.previewHref!} title={site.title} />}
     {showImage && <img src={site.backgroundUrl} alt="" onError={() => setImageFailed(true)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: site.greyscale ? 'grayscale(1)' : undefined }} />}
     <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg,rgba(9,10,8,.12) 0%,rgba(9,10,8,.55) 55%,rgba(9,10,8,.9) 100%)' }} />
     <div style={{ position: 'absolute', left: 14, right: 14, bottom: 12, display: 'flex', alignItems: 'flex-end', gap: 10, minWidth: 0 }}>
@@ -92,17 +117,19 @@ const CARD_CSS = `
 const menuItem: React.CSSProperties = { display: 'block', boxSizing: 'border-box', width: '100%', border: 0, background: 'transparent', color: INK, padding: '10px 12px', textAlign: 'left', fontFamily: sans, fontSize: 13, fontWeight: 700, cursor: 'pointer', textDecoration: 'none' };
 
 /**
- * The All sites inventory: one 16:9 hero card per site, in the card language of the public Guardians page.
+ * The All sites inventory: one tall (4:5) hero card per site, with a live preview of the page once it is published, in the card language of the public Guardians page.
  * The whole card opens the site in the builder; the three dots menu holds Edit, the preview and View live.
  */
-export function SiteCardGrid({ sites, openMenu, onOpenMenu, onEdit, onPreview }: {
+export function SiteCardGrid({ sites, openMenu, onOpenMenu, onEdit, onPreview, minCardWidth = 280 }: {
   sites: SiteCardData[];
+  /** Narrowest a card may get before the grid drops a column. 440 holds two to a row in a 1100px column. */
+  minCardWidth?: number;
   openMenu: string | null;
   onOpenMenu: (key: string | null) => void;
   onEdit: (site: SiteCardData) => void;
   onPreview: (site: SiteCardData) => void;
 }) {
-  return <div className="g-sitecards">
+  return <div className="g-sitecards" style={{ gridTemplateColumns: `repeat(auto-fill,minmax(min(${minCardWidth}px,100%),1fr))` }}>
     <style>{CARD_CSS}</style>
     {sites.map((site) => {
       const open = openMenu === site.key;

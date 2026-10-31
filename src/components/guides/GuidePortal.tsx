@@ -3697,13 +3697,13 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         </section>
       </div>
     </form>}
-    {!summaryView && <StepRelated step={step} guardianSlug={savedSlug || guardianSlug} displayName={displayName} brands={brandProfiles.map((brand) => ({ id: brand.localId, name: (brand.localId === activeBrandId ? displayName : brand.name) || 'Untitled brand', kind: brand.kind, logo: brand.localId === activeBrandId ? avatarUrl || brand.logo_url : brand.logo_url }))} activeBrandId={activeBrandId} related={related} audience={audienceLabel(audienceDetails, audience)} />}
+    {!summaryView && <StepRelated step={step} profileStatus={savedStatus} guardianSlug={savedSlug || guardianSlug} displayName={displayName} brands={brandProfiles.map((brand) => ({ id: brand.localId, name: (brand.localId === activeBrandId ? displayName : brand.name) || 'Untitled brand', kind: brand.kind, logo: brand.localId === activeBrandId ? avatarUrl || brand.logo_url : brand.logo_url }))} activeBrandId={activeBrandId} related={related} audience={audienceLabel(audienceDetails, audience)} />}
       </div>
     </div>
   </div>;
 }
 
-type RelatedRow = { key: string; title: string; meta: string; image?: string | null; href: string; brandId?: string };
+type RelatedRow = { key: string; title: string; meta: string; image?: string | null; href: string; brandId?: string; kind?: 'profile' | 'offer'; rampStatus?: GuideValueRamp['status'] };
 export interface RelatedBrand { id: string; name: string; kind: 'personal' | 'business'; logo: string | null }
 
 /** One wide card of the "In your workspace" grid: picture, serif title, the detail line and a single Open. */
@@ -3721,16 +3721,17 @@ function WideCard({ row, onOpen }: { row: RelatedRow; onOpen: () => void }) {
 }
 
 /** Below the fold of each setup step: the Guardian's existing items for that stage, as wide cards two to a row. */
-export function StepRelated({ step, guardianSlug, displayName, related, audience = '', brands = [], activeBrandId = 'personal' }: { audience?: string;  step: number; guardianSlug: string; displayName: string; related: { leads: GuideLead[]; offers: GuideOffer[]; ramps: GuideValueRamp[]; protocols: AdminProtocol[] }; brands?: RelatedBrand[]; activeBrandId?: string }) {
+export function StepRelated({ step, guardianSlug, displayName, related, audience = '', brands = [], activeBrandId = 'personal', profileStatus = null }: { audience?: string; profileStatus?: GuideProfile['status'] | null;  step: number; guardianSlug: string; displayName: string; related: { leads: GuideLead[]; offers: GuideOffer[]; ramps: GuideValueRamp[]; protocols: AdminProtocol[] }; brands?: RelatedBrand[]; activeBrandId?: string }) {
   const [brandFilter, setBrandFilter] = useState<string>('all');
+  const [siteMenu, setSiteMenu] = useState<string | null>(null);
   const open = (href: string) => () => { window.location.href = href; };
   const offerImage = (offer: GuideOffer) => offer.access_model === 'free' ? '/images/guides/lead-plate.png' : '/images/guides/offer-plate.png';
   // Offer paths and offers are not tied to a brand in the data, so they belong to the whole Guardian and show under every filter.
-  const rampRows: RelatedRow[] = related.ramps.map((ramp) => ({ key: ramp.id, title: ramp.name, meta: `${[ramp.audience, ramp.problem].filter(Boolean).join(' · ')} · ${ramp.offer_ids.length} offers · ${ramp.status}`, image: '/images/guides/offer-plate.png', href: `/guardians/${guardianSlug}/value-ramp/${ramp.slug}` }));
+  const rampRows: RelatedRow[] = related.ramps.map((ramp) => ({ key: ramp.id, title: ramp.name, meta: `${[ramp.audience, ramp.problem].filter(Boolean).join(' · ')} · ${ramp.offer_ids.length} offers · ${ramp.status}`, image: '/images/guides/offer-plate.png', href: `/guardians/${guardianSlug}/value-ramp/${ramp.slug}`, kind: 'offer', rampStatus: ramp.status }));
   // One profile site per brand (a single brand reads exactly as before).
   const brandList: RelatedBrand[] = brands.length ? brands : [{ id: 'personal', name: displayName || 'Your', kind: 'personal', logo: null }];
   const siteRows: RelatedRow[] = [
-    ...brandList.map((brand): RelatedRow => ({ key: `profile-${brand.id}`, brandId: brand.id, title: `${brand.name || 'Your'} profile site`, meta: `/guardians/${guardianSlug}${brandList.length > 1 ? ` · ${brand.kind === 'personal' ? 'Personal' : 'Business'} brand` : ''}`, image: brand.logo || '/images/guides/guide-plate.png', href: `/guardians/${guardianSlug}` })),
+    ...brandList.map((brand): RelatedRow => ({ key: `profile-${brand.id}`, brandId: brand.id, kind: 'profile', title: `${brand.name || 'Your'} profile site`, meta: `/guardians/${guardianSlug}${brandList.length > 1 ? ` · ${brand.kind === 'personal' ? 'Personal' : 'Business'} brand` : ''}`, image: brand.logo || '/images/guides/guide-plate.png', href: `/guardians/${guardianSlug}` })),
     ...rampRows,
   ];
   const sections: Record<number, { title: string; tab: string; rows: RelatedRow[] }> = {
@@ -3754,7 +3755,17 @@ export function StepRelated({ step, guardianSlug, displayName, related, audience
     {filterable && <div role="group" aria-label="Filter sites by brand" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
       {filterIds.map((id) => <button key={id} type="button" aria-pressed={brandFilter === id} onClick={() => setBrandFilter(id)} style={{ minHeight: 30, padding: '0 12px', border: `1px solid ${brandFilter === id ? ink : line}`, background: brandFilter === id ? ink : 'transparent', color: brandFilter === id ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{chipLabel(id)}</button>)}
     </div>}
-    {rows.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,440px),1fr))', gap: 14 }}>
+    {rows.length && (step === 1 || step === 5) ? <SiteCardGrid
+      minCardWidth={440}
+      openMenu={siteMenu}
+      onOpenMenu={setSiteMenu}
+      sites={rows.slice(0, 8).map((row): SiteCardData => {
+        const profile = row.kind === 'profile';
+        return { key: row.key, type: profile ? 'Profile site' : 'Offer site', title: row.title, path: row.href, status: siteStatus(profileStatus, profile ? undefined : row.rampStatus ?? 'draft'), heroLine: row.title, heroKicker: profile ? 'Profile' : 'Offer path', avatarUrl: profile ? row.image : null, backgroundUrl: profile && row.image ? row.image : undefined, previewId: `site-${row.key}`, previewHref: row.href };
+      })}
+      onEdit={(site) => { setSiteMenu(null); open(site.path)(); }}
+      onPreview={(site) => { setSiteMenu(null); open(site.path)(); }}
+    /> : rows.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,440px),1fr))', gap: 14 }}>
       {rows.slice(0, 8).map((row) => <WideCard key={row.key} row={row} onOpen={open(row.href)} />)}
     </div> : <p style={{ color: muted, fontSize: 12 }}>Nothing here yet. What you create in this step will appear here.</p>}
   </section>;
