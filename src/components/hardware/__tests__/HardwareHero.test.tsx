@@ -71,4 +71,14 @@ describe('HardwareHero', () => {
     render(<HardwareHero />);
     expect(screen.queryByTestId('fluted')).toBeNull();
   });
+
+  it('centres the devices column vertically in the hero (the grid fills the height, the stage self-centres)', () => {
+    const { container } = render(<HardwareHero />);
+    const grid = container.querySelector('.r3-hw-hero-grid') as HTMLElement;
+    const stage = container.querySelector('.r3-hw-hero-devices') as HTMLElement;
+    expect(grid.style.flex).toMatch(/^1/);
+    expect(stage.style.alignSelf).toBe('center');
+    expect((grid.children[0] as HTMLElement).style.alignSelf).toBe('end');
+    expect(stage.contains(screen.getByTestId('devices'))).toBe(true);
+  });
 });

@@ -1,35 +1,33 @@
 /**
- * The R³ Retro "real retro watch" in necklace mode, ported from the owner's Pod Plan artifact (three r160):
- * `buildRetro` (artifact lines ~2140-2200), necklace branch only. The measured watch head (bracelet and lugs cut
- * off; public/models/r3-clip-retro.bin, made by scripts/decode-watch-model.mjs) turned 45° to hang as a diamond
- * from a chain, its e-paper screen under a flat crystal.
+ * The R³ Retro "real retro watch" in WATCH mode, ported from the owner's Pod Plan artifact (three r160): `buildRetro`
+ * (artifact lines ~2140-2200), `addHead(wG, 0, 13.8, true)`: the FULL measured watch, case plus its closed link
+ * bracelet (public/models/r3-clip-watch.bin, made by `scripts/decode-watch-model.mjs --full`), standing upright with
+ * its e-paper screen facing +Z under a flat crystal and the bracelet looping behind and around the case.
  *
- * Ported faithfully (millimetres, the artifact's S = 38 mm per model unit): the case mesh (`hm`, scaled by S at
+ * Ported faithfully (millimetres, the artifact's S = 38 mm per model unit): the watch mesh (`g`, scaled by S at
  * z = -0.74 S); the screen window `octagon(27, 23.5, 4)` at y -0.7, z = zf; the ring in the screen's colour that
  * fills the gap to the case (`octagon(31.4, 27.9, 4.8)` with the window as a hole); the additive crystal over it;
- * `lensBlend` camera at [12, 14.9, -0.2]; the two end caps with their dark rail mouths; `headG.rotation.z = π/4`;
- * the chain (bail cylinder, ring, two tubes) fixed to the turned head's top point. Helpers ported: `octagon`
- * (~1803), `add` (~940), `lensBlend` (~1897), `crystalMat` (~935), `metal` (~932), colours from `PRO.black` and
- * `UI.black`.
+ * `lensBlend` camera at [12, 14.9, -0.2]; no end caps (the bracelet runs into the case). Helpers ported: `octagon`
+ * (~1803), `add` (~940), `lensBlend` (~1897), `crystalMat` (~935), colours from `PRO.black` and `UI.black`.
  *
  * Changed: black colourway only; the screen is a MeshBasicMaterial (the artifact's `displayMat`) showing the
- * caller's texture, with UVs mapping the 27.6 mm square onto [0,1]² (the artifact set texture repeat/offset
- * instead, so the caller's texture needs no setup here); normals are computed on the head alone; the whole rig is
- * shifted +3.8 mm in z so the chain, and so `userData.anchor`, sit at x = 0, z = 0; the two chain tubes get one
- * more control point so they leave any frame. `chain` is a named child so the scene can frame without it.
+ * caller's texture (the heartbeat, retroScreen.ts, not navigation), with UVs mapping the 27.6 mm square onto
+ * [0,1]²; the bracelet's hole is measured (`loopHole`) and exposed as `group.userData.hole` (a Box3 in the group's
+ * millimetres, hole axis `userData.holeAxis` = 'x') so the scene can nest the R³ Note ring inside it.
  */
 import * as THREE from 'three';
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
-/** A hanging clip: `group` (with `userData.anchor` where the chain leaves it), its `screen` mesh, and `dispose`. */
+/** The watch: `group` (with `userData.hole` / `userData.holeAxis`), its `screen` mesh, and `dispose`. */
 export type ClipModel = { group: THREE.Group; screen: THREE.Mesh; dispose(): void };
 export type RetroClipOptions = { screenTexture: THREE.Texture };
+export type HoleBox = { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } };
 type V3 = [number, number, number];
 
 const S = 38;                                  // mm per model unit
 const BODY = '#2a2e2d';                        // PRO.black.body
 const GROUND = '#000000';                      // UI.black.ground
-const EY = 0.47, ZF = (0.785 - 0.74) * S, CHAIN_Z = -3.8;
+const ZF = (0.785 - 0.74) * S, Z_SHIFT = -0.74 * S;
+const RAY_BAND = 0.08;                         // model units: vertices this close to a ray count as on it
 const SCREEN_SPAN = 27.6;                      // the texture's square, mm
 
 /** Binary model: uint32 header length, JSON {min, max, n, ni, iw?}, Int16 positions, pad to 4, Uint16/Uint32 indices. */
@@ -56,7 +54,6 @@ function octagon(w: number, h: number, c: number): THREE.Shape {
 const add = (rig: THREE.Object3D, geo: THREE.BufferGeometry, mat: THREE.Material, x = 0, y = 0, z = 0) => {
   const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); rig.add(m); return m;
 };
-const metal = (color: string, rough = 0.3) => new THREE.MeshPhysicalMaterial({ color, metalness: 0.9, roughness: rough });
 // Sapphire crystal: drawn as its reflections only, added on top, so the screen under it stays sharp and true.
 const crystalMat = () => new THREE.MeshStandardMaterial({ color: '#000000', metalness: 0, roughness: 0.04, envMapIntensity: 0.35, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
 
@@ -77,24 +74,46 @@ function lensBlend(parent: THREE.Object3D, p: V3, t: V3, n: V3, mat: THREE.Mater
   return g;
 }
 
-export function buildRetroClip(bytes: ArrayBuffer, options: RetroClipOptions): ClipModel {
+/**
+ * The closed bracelet's hole, in model units, for a loop about the X axis: start at the YZ centre of the model's box,
+ * cast rays along ±Y and ±Z (vertices within RAY_BAND of a ray count), take the nearest hit on each, re-centre
+ * between the hits and cast once more. The X span is the model's full width. A ray that hits nothing falls back to
+ * the outer box.
+ */
+export function loopHole(positions: Float32Array): HoleBox {
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < positions.length; i++) { const k = i % 3; lo[k] = Math.min(lo[k], positions[i]); hi[k] = Math.max(hi[k], positions[i]); }
+  let cy = (lo[1] + hi[1]) / 2, cz = (lo[2] + hi[2]) / 2;
+  let yp = hi[1] - cy, yn = cy - lo[1], zp = hi[2] - cz, zn = cz - lo[2];
+  for (let pass = 0; pass < 2; pass++) {
+    let a = Infinity, b = Infinity, c = Infinity, d = Infinity;
+    for (let i = 0; i < positions.length; i += 3) {
+      const dy = positions[i + 1] - cy, dz = positions[i + 2] - cz;
+      if (Math.abs(dz) < RAY_BAND) { if (dy > 0) a = Math.min(a, dy); else b = Math.min(b, -dy); }
+      if (Math.abs(dy) < RAY_BAND) { if (dz > 0) c = Math.min(c, dz); else d = Math.min(d, -dz); }
+    }
+    yp = Number.isFinite(a) ? a : hi[1] - cy; yn = Number.isFinite(b) ? b : cy - lo[1];
+    zp = Number.isFinite(c) ? c : hi[2] - cz; zn = Number.isFinite(d) ? d : cz - lo[2];
+    if (pass === 0) { const ny = cy + (yp - yn) / 2, nz = cz + (zp - zn) / 2; yp += cy - ny; yn -= cy - ny; zp += cz - nz; zn -= cz - nz; cy = ny; cz = nz; }
+  }
+  return { min: { x: lo[0], y: cy - yn, z: cz - zn }, max: { x: hi[0], y: cy + yp, z: cz + zp } };
+}
+
+export function buildRetroWatch(bytes: ArrayBuffer, options: RetroClipOptions): ClipModel {
   const { positions, indices } = parseWatchModel(bytes);
-  const caseGeo = new THREE.BufferGeometry();
-  caseGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  caseGeo.setIndex(new THREE.BufferAttribute(indices, 1));
-  caseGeo.computeVertexNormals();
+  const watchGeo = new THREE.BufferGeometry();
+  watchGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  watchGeo.setIndex(new THREE.BufferAttribute(indices, 1));
+  watchGeo.computeVertexNormals();
 
   const group = new THREE.Group();
-  group.name = 'clip';
-  const rig = new THREE.Group();
-  rig.position.z = -CHAIN_Z;                   // the chain (and so the anchor) at z = 0
-  group.add(rig);
+  group.name = 'watch';
   const head = new THREE.Group();
   head.name = 'head';
-  rig.add(head);
+  group.add(head);
 
   const mat = new THREE.MeshPhysicalMaterial({ metalness: 1, roughness: 0.32, color: BODY });
-  const hm = new THREE.Mesh(caseGeo, mat); hm.scale.setScalar(S); hm.position.z = -0.74 * S; head.add(hm);
+  const wm = new THREE.Mesh(watchGeo, mat); wm.scale.setScalar(S); wm.position.z = Z_SHIFT; head.add(wm);
   // The screen: the artifact's unlit display material; UVs put the 27.6 mm texture square on the window.
   const winGeo = new THREE.ShapeGeometry(octagon(27, 23.5, 4));
   const uv = winGeo.attributes.uv as THREE.BufferAttribute;
@@ -106,27 +125,14 @@ export function buildRetroClip(bytes: ArrayBuffer, options: RetroClipOptions): C
   add(head, new THREE.ShapeGeometry(fr), new THREE.MeshBasicMaterial({ color: GROUND, toneMapped: false }), 0, -0.7, ZF + 0.01);
   add(head, new THREE.ShapeGeometry(octagon(31.4, 27.9, 4.8)), crystalMat(), 0, -0.7, ZF + 0.2);
   lensBlend(head, [12.0, 14.9, -0.2], [-0.707, 0.707, 0], [0.288, 0.288, 0.914], mat);
-  const ey = EY * S, mouth = new THREE.MeshStandardMaterial({ color: '#050606', roughness: 0.5 });
-  [-1, 1].forEach(sd => {
-    // The case's short edge, measured: 24 mm wide and about 6 mm deep, at its z centre.
-    add(head, new RoundedBoxGeometry(23.6, 2.4, 6, 2, 0.9), mat, 0, sd * (ey + 0.3), -3.8);
-    add(head, new RoundedBoxGeometry(15, 0.5, 3, 1, 0.4), mouth, 0, sd * (ey + 1.5), -3.8);
-  });
-  head.rotation.z = Math.PI / 4;
 
-  // The chain, fixed to the actual top point of the turned head.
-  const ty = (11.8 + ey + 1.5) * 0.7071, cm = metal('#c4ccc8', 0.25);
-  const chain = new THREE.Group();
-  chain.name = 'chain';
-  chain.position.z = CHAIN_Z;
-  rig.add(chain);
-  add(chain, new THREE.CylinderGeometry(1.1, 1.1, 5.4, 20), cm, 0, ty - 1.2, 0);
-  add(chain, new THREE.TorusGeometry(1.9, 0.55, 16, 48), cm, 0, ty + 2.0, 0).rotation.y = Math.PI / 2;
-  [-1, 1].forEach(sd => add(chain, new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
-    new THREE.Vector3(0, ty + 3.6, 0), new THREE.Vector3(sd * 9, 46, -3), new THREE.Vector3(sd * 19, 72, -7),
-    new THREE.Vector3(sd * 26, 104, -10), new THREE.Vector3(sd * 40, 200, -18),
-  ]), 100, 0.5, 10), cm));
-  group.userData.anchor = new THREE.Vector3(0, ty + 3.6, 0);
+  // The bracelet's hole, in the group's millimetres.
+  const h = loopHole(positions);
+  group.userData.hole = new THREE.Box3(
+    new THREE.Vector3(h.min.x * S, h.min.y * S, h.min.z * S + Z_SHIFT),
+    new THREE.Vector3(h.max.x * S, h.max.y * S, h.max.z * S + Z_SHIFT),
+  );
+  group.userData.holeAxis = 'x';
 
   let disposed = false;
   const dispose = () => {
@@ -145,11 +151,11 @@ export function buildRetroClip(bytes: ArrayBuffer, options: RetroClipOptions): C
   return { group, screen, dispose };
 }
 
-/** Fetch the head model and build the clip. */
-export async function loadRetroClip(url: string, options: RetroClipOptions): Promise<ClipModel> {
+/** Fetch the full watch model and build it. */
+export async function loadRetroWatch(url: string, options: RetroClipOptions): Promise<ClipModel> {
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Clip model request failed: status ${res.status} for ${url}`);
+  if (!res.ok) throw new Error(`Watch model request failed: status ${res.status} for ${url}`);
   const bytes = await res.arrayBuffer();
-  if (!bytes || bytes.byteLength < 8) throw new Error(`Clip model response was empty (status ${res.status}) for ${url}`);
-  return buildRetroClip(bytes, options);
+  if (!bytes || bytes.byteLength < 8) throw new Error(`Watch model response was empty (status ${res.status}) for ${url}`);
+  return buildRetroWatch(bytes, options);
 }

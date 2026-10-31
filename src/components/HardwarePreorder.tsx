@@ -39,10 +39,8 @@ export function HardwarePreorder() {
           <p style={overline}>R³ hardware · first batch</p>
         </div>
 
-        <div style={{ flex: 1, minHeight: 'clamp(24px, 5vh, 80px)' }} />
-
-        <div className="r3-hw-teaser-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 0.9fr)', gap: 'clamp(28px, 5vw, 80px)', alignItems: 'end' }}>
-          <div>
+        <div className="r3-hw-teaser-grid" style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 0.9fr)', gap: 'clamp(28px, 5vw, 80px)', alignItems: 'end', paddingTop: 'clamp(24px, 5vh, 80px)' }}>
+          <div style={{ alignSelf: 'end' }}>
             <h2 id="hardware-preorder-title" style={{ ...coverStyle, fontSize: 'clamp(2.8rem, 7vw, 7.5rem)', color: '#FFFFFF', textShadow: '0 4px 24px rgba(0,0,0,0.38)' }}>
               Meet the R³ Note and R³ Clip.
             </h2>
@@ -54,14 +52,14 @@ export function HardwarePreorder() {
               <p style={{ margin: '16px 0 0', fontFamily: GRO, fontSize: 14, lineHeight: 1.55, color: ed.ink }}>{PREORDER_TERMS}</p>
             </div>
           </div>
-          <div className="r3-hw-teaser-devices" style={{ position: 'relative', width: '100%', aspectRatio: '4 / 5', minHeight: 420 }}>
+          <div className="r3-hw-teaser-devices" style={{ position: 'relative', width: '100%', aspectRatio: '4 / 5', minHeight: 420, alignSelf: 'center' }}>
             <LazyHeroDevices targetRef={sectionRef} />
           </div>
         </div>
       </div>
       <style>{`@supports not (min-height: 100svh) { #hardware-preorder, #hardware-preorder > div { min-height: 100vh !important; } }
 .r3-hw-teaser-devices svg { width: 100%; height: 100%; display: block; }
-@media (max-width: 800px) { .r3-hw-teaser-grid { grid-template-columns: 1fr !important; } .r3-hw-teaser-devices { aspect-ratio: 1 / 1 !important; min-height: 0 !important; max-height: 52svh; } }`}</style>
+@media (max-width: 800px) { .r3-hw-teaser-grid { grid-template-columns: 1fr !important; align-content: end; } .r3-hw-teaser-devices { aspect-ratio: 1 / 1 !important; min-height: 0 !important; max-height: 52svh; } }`}</style>
     </section>
   );
 }

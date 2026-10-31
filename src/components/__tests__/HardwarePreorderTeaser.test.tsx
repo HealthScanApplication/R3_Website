@@ -113,4 +113,13 @@ describe('HardwarePreorder teaser', () => {
     render(<HardwarePreorder />);
     expect(screen.getByTestId('devices')).toBeTruthy();
   });
+
+  it('centres the devices column vertically in the section', () => {
+    const { container } = render(<HardwarePreorder />);
+    const grid = container.querySelector('.r3-hw-teaser-grid') as HTMLElement;
+    const stage = container.querySelector('.r3-hw-teaser-devices') as HTMLElement;
+    expect(grid.style.flex).toMatch(/^1/);
+    expect(stage.style.alignSelf).toBe('center');
+    expect((grid.children[0] as HTMLElement).style.alignSelf).toBe('end');
+  });
 });

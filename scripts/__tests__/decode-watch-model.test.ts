@@ -1,5 +1,5 @@
 // @ts-expect-error - plain .mjs script without type declarations
-import { decodeModel, encodeModel, keepHead, weld } from '../decode-watch-model.mjs';
+import { decodeModel, encodeModel, keepFull, keepHead, weld } from '../decode-watch-model.mjs';
 import { describe, expect, it } from 'vitest';
 
 type Model = { positions: Float32Array; indices: Uint32Array };
@@ -52,5 +52,23 @@ describe('decode-watch-model', () => {
     expect(Array.from(head.indices)).toEqual([0, 1, 2]);
     expect(head.positions.length).toBe(9);
     expect(head.positions[8]).toBeCloseTo(0.7, 6);
+  });
+
+  it('full mode keeps the bracelet triangles as well as the head (and compacts away unused vertices)', () => {
+    const full = keepFull(synthetic()) as Model;
+    expect(full.indices.length).toBe(6);
+    expect(full.positions.length).toBe(18);
+    const ys = Array.from({ length: 6 }, (_, i) => full.positions[i * 3 + 1]);
+    expect(Math.max(...ys)).toBeCloseTo(0.95, 5);   // the bracelet triangle survived
+  });
+
+  it('full mode decimates to the triangle budget', () => {
+    // A 20 x 20 grid of quads (800 triangles) brought down to <= 200.
+    const n = 21, pos: number[] = [], idx: number[] = [];
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) pos.push(i / 20, j / 20, Math.sin(i / 3) * 0.05);
+    for (let j = 0; j < n - 1; j++) for (let i = 0; i < n - 1; i++) { const a = j * n + i; idx.push(a, a + 1, a + n, a + 1, a + n + 1, a + n); }
+    const out = keepFull({ positions: new Float32Array(pos), indices: new Uint32Array(idx) }, 200) as Model;
+    expect(out.indices.length / 3).toBeLessThanOrEqual(200);
+    expect(out.indices.length / 3).toBeGreaterThan(50);
   });
 });
