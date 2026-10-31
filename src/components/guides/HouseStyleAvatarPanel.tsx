@@ -45,6 +45,8 @@ export interface HouseStyleAvatarPanelProps {
   /** Saves the profile (including this avatar) as a draft. */
   save?: SaveState;
   onSave?: () => void;
+  /** Content shown inside the card under the actions, e.g. the photo grid. */
+  children?: React.ReactNode;
 }
 
 /** One square picture with a caption; `tag` is the small badge laid over the corner (Example, Test image). */
@@ -60,7 +62,7 @@ function Shot({ src, alt, caption, tag, grey, size }: { src: string; alt: string
   );
 }
 
-export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, converting, applying, uploading, dragging, resultUrl, resultMock, error, onCreate, onUpload, onApply, onCancel, save, onSave }: HouseStyleAvatarPanelProps) {
+export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, converting, applying, uploading, dragging, resultUrl, resultMock, error, onCreate, onUpload, onApply, onCancel, save, onSave, children }: HouseStyleAvatarPanelProps) {
   const busy = converting || applying;
   const noteId = `${id}-note`;
   const featured = resultUrl ? sourceUrl : currentUrl || sourceUrl;
@@ -108,8 +110,10 @@ export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, 
         {dragging ? 'Drop to upload' : needsUpload ? 'This is a stock image. Replace it with your own photo to create your house style, or drag one here.' : 'or drag a photo here'}
       </p>
       {error && <p role="alert" style={{ color: ink, background: 'rgba(245,242,234,.06)', borderLeft: `2px solid ${acid}`, fontSize: 12, lineHeight: 1.5, margin: '12px auto 0', padding: '8px 10px', maxWidth: 480, textAlign: 'left' }}>{error}</p>}
-      <div aria-label="The R3 house style to aim for" style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${line}` }}>
-        <span style={{ ...label, textAlign: 'center' }}>The R3 house style to aim for</span>
+      {children}
+      <details style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${line}` }}>
+        <summary style={{ ...label, textAlign: 'center', cursor: 'pointer', listStylePosition: 'inside' }}>See the R3 house style to aim for</summary>
+      <div aria-label="The R3 house style to aim for">
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,200px)', justifyContent: 'center', marginTop: 12 }}>
           <Shot src={HOUSE_STYLE_EXAMPLE.goal} alt="An As-Tro plate: an engraved fine-art illustration of a robed apostle holding a staff, in muted grey tones with fine linework, isolated on a transparent background." caption="The goal" tag="Example" size={400} />
         </div>
@@ -117,6 +121,7 @@ export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, 
           R3 house style turns your photo into an antique fine-art illustration in the As-Tro style: classical engraved portraiture with delicate painterly shading and muted natural colours, cleanly cut out on a transparent background. It keeps you looking like you.
         </p>
       </div>
+      </details>
     </section>
   );
 }
