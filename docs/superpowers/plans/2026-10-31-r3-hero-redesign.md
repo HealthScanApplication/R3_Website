@@ -59,6 +59,48 @@ git commit -m "feat(hardware): dependency-free STL decimation script and reduced
 
 ---
 
+### Task 1b: Replace vertex clustering with quadric-error edge-collapse simplification (smooth ring)
+
+> **Why (owner feedback + controller diagnosis, 2026-10-31):** the owner reported "the ring polygon is broken, not smooth". Side-by-side views in three.js showed the ORIGINAL Meshy STL (324,060 triangles, 162,013 welded vertices) is clean and smooth, while the Task 1 vertex-clustering result (39,210 triangles, only 18,752 welded vertices) lost the smooth inner band, has a jagged crinkled inner rim, and mangled the small inner sensors. Vertex clustering is the cause, not the source mesh. The fix is a real simplifier (Garland–Heckbert quadric error metrics with edge collapse), written in pure Node with NO third-party code (a downloaded-package approach was rejected by the sandbox and the plan's no-new-dependency ruling stands).
+
+**Files:**
+- Modify (rewrite the simplification core): `scripts/decimate-stl.mjs`
+- Modify: `scripts/__tests__/decimate-stl.test.ts`
+- Regenerate (committed binary asset): `public/models/r3-ring.stl`
+- Modify: `scripts/convert-ring-stl.md` (describe the new algorithm and flags)
+
+**Interfaces (named ESM exports; keep `parseStl` and `writeBinaryStl` exactly as they are):**
+- Keep: `parseStl(bytes: Uint8Array): Float32Array` (9 floats per triangle) and `writeBinaryStl(positions: Float32Array): Uint8Array`.
+- Remove: `decimate` and `decimateToTarget` (vertex clustering) and their tests; nothing outside this script imports them (grep to confirm).
+- Add: `weldMesh(positions: Float32Array): { vertices: Float32Array; indices: Uint32Array }` — welds vertices that have IDENTICAL float coordinates (hash on the three float32 bit patterns, e.g. via a `Map` keyed by a string of the three values or by three `Float32Array`→`Uint32Array` reinterpreted words) into an indexed mesh; drops triangles with a repeated index.
+- Add: `simplify(mesh: { vertices: Float32Array; indices: Uint32Array }, targetTriangles: number): { vertices: Float32Array; indices: Uint32Array; triangles: number }` — Garland–Heckbert quadric-error-metrics simplification by iterative edge collapse until the triangle count is ≤ `targetTriangles` (or no valid collapse remains).
+- Add: `toTriangleSoup(mesh: { vertices: Float32Array; indices: Uint32Array }): Float32Array` — back to 9 floats per triangle for `writeBinaryStl`.
+- CLI unchanged in spelling: `node scripts/decimate-stl.mjs <input.stl> <output.stl> [--max-triangles 50000]` (default now 50000); it prints input triangles, welded vertices, output triangles, output welded vertices, Euler characteristic (V − E + F) before and after, and output bytes.
+
+**Algorithm requirements (all mandatory):**
+1. **Quadrics:** for every triangle compute its plane (a,b,c,d) with unit normal, area-weight the 4×4 fundamental quadric `K = p pᵀ` by triangle area, and sum onto its three vertices. Store each vertex quadric as 10 floats in one `Float64Array`.
+2. **Edge candidates:** every unique edge `(u,v)` of the welded mesh; collapse cost = `vᵀ(Qu+Qv)v` evaluated at the optimal position found by solving the 3×3 system from the quadric (if the matrix is near-singular, fall back to the best of {u, v, midpoint}); keep a binary min-heap of candidates with lazy invalidation (a per-vertex version counter; discard stale entries when popped). Rebuild candidates for the survivor's edges after each collapse.
+3. **Validity checks before accepting a collapse:** (a) *link condition* — the number of common neighbours of `u` and `v` must be exactly 2 on a closed manifold (so topology is preserved and the surface cannot pinch or tear); (b) *no fold-overs* — for every triangle around `u` and `v` that survives, the normal after moving the vertex to the new position must not flip (dot with the old normal > 0.2 is required, i.e. reject collapses that turn a face by more than ~78°) and must not become degenerate (area > 1e-12 × scale²); (c) never collapse onto a vertex whose position would produce NaN/Infinity.
+4. **Boundary handling:** if the mesh has boundary edges (an edge used by only one triangle), add the standard penalty quadrics (a plane through the boundary edge perpendicular to its triangle, weighted large) so open boundaries stay put; the real ring is closed, but the code must not crash on open meshes.
+5. **Complexity and memory:** typed arrays only for vertices, indices, quadrics, adjacency (use CSR-style vertex→triangle lists rebuilt/updated by a swap-remove scheme or per-vertex `Int32Array` lists with `-1` tombstones); the heap stores entries in parallel typed arrays; the real file (162,013 welded vertices, 324,060 triangles → 50,000) must finish in under 60 s and under 1.5 GB peak.
+6. **Determinism:** same input and target give byte-identical output.
+7. **Compaction:** after simplification drop unreferenced vertices and compact indices; the output vertex array contains only used vertices.
+
+- [ ] **Step 1: Write the failing tests** (`scripts/__tests__/decimate-stl.test.ts`, node environment; delete the vertex-clustering tests; keep the `parseStl`/`writeBinaryStl` round-trip, ASCII and error tests unchanged). New synthetic meshes are built in the test: a UV-sphere (radius 10, ≥ 20,000 triangles) and a torus (major radius 10, minor radius 3, ≥ 20,000 triangles). Assert for BOTH meshes after `weldMesh` then `simplify(mesh, ~20% of triangles)`: triangle count ≤ target and ≥ 0.9 × target (it reaches the target); the Euler characteristic V − E + F is unchanged (sphere 2, torus 0) — computed by counting unique undirected edges; every edge is shared by exactly two triangles (closed manifold preserved) and no vertex index is out of range; no degenerate triangle (cross-product length > 0); no triangle flipped (for the sphere, every output triangle's face normal has a positive dot product with its centroid direction from the origin; for the torus, with the outward normal computed from the centroid's projection onto the major circle); geometric fidelity: for the sphere, every output vertex lies within 1% of the radius of the true sphere surface (| |v| − 10 | < 0.1), and the enclosed volume (sum of signed tetrahedra) is within 2% of the original's; for the torus, every output vertex is within 2% of minor radius... (distance from the major circle minus 3, absolute < 0.12); bounding box within 1% of the original on every axis; determinism (two runs give identical `indices` and `vertices`); a mesh with a boundary (a flat grid of 60×60 quads, 7,200 triangles) simplified to ~25% keeps its outer boundary: every original boundary corner vertex still exists in the output (positions of the four corners present) and there are no NaNs; `simplify` with a target larger than the triangle count returns the mesh unchanged (same triangle count); a tiny mesh (a tetrahedron, 4 triangles) with target 2 returns without throwing and does not produce degenerate triangles (it is allowed to stop at 4 because the link condition forbids collapsing); `weldMesh` merges identical vertices (a two-triangle square shares 2 vertices → 4 vertices, 6 indices); `toTriangleSoup(weldMesh(x))` has the same triangle count as `x`.
+- [ ] **Step 2: Run to verify they fail** — `npx vitest run scripts/__tests__/decimate-stl.test.ts` — Expected: FAIL (new exports missing).
+- [ ] **Step 3: Implement** the rewrite of `scripts/decimate-stl.mjs` (pure Node, no dependencies, no side effects on import, CLI behind the `pathToFileURL(process.argv[1]).href` guard). Add friendly CLI errors: a missing input file, an output directory that does not exist, and output path equal to input path each print one clear line and exit 1 (no stack trace).
+- [ ] **Step 4: Run to verify they pass** — same command — Expected: PASS, pristine output.
+- [ ] **Step 5: Regenerate the real asset** from the owner's source (read-only; never copy it into the repo): `node scripts/decimate-stl.mjs "/Users/john/Desktop/untitled folder 6/Meshy_AI_smart_ring_refined_20261031_generate.stl" public/models/r3-ring.stl --max-triangles 50000`. The output must be ≤ 3,000,000 bytes. Then verify programmatically (not by eye) and report: output triangle count, welded vertex count (it must be roughly 25,000, far above the 18,752 of the old clustered result when measured at the same triangle count... report the number), Euler characteristic before and after (they must be equal), bounding box of input vs output (agree within 0.5% of the longest extent), the maximum and mean distance from output vertices to the original surface sampled by nearest original-vertex distance on a subsample of 2,000 output vertices (report the maximum; a good result is under 1% of the longest extent), and the runtime and peak memory.
+- [ ] **Step 6: Update `scripts/convert-ring-stl.md`**: describe the QEM approach in two or three sentences, the command, the default 50,000 triangles and that size is ≈ 50 bytes per triangle, and that the source STL is not committed.
+- [ ] **Step 7: Commit**
+
+```bash
+git add scripts/decimate-stl.mjs scripts/__tests__/decimate-stl.test.ts public/models/r3-ring.stl scripts/convert-ring-stl.md
+git commit -m "fix(hardware): quadric-error edge-collapse simplification for a smooth ring model"
+```
+
+---
+
 ### Task 2: Restore the clip's heartbeat in the drawn art and add the heart-rate spec row
 
 > **Context (controller correction):** the Task 12 fix removed the heartbeat polyline from `ClipArt` as an "invented" sensor claim. The owner's Pod Plan spec sheet lists heart rate and the owner asked for the heartbeat, so it comes back.
