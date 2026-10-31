@@ -929,98 +929,44 @@ git commit -m "feat(hardware): preorder block with two-step Stripe Payment Eleme
 
 ---
 
-### Task 11: 3D ring asset pipeline + `RingViewer`
+### Task 11: 3D ring viewer component (asset conversion is an owner step)
+
+> **Plan revision (controller ruling):** Blender is not installed on this machine and the shared-machine gate was RED when this task was reached, so the STL → `.glb` conversion cannot run here. This task builds the viewer component, its dependency declaration, and the owner's conversion instructions. The component MUST work without the model file: if the `.glb` is missing, or the viewer fails to register or load, it shows the SVG ring illustration instead, so `/ring` is never broken. The two asset files (`public/models/r3-ring.glb`, `public/models/r3-ring-poster.webp`) are NOT created by this task.
 
 **Files:**
-- Create: `public/models/r3-ring.glb`, `public/models/r3-ring-poster.webp` (build artifacts)
-- Create: `scripts/convert-ring-stl.md` (reproducible conversion notes)
+- Create: `src/components/hardware/registerModelViewer.ts`
 - Create: `src/components/hardware/RingViewer.tsx`
-- Test: `src/components/hardware/__tests__/RingViewer.test.tsx`
-- Modify: `package.json` (add `@google/model-viewer`)
+- Create: `src/components/hardware/model-viewer.d.ts`
+- Create: `scripts/convert-ring-stl.md`
+- Modify: `package.json` and `package-lock.json` (declare `@google/model-viewer@4.0.0` WITHOUT touching `node_modules`: run `npm install --package-lock-only @google/model-viewer@4.0.0`; do NOT run a plain `npm install`/`npm ci`)
+- Test: `src/components/hardware/__tests__/RingViewer.test.tsx` (`// @vitest-environment jsdom` first line; `afterEach(cleanup)`)
 
 **Interfaces:**
-- Produces: `<RingViewer />` rendering a `<model-viewer>` with `src="/models/r3-ring.glb"`, `poster`, `camera-controls`, `auto-rotate`, reduced-motion aware; poster-image fallback when the element is unsupported.
+- Produces: `export function RingViewer()` (no props; fills its parent: `width: 100%; height: 100%; min-height: 360px`). Task 12 renders `<RingViewer />` in the hero.
+- Produces: `registerModelViewer.ts` whose entire body is `import '@google/model-viewer';` (isolated so tests mock this one relative module and never resolve the package).
 
-- [ ] **Step 1: Convert the STL (not a test — asset step, run behind the machine gate)**
+**Behavior (all covered by tests):**
+1. Renders a `<model-viewer>` element with `src="/models/r3-ring.glb"`, `poster="/models/r3-ring-poster.webp"`, an `alt` ("R³ Ring — drag to rotate"), the `camera-controls` attribute, `shadow-intensity`, and `auto-rotate` ONLY when `window.matchMedia('(prefers-reduced-motion: reduce)').matches` is false (guard `matchMedia` being undefined).
+2. On mount it dynamically `import('./registerModelViewer')`; if that import rejects, show the fallback.
+3. If the `<model-viewer>` element fires an `error` event (e.g. the `.glb` 404s), replace it with the fallback.
+4. If `window.customElements` is unavailable, show the fallback without registering.
+5. Fallback = an inline SVG ring illustration with `role="img"` and `aria-label="R³ Ring"` (a simple ellipse ring in the same stone/ochre palette as the homepage hardware art: dark ellipse shell, inner ellipse, one `#C7D99F` indicator dot) inside a container that fills the parent. Inline styles only; no Tailwind classes.
+6. Never set state after unmount (guard the async import).
+7. `scripts/convert-ring-stl.md` documents, for the OWNER to run later: the exact Blender command (`blender -b --python <script>`) that imports `Meshy_AI_smart_ring_refined_20261031_generate.stl`, applies a Decimate modifier (target a `.glb` under ~2 MB; ratio starting at 0.25, adjust), exports GLB with Draco compression to `public/models/r3-ring.glb`, plus how to produce `public/models/r3-ring-poster.webp` (a 1:1 viewport render), and a note that until these two files exist the page shows the SVG fallback. No execution in this task.
 
-```bash
-~/Developer/.machine-pressure.sh gate --wait
-# Decimate + export to glb with Draco. Source is outside the repo:
-SRC="/Users/john/Desktop/untitled folder 6/Meshy_AI_smart_ring_refined_20261031_generate.stl"
-blender -b -P - <<'PY'
-import bpy, sys
-bpy.ops.wm.read_factory_settings(use_empty=True)
-bpy.ops.import_mesh.stl(filepath="/Users/john/Desktop/untitled folder 6/Meshy_AI_smart_ring_refined_20261031_generate.stl")
-obj = bpy.context.selected_objects[0]
-m = obj.modifiers.new('d', 'DECIMATE'); m.ratio = 0.25
-bpy.ops.object.modifier_apply(modifier='d')
-bpy.ops.export_scene.gltf(filepath="public/models/r3-ring.glb", export_format='GLB', export_draco_mesh_compression_enable=True)
-PY
-ls -lh public/models/r3-ring.glb   # confirm well under ~2MB
-```
+- [ ] **Step 1: Write the failing tests** — mock `../registerModelViewer` with `vi.mock('../registerModelViewer', () => ({}))` for the happy path and a throwing factory (or a mocked-rejecting dynamic import) for the failure path. Cases: renders `model-viewer` with the exact `src`, `poster`, `camera-controls`, and an `alt`; `auto-rotate` present normally and absent under reduced motion (stub `window.matchMedia`); dispatching an `error` event on the element swaps in the fallback (`getByRole('img', { name: 'R³ Ring' })` present, `model-viewer` gone); a failing registration shows the fallback; missing `customElements` shows the fallback and does not call registration; registration is requested exactly once; unmounting before the import resolves does not warn or set state.
 
-Export a poster still (any viewport render or a one-off `model-viewer` screenshot) to `public/models/r3-ring-poster.webp`. Record exact steps in `scripts/convert-ring-stl.md`.
+- [ ] **Step 2: Run to verify they fail** — `npx vitest run src/components/hardware/__tests__/RingViewer.test.tsx` — Expected: FAIL (component missing).
 
-- [ ] **Step 2: Write the failing test** (fallback render path — jsdom has no WebGL)
+- [ ] **Step 3: Implement** `registerModelViewer.ts`, `RingViewer.tsx`, `model-viewer.d.ts` (a JSX `IntrinsicElements` declaration for `'model-viewer'`), and `scripts/convert-ring-stl.md`; declare the dependency with the lockfile-only command above.
 
-```tsx
-import { describe, expect, it } from 'vitest';
-import { render } from '@testing-library/react';
-import { RingViewer } from '../RingViewer';
+- [ ] **Step 4: Run to verify they pass** — same command — Expected: PASS, pristine output.
 
-describe('RingViewer', () => {
-  it('renders a model-viewer pointing at the ring glb', () => {
-    const { container } = render(<RingViewer />);
-    const mv = container.querySelector('model-viewer');
-    expect(mv).toBeTruthy();
-    expect(mv?.getAttribute('src')).toBe('/models/r3-ring.glb');
-    expect(mv?.getAttribute('poster')).toContain('r3-ring-poster');
-  });
-});
-```
-
-- [ ] **Step 3: Run test to verify it fails**
-
-Run: `npx vitest run src/components/hardware/__tests__/RingViewer.test.tsx`
-Expected: FAIL (module missing).
-
-- [ ] **Step 4: Add the dep and implement**
+- [ ] **Step 5: Commit**
 
 ```bash
-npm install @google/model-viewer@4.0.0
-```
-
-```tsx
-import React, { useEffect } from 'react';
-
-export function RingViewer() {
-  useEffect(() => { import('@google/model-viewer'); }, []); // registers the custom element, client-only
-  const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  return React.createElement('model-viewer' as any, {
-    src: '/models/r3-ring.glb',
-    poster: '/models/r3-ring-poster.webp',
-    alt: 'R³ Ring — rotate to explore',
-    'camera-controls': true,
-    'auto-rotate': reduce ? undefined : true,
-    'reveal': 'interaction',
-    'shadow-intensity': '0.6',
-    style: { width: '100%', height: '100%', minHeight: 360, '--poster-color': 'transparent' } as React.CSSProperties,
-  });
-}
-```
-
-> Add a module declaration for the custom element if TS complains: create `src/components/hardware/model-viewer.d.ts` with a `declare namespace JSX { interface IntrinsicElements { 'model-viewer': any } }`.
-
-- [ ] **Step 5: Run test + build to verify**
-
-Run: `npx vitest run src/components/hardware/__tests__/RingViewer.test.tsx` → PASS
-Run: `npx vitest run` (full suite stays green)
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add public/models/r3-ring.glb public/models/r3-ring-poster.webp scripts/convert-ring-stl.md src/components/hardware/RingViewer.tsx src/components/hardware/model-viewer.d.ts package.json package-lock.json src/components/hardware/__tests__/RingViewer.test.tsx
-git commit -m "feat(hardware): interactive 3D ring viewer + STL->glb pipeline"
+git add src/components/hardware/registerModelViewer.ts src/components/hardware/RingViewer.tsx src/components/hardware/model-viewer.d.ts src/components/hardware/__tests__/RingViewer.test.tsx scripts/convert-ring-stl.md package.json package-lock.json
+git commit -m "feat(hardware): 3D ring viewer with SVG fallback; STL conversion documented for the owner"
 ```
 
 ---
