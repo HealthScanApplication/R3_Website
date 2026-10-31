@@ -1,8 +1,7 @@
 import React from "react";
-// Asset hashes mapped to their ACTUAL screen content (the original names were swapped).
-import needScreenshot from "../assets/f103676152ae3299f7a7f1ac2b178b16e80fc270.png"; // "Need" — Vitamin A (green)
-import riskScreenshot from "../assets/95040abfc382a9000163603b0406e99ced704e94.png"; // "Risk" — Phthalate (red)
-import mealAnalysisScreenshot from "../assets/0d90de2a9245f9d68e76a732655874812e689495.png"; // Bulgar Salad meal result
+// The real app screenshots are the optimised files in config/homeImages (need = Vitamin A, risk = Phthalate, meal = Bulgar salad).
+import { OptimizedImage } from "./OptimizedImage";
+import { APP_SHOTS, type HomeImage } from "../config/homeImages";
 import { ed, GRO, DISPLAY, kickerStyle, folioStyle, h2Style, deckStyle } from "../config/editorialTheme";
 import { Reveal } from "./motion/Reveal";
 import { ScannerMockup } from "./mockups/ScannerMockup";
@@ -19,7 +18,7 @@ interface Feature {
   titleEm: string;
   body: string;
   bullets: Bullet[];
-  image?: string;
+  image?: HomeImage;
   alt?: string;
   fig: string;
 }
@@ -49,7 +48,7 @@ const FEATURES: Feature[] = [
       { title: "Intake over time", desc: "Spot patterns and deficiencies across days and weeks." },
       { title: "Smart food pairing", desc: "Suggestions that help your body absorb more of what it needs." },
     ],
-    image: needScreenshot,
+    image: APP_SHOTS.need,
     alt: "ROUTINE³ nutrition analysis screen",
     fig: "Fig. 02 — Nutrient breakdown",
   },
@@ -64,7 +63,7 @@ const FEATURES: Feature[] = [
       { title: "Exposure over time", desc: "Track cumulative exposure rather than one-off scares." },
       { title: "Your personal watch-list", desc: "Informational, built from your preferences and what you scan." },
     ],
-    image: riskScreenshot,
+    image: APP_SHOTS.risk,
     alt: "ROUTINE³ risk detection screen",
     fig: "Fig. 03 — Watch-list",
   },
@@ -79,7 +78,7 @@ const FEATURES: Feature[] = [
       { title: "Smart recipe matching", desc: "Dishes that meet everyone's nutrition and taste at once." },
       { title: "Personalised plans", desc: "Weekly planning tuned to your household's goals." },
     ],
-    image: mealAnalysisScreenshot,
+    image: APP_SHOTS.meal,
     alt: "ROUTINE³ recipe analysis",
     fig: "Fig. 04 — Recipe match",
   },
@@ -110,12 +109,20 @@ function NumberKicker({ no, label }: { no: string; label: string }) {
   );
 }
 
-function Plate({ image, alt, fig }: { image: string; alt: string; fig: string }) {
+function Plate({ image, alt, fig }: { image: HomeImage; alt: string; fig: string }) {
   // Real app screenshot inside the same phone frame as the built mockups.
   return (
     <figure style={{ margin: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
       <PhoneFrame notch={false} screenBg="#FFFFFF">
-        <img src={image} alt={alt} loading="lazy" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+        <OptimizedImage
+          src={image.src}
+          srcSet={image.srcSet}
+          sizes="318px"
+          alt={alt}
+          placeholderSrc={image.lqip}
+          placeholderColor={image.color}
+          style={{ position: "absolute", inset: 0 }}
+        />
       </PhoneFrame>
       <figcaption style={{ fontFamily: GRO, fontSize: 11, fontStyle: "italic", color: ed.inkSoft, marginTop: 18, letterSpacing: "0.02em", textAlign: "center" }}>{fig}</figcaption>
     </figure>
