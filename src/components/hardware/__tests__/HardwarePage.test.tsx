@@ -53,9 +53,8 @@ describe('HardwarePage', () => {
     }
     expect(text).not.toMatch(/\bNote\b/);
     expect(text).not.toMatch(/\bHeart\b/);
-    const prices = new Set(text.match(/\$\d+/g) ?? []);
-    for (const p of prices) expect(['$179', '$299', '$199', '$349']).toContain(p);
-    expect(prices.has('$179')).toBe(true);
+    const prices = Array.from(new Set(text.match(/\$\d+(?:\.\d+)?/g) ?? [])).sort();
+    expect(prices).toEqual(['$179', '$199', '$299', '$349']);
   });
 
   it('has a #preorder section with the checkout button', () => {
@@ -73,6 +72,14 @@ describe('HardwarePage', () => {
     expect(screen.queryByRole('main')).toBeNull();
     expect(screen.queryByRole('contentinfo')).toBeNull();
     expect(screen.queryByRole('banner')).toBeNull();
+  });
+
+  it('offsets #preorder below the fixed header', () => {
+    const { container } = render(<HardwarePage />);
+    const section = container.querySelector('#preorder') as HTMLElement;
+    const style = section.getAttribute('style') ?? '';
+    expect(style).toContain('scroll-margin-top');
+    expect(section.style.scrollMarginTop || style).toContain('calc(64px + 64px + 16px)');
   });
 
   it('every section has an aria-labelledby heading', () => {
@@ -94,5 +101,12 @@ describe('DeviceArt', () => {
     expect(ids.length).toBeGreaterThan(6);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids.every((i) => /^[\w-]+$/.test(i))).toBe(true);
+  });
+
+  it('ClipArt has a lens mark and no pulse line', () => {
+    const { container } = render(<ClipArt />);
+    const paths = Array.from(container.querySelectorAll('path')).map((p) => p.getAttribute('d') ?? '');
+    expect(paths.some((d) => d.startsWith('M253 260'))).toBe(false);
+    expect(container.querySelector('circle[r="34"]')).toBeTruthy();
   });
 });

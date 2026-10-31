@@ -64,7 +64,9 @@ export function ClipArt() {
         <path d="M264 351h112l-16 132h-80z" fill="#151714" stroke="#4a4e47" strokeWidth="4" />
         <rect x="201" y="137" width="238" height="238" rx="54" transform="rotate(45 320 256)" fill={`url(#${shellId})`} stroke="#73786e" strokeWidth="5" />
         <rect x="223" y="159" width="194" height="194" rx="42" transform="rotate(45 320 256)" fill="#070807" stroke="#30342f" strokeWidth="4" />
-        <path d="M253 260h34l17-38 30 72 18-34h35" fill="none" stroke="#f4f1ea" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="320" cy="256" r="34" fill="none" stroke="#f4f1ea" strokeWidth="6" />
+        <circle cx="320" cy="256" r="14" fill="#f4f1ea" />
+        <circle cx="330" cy="246" r="4" fill="#c7d99f" />
         <circle cx="410" cy="163" r="19" fill="#090a09" stroke="#747a70" strokeWidth="4" />
         <circle cx="410" cy="163" r="8" fill="#c7d99f" />
         <circle cx="410" cy="163" r="3" fill="#fff" />
