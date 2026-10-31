@@ -131,6 +131,8 @@ type DeliveryFormat = 'Downloadable PDF' | 'Interactive Protocol' | 'PDF + Inter
 type BookingProvider = 'ROUTINE³ Booking' | 'Cal.com' | 'Google appointment schedule' | 'Calendly' | 'Other';
 type StoryTemplateId = 'editorial' | 'ritual' | 'human' | 'clinical' | 'kitchen' | 'night' | 'coastal' | 'movement' | 'collage' | 'herbal' | 'future' | 'community';
 type CurrencyCode = 'GBP' | 'EUR' | 'USD' | 'PLN' | 'CAD' | 'AUD' | 'NZD' | 'CHF' | 'JPY' | 'INR' | 'AED' | 'ZAR' | 'BRL' | 'MXN' | 'SEK' | 'NOK' | 'DKK' | 'CZK';
+/** The photo urls saved on a brand (social_links.photos is a JSON array), keeping only real https urls. */
+const parsePhotos = (value?: string): string[] => { try { const list = JSON.parse(String(value || '[]')); return Array.isArray(list) ? list.filter((url): url is string => typeof url === 'string' && /^https?:\/\//.test(url)).slice(0, PHOTO_SLOTS) : []; } catch { return []; } };
 type UseCasePart = 'audience' | 'population' | 'age' | 'stage' | 'problem';
 const USE_CASE_ORDER: UseCasePart[] = ['audience', 'population', 'age', 'stage', 'problem'];
 type BrandDraft = Omit<GuideBrand, 'id' | 'guide_id' | 'is_primary'> & { localId: string };
@@ -2092,8 +2094,9 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       if (links.logo_url) setLogoUrl(links.logo_url);
       if (links.expertise_tags) setExpertiseTags(parseExpertiseTags(links.expertise_tags));
       if (links.offer_videos) { try { setOfferVideos(JSON.parse(String(links.offer_videos))); } catch { /* ignore bad JSON */ } }
-      if (links.photos) { try { const list = JSON.parse(String(links.photos)); if (Array.isArray(list)) setSitePhotos(list.filter((url): url is string => typeof url === 'string' && /^https?:\/\//.test(url)).slice(0, PHOTO_SLOTS)); } catch { /* ignore bad JSON */ } }
+      if (links.photos) { const list = parsePhotos(links.photos); if (list.length) setSitePhotos(list); }
       if (typeof saved.onboarding_step === 'number') setSavedStep(saved.onboarding_step);
+      if (saved.slug) setSavedSlug(saved.slug);
       if (links.roles) setRoles(String(links.roles).split(',').filter(Boolean));
     }).catch(() => {});
   }, [userId]);
@@ -2110,6 +2113,10 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       setBrandProfiles((current) => [drafts.find((d) => d.localId === 'personal') || current.find((d) => d.localId === 'personal')!, ...drafts.filter((d) => d.localId !== 'personal')].filter(Boolean));
       const personal = drafts.find((d) => d.localId === 'personal');
       if (personal) setBrandKit(brandKitOf(personal.social_links));
+      const primary = saved.find((b) => b.is_primary);
+      if (primary) setSavedPrimaryId(primary.kind === 'personal' ? 'personal' : `brand-${primary.id}`);
+      const personalPhotos = parsePhotos(personal?.social_links.photos);
+      if (personalPhotos.length) setSitePhotos(personalPhotos);
     }).catch(() => setBrandsLoaded('failed'));
   }, [userId]);
   // Existing items shown under each step ("In your workspace").
@@ -2194,6 +2201,9 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   // Every part of the setup can be saved as a draft without publishing. One shared state keeps the "Saved 14:32" line the same everywhere.
   const [saveState, setSaveState] = useState<SaveState>(IDLE_SAVE);
   const [savedStep, setSavedStep] = useState(1);
+  // The saved public url and which brand the profile row currently mirrors (the one they publish as). A draft save never changes either.
+  const [savedSlug, setSavedSlug] = useState<string | null>(null);
+  const [savedPrimaryId, setSavedPrimaryId] = useState('personal');
   const activeStoryTemplate = storyTemplates.find((template) => template.id === storyTemplate) || storyTemplates[0];
   const effectiveBackground = backgroundUrl || activeStoryTemplate.image;
   const previewHeaderBackground = '#FFFFFF';
@@ -2209,7 +2219,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       contact_email: contactEmail.trim(),
       whatsapp_phone: whatsappPhone.trim(),
       website_url: websiteUrl.trim(),
-      social_links: { instagram: instagramUrl.trim(), facebook: facebookUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), ...brandKitLinks(brandKit) },
+      social_links: { instagram: instagramUrl.trim(), facebook: facebookUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), photos: JSON.stringify(sitePhotos), ...brandKitLinks(brandKit) },
       language: mainLanguage,
       pricing_region: pricingRegion,
       currency,
@@ -2223,6 +2233,9 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     setYoutubeUrl(brand.social_links.youtube || ''); setLinktreeUrl(brand.social_links.linktree || '');
     setMainLanguage(brand.language); setPricingRegion(brand.pricing_region); setCurrency(brand.currency);
     setBrandKit(brandKitOf(brand.social_links));
+    // Photos belong to the brand. Only the personal brand starts with the photo that comes with the account email.
+    const brandPhotos = parsePhotos(brand.social_links.photos);
+    setSitePhotos(brand.localId === 'personal' ? (brandPhotos.length ? brandPhotos : accountAvatarUrl ? [accountAvatarUrl] : []) : brandPhotos);
   }
 
   function selectBrand(localId: string) {
@@ -2635,8 +2648,8 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   }
 
   /** The Guardian's profile row as it is saved, whether they publish (status submitted, step 5) or just save a draft. */
-  const profileRow = (status: GuideProfile['status'], onboardingStep: number) => {
-    const slug = guardianSlug;
+  const profileRow = (status: GuideProfile['status'], onboardingStep: number, slugOverride?: string | null) => {
+    const slug = slugOverride || guardianSlug;
     const audienceText = audience.join(', ').toLowerCase();
     const headline = generatedHeadline;
     const bio = intro.trim() || `I help ${audienceText} with ${chosen.join(', ').toLowerCase()} through ${format.join(', ').toLowerCase()}.`;
@@ -2648,13 +2661,20 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     setSaveState({ status: 'saving' });
     try {
       if (!displayName.trim()) throw new Error('Add the name people should call you, then save.');
-      const status: GuideProfile['status'] = savedStatus === 'approved' ? 'approved' : savedStatus === 'submitted' ? 'submitted' : 'draft';
-      const saved = await saveGuideProfile(profileRow(status, Math.min(5, Math.max(savedStep, step, 1))));
-      setSavedStatus(saved.status); setSavedStep(saved.onboarding_step || step);
+      // The profile row mirrors the brand they publish as. Saving while another brand is open must not rename it, change its
+      // public url, or make that brand the primary, so a draft save only writes the profile row from the primary brand.
+      const writesProfile = activeBrandId === savedPrimaryId || !savedStatus;
+      if (!savedStatus && activeBrandId !== 'personal') throw new Error('Save your personal profile first: open it from "Publishing as", then save.');
+      if (writesProfile) {
+        const status: GuideProfile['status'] = savedStatus === 'approved' ? 'approved' : savedStatus === 'submitted' ? 'submitted' : 'draft';
+        const saved = await saveGuideProfile(profileRow(status, Math.min(5, Math.max(savedStep, step, 1)), savedSlug)); // an existing public url is kept
+        setSavedStatus(saved.status); setSavedStep(saved.onboarding_step || step);
+        if (saved.slug) setSavedSlug(saved.slug);
+      }
       // Brands are only replaced once they have loaded, so a failed load can never wipe saved business brands.
       if (brandsLoaded === 'ok') {
         const brandsToSave = brandProfiles.map((brand) => brand.localId === activeBrandId ? currentBrandDraft() : brand);
-        await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, is_primary: localId === activeBrandId })));
+        await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, is_primary: localId === (writesProfile && !savedStatus ? activeBrandId : savedPrimaryId) })));
       }
       setSaveState({ status: 'saved', at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
     } catch (e) { setSaveState({ status: 'error', message: (e as Error).message || 'Could not save.' }); }
@@ -3138,7 +3158,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         {({ open, dragging }) => (
       <>
       <HouseStyleAvatarPanel id={houseStylePanelId} save={saveState} onSave={saveProgress} dragging={dragging} sourceUrl={avatarSource} currentUrl={avatarUrl} needsUpload={avatarNeedsOwnPhoto} converting={avatarConverting} applying={avatarApplying} uploading={uploading} resultUrl={avatarPreviewUrl} resultMock={avatarPreviewMock} error={avatarError} onCreate={convertAvatarToHouseStyle} onUpload={open} onApply={applyConvertedAvatar} onCancel={() => { setAvatarPreviewUrl(null); setAvatarError(''); }}>
-        <PhotoGrid embedded photos={sitePhotos} accountAvatarUrl={accountAvatarUrl || null} uploading={photosUploading} onAdd={addSitePhotos} onRemove={(index) => setSitePhotos((current) => current.filter((_, position) => position !== index))} save={saveState} onSave={saveProgress} />
+        <PhotoGrid embedded photos={sitePhotos} accountAvatarUrl={activeBrandId === 'personal' ? accountAvatarUrl || null : null} forBrand={brandProfiles.length > 1 ? displayName.trim() || 'this brand' : undefined} uploading={photosUploading} onAdd={addSitePhotos} onRemove={(index) => setSitePhotos((current) => current.filter((_, position) => position !== index))} save={saveState} onSave={saveProgress} />
       </HouseStyleAvatarPanel>
       </>
         )}
@@ -3669,7 +3689,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         </section>
       </div>
     </form>}
-    {!summaryView && <StepRelated step={step} guardianSlug={guardianSlug} displayName={displayName} brands={brandProfiles.map((brand) => ({ id: brand.localId, name: (brand.localId === activeBrandId ? displayName : brand.name) || 'Untitled brand', kind: brand.kind, logo: brand.localId === activeBrandId ? avatarUrl || brand.logo_url : brand.logo_url }))} activeBrandId={activeBrandId} related={related} audience={audienceLabel(audienceDetails, audience)} />}
+    {!summaryView && <StepRelated step={step} guardianSlug={savedSlug || guardianSlug} displayName={displayName} brands={brandProfiles.map((brand) => ({ id: brand.localId, name: (brand.localId === activeBrandId ? displayName : brand.name) || 'Untitled brand', kind: brand.kind, logo: brand.localId === activeBrandId ? avatarUrl || brand.logo_url : brand.logo_url }))} activeBrandId={activeBrandId} related={related} audience={audienceLabel(audienceDetails, audience)} />}
       </div>
     </div>
   </div>;
