@@ -6,7 +6,7 @@ import { HeroDevices } from './HeroDevices';
 import { PreorderBlock } from './PreorderBlock';
 import { HERO_FEATURE_WORDS } from './copy';
 
-const DECK = "Touch or slide the R³ Note and the R³ Clip captures it in real time — your AI assistant keeps your routine, calendar, and email up to date.";
+const DECK = 'See it, say it, do it — in real time, without a phone. Tap the R³ Note and the R³ Clip takes the photo, logs the activity or saves the voice note.';
 const overline: React.CSSProperties = { fontFamily: GRO, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.2em', color: ed.inkSoft, margin: 0 };
 
 export function HardwareHero() {
@@ -37,13 +37,13 @@ export function HardwareHero() {
         <div className="r3-hw-hero-grid" style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 0.9fr)', gap: 'clamp(28px, 5vw, 80px)', alignItems: 'end', paddingTop: 'clamp(24px, 5vh, 80px)' }}>
           <div style={{ alignSelf: 'center' }}>
             <h1 id="hardware-hero-title" style={{ ...coverStyle, color: '#FFFFFF', textShadow: '0 4px 24px rgba(0,0,0,0.38)' }}>
-              <span style={{ display: 'block' }}>Track your routine</span>
               <span style={{ display: 'block' }}>
-                with{' '}
+                Capture your{' '}
                 <span style={{ fontStyle: 'italic', color: ed.ink, textShadow: 'none', transition: reduceMotion ? undefined : 'opacity 320ms ease', opacity: wordVisible ? 1 : 0 }}>
                   {HERO_FEATURE_WORDS[reduceMotion ? 0 : wordIndex]}
                 </span>
               </span>
+              <span style={{ display: 'block' }}>without your phone.</span>
             </h1>
             <p style={{ ...deckStyle, color: ed.ink, marginTop: 'clamp(20px, 3vw, 36px)', maxWidth: '34ch' }}>{DECK}</p>
             <div id="preorder" style={{ scrollMarginTop: 'calc(64px + 64px + 16px)', marginTop: 'clamp(28px, 4vh, 48px)', maxWidth: 560 }}>

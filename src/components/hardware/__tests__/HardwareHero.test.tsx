@@ -11,8 +11,10 @@ vi.mock('../../FlutedGlassBackground', () => ({ FlutedGlassBackground: () => <di
 vi.mock('../../../hooks/useHeroBackground', () => ({ useHeroBackground: () => bg }));
 import { HardwareHero } from '../HardwareHero';
 
-const DECK = "Touch or slide the R³ Note and the R³ Clip captures it in real time — your AI assistant keeps your routine, calendar, and email up to date.";
-const line2 = () => (screen.getByRole('heading', { level: 1 }).children[1] as HTMLElement).textContent;
+const DECK = 'See it, say it, do it — in real time, without a phone. Tap the R³ Note and the R³ Clip takes the photo, logs the activity or saves the voice note.';
+const line = (i: number) => (screen.getByRole('heading', { level: 1 }).children[i] as HTMLElement).textContent;
+const line1 = () => line(0);
+const line2 = () => line(1);
 
 beforeEach(() => { bg.reduceMotion = false; bg.backgroundVideos = []; });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
@@ -22,8 +24,8 @@ describe('HardwareHero', () => {
     render(<HardwareHero />);
     const h1s = screen.getAllByRole('heading', { level: 1 });
     expect(h1s).toHaveLength(1);
-    expect((h1s[0].children[0] as HTMLElement).textContent).toBe('Track your routine');
-    expect(line2()).toBe('with voice notes');
+    expect(line1()).toBe('Capture your meals');
+    expect(line2()).toBe('without your phone.');
   });
 
   it('rotates the feature word in order and wraps', () => {
@@ -32,7 +34,8 @@ describe('HardwareHero', () => {
     act(() => { vi.advanceTimersByTime(320); });
     for (let i = 1; i <= HERO_FEATURE_WORDS.length; i++) {
       act(() => { vi.advanceTimersByTime(3200); });
-      expect(line2()).toBe(`with ${HERO_FEATURE_WORDS[i % HERO_FEATURE_WORDS.length]}`);
+      expect(line1()).toBe(`Capture your ${HERO_FEATURE_WORDS[i % HERO_FEATURE_WORDS.length]}`);
+      expect(line2()).toBe('without your phone.');
     }
   });
 
@@ -41,7 +44,7 @@ describe('HardwareHero', () => {
     bg.reduceMotion = true;
     render(<HardwareHero />);
     act(() => { vi.advanceTimersByTime(20000); });
-    expect(line2()).toBe('with voice notes');
+    expect(line1()).toBe('Capture your meals');
   });
 
   it('has deck, overline, preorder wrapper, devices, hidden poster and labelled section', () => {
@@ -90,7 +93,9 @@ describe('HardwareHero', () => {
     expect(text.contains(screen.getByRole('heading', { level: 1 }))).toBe(true);
   });
 
-  it('uses the owner feature word list', () => {
-    expect(HERO_FEATURE_WORDS).toEqual(['voice notes', 'meals', 'activity', 'symptoms', 'AI advice', 'your calendar', 'your email']);
+  it('uses the owner capture word list', () => {
+    expect(HERO_FEATURE_WORDS).toEqual(['meals', 'workouts', 'notes', 'moments', 'symptoms']);
+    // Short words only, so the headline never wraps past its two lines' width.
+    for (const w of HERO_FEATURE_WORDS) expect(w.length).toBeLessThanOrEqual(8);
   });
 });
