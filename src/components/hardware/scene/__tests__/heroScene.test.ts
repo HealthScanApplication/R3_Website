@@ -196,7 +196,7 @@ describe('createHeroScene', () => {
     scene.updateMatrixWorld(true);
     const screen = scene.getObjectByName('screen')!;
     const n = new THREE.Vector3(0, 0, 1).transformDirection(screen.matrixWorld);
-    expect(n.z).toBeGreaterThan(0.6);              // toward the camera (on +Z)
+    expect(n.z).toBeGreaterThan(0.45);             // toward the camera (on +Z), turned enough to show the ring
     expect(Math.abs(n.x)).toBeGreaterThan(0.3);    // but turned: three-quarter
   });
 

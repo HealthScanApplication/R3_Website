@@ -12,8 +12,8 @@ export const RING_FILL = 0.6;
  * Watch yaw: an eased swing about the resting three-quarter view over a 10 s period. It never comes within
  * MIN_OFF_AXIS of facing the camera, because straight on the case hides the ring nested behind it.
  */
-export const REST_YAW = -0.9;
-export const MIN_OFF_AXIS = 0.7;
+export const REST_YAW = -1.05;
+export const MIN_OFF_AXIS = 0.9;
 export const WATCH_SWING = Math.abs(REST_YAW) - MIN_OFF_AXIS;
 export const WATCH_PERIOD = 10;
 
