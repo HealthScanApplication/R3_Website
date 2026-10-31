@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { YouTubeClipBackground } from '../../components/guides/YouTubeClipBackground';
 
 const A = { id: 'c7rNVcYU_-s', start: 60, end: 68 };
@@ -63,6 +63,18 @@ describe('YouTubeClipBackground', () => {
     onStateChange(event(made[0], 0));
     expect(made[0].instance.loadVideoById).toHaveBeenLastCalledWith({ videoId: A.id, startSeconds: 60, endSeconds: 68 });
     expect(made[0].instance.loadVideoById).toHaveBeenCalledTimes(2);
+  });
+
+  it('zooms each clip by its own amount, so a 4:3 video can fill the frame, and changes as the clips alternate', async () => {
+    const wide = { ...A, zoom: 1.4 };
+    const { container } = render(<YouTubeClipBackground clips={[wide, B]} />);
+    await waitFor(() => expect(made.length).toBe(1));
+    const scale = () => (container.querySelector('.g-yt-cover') as HTMLElement).style.transform;
+    expect(scale()).toContain('scale(1.4)');
+    act(() => made[0].options.events.onStateChange(event(made[0], 0)));
+    await waitFor(() => expect(scale()).toContain('scale(1.2)')); // the second clip has no zoom of its own: the default
+    act(() => made[0].options.events.onStateChange(event(made[0], 0)));
+    await waitFor(() => expect(scale()).toContain('scale(1.4)'));
   });
 
   it('cleans up the player when it goes away, and starts over when the clips change', async () => {
