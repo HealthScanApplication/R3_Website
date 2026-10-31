@@ -43,7 +43,7 @@ export function HardwareHero() {
                   {HERO_FEATURE_WORDS[reduceMotion ? 0 : wordIndex]}
                 </span>
               </span>
-              <span style={{ display: 'block' }}>without your phone.</span>
+              <span style={{ display: 'block' }}>without phone.</span>
             </h1>
             <p style={{ ...deckStyle, color: ed.ink, marginTop: 'clamp(20px, 3vw, 36px)', maxWidth: '34ch' }}>{DECK}</p>
             <div id="preorder" style={{ scrollMarginTop: 'calc(64px + 64px + 16px)', marginTop: 'clamp(28px, 4vh, 48px)', maxWidth: 560 }}>

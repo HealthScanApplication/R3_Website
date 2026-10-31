@@ -25,7 +25,7 @@ describe('HardwareHero', () => {
     const h1s = screen.getAllByRole('heading', { level: 1 });
     expect(h1s).toHaveLength(1);
     expect(line1()).toBe('Capture your meals');
-    expect(line2()).toBe('without your phone.');
+    expect(line2()).toBe('without phone.');
   });
 
   it('rotates the feature word in order and wraps', () => {
@@ -35,7 +35,7 @@ describe('HardwareHero', () => {
     for (let i = 1; i <= HERO_FEATURE_WORDS.length; i++) {
       act(() => { vi.advanceTimersByTime(3200); });
       expect(line1()).toBe(`Capture your ${HERO_FEATURE_WORDS[i % HERO_FEATURE_WORDS.length]}`);
-      expect(line2()).toBe('without your phone.');
+      expect(line2()).toBe('without phone.');
     }
   });
 

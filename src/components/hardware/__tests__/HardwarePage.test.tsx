@@ -24,7 +24,7 @@ describe('HardwarePage', () => {
     const h1s = screen.getAllByRole('heading', { level: 1 });
     expect(h1s).toHaveLength(1);
     expect((h1s[0].children[0] as HTMLElement).textContent).toBe('Capture your meals');
-    expect((h1s[0].children[1] as HTMLElement).textContent).toBe('without your phone.');
+    expect((h1s[0].children[1] as HTMLElement).textContent).toBe('without phone.');
   });
 
   it('shows device and section headings', () => {
