@@ -1,8 +1,8 @@
 /*
  * The Guardian's profile image, as one full-width, centred card: their current photo featured first, then a single
  * Replace and a single "Create my R3 house style" (each action appears once). Once they have a result the card shows
- * their original beside it with Use this avatar / Try again / Cancel. The house-style Before / After example stays
- * below, so a result can always be compared with the style to aim for.
+ * their original beside it with Use this avatar / Try again / Cancel. Before there is a result, an empty slot beside their
+ * photo shows where it will appear. One reference image of the style stays below as the goal.
  *
  * Presentational: GuidePortal owns the state and the handlers (convert, apply, upload), this only lays them out.
  */
@@ -15,9 +15,9 @@ const badge: React.CSSProperties = { position: 'absolute', top: 8, left: 8, padd
 const primary: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 40, padding: '0 16px', border: `1px solid ${ink}`, background: ink, color: black, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase' };
 const secondary: React.CSSProperties = { minHeight: 40, padding: '0 14px', border: `1px solid ${line}`, background: 'transparent', color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase' };
 
+/** The one reference image of the style: a carved stone bust. Their own result is the "after", so there is no example pair. */
 export const HOUSE_STYLE_EXAMPLE = {
-  before: '/images/guides/house-style/example-before.webp',
-  after: '/images/guides/house-style/example-after.webp',
+  goal: '/images/guides/house-style/example-before.webp',
 };
 
 export interface HouseStyleAvatarPanelProps {
@@ -60,12 +60,20 @@ export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, 
   const busy = converting || applying;
   const noteId = `${id}-note`;
   const featured = resultUrl ? sourceUrl : currentUrl || sourceUrl;
-  const pairColumns = resultUrl ? 'repeat(2,minmax(0,260px))' : 'minmax(0,280px)';
+  const pairColumns = featured ? 'repeat(2,minmax(0,260px))' : 'minmax(0,280px)';
   return (
     <section id={id} aria-label="R3 house style profile image" style={{ width: '100%', boxSizing: 'border-box', marginTop: 18, padding: 20, border: `1px solid ${dragging ? ink : line}`, outline: dragging ? `2px dashed ${ink}` : 'none', background: 'rgba(245,242,234,.025)', textAlign: 'center' }}>
       <h3 style={{ ...label, margin: '0 0 14px', textAlign: 'center' }}>Profile image · optional</h3>
       <div style={{ display: 'grid', gridTemplateColumns: pairColumns, gap: 16, justifyContent: 'center' }}>
         {featured && <Shot src={featured} alt={resultUrl ? 'Your original portrait' : 'Your current profile image'} caption={resultUrl ? 'Original' : 'Your photo'} />}
+        {!resultUrl && featured && (
+          <figure style={{ margin: 0, minWidth: 0 }}>
+            <div aria-label="Your R3 house style will appear here" style={{ aspectRatio: '1', display: 'grid', placeItems: 'center', padding: 16, boxSizing: 'border-box', border: `1px dashed ${line}`, background: panel, color: muted, fontSize: 12, lineHeight: 1.5 }}>
+              {converting ? 'Carving your bust…' : 'Your R3 house style appears here'}
+            </div>
+            <figcaption style={{ ...label, marginTop: 8, textAlign: 'center' }}>R3 house style</figcaption>
+          </figure>
+        )}
         {resultUrl && <Shot src={resultUrl} alt={resultMock ? 'Placeholder test image standing in for your R3 house style portrait' : 'Your portrait in the R3 house style'} caption="R3 house style" tag={resultMock ? 'Test image' : undefined} grey />}
       </div>
       {resultUrl && resultMock && (
@@ -97,9 +105,8 @@ export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, 
       {error && <p role="alert" style={{ color: ink, background: 'rgba(245,242,234,.06)', borderLeft: `2px solid ${acid}`, fontSize: 12, lineHeight: 1.5, margin: '12px auto 0', padding: '8px 10px', maxWidth: 480, textAlign: 'left' }}>{error}</p>}
       <div aria-label="The R3 house style to aim for" style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${line}` }}>
         <span style={{ ...label, textAlign: 'center' }}>The R3 house style to aim for</span>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,160px))', gap: 14, justifyContent: 'center', marginTop: 12 }}>
-          <Shot src={HOUSE_STYLE_EXAMPLE.before} alt="A stone bust of a young man on a plain white background, with an open book at its base." caption="Before" tag="Example" size={320} />
-          <Shot src={HOUSE_STYLE_EXAMPLE.after} alt="The same bust without the book, framed head and shoulders in grey carved stone on a soft grey backdrop with gentle side light." caption="After" tag="Example" size={320} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,200px)', justifyContent: 'center', marginTop: 12 }}>
+          <Shot src={HOUSE_STYLE_EXAMPLE.goal} alt="A carved grey stone bust of a young man with an open book at its base, lit softly on a plain white background." caption="The goal" tag="Example" size={400} />
         </div>
         <p style={{ color: muted, fontSize: 12, lineHeight: 1.6, margin: '12px auto 0', maxWidth: 520 }}>
           R3 house style turns your photo into a carved stone bust, like the figures on As-Tro: grey stone with visible grain, one soft side light, a round stone base and a near-black backdrop. It keeps you looking like you.
