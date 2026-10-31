@@ -129,6 +129,8 @@ type DeliveryFormat = 'Downloadable PDF' | 'Interactive Protocol' | 'PDF + Inter
 type BookingProvider = 'ROUTINE³ Booking' | 'Cal.com' | 'Google appointment schedule' | 'Calendly' | 'Other';
 type StoryTemplateId = 'editorial' | 'ritual' | 'human' | 'clinical' | 'kitchen' | 'night' | 'coastal' | 'movement' | 'collage' | 'herbal' | 'future' | 'community';
 type CurrencyCode = 'GBP' | 'EUR' | 'USD' | 'PLN' | 'CAD' | 'AUD' | 'NZD' | 'CHF' | 'JPY' | 'INR' | 'AED' | 'ZAR' | 'BRL' | 'MXN' | 'SEK' | 'NOK' | 'DKK' | 'CZK';
+type UseCasePart = 'audience' | 'population' | 'age' | 'stage' | 'problem';
+const USE_CASE_ORDER: UseCasePart[] = ['audience', 'population', 'age', 'stage', 'problem'];
 type BrandDraft = Omit<GuideBrand, 'id' | 'guide_id' | 'is_primary'> & { localId: string };
 type GuardianOfferGoal = 'basic' | 'audience' | 'sell';
 type HeaderStyle = 'white' | 'hidden';
@@ -2174,9 +2176,13 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     in_person: { title: 'In-person session', price: '349', url: '', delivery: ['In person'], audienceValue: 'Experience tailored hands-on support and individual attention.', nextStep: 'booking', billingModel: 'pack_10' },
     festival: { title: 'Three-day in-person retreat', price: '1500', url: '', delivery: ['Event'], audienceValue: 'Spend three focused days at a country hotel with in-person coaching, practical sessions, accommodation and a personal plan to take home.', nextStep: 'booking', billingModel: 'one_time' },
   });
-  const [routineGender, setRoutineGender] = useState('Women');
-  const [routineAge, setRoutineAge] = useState('Adults 45–64');
-  const [routineLifeStage, setRoutineLifeStage] = useState('Menopause');
+  const [routineGender, setRoutineGender] = useState('Everyone');
+  const [routineAge, setRoutineAge] = useState('All ages');
+  const [routineLifeStage, setRoutineLifeStage] = useState('Not specified');
+  // The use case is built step by step: audience → sex / population → age → health / life stage → problem → solution. Nothing is
+  // preselected, each choice reveals the next, and "Add this use case" then reveals the lead magnet and the offers.
+  const [useCasePicked, setUseCasePicked] = useState<Record<UseCasePart, boolean>>({ audience: false, population: false, age: false, stage: false, problem: false });
+  const [useCaseAdded, setUseCaseAdded] = useState(false);
   const activeStoryTemplate = storyTemplates.find((template) => template.id === storyTemplate) || storyTemplates[0];
   const effectiveBackground = backgroundUrl || activeStoryTemplate.image;
   const previewHeaderBackground = '#FFFFFF';
@@ -2708,6 +2714,16 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const routineNameAudience = routineGender === 'Everyone' ? rampTargetAudience.toLowerCase() : routineGender.toLowerCase();
   const routineTitlePrefix = '';
   const suggestedRoutineName = `${routineTitlePrefix}7-day ${routineNameLifeStage}${routineNameTopic} challenge for ${routineNameAudience}`;
+  // A Guardian who already has offers or offer paths has a use case: show it all. Everyone else starts blank and is led through it.
+  const hasExistingOffers = related.offers.length > 0 || related.ramps.length > 0;
+  const picked = (part: UseCasePart) => hasExistingOffers || useCasePicked[part];
+  const useCaseReady = hasExistingOffers || useCaseAdded;
+  // Choosing (or changing) a part clears every later part and un-adds the use case, so the steps always read left to right.
+  const pickUseCase = (part: UseCasePart) => {
+    setUseCasePicked((current) => { const next = { ...current }; const from = USE_CASE_ORDER.indexOf(part); USE_CASE_ORDER.forEach((key, index) => { next[key] = index <= from; }); return next; });
+    setUseCaseAdded(false);
+  };
+  const addUseCase = () => { if (freeOfferType === 'routine') setLeadMagnetTitle(suggestedRoutineName); setUseCaseAdded(true); };
   const leadMagnetIdeas = [
     `${routineTitlePrefix}3-day ${routineNameTopic} reset for ${routineNameAudience}`,
     `${routineTitlePrefix}5-day ${routineNameLifeStage}${routineNameTopic} starter plan`,
@@ -3164,21 +3180,27 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
             <div style={{ border: `1px solid ${line}`, background: panel, padding: 14, marginBottom: 16 }}>
               <label style={{ ...label, color: acid }}>Create these offers for</label>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(165px,1fr))', gap: 9 }}>
-                <div><label style={{ ...label, marginBottom: 5 }}>Audience</label><select value={rampTargetAudience} onChange={(event) => { const nextAudience = event.target.value; setRampAudience(nextAudience); setRampProblem((audienceProblemsByGroup[nextAudience] || [])[0] || ''); }} style={{ ...input, paddingRight: 38 }}>{rampAudienceOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
-                <div><label style={{ ...label, marginBottom: 5 }}>Sex / population</label><select value={routineGender} onChange={(event) => { const nextPopulation = event.target.value; setRoutineGender(nextPopulation); setRoutineAge((targetAgeRanges[nextPopulation] || targetAgeRanges.Everyone)[0]); setRoutineLifeStage((targetLifeStages[nextPopulation] || targetLifeStages.Everyone)[0]); }} style={{ ...input, paddingRight: 38 }}>{Object.keys(targetAgeRanges).map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
-                <div><label style={{ ...label, marginBottom: 5 }}>Age range</label><select value={routineAge} onChange={(event) => setRoutineAge(event.target.value)} style={{ ...input, paddingRight: 38 }}>{routineAgeOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
-                <div><label style={{ ...label, marginBottom: 5 }}>Health / life stage</label><select value={routineLifeStage} onChange={(event) => setRoutineLifeStage(event.target.value)} style={{ ...input, paddingRight: 38 }}>{routineLifeStageOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
-                <div><label style={{ ...label, marginBottom: 5 }}>Problem</label><select value={rampTargetProblem} onChange={(event) => setRampProblem(event.target.value)} style={{ ...input, paddingRight: 38 }}>{rampProblemOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
+                <div><label style={{ ...label, marginBottom: 5 }}>Audience</label><select aria-label="Audience" value={picked('audience') ? rampTargetAudience : ''} onChange={(event) => { const nextAudience = event.target.value; pickUseCase('audience'); setRampAudience(nextAudience); setRampProblem((audienceProblemsByGroup[nextAudience] || [])[0] || ''); }} style={{ ...input, paddingRight: 38 }}>{!picked('audience') && <option value="" disabled>Choose an audience</option>}{rampAudienceOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
+                {picked('audience') && <div><label style={{ ...label, marginBottom: 5 }}>Sex / population</label><select aria-label="Sex / population" value={picked('population') ? routineGender : ''} onChange={(event) => { const nextPopulation = event.target.value; pickUseCase('population'); setRoutineGender(nextPopulation); setRoutineAge((targetAgeRanges[nextPopulation] || targetAgeRanges.Everyone)[0]); setRoutineLifeStage((targetLifeStages[nextPopulation] || targetLifeStages.Everyone)[0]); }} style={{ ...input, paddingRight: 38 }}>{!picked('population') && <option value="" disabled>Choose who it is for</option>}{Object.keys(targetAgeRanges).map((item) => <option key={item} value={item}>{item}</option>)}</select></div>}
+                {picked('population') && <div><label style={{ ...label, marginBottom: 5 }}>Age range</label><select aria-label="Age range" value={picked('age') ? routineAge : ''} onChange={(event) => { pickUseCase('age'); setRoutineAge(event.target.value); }} style={{ ...input, paddingRight: 38 }}>{!picked('age') && <option value="" disabled>Choose an age range</option>}{routineAgeOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>}
+                {picked('age') && <div><label style={{ ...label, marginBottom: 5 }}>Health / life stage</label><select aria-label="Health / life stage" value={picked('stage') ? routineLifeStage : ''} onChange={(event) => { pickUseCase('stage'); setRoutineLifeStage(event.target.value); }} style={{ ...input, paddingRight: 38 }}>{!picked('stage') && <option value="" disabled>Choose a life stage</option>}{routineLifeStageOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>}
+                {picked('stage') && <div><label style={{ ...label, marginBottom: 5 }}>Problem</label><select aria-label="Problem" value={picked('problem') ? rampTargetProblem : ''} onChange={(event) => { pickUseCase('problem'); setRampProblem(event.target.value); }} style={{ ...input, paddingRight: 38 }}>{!picked('problem') && <option value="" disabled>Choose a problem</option>}{rampProblemOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>}
               </div>
-              <div style={{ marginTop: 12, borderLeft: `2px solid ${acid}`, padding: '3px 0 3px 10px' }}>
+              {picked('problem') && !useCaseReady && <div aria-label="Solution for this use case" style={{ marginTop: 14, borderLeft: `2px solid ${acid}`, padding: '3px 0 3px 12px', display: 'grid', gap: 8 }}>
+                <span style={{ ...label, color: acid, marginBottom: 0 }}>Solution</span>
+                <strong style={{ fontFamily: serif, fontSize: 22, fontWeight: 300, lineHeight: 1.2 }}>{suggestedRoutineName}</strong>
+                <span style={{ color: muted, fontSize: 11, lineHeight: 1.5 }}>A free starter for {routineNameAudience}{routineLifeStage !== 'Not specified' ? ` in ${routineLifeStage.toLowerCase()}` : ''} with {rampTargetProblem.toLowerCase()}. Add this use case and we will suggest the lead magnet and build the offers around it.</span>
+                <button type="button" onClick={addUseCase} style={{ ...btn, justifySelf: 'start' }}>Add this use case</button>
+              </div>}
+              {useCaseReady && <div style={{ marginTop: 12, borderLeft: `2px solid ${acid}`, padding: '3px 0 3px 10px' }}>
                 <label htmlFor="value-ramp-name" style={{ display: 'block', color: muted, fontSize: 8, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 6 }}>Lead magnet name <span style={{ color: acid }}>· choose an idea or type your own</span></label>
                 <input id="value-ramp-name" list="lead-magnet-ideas" value={leadMagnetTitle} onChange={(event) => setLeadMagnetTitle(event.target.value)} onBlur={() => { if (freeOfferType === 'routine' && leadMagnetTitle.trim() && !leadMagnetTitle.trim().startsWith(routineTitlePrefix)) setLeadMagnetTitle(`${routineTitlePrefix}${leadMagnetTitle.trim()}`); }} placeholder={suggestedRoutineName} style={{ ...input, height: 42, minHeight: 42, fontSize: 12 }} />
                 <datalist id="lead-magnet-ideas">{leadMagnetIdeas.map((idea) => <option key={idea} value={idea} />)}</datalist>
                 <span style={{ display: 'block', color: muted, fontSize: 8, lineHeight: 1.4, marginTop: 6 }}>Suggested: {suggestedRoutineName}</span>
                 <details style={{ marginTop: 10 }}><summary style={{ color: acid, fontSize: 8, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>Browse {leadMagnetIdeas.length} lead magnet ideas</summary><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(250px,1fr))', gap: 6, marginTop: 9 }}>{leadMagnetIdeas.map((idea) => <button type="button" key={idea} onClick={() => setLeadMagnetTitle(idea)} aria-pressed={leadMagnetTitle === idea} style={{ minHeight: 48, border: `1px solid ${leadMagnetTitle === idea ? acid : line}`, background: leadMagnetTitle === idea ? 'rgba(199,216,163,.1)' : 'transparent', color: ink, padding: '8px 10px', fontFamily: sans, fontSize: 9, lineHeight: 1.35, textAlign: 'left', cursor: 'pointer' }}>{idea}</button>)}</div></details>
-              </div>
+              </div>}
             </div>
-            <label style={{ ...label, color: ink }}>Your offers <span style={{ color: acid }}>· value rises at every step</span></label>
+            {useCaseReady && <><label style={{ ...label, color: ink }}>Your offers <span style={{ color: acid }}>· value rises at every step</span></label>
             <p style={{ color: muted, fontSize: 9, lineHeight: 1.5, margin: '-1px 0 12px' }}>Add or remove steps in one continuous customer journey.</p>
             <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'stretch', gap: 0, minWidth: 'max-content' }}>
@@ -3190,10 +3212,10 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
                   <div style={{ borderTop: `1px solid ${line}`, minHeight: 50, marginTop: 'auto', padding: 10, background: 'rgba(245,242,234,.025)', display: 'flex', alignItems: 'center' }}><strong style={{ color: muted, fontSize: 9, letterSpacing: '.08em', textTransform: 'uppercase' }}>Next value step</strong></div>
                 </div></Fragment>}
               </div>
-            </div>
+            </div></>}
           </div>}
         </div>
-        {offerPlanStage === 2 && <>
+        {offerPlanStage === 2 && useCaseReady && <>
         <section style={{ border: `1px solid ${line}`, background: panel, marginBottom: 30 }}>
           <div style={{ padding: '16px 18px', borderBottom: `1px solid ${line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}><span><span style={{ ...label, color: acid, marginBottom: 4 }}>Offer build queue</span><strong style={{ color: ink, fontFamily: serif, fontSize: 25, fontWeight: 400 }}>{builtOfferCount} of {totalOfferCount} built</strong></span><span style={{ color: muted, fontSize: 9 }}>Finish each offer before publishing the offer site.</span></div>
           <div style={{ overflowX: 'auto' }}><div role="table" aria-label="Offers to build" style={{ minWidth: 760 }}>
@@ -3591,7 +3613,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       {error && <p style={{ color: '#F0A7A7', fontSize: 12 }}>{error}</p>}
       {step !== 3 && step !== 5 && (step !== 4 || offerPlanStage === 2) && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', alignItems: 'center', gap: 12, marginTop: 34 }}>
         {step > 1 ? <button type="button" onClick={() => { setError(''); if (step === 3) setAudienceSetupStage(1); else if (step === 4) setOfferPlanStage(1); else setStep((current) => current - 1); }} style={{ ...btn, width: '100%', background: 'transparent', color: ink }}>← Back</button> : <span />}
-        {(step !== 4 || offerPlanStage === 2) && (step !== 5 || freeOfferSetupStage === 2) ? step < 5 ? <button type="button" onClick={step === 1 && profileStage === 0 ? goToBrandStage : continueSetup} disabled={importing} style={{ ...btn, width: '100%' }}>{importing ? <><Loader2 size={14} className="animate-spin" /> Reading profiles</> : <>{step === 1 && profileStage === 0 ? 'Continue to brand' : 'Continue'} <ArrowRight size={14} /></>}</button> : <button disabled={busy} style={{ ...btn, width: '100%' }}>{busy ? 'Creating your Guardian' : 'Create my Guardian profile'} <ArrowRight size={14} /></button> : <span />}
+        {(step !== 4 || offerPlanStage === 2) && (step !== 5 || freeOfferSetupStage === 2) ? step < 5 ? <button type="button" onClick={step === 1 && profileStage === 0 ? goToBrandStage : continueSetup} disabled={importing || (step === 4 && offerPlanStage === 2 && !useCaseReady)} style={{ ...btn, width: '100%' }}>{importing ? <><Loader2 size={14} className="animate-spin" /> Reading profiles</> : <>{step === 1 && profileStage === 0 ? 'Continue to brand' : 'Continue'} <ArrowRight size={14} /></>}</button> : <button disabled={busy} style={{ ...btn, width: '100%' }}>{busy ? 'Creating your Guardian' : 'Create my Guardian profile'} <ArrowRight size={14} /></button> : <span />}
       </div>}
         </section>
       </div>
