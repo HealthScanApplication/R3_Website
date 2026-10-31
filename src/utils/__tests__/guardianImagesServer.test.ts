@@ -71,3 +71,12 @@ it('only accepts the model the price list belongs to', () => {
   expect(pickModel('gpt-image-1.5')).toBe(DEFAULT_MODEL);
   expect(pickModel(undefined)).toBe(DEFAULT_MODEL);
 });
+
+describe('avatar house style prompt', () => {
+  it('asks for a carved stone bust on a round base against near-black, and keeps the identity', () => {
+    const prompt = gi.avatarPrompt('Ada Lovelace');
+    expect(prompt).toMatch(/Ada Lovelace/);
+    for (const needle of [/carved stone bust/, /round stone base/, /near-black/, /monochrome greyscale/, /Preserve the person's identity/, /No text, letters, logos/]) expect(prompt).toMatch(needle);
+    expect(prompt).not.toMatch(/black-and-white photography|warm-light-grey/);
+  });
+});
