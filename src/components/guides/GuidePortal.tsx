@@ -2,25 +2,27 @@ import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight, ChevronRight, FileText, HeartPulse, LogOut,
   Mail, Package, Plus, Salad, Sparkles, Users, Globe2, Loader2,
-  Upload, Check, Instagram, Youtube, Link2, AtSign, Route, CalendarDays, Download,
-  MoreHorizontal, Droplets, Activity, Bath, Sparkle, HeartHandshake, Hourglass, ChefHat, Wheat, ListChecks, CookingPot, FolderOpen, Trash2, ExternalLink, Hammer, PencilRuler, Blocks, LayoutDashboard, Play, Clock, ShieldCheck, Utensils, Dumbbell, Combine, Clapperboard, BookOpen, Podcast, GraduationCap, AudioLines } from 'lucide-react';
+  Upload, Check, Instagram, Facebook, Youtube, Link2, AtSign, Route, CalendarDays, Download,
+  MoreHorizontal, Droplets, Activity, Bath, Sparkle, HeartHandshake, Hourglass, ChefHat, Wheat, ListChecks, CookingPot, FolderOpen, Trash2, ExternalLink, Hammer, PencilRuler, Blocks, LayoutDashboard, Grid2X2, List, Play, Clock, ShieldCheck, Utensils, Dumbbell, Combine, Clapperboard, BookOpen, Podcast, GraduationCap, AudioLines } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ProtocolEditor } from '../admin/ProtocolEditor';
 import { RoutineMark } from '../Header';
 import { ContentStudio } from './ContentStudio';
 import { CombineProtocols, DietBuilder, FitnessBuilder } from './GuardianBuilders';
-import { ProtocolCard, ProtocolCardGrid, clipCopy } from './ProtocolCard';
+import { ProtocolCard, ProtocolCardGrid, ProtocolOutputTags, clipCopy } from './ProtocolCard';
 import { OfferProtocolItems } from './OfferProtocolItems';
 import { ProtocolRemovalDialog, type ProtocolRemoval } from './ProtocolRemoval';
-import { PROTOCOL_THEMES, daysLabel, protocolTags, protocolTheme, protocolWhen } from '../../utils/protocolTags';
+import { PROTOCOL_THEMES, completeProtocolTags, daysLabel, protocolTags, protocolTheme, protocolWhen } from '../../utils/protocolTags';
 import { defaultAvatarKeyFor } from '../../utils/memberAvatar';
 import { PhotoDropzone } from '../PhotoDropzone';
 import { GuardianAvatar, useGuardianAvatarUrl } from './GuardianAvatar';
 import { ProtocolChildrenPanel } from './ProtocolChildrenPanel';
 import { customizeProtocolRecipe } from '../../utils/protocolCopies';
 import { ContentBuilder } from './ContentBuilder';
-import { RoutineShareLink } from './RoutineShareLink';
+import { SocialPublisher } from './SocialPublisher';
+import { RoutineCardQr, RoutineShareLink } from './RoutineShareLink';
 import { OfferRoutineLink } from './OfferRoutineLink';
+import { CourseBuilder } from './CourseBuilder';
 import { listOfferRoutines } from '../../utils/routineShare';
 import { useGuardianPage } from './useGuardianPage';
 import { getGuardianStripeConfiguration } from '../../utils/guardianStripe';
@@ -28,25 +30,37 @@ import { readCheckoutSession, saveCheckoutSession, clearCheckoutSession, checkou
 import { HazardList, NutrientCoverage, RecipeFiltersPanel } from './RecipeInsights';
 import { avoidViolations, filtersToBrief, type RecipeFilters, type Tier } from '../../utils/recipeNutrients';
 import { buildRecipePdf } from '../../utils/recipePdf';
+import { buildProtocolPdf } from '../../utils/protocolPdf';
 import { PhoneFrame } from '../mockups/PhoneFrame';
 import { buildRecipesWithAI, computeNutrition, gramsFor, searchCatalogIngredients, KEY_MICROS, UNITS, type CatalogIngredient, type MacroKey, type RecipeDraft, type RecipeIngredient } from '../../utils/guideRecipeAI';
 import { APP_STORE_URL } from '../../config/appLinks';
 import { EventProtocolBuilder } from './EventProtocolBuilder';
 import { GuardianModal } from './GuardianModal';
+import { SiteCardGrid, SitePublishBar, SiteStatusTag, type SiteCardData } from './GuardianSiteCards';
+import { sitePublishAction, siteStatus } from '../../utils/guardianSiteStatus';
 import { BrandKitFields } from './BrandKitFields';
 import { AGE_RANGES, LIFE_STAGES } from '../../utils/audienceTaxonomy';
+import { convertGuardianAvatar, generatedImageFile } from '../../utils/guardianImages';
+import { HouseStyleAvatarPanel } from './HouseStyleAvatarPanel';
 import { brandKitLinks, brandKitOf, defaultBrandKit, type BrandKit } from '../../utils/brandKit';
-import { GuardianProducts, GuardianShop } from './GuardianProducts';
+import { GuardianProducts, GuardianShop, type GuardianLocalePreference } from './GuardianProducts';
 import { ActivitiesLibrary } from './ActivitiesLibrary';
 import { CookingEquipment, CookingTechniques } from './CookingLibrary';
 import { CatalogIngredients, CatalogRecipes, FitnessRoutines } from './CatalogBrowsers';
 import { buildProtocolWithAI, foldSleepSteps, saveDraftStep, updateProtocolWithAI, listProtocolItems, createProtocol, findOrCreateProtocol, createProtocolItem, listProtocols, listPublicProtocols, restoreProtocol, type AdminProtocol } from '../../utils/protocolAdmin';
 import {
-  recoverUpsellPayment, createGuideLead, createGuideOffer, createGuideRecipe, createGuideValueRamp, getGuideProfile, getGuideProfileBySlug,
-  importGuideProfile, listGuideLeads, listGuideOffers, listGuideRecipes, listGuideValueRamps, listRoutineOwners, upsertGuideOffer, upsertGuideValueRamp, listPublicGuideProfiles, saveGuideProfile, listGuardianReviews, listGuardianReviewRequests, createGuardianReviewRequest, submitGuardianReview, setGuardianReviewStatus, createOfferPayment, confirmOfferPayment, buyUpsellOneClick, getFreeOfferDownload, requestGuardianReview, decideGuardianSite, listAllGuideProfiles, listGuardianSuggestions, setGuardianSuggestionStatus, listPublicGuardianOffers, listReviewSummaries, type AdminGuideProfile, type GuardianSuggestionRow, type GuardianReview, type GuardianReviewRequest, submitGuardianSuggestion, submitGuardianOptIn,
+  recoverUpsellPayment, createGuideLead, createGuideOffer, createGuideRecipe, createGuideValueRamp, getGuideProfile, getGuideProfileBySlug, canonicalGuideSlug,
+  importGuideProfile, listGuideLeads, listGuideOffers, listGuideProducts, listGuideRecipes, listGuideValueRamps, listRoutineOwners, upsertGuideOffer, upsertGuideValueRamp, listPublicGuideProfiles, saveGuideProfile, listGuardianReviews, listGuardianReviewRequests, createGuardianReviewRequest, submitGuardianReview, setGuardianReviewStatus, createOfferPayment, confirmOfferPayment, buyUpsellOneClick, getFreeOfferDownload, requestGuardianReview, decideGuardianSite, listAllGuideProfiles, listGuardianSuggestions, setGuardianSuggestionStatus, listPublicGuardianOffers, listReviewSummaries, type AdminGuideProfile, type GuardianSuggestionRow, type GuardianReview, type GuardianReviewRequest, submitGuardianSuggestion, submitGuardianOptIn,
   createGuideLibraryFolder, createGuideLibraryItem, deleteGuideLibraryItem, getGuideFileDownloadUrl,
   listGuideLibraryFolders, listGuideLibraryItems, replaceGuideBrands, listGuideBrands, updateGuideRecipe, saveGuideRecipeDraft, listPersonalProtocolPeople, uploadGuideFile, uploadGuideImage, uploadGuideLibraryAudio,
-  type GuideBrand, type RoutineOwner, type GuideLead, type GuideLibraryFolder, type GuideLibraryItem, type GuideLibraryKind, type GuideOffer, type GuideProfile, type GuideRecipe,
+  updateGuideLead, deleteGuideLead, updateGuideValueRamp, deleteGuideValueRamp, deleteGuideRecipe, deleteGuideOffer,
+  updateGuideLibraryFolder, deleteGuideLibraryFolder, updateGuideLibraryItem,
+  getOfferCommunityChannel, saveOfferCommunityChannel, getCommunityChannelByRoute, joinGuideCommunity, isGuideCommunityMember, listGuideCommunityMessages, postGuideCommunityMessage,
+  listGuideCommunityChannels, createGuideCommunityChannel, updateGuideCommunityChannel, deleteGuideCommunityChannel, ensureDefaultGuideCommunityChannels,
+  listGuideCommunityQuestions, saveGuideCommunityQuestion, deleteGuideCommunityQuestion,
+  listGuideLeadPurchases, listGuideLeadComments, addGuideLeadComment,
+  listGuideEvents, listManagedGuideEvents, saveGuideEvent, deleteGuideEvent, listGuideRetreats, getGuideEventSource, importGuideEvents, searchGuideBackgroundMedia,
+  type GuideBrand, type RoutineOwner, type GuideLead, type GuideLeadPurchase, type GuideLeadComment, type GuideEvent, type GuideRetreat, type GuideBackgroundMedia, type GuideLibraryFolder, type GuideLibraryItem, type GuideLibraryKind, type GuideOffer, type GuideProfile, type GuideRecipe, type GuideCommunityChannel, type GuideCommunityMessage, type GuideCommunityQuestion,
   type GuideValueRamp, type ImportedGuideProfile,
 } from '../../utils/guidePortal';
 import { LIBRARY_KINDS, buildLibraryDraft, filterLibraryItems, libraryErrorMessage, libraryKindDefinition, librarySourceDocumentPath, librarySourcePrompt, librarySourceSubtitle, librarySourceUrls, type LibraryDraftInput } from '../../utils/guideLibrarySources';
@@ -79,7 +93,10 @@ function parseExpertiseTags(value?: string) {
 
 function customerFacingOfferTitle(value: string) {
   // Older drafts were saved as "Custom Protocol"; customers see "Personalised Protocol".
-  return value.replace(/^R3\s+Protocol\s*>\s*/i, '').replace(/^Custom Protocol\b/i, 'Personalised Protocol').trim();
+  const title = value.replace(/^R3\s+Protocol\s*>\s*/i, '').replace(/^Custom Protocol\b/i, 'Personalised Protocol').trim();
+  if (title === 'Whole-Day Natural Wellness Routine') return 'Self Heal by Design';
+  if (title === '7-Day Apple Juice and Olive Oil Protocol') return 'Misty Mountain Cleanse Routine';
+  return title;
 }
 
 function offerTitleSize(value: string) {
@@ -96,10 +113,15 @@ function ExpertiseTags({ tags, color = '#667245', compact = false }: { tags: str
   </div>;
 }
 
-type Tab = 'home' | 'profile' | 'library' | 'leads' | 'value_ramps' | 'offer_builder' | 'products' | 'recipes' | 'diet' | 'diet_protocols' | 'fitness' | 'activities' | 'cooking' | 'equipment' | 'ingredients' | 'routines' | 'hygiene' | 'hygiene_protocols' | 'hygiene_activities' | 'beauty' | 'beauty_protocols' | 'beauty_activities' | 'wellness' | 'wellness_protocols' | 'wellness_activities' | 'longevity' | 'longevity_protocols' | 'detox' | 'detox_protocols' | 'content' | 'protocols' | 'admin';
-const WORKSPACE_TABS: readonly Tab[] = ['home', 'profile', 'library', 'leads', 'value_ramps', 'offer_builder', 'products', 'recipes', 'diet', 'diet_protocols', 'fitness', 'activities', 'cooking', 'equipment', 'ingredients', 'routines', 'hygiene', 'hygiene_protocols', 'hygiene_activities', 'beauty', 'beauty_protocols', 'beauty_activities', 'wellness', 'wellness_protocols', 'wellness_activities', 'longevity', 'longevity_protocols', 'detox', 'detox_protocols', 'content', 'protocols', 'admin'];
+type Tab = 'home' | 'profile' | 'events' | 'library' | 'leads' | 'community' | 'value_ramps' | 'offer_builder' | 'products' | 'recipes' | 'diet' | 'diet_protocols' | 'fitness' | 'activities' | 'cooking' | 'equipment' | 'ingredients' | 'routines' | 'hygiene' | 'hygiene_protocols' | 'hygiene_activities' | 'beauty' | 'beauty_protocols' | 'beauty_activities' | 'wellness' | 'wellness_protocols' | 'wellness_activities' | 'longevity' | 'longevity_protocols' | 'detox' | 'detox_protocols' | 'content' | 'protocols' | 'admin';
+const WORKSPACE_TABS: readonly Tab[] = ['home', 'profile', 'events', 'library', 'leads', 'community', 'value_ramps', 'offer_builder', 'products', 'recipes', 'diet', 'diet_protocols', 'fitness', 'activities', 'cooking', 'equipment', 'ingredients', 'routines', 'hygiene', 'hygiene_protocols', 'hygiene_activities', 'beauty', 'beauty_protocols', 'beauty_activities', 'wellness', 'wellness_protocols', 'wellness_activities', 'longevity', 'longevity_protocols', 'detox', 'detox_protocols', 'content', 'protocols', 'admin'];
 // 0 is the Get started page a new Guardian meets first; 1–5 are the setup steps (Profile … Site).
 const SETUP_STEPS = [0, 1, 2, 3, 4, 5] as const;
+const SETUP_STAGE_ICONS = [FileText, HeartPulse, Users, Package, Blocks, Clapperboard] as const;
+function SetupStageIcon({ stage, size = 15 }: { stage: number; size?: number }) {
+  const Icon = SETUP_STAGE_ICONS[Math.max(0, Math.min(SETUP_STAGE_ICONS.length - 1, stage - 1))];
+  return <Icon aria-hidden="true" size={size} strokeWidth={1.7} style={{ flex: '0 0 auto' }} />;
+}
 type FreeOfferKind = 'ebook' | 'one_to_one_call' | 'group_call' | 'recipe_book' | 'routine' | 'in_person';
 type UpsellKind = 'ebook' | 'routine' | 'routine_guidance' | 'recipe_book' | 'group_call' | 'one_to_one_call' | 'in_person' | 'festival';
 type DeliveryFormat = 'Downloadable PDF' | 'Interactive Protocol' | 'PDF + Interactive Protocol' | 'Live online' | 'In person' | 'Event';
@@ -136,13 +158,27 @@ const pricingRegions: { region: string; currency: CurrencyCode; label: string }[
   { region: 'Denmark', currency: 'DKK', label: '🇩🇰 Denmark · Krone' },
   { region: 'Czech Republic', currency: 'CZK', label: '🇨🇿 Czechia · Koruna' },
 ];
+const pricingRegionCodes: Record<string, string> = {
+  'United Kingdom': 'GB', Eurozone: 'EU', 'United States': 'US', Poland: 'PL', Canada: 'CA', Australia: 'AU',
+  'New Zealand': 'NZ', Switzerland: 'CH', Japan: 'JP', India: 'IN', 'United Arab Emirates': 'AE',
+  'South Africa': 'ZA', Brazil: 'BR', Mexico: 'MX', Sweden: 'SE', Norway: 'NO', Denmark: 'DK', 'Czech Republic': 'CZ',
+};
+const pricingRegionFlags: Record<string, string> = {
+  'United Kingdom': '🇬🇧', Eurozone: '🇪🇺', 'United States': '🇺🇸', Poland: '🇵🇱', Canada: '🇨🇦', Australia: '🇦🇺',
+  'New Zealand': '🇳🇿', Switzerland: '🇨🇭', Japan: '🇯🇵', India: '🇮🇳', 'United Arab Emirates': '🇦🇪',
+  'South Africa': '🇿🇦', Brazil: '🇧🇷', Mexico: '🇲🇽', Sweden: '🇸🇪', Norway: '🇳🇴', Denmark: '🇩🇰', 'Czech Republic': '🇨🇿',
+};
+const regionByCountryCode: Record<string, string> = { GB: 'United Kingdom', US: 'United States', PL: 'Poland', CA: 'Canada', AU: 'Australia', NZ: 'New Zealand', CH: 'Switzerland', JP: 'Japan', IN: 'India', AE: 'United Arab Emirates', ZA: 'South Africa', BR: 'Brazil', MX: 'Mexico', SE: 'Sweden', NO: 'Norway', DK: 'Denmark', CZ: 'Czech Republic' };
+const euroCountryCodes = ['AT','BE','HR','CY','EE','FI','FR','DE','GR','IE','IT','LV','LT','LU','MT','NL','PT','SK','SI','ES'];
+function pricingRegionForCountry(countryCode: string) {
+  const country = countryCode.toUpperCase();
+  const region = euroCountryCodes.includes(country) ? 'Eurozone' : regionByCountryCode[country];
+  return pricingRegions.find((option) => option.region === region);
+}
 function defaultPricingRegion() {
   if (typeof navigator === 'undefined') return pricingRegions[0];
   const country = (navigator.language.split('-')[1] || '').toUpperCase();
-  const regionByCountry: Record<string, string> = { GB: 'United Kingdom', US: 'United States', PL: 'Poland', CA: 'Canada', AU: 'Australia', NZ: 'New Zealand', CH: 'Switzerland', JP: 'Japan', IN: 'India', AE: 'United Arab Emirates', ZA: 'South Africa', BR: 'Brazil', MX: 'Mexico', SE: 'Sweden', NO: 'Norway', DK: 'Denmark', CZ: 'Czech Republic' };
-  const euroCountries = ['AT','BE','HR','CY','EE','FI','FR','DE','GR','IE','IT','LV','LT','LU','MT','NL','PT','SK','SI','ES'];
-  const region = euroCountries.includes(country) ? 'Eurozone' : regionByCountry[country];
-  return pricingRegions.find((option) => option.region === region) || pricingRegions[2];
+  return pricingRegionForCountry(country) || pricingRegions[2];
 }
 function formatMoney(value: number | string, currency: string = 'GBP') {
   const amount = Number(value || 0);
@@ -223,6 +259,18 @@ const languageOptions = [
   { name: 'French', code: 'fr', flag: '🇫🇷' }, { name: 'German', code: 'de', flag: '🇩🇪' }, { name: 'Italian', code: 'it', flag: '🇮🇹' },
   { name: 'Portuguese', code: 'pt', flag: '🇵🇹' }, { name: 'Dutch', code: 'nl', flag: '🇳🇱' }, { name: 'Arabic', code: 'ar', flag: '🇦🇪' },
 ];
+const publicCurrencies = ['GBP', 'EUR', 'USD', 'PLN', 'CAD', 'AUD', 'NZD', 'CHF', 'JPY'] as const;
+const DEFAULT_PROTOCOL_CATEGORIES = ['All', 'Protocols', 'Guides', 'Recipes', 'Sessions', 'Communities', 'Programs'];
+const DEFAULT_PRODUCT_FILTERS = ['Books', 'Bundles', 'Creams & skincare', 'Herbal treatments', 'Minerals', 'Other'];
+
+function offerCategory(offer: GuideOffer): string {
+  if (offer.kind === 'recipe_book') return 'Recipes';
+  if (offer.kind === 'community') return 'Communities';
+  if (offer.kind === 'one_to_one_call' || offer.kind === 'group_call' || offer.kind === 'in_person' || offer.kind === 'festival') return 'Sessions';
+  if (offer.kind === 'ebook' || offer.kind === 'lead_magnet') return 'Guides';
+  if (offer.kind === 'course' || offer.kind === 'program' || offer.kind === 'journey' || offer.kind === 'team_program') return 'Programs';
+  return 'Protocols';
+}
 function defaultLanguage() {
   if (typeof navigator === 'undefined') return 'English';
   const code = navigator.language.split('-')[0].toLowerCase();
@@ -360,6 +408,8 @@ const nav: { id: Tab; label: string; Icon: typeof Users }[] = [
   { id: 'home', label: 'Overview', Icon: Sparkles },
   { id: 'library', label: 'Library', Icon: FolderOpen },
   { id: 'leads', label: 'Leads', Icon: Users },
+  { id: 'community', label: 'Community', Icon: AtSign },
+  { id: 'events', label: 'Events', Icon: CalendarDays },
   // One Offers section: the builder (each offer) and offer paths (funnels) are tabs inside it.
   { id: 'offer_builder', label: 'Offers', Icon: Package },
   { id: 'protocols', label: 'Protocols', Icon: HeartPulse },
@@ -543,6 +593,7 @@ const audienceArt = atlas('/images/guides/tags/audience.webp', 4, 2, ['Everyone'
 const supportArt = atlas('/images/guides/tags/support-v3.webp', 3, 2, ['ROUTINE³ (physical + digital)', 'Recipes', 'Group call', '1:1 online', 'In person', 'Event']);
 const offerArt: Record<string, TagArt> = atlas('/images/guides/tags/offers-v2.webp', 4, 3, ['Starter guide', 'Recipe pack', 'ROUTINE³', '1:1 call', 'Group call', 'Journey', 'Event', 'eBook', 'Recipe book', 'Team program', 'Upload', 'Paid'], .75);
 const offerTypeArt = atlas('/images/guides/tags/offer-types-v3.png', 4, 2, ['routine', 'ebook', 'recipe_book', 'routine_guidance', 'festival', 'group_call', 'one_to_one_call', 'in_person']);
+(offerTypeArt as Record<string, TagArt>).community = offerTypeArt.group_call;
 const freeOfferArt: Record<FreeOfferKind, TagArt> = {
   ebook: offerArt.eBook,
   one_to_one_call: offerArt['1:1 call'],
@@ -831,11 +882,13 @@ function PublicGuidePage({ isSignedIn }: { isSignedIn: boolean }) {
   const [guardians, setGuardians] = useState<GuideProfile[]>([]);
   const [directoryLoading, setDirectoryLoading] = useState(true);
   const [directoryOffers, setDirectoryOffers] = useState<GuideOffer[]>([]);
+  const [directoryProtocols, setDirectoryProtocols] = useState<AdminProtocol[]>([]);
   const [reviewSummaries, setReviewSummaries] = useState<Record<string, { rating: number; reviewCount: number }>>({});
   const [activeType, setActiveType] = useState('All');
   useEffect(() => {
     listPublicGuideProfiles().then(setGuardians).catch(() => setGuardians([])).finally(() => setDirectoryLoading(false));
     listPublicGuardianOffers().then(setDirectoryOffers).catch(() => setDirectoryOffers([]));
+    listPublicProtocols('').then(setDirectoryProtocols).catch(() => setDirectoryProtocols([]));
     listReviewSummaries().then(setReviewSummaries).catch(() => setReviewSummaries({}));
   }, []);
   const [offerFilter, setOfferFilter] = useState<'all' | 'free' | 'paid'>('all');
@@ -916,7 +969,7 @@ function PublicGuidePage({ isSignedIn }: { isSignedIn: boolean }) {
                 <div aria-label="Filter offers" style={{ display: 'flex', gap: 7 }}>{(['all', 'free', 'paid'] as const).map((value) => <button type="button" key={value} onClick={() => setOfferFilter(value)} aria-pressed={offerFilter === value} style={{ height: 34, padding: '0 14px', border: `1px solid ${offerFilter === value ? ink : line}`, background: offerFilter === value ? ink : 'transparent', color: offerFilter === value ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer' }}>{value === 'all' ? 'All' : value === 'free' ? 'Free' : 'Paid'}</button>)}</div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,300px),1fr))', gap: 18 }}>
-                {shown.map((offer) => { const g = byId.get(offer.guide_id)!; const free = offer.access_model === 'free'; return <ProductCard key={offer.id} {...(reviewSummaries[offer.guide_id] || {})} imageUrl={offer.cover_url} kind={offer.kind} eyebrow={audienceLabel(g.social_links?.audience_details) || 'Everyone'} title={customerFacingOfferTitle(offer.title)} copy={(offer.description || '').split(' Delivery:')[0] || undefined} price={free ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid'} name={g.display_name} avatarUrl={g.avatar_url} accent="#667245" cta={free ? 'Get it free' : 'View offer'} href={`/guardians/${encodeURIComponent(g.slug)}${free ? '#start' : '#offers'}`} />; })}
+                {shown.map((offer) => { const g = byId.get(offer.guide_id)!; const free = offer.access_model === 'free'; const communityHref = `/guardians/${encodeURIComponent(g.slug)}/community/${encodeURIComponent(communitySlug(offer.title))}`; const wanted = offerProtocolKey(offer.title); const protocol = directoryProtocols.filter((item) => item.user_id === offer.guide_id).find((item) => offerProtocolKey(item.name) === wanted) || directoryProtocols.filter((item) => item.user_id === offer.guide_id).find((item) => offerProtocolKey(item.name).includes(wanted) || wanted.includes(offerProtocolKey(item.name))); return <ProductCard key={offer.id} {...(reviewSummaries[offer.guide_id] || {})} imageUrl={offer.cover_url} kind={offer.kind} eyebrow={audienceLabel(g.social_links?.audience_details) || 'Everyone'} title={customerFacingOfferTitle(offer.title)} copy={(offer.description || '').split(' Delivery:')[0] || undefined} price={free ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid'} name={g.display_name} avatarUrl={g.avatar_url} accent="#667245" cta={offer.kind === 'community' ? 'Open community' : free ? 'Get it free' : 'View offer'} href={offer.kind === 'community' ? communityHref : `/guardians/${encodeURIComponent(g.slug)}${free ? '#start' : '#offers'}`} cardQr={protocol ? <RoutineCardQr protocolId={protocol.id} guardianSlug={g.slug} href={`${window.location.origin}/protocol/${encodeURIComponent(protocol.id)}`} size={58} /> : undefined} />; })}
               </div>
               {!shown.length && <p style={{ color: muted }}>No offers match this filter yet.</p>}
             </div>
@@ -928,7 +981,7 @@ function PublicGuidePage({ isSignedIn }: { isSignedIn: boolean }) {
   );
 }
 
-const SUPPORT_KINDS: GuideOffer['kind'][] = ['one_to_one_call', 'group_call', 'in_person', 'journey', 'festival', 'team_program'];
+const SUPPORT_KINDS: GuideOffer['kind'][] = ['one_to_one_call', 'group_call', 'community', 'in_person', 'journey', 'festival', 'team_program'];
 
 /** Default funnel order: the ramp's own order when published, else free → paid by price → personal support. */
 function orderFunnelOffers(offers: GuideOffer[], ramp: GuideValueRamp | null): GuideOffer[] {
@@ -1141,12 +1194,12 @@ export function OfferCheckout({ offer, upsells, profile, accent, onClose, onFres
         <span style={{ width: 56, height: 56, margin: '0 auto 14px', borderRadius: '50%', background: APP.greenSoft, color: '#000', display: 'grid', placeItems: 'center' }}><Check size={26} /></span>
         <h2 style={{ fontFamily: APP.font, fontSize: 28, fontWeight: 600, margin: '0 0 4px' }}>You’re all set!</h2>
         <p style={{ color: APP.muted, fontSize: 16, fontWeight: 600, margin: '0 0 18px', overflowWrap: 'anywhere' }}>{message || `Payment confirmed for ${email}`}</p>
-        <div style={{ background: APP.surface, border: `1px solid ${APP.border}`, borderRadius: 12, padding: '6px 16px', textAlign: 'left', marginBottom: 18 }}>{bought.map((id) => <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', fontSize: 15, fontWeight: 600 }}><span style={{ width: 22, height: 22, flex: '0 0 22px', borderRadius: '50%', border: '1.5px solid #262626', display: 'grid', placeItems: 'center' }}><Check size={13} strokeWidth={2.5} /></span>{[offer, ...upsells].find(item => item.id === id)?.title}</div>)}</div>
+        <div style={{ background: APP.surface, border: `1px solid ${APP.border}`, borderRadius: 12, padding: '6px 16px', textAlign: 'left', marginBottom: 18 }}>{bought.map((id) => { const boughtTitle = [offer, ...upsells].find(item => item.id === id)?.title; return <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', fontSize: 15, fontWeight: 600 }}><span style={{ width: 22, height: 22, flex: '0 0 22px', borderRadius: '50%', border: '1.5px solid #262626', display: 'grid', placeItems: 'center' }}><Check size={13} strokeWidth={2.5} /></span>{boughtTitle ? customerFacingOfferTitle(boughtTitle) : ''}</div>; })}</div>
       </div> : <div style={{ padding: '44px 24px 24px' }}>
         <AppOfferImage kind={offer.kind} size={80} />
         <div style={{ margin: '12px 0 2px' }}><OfferFormatTag kind={offer.kind} /></div>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, margin: '12px 0 6px' }}>{profile.avatar_url ? <img src={profile.avatar_url} alt="" style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover' }} /> : <span style={{ width: 24, height: 24, borderRadius: '50%', background: APP.border, display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 600 }}>{(profile.display_name || 'G')[0]}</span>}<span style={{ color: APP.muted, fontSize: 13, fontWeight: 500 }}>{profile.display_name}</span></span>
-        <h2 style={{ fontFamily: APP.font, fontSize: 28, fontWeight: 600, lineHeight: '34px', letterSpacing: -0.5, margin: '0 0 4px' }}>{offer.title}</h2>
+        <h2 style={{ fontFamily: APP.font, fontSize: 28, fontWeight: 600, lineHeight: '34px', letterSpacing: -0.5, margin: '0 0 4px' }}>{customerFacingOfferTitle(offer.title)}</h2>
         <p style={{ color: APP.muted, fontSize: 16, fontWeight: 600, margin: '0 0 20px' }}>{money(offer.price_cents)} · secure checkout</p>
         {stage === 'details' ? <form id={checkoutFormId} onSubmit={start} style={{ display: 'grid', gap: 0, textAlign: 'left' }}>
           <input required placeholder="First name" aria-label="First name" value={name} onChange={(e) => setName(e.target.value)} style={{ ...field, borderRadius: '12px 12px 0 0' }} />
@@ -1165,10 +1218,20 @@ function GuardianFunnel({ profile, offers, ramp, accent, headingFont, reviews = 
   const ordered = orderFunnelOffers(offers, ramp);
   const entry = ordered.find((offer) => offer.access_model === 'free') || null;
   const nextPaid = ordered.find((offer) => offer.access_model === 'paid' && !SUPPORT_KINDS.includes(offer.kind)) || null;
-  const support = ordered.find((offer) => SUPPORT_KINDS.includes(offer.kind)) || null;
   const [form, setForm] = useState({ name: '', email: '', goal: '', consent: false });
   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
   const [checkoutOffer, setCheckoutOffer] = useState<GuideOffer | null>(null);
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('r3-guardian-offer-lead');
+      if (!raw) return;
+      const lead = JSON.parse(raw) as { guideId?: string; rampId?: string; email?: string };
+      if (lead.guideId !== profile.user_id || (lead.rampId && lead.rampId !== ramp?.id) || !lead.email) return;
+      setForm((current) => ({ ...current, name: lead.email!.split('@')[0] || 'Subscriber', email: lead.email! }));
+      setState('done');
+      sessionStorage.removeItem('r3-guardian-offer-lead');
+    } catch { /* session storage is optional */ }
+  }, [profile.user_id, ramp?.id]);
   useEffect(() => {
     const returnedOffer = new URL(window.location.href).searchParams.get('guardian_checkout');
     if (!returnedOffer) return;
@@ -1194,7 +1257,7 @@ function GuardianFunnel({ profile, offers, ramp, accent, headingFont, reviews = 
   const openOffer = (offer: GuideOffer) => (event: React.MouseEvent) => { if (sellsHere(offer)) { event.preventDefault(); setCheckoutOffer(offer); } };
   const paidAfter = (offer: GuideOffer) => ordered.slice(ordered.indexOf(offer) + 1).filter(sellsHere);
   const price = (offer: GuideOffer) => offer.access_model === 'free' ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Enquire';
-  const offerHref = (offer: GuideOffer) => offer.booking_url || offer.affiliate_url || '#start';
+  const offerHref = (offer: GuideOffer) => offer.kind === 'community' ? `/guardians/${encodeURIComponent(profile.slug)}/community/${encodeURIComponent(communitySlug(offer.title))}` : offer.booking_url || offer.affiliate_url || '#start';
   async function optIn(e: React.FormEvent) {
     e.preventDefault();
     setState('sending');
@@ -1208,37 +1271,21 @@ function GuardianFunnel({ profile, offers, ramp, accent, headingFont, reviews = 
   const eyebrow: React.CSSProperties = { color: accent, fontSize: 10, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase' };
   const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', height: 46, border: '1px solid #11120F', borderRadius: 2, padding: '0 14px', fontFamily: 'inherit', fontSize: 14, background: '#FFF', color: '#11120F', outline: 'none' };
   const solid: React.CSSProperties = { minHeight: 46, border: '1px solid #11120F', borderRadius: 2, background: '#11120F', color: '#FFF', padding: '0 20px', fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10, textDecoration: 'none', cursor: 'pointer' };
-  const steps = [entry, nextPaid, support].filter(Boolean) as GuideOffer[];
   // Pitch videos saved by the builder in social_links.offer_videos ('free' = lead magnet).
   const offerVideos = (() => { try { return JSON.parse(String((profile.social_links as Record<string, unknown> | null)?.offer_videos || '{}')) as Record<string, string>; } catch { return {} as Record<string, string>; } })();
   const leadVideo = offerVideos.free || '';
   return <>
     {checkoutOffer && <OfferCheckout key={checkoutOffer.id} offer={checkoutOffer} upsells={paidAfter(checkoutOffer)} profile={profile} accent={accent} reviews={reviews} videos={offerVideos} onFreshCheckout={setCheckoutOffer} onClose={() => setCheckoutOffer(null)} />}
     {!stripeConfig.enabled && ordered.some(offer => offer.access_model === 'paid' && offer.price_cents > 0 && !offer.booking_url) && <p role="status" style={{ padding: '16px 24px', textAlign: 'center', color: accent }}>{stripeConfig.error}</p>}
-    {steps.length > 0 && <section id="offers" style={{ padding: `clamp(60px,9vw,120px) ${PAGE_X}`, borderTop: '1px solid rgba(17,18,15,.2)' }}>
-      {/* App-style heading (Poppins, like the ROUTINE³ paywall): green label, bold title, muted subtitle. */}
-      <div style={{ fontFamily: APP.font, textAlign: 'center', margin: '0 auto 28px', maxWidth: 640 }}>
-        <span style={{ display: 'block', color: APP.greenDark, fontSize: 15, fontWeight: 600, marginBottom: 6 }}>{ramp?.problem ? ramp.problem : `Work with ${profile.display_name}`}</span>
-        <h2 style={{ ...HEADLINE_STYLES[headlineStyle].section, margin: '0 0 8px' }}>Your path, step by step{headlineStyle === 'editorial' ? '.' : ''}</h2>
-        <p style={{ color: APP.muted, fontSize: 15, fontWeight: 600, margin: 0 }}>Start free, then go deeper when you’re ready.</p>
+    {entry && <section id="start" style={{ padding: `clamp(60px,9vw,120px) ${PAGE_X}`, background: '#F2EFE7', color: '#11120F', borderTop: '1px solid rgba(17,18,15,.2)' }}>
+      <div style={{ maxWidth: 720, margin: '0 auto 26px', textAlign: 'center', fontFamily: APP.font }}>
+        <span style={{ color: APP.greenDark, fontSize: 12, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Follow {profile.display_name}</span>
+        <h2 style={{ ...HEADLINE_STYLES[headlineStyle].section, margin: '10px 0 8px' }}>Get new guidance in your inbox.</h2>
+        <p style={{ color: APP.muted, fontSize: 15, fontWeight: 600, margin: 0 }}>Subscribe once and receive {customerFacingOfferTitle(entry.title)} free.</p>
       </div>
-      {/* Same app-style offer cards as the hero, one per step of the path. */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,300px),360px))', justifyContent: 'center', gap: 18 }}>
-        {steps.map((offer, index) => { const free = index === 0 && offer.access_model === 'free'; return <ProductCard key={offer.id} {...reviewStats(reviews)} audience={audienceLabel(profile.social_links?.audience_details)} imageUrl={offer.cover_url} kind={offer.kind} eyebrow={`Step ${index + 1} · ${free ? 'Start free' : SUPPORT_KINDS.includes(offer.kind) ? 'Personal support' : 'Go deeper'}`} title={customerFacingOfferTitle(offer.title)} copy={offer.description || 'The next step in your journey.'} price={price(offer)} name={profile.display_name} avatarUrl={profile.avatar_url} accent={accent} cta={free ? 'Get it free' : sellsHere(offer) ? 'Get it now' : 'See what is included'} href={free ? '#start' : offerHref(offer)} onClick={free ? () => document.getElementById('start')?.scrollIntoView({ behavior: 'smooth' }) : sellsHere(offer) ? () => setCheckoutOffer(offer) : undefined} />; })}
-      </div>
-    </section>}
-    {entry && <section id="start" style={{ padding: `clamp(60px,9vw,120px) ${PAGE_X}` }}>
-      {/* Same wide ROUTINE³ app-style card as the builder's sign-up preview: offer left, form in a white panel right. */}
-      <div {...tiltHandlers(3)} style={tiltStyle({ position: 'relative', maxWidth: 880, margin: '0 auto', background: APP.bg, color: APP.text, fontFamily: APP.font, borderRadius: 24, overflow: 'hidden', boxShadow: '0 20px 50px rgba(17,24,39,.14)', display: 'flex', flexWrap: 'wrap', alignItems: 'stretch' })}><GlowLayer />
-        <span style={{ position: 'absolute', zIndex: 2, top: 16, left: 16, background: '#000', color: '#FFF', borderRadius: 8, padding: '5px 10px', fontSize: 11, fontWeight: 600, letterSpacing: .5 }}>FREE</span>
-        <div style={{ flex: '1 1 340px', minWidth: 0, padding: '56px 28px 28px', display: 'grid', alignContent: 'start', justifyItems: 'start', textAlign: 'left' }}>
-          {leadVideo && state !== 'done' ? <video src={leadVideo} controls playsInline style={{ width: '100%', aspectRatio: '16 / 9', objectFit: 'cover', background: '#000', borderRadius: 12, marginBottom: 12 }} /> : <AppOfferImage kind={entry.kind} size={110} align="left" />}
-          <div style={{ margin: '12px 0 2px' }}><OfferFormatTag kind={entry.kind} /></div>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, margin: '12px 0 6px' }}>{profile.avatar_url ? <img src={profile.avatar_url} alt="" style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover' }} /> : <span style={{ width: 24, height: 24, borderRadius: '50%', background: APP.border, display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 600 }}>{(profile.display_name || 'G')[0]}</span>}<span style={{ color: APP.muted, fontSize: 13, fontWeight: 500 }}>{profile.display_name}</span></span>
-          <h2 style={{ fontFamily: APP.font, fontSize: 28, fontWeight: 600, lineHeight: '34px', letterSpacing: -0.5, margin: '0 0 6px' }}>{state === 'done' ? 'You’re in!' : entry.title}</h2>
-          <p style={{ color: APP.muted, fontSize: 16, fontWeight: 600, lineHeight: 1.45, margin: 0 }}>{state === 'done' ? `${entry.title} runs as a daily routine in the ROUTINE³ app, with reminders, so you keep going.` : entry.description || 'Get the guide and the interactive routine that goes with it.'}</p>
-        </div>
-        <div {...tiltHandlers(6)} style={tiltStyle({ flex: '1 1 320px', minWidth: 0, margin: 16, alignSelf: 'stretch', justifyContent: 'center', padding: '24px 22px 20px', background: APP.surface, borderRadius: 16, boxShadow: '0 2px 8px rgba(17,24,39,.08)', display: 'flex', flexDirection: 'column', gap: 12 })}><GlowLayer />
+      <div {...tiltHandlers(3)} style={tiltStyle({ position: 'relative', maxWidth: 620, margin: '0 auto', background: APP.bg, color: APP.text, fontFamily: APP.font, borderRadius: 24, overflow: 'hidden', boxShadow: '0 20px 50px rgba(17,24,39,.14)' })}><GlowLayer />
+        {leadVideo && state !== 'done' && <video src={leadVideo} controls playsInline style={{ width: '100%', aspectRatio: '16 / 9', objectFit: 'cover', background: '#000' }} />}
+        <div {...tiltHandlers(6)} style={tiltStyle({ minWidth: 0, margin: 16, justifyContent: 'center', padding: '24px 22px 20px', background: APP.surface, borderRadius: 16, boxShadow: '0 2px 8px rgba(17,24,39,.08)', display: 'flex', flexDirection: 'column', gap: 12 })}><GlowLayer />
           {state === 'done' ? <>
             {!nextPaid && <span style={{ width: 52, height: 52, margin: '0 auto 4px', borderRadius: '50%', background: APP.greenSoft, color: '#000', display: 'grid', placeItems: 'center' }}><Check size={24} /></span>}
             {nextPaid && <div style={{ border: `2px solid ${APP.green}`, borderRadius: 12, overflow: 'hidden', textAlign: 'center' }}>
@@ -1254,9 +1301,6 @@ function GuardianFunnel({ profile, offers, ramp, accent, headingFont, reviews = 
             <div>
               <input required placeholder="First name" aria-label="First name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', height: 56, border: `1px solid ${APP.border}`, borderRadius: '12px 12px 0 0', padding: '0 16px', fontFamily: APP.font, fontSize: 16, background: APP.alt, color: APP.text, outline: 'none' }} />
               <label style={{ display: 'flex', alignItems: 'center', height: 56, marginTop: -1, padding: '0 16px', background: APP.alt, border: `1px solid ${APP.border}`, borderRadius: '0 0 12px 12px', boxSizing: 'border-box' }}><Mail size={18} color={APP.muted} style={{ marginRight: 12, flex: '0 0 auto' }} /><input required type="email" placeholder="Email" aria-label="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', fontFamily: APP.font, fontSize: 16, color: APP.text }} /></label>
-            </div>
-            <div role="radiogroup" aria-label="Main goal (optional)" style={{ display: 'flex', gap: 8 }}>
-              {['Health', 'Beauty', 'Fitness'].map((goal) => <button type="button" key={goal} role="radio" aria-checked={form.goal === goal} onClick={() => setForm({ ...form, goal: form.goal === goal ? '' : goal })} style={{ flex: 1, height: 40, border: `1px solid ${form.goal === goal ? APP.green : APP.border}`, borderRadius: 12, background: form.goal === goal ? APP.greenSoft : APP.alt, color: APP.text, fontFamily: APP.font, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>{goal}</button>)}
             </div>
             <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, lineHeight: 1.45, color: APP.muted, cursor: 'pointer', textAlign: 'left' }}><input type="checkbox" checked={form.consent} onChange={(e) => setForm({ ...form, consent: e.target.checked })} style={{ width: 20, height: 20, flex: '0 0 20px', margin: 0, accentColor: '#22C55E' }} />{CONSENT_TEXT}</label>
             {state === 'error' && <p role="alert" style={{ color: '#EF4444', fontSize: 12, margin: 0 }}>We could not sign you up just now. Please try again.</p>}
@@ -1276,18 +1320,15 @@ function GuardianFunnel({ profile, offers, ramp, accent, headingFont, reviews = 
       {downloadError && <p role="alert" style={{ maxWidth: 880, margin: '8px auto 0', color: '#EF4444', fontFamily: APP.font, fontSize: 12 }}>{downloadError}</p>}
       {reviews.length > 0 && <div style={{ maxWidth: 880, margin: '24px auto 0', paddingTop: 20, borderTop: '1px solid rgba(17,24,39,.14)' }}><ReviewRail reviews={reviews} accent={APP.greenDark} /></div>}
     </section>}
-    <footer style={{ padding: `28px ${PAGE_X}`, borderTop: '1px solid rgba(17,18,15,.2)', color: '#66645F', fontSize: 11, lineHeight: 1.6 }}>
-      {profile.display_name} shares general wellbeing guidance, not medical advice. Speak to your GP or doctor before changing medication, diet or exercise, and about any health concern. Individual results vary.
-    </footer>
   </>;
 }
 
-type SiteHeroCard = { key: string; offerTitle?: string; eyebrow?: string; title: string; copy?: string; href?: string; onClick?: () => void; kind?: string; price?: string };
+type SiteHeroCard = { key: string; offerTitle?: string; eyebrow?: string; title: string; copy?: string; href?: string; onClick?: () => void; kind?: string; price?: string; imageUrl?: string | null };
 const productArt = (kind?: string): TagArt | undefined => kind ? (offerTypeArt as Record<string, TagArt>)[kind] || (freeOfferArt as Record<string, TagArt>)[kind] : undefined;
 // Light version of the dashboard offer card (art, author, title, value stars, price) for the public site and funnel.
 // Review stats for offer cards: average + count of published reviews, or nothing when there are none.
 const reviewStats = (reviews: GuardianReview[]) => { const live = reviews.filter((r) => r.status === 'published'); return live.length ? { rating: live.reduce((sum, r) => sum + r.rating, 0) / live.length, reviewCount: live.length } : {}; };
-export function ProductCard({ kind, eyebrow, title, copy, price, name, avatarUrl, cta = 'View', href, onClick, rating, reviewCount = 0, audience, imageUrl }: { imageUrl?: string | null; audience?: string; rating?: number; reviewCount?: number; kind?: string; eyebrow?: string; title: string; copy?: string; price?: string; name: string; avatarUrl?: string | null; accent?: string; cta?: string; href?: string; onClick?: () => void }) {
+export function ProductCard({ kind, eyebrow, title, copy, price, name, avatarUrl, cta = 'View', href, onClick, onEdit, onDelete, owned, visibility, rating, reviewCount = 0, audience, imageUrl, cardQr }: { imageUrl?: string | null; audience?: string; rating?: number; reviewCount?: number; kind?: string; eyebrow?: string; title: string; copy?: string; price?: string; name: string; avatarUrl?: string | null; accent?: string; cta?: string; href?: string; onClick?: () => void; onEdit?: () => void; onDelete?: () => void; owned?: boolean; visibility?: 'public' | 'private'; cardQr?: React.ReactNode }) {
   // An offer is the same card as a Protocol (the Guardian profile card with the tilt-shift picture that comes into colour): the price sits on
   // the picture, top left; the format tags top right; a cover photo is the picture, else the offer's own art stands on the plate.
   const stars = reviewCount > 0 && rating
@@ -1296,13 +1337,18 @@ export function ProductCard({ kind, eyebrow, title, copy, price, name, avatarUrl
   const avatar = avatarUrl
     ? <img src={avatarUrl} alt="" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover', flex: '0 0 auto' }} />
     : <span aria-hidden="true" style={{ width: 22, height: 22, borderRadius: '50%', background: APP.border, display: 'grid', placeItems: 'center', fontSize: 10, fontWeight: 600, color: APP.text, flex: '0 0 auto' }}>{(name || 'G')[0]}</span>;
+  // Every navigable offer carries the same compact QR treatment. A linked Protocol can
+  // override this with its routine URL; otherwise the QR opens the offer itself.
+  const automaticQr = !cardQr && href && (/^https?:/i.test(href) || href.startsWith('/'))
+    ? <RoutineCardQr protocolId={`offer:${href}`} href={new URL(href, window.location.origin).toString()} size={58} />
+    : undefined;
   return <ProtocolCard
     imageUrl={imageUrl} plate={<AppOfferImage kind={kind} size={116} />}
     badge={price} corner={<OfferFormatTag kind={kind} />}
     kicker={eyebrow} title={title} tags={audience ? [{ label: audience, kind: 'audience' }] : undefined} copy={copy} extra={stars}
-    by={name} byAvatar={avatar}
+    by={name} byAvatar={avatar} footerCorner={cardQr || automaticQr}
     cta={cta === 'View' ? (price === 'Free' ? 'Get it free' : 'View offer') : cta}
-    href={href} onClick={onClick} inert={!href && !onClick} />;
+    href={href} onClick={onClick} onEdit={onEdit} onDelete={onDelete} owned={owned} visibility={visibility} inert={!href && !onClick} />;
 }
 
 /** Guardian profile hero, shared by the published mini-site and the builder preview so both are identical. */
@@ -1312,24 +1358,24 @@ const PAGE_X = 'max(clamp(24px,6vw,84px), calc((100% - 1240px) / 2 + clamp(24px,
 type HeadlineStyle = 'editorial' | 'app' | 'statement';
 const HEADLINE_STYLES: Record<HeadlineStyle, { label: string; hero: React.CSSProperties; section: React.CSSProperties; stripStop?: boolean }> = {
   editorial: { label: 'Editorial serif', hero: { fontFamily: serif, fontWeight: 300, fontSize: 'clamp(46px,7cqw,96px)', lineHeight: .95, letterSpacing: '-.035em', color: '#11120F' }, section: { fontFamily: serif, fontWeight: 300, fontSize: 'clamp(36px,5vw,58px)', lineHeight: 1, letterSpacing: '-.02em', color: '#11120F' } },
-  app: { label: 'App bold', stripStop: true, hero: { fontFamily: "'Poppins', 'Inter', sans-serif", fontWeight: 700, fontSize: 'clamp(36px,5.2cqw,60px)', lineHeight: 1.08, letterSpacing: '-.03em', color: '#111827' }, section: { fontFamily: "'Poppins', 'Inter', sans-serif", fontWeight: 700, fontSize: 'clamp(28px,4vw,36px)', lineHeight: 1.2, letterSpacing: -0.8, color: '#111827' } },
-  statement: { label: 'Statement caps', stripStop: true, hero: { fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 700, fontSize: 'clamp(34px,5cqw,64px)', lineHeight: 1, letterSpacing: '.02em', textTransform: 'uppercase', color: '#11120F' }, section: { fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 700, fontSize: 'clamp(24px,3.4vw,34px)', lineHeight: 1.1, letterSpacing: '.04em', textTransform: 'uppercase', color: '#11120F' } },
+  app: { label: 'App bold', stripStop: true, hero: { fontFamily: sans, fontWeight: 700, fontSize: 'clamp(36px,5.2cqw,60px)', lineHeight: 1.08, letterSpacing: '-.03em', color: '#111827' }, section: { fontFamily: sans, fontWeight: 700, fontSize: 'clamp(28px,4vw,36px)', lineHeight: 1.2, letterSpacing: -0.8, color: '#111827' } },
+  statement: { label: 'Statement caps', stripStop: true, hero: { fontFamily: sans, fontWeight: 700, fontSize: 'clamp(34px,5cqw,64px)', lineHeight: 1, letterSpacing: '.02em', textTransform: 'uppercase', color: '#11120F' }, section: { fontFamily: sans, fontWeight: 700, fontSize: 'clamp(24px,3.4vw,34px)', lineHeight: 1.1, letterSpacing: '.04em', textTransform: 'uppercase', color: '#11120F' } },
 };
 const headlineStyleOf = (value?: string | null): HeadlineStyle => value === 'app' || value === 'statement' ? value : 'editorial';
 // ROUTINE³ iOS app look (mobile repo: Paywall.tsx, SignUpScreen.tsx, designTokens.ts) for the sign-up and upsell pages.
-const APP = { bg: '#F2F4F7', surface: '#FFFFFF', alt: '#F6F8FA', text: '#111827', muted: '#6B7280', faint: '#9CA3AF', border: '#E5E7EB', green: '#10B981', greenDark: '#047857', greenSoft: '#86EFAC', font: "'Poppins', 'Inter', sans-serif" };
+const APP = { bg: '#F2F4F7', surface: '#FFFFFF', alt: '#F6F8FA', text: '#111827', muted: '#6B7280', faint: '#9CA3AF', border: '#E5E7EB', green: '#10B981', greenDark: '#047857', greenSoft: '#86EFAC', font: sans };
 const appButton: React.CSSProperties = { width: '100%', minHeight: 56, border: 0, borderRadius: 16, background: '#000', color: '#FFF', fontFamily: APP.font, cursor: 'pointer', display: 'grid', placeItems: 'center', padding: '8px 16px', boxSizing: 'border-box' };
 // Format tag for Protocol offers: printable PDF plus the interactive version in the ROUTINE³ app.
-const ProtocolFormatTag = () => <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: APP.text, fontFamily: APP.font, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, height: 18, padding: '0 8px', border: '1px solid #111827', borderRadius: 2, fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.13em', boxSizing: 'border-box' }}><FileText size={11} />PDF</span><span aria-hidden="true" style={{ color: APP.muted }}>+</span><RoutineMark size={18} textColor="#111827" hairline="#111827" suffix="" /></span>;
+const ProtocolFormatTag = () => <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#FFF', fontFamily: APP.font, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}><span style={boxTag}><FileText size={11} />Printed PDF</span><span aria-hidden="true" style={{ color: '#FFF', fontWeight: 800 }}>+</span><span style={boxTag}>R3 Protocol</span></span>;
 const isProtocolKind = (kind?: string) => kind === 'routine' || kind === 'routine_guidance';
 // Every offer gets a format tag: app-delivered plans are PDF + ROUTINE³, others name their format.
 const APP_PLAN_KINDS = ['routine', 'routine_guidance', 'program', 'journey', 'team_program', 'lead_magnet'];
-const boxTag: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 5, height: 18, padding: '0 8px', border: '1px solid #111827', borderRadius: 2, fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.13em', boxSizing: 'border-box', color: '#111827', textTransform: 'uppercase', whiteSpace: 'nowrap' };
-const OTHER_FORMATS: Record<string, string> = { lead: 'Lead', ebook: 'PDF', recipe_book: 'PDF', one_to_one_call: '1:1 call', group_call: 'Group call', in_person: 'In person', festival: 'Event', product: 'Product' };
+const boxTag: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 5, height: 22, padding: '0 8px', border: '1px solid rgba(255,255,255,.78)', borderRadius: 3, background: 'rgba(24,28,25,.2)', WebkitBackdropFilter: 'blur(12px) saturate(1.35)', backdropFilter: 'blur(12px) saturate(1.35)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.16),0 3px 12px rgba(0,0,0,.12)', textShadow: '0 1px 3px rgba(0,0,0,.8)', fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', boxSizing: 'border-box', color: '#FFF', textTransform: 'uppercase', whiteSpace: 'nowrap' };
+const OTHER_FORMATS: Record<string, string> = { lead: 'Lead', ebook: 'Printed PDF', recipe_book: 'Printed PDF', one_to_one_call: '1:1 call', group_call: 'Group call', community: 'Digital community', course: 'Course', in_person: 'In person', festival: 'Event', product: 'Product' };
 function OfferFormatTag({ kind }: { kind?: string }) {
   if (!kind || APP_PLAN_KINDS.includes(kind)) return <ProtocolFormatTag />;
   const name = OTHER_FORMATS[kind] || 'Online';
-  return <span style={boxTag}>{name === 'PDF' && <FileText size={11} />}{name}</span>;
+  return <span style={boxTag}>{name === 'Printed PDF' && <FileText size={11} />}{name}</span>;
 }
 // Audience line from the offer-creation flow (social_links.audience_details), e.g. "Women · 32–55 · Menopause".
 type AudienceDetail = { min?: number; max?: number; stages?: string[] };
@@ -1466,30 +1512,311 @@ function ReviewsPanel({ userId, slug }: { userId: string; slug: string }) {
     {reviews.length > 0 && <div style={{ display: 'grid', gap: 6, marginTop: 14 }}><span style={label}>Received</span>{reviews.map((r) => <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, borderTop: `1px solid ${line}`, paddingTop: 8, fontSize: 11, opacity: r.status === 'hidden' ? .5 : 1 }}><span style={{ color: acid }}>{'★'.repeat(r.rating)}</span><span style={{ flex: 1, color: ink }}>{r.body} <span style={{ color: muted }}>· {r.reviewer_name}</span></span><button type="button" onClick={() => toggle(r)} style={small}>{r.status === 'published' ? 'Hide' : 'Show'}</button></div>)}</div>}
   </section>;
 }
-function GuardianSiteHero({ guideId, name, avatarUrl, specialties, headline, tags, bio, accent, headingFont, background, backgroundIsVideo = false, greyscale = false, cards, headlineStyle = 'editorial', reviewSummary = {}, audience }: { guideId?: string; audience?: string; reviewSummary?: { rating?: number; reviewCount?: number }; headlineStyle?: HeadlineStyle; name: string; avatarUrl?: string | null; specialties: string[]; headline: string; tags: string[]; bio: string; accent: string; headingFont: string; background?: string | null; backgroundIsVideo?: boolean; greyscale?: boolean; cards: SiteHeroCard[] }) {
-  // overflow: clip, not hidden: hidden would make this section the scroller the headline sticks inside.
-  return <section style={{ position: 'relative', overflow: 'clip', minHeight: 'min(720px,calc(100vh - 64px))', display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', alignItems: 'center', backgroundImage: background && !backgroundIsVideo ? `linear-gradient(rgba(242,239,231,.66),rgba(242,239,231,.66)),url(${background})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: greyscale ? 'luminosity' : 'normal', color: '#11120F' }}>
-    {background && backgroundIsVideo && <><video src={background} autoPlay muted loop playsInline aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'none' }} /><span aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'rgba(242,239,231,.66)' }} /></>}
-    <div style={{ position: 'relative', zIndex: 2, width: '100%', maxWidth: 1240, margin: '0 auto', boxSizing: 'border-box', padding: 'clamp(40px,7cqw,96px) clamp(24px,6cqw,84px)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,300px),1fr))', gap: 'clamp(28px,5cqw,72px)', alignItems: 'start' }}>
-      {/* The Guardian's name and headline stay at the top beside the offers, and follow the reader down a long routine. */}
-      <div style={{ position: 'sticky', top: 'clamp(16px,4vw,48px)', alignSelf: 'start' }}>
+function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, accent, headingFont, background, backgroundIsVideo = false, greyscale = false, cards, headlineStyle = 'editorial', guideId, sourceOfferId }: { audience?: string; reviewSummary?: { rating?: number; reviewCount?: number }; headlineStyle?: HeadlineStyle; name: string; avatarUrl?: string | null; specialties: string[]; headline: string; tags: string[]; bio: string; accent: string; headingFont: string; background?: string | null; backgroundIsVideo?: boolean; greyscale?: boolean; cards: SiteHeroCard[]; guideId?: string; sourceOfferId?: string | null }) {
+  const [email, setEmail] = useState('');
+  const [captureState, setCaptureState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
+  const heroMedia = background || cards.find((card) => card.imageUrl)?.imageUrl || null;
+  async function capture(event: React.FormEvent) {
+    event.preventDefault();
+    if (!guideId) { document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' }); return; }
+    setCaptureState('sending');
+    try {
+      await submitGuardianOptIn(guideId, { name: email.trim().split('@')[0] || 'Subscriber', email, goal: null, marketingConsent: false, consentText: CONSENT_TEXT, sourceOfferId });
+      setCaptureState('done');
+    } catch { setCaptureState('error'); }
+  }
+  const goTo = (id: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
+    const target = document.getElementById(id);
+    if (!target) return;
+    event.preventDefault();
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    window.history.replaceState(null, '', `#${id}`);
+  };
+  return <section style={{ position: 'relative', overflow: 'clip', minHeight: 'calc(100svh - 64px)', display: 'grid', alignItems: 'center', background: '#151A12', color: '#FFF' }}>
+    {heroMedia && !backgroundIsVideo && <img src={heroMedia} alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />}
+    {heroMedia && backgroundIsVideo && <video src={heroMedia} autoPlay muted loop playsInline aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />}
+    <span aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,rgba(8,10,7,.88) 0%,rgba(8,10,7,.62) 48%,rgba(8,10,7,.18) 100%),linear-gradient(0deg,rgba(8,10,7,.72),transparent 55%)' }} />
+    <div style={{ position: 'relative', zIndex: 2, width: '100%', maxWidth: 1240, margin: '0 auto', boxSizing: 'border-box', padding: 'clamp(76px,10vh,120px) clamp(24px,6vw,84px)', display: 'grid', gridTemplateColumns: 'minmax(0,720px)', alignItems: 'center' }}>
+      <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
           {avatarUrl ? <img src={avatarUrl} alt={name} style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'none' }} /> : <span style={{ width: 56, height: 56, borderRadius: '50%', background: '#D7D4CC', display: 'grid', placeItems: 'center', fontFamily: headingFont, fontSize: 24 }}>{(name || 'G').charAt(0)}</span>}
-          <span style={{ fontFamily: APP.font }}><strong style={{ display: 'block', fontSize: 15, fontWeight: 600, color: APP.text }}>{name || 'Your name'}</strong><span style={{ display: 'block', marginTop: 2, fontSize: 12, fontWeight: 600, color: APP.greenDark }}>{specialties.slice(0, 3).join(' · ') || 'Personal guidance'}</span></span>
+          <span style={{ fontFamily: APP.font }}><strong style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#FFF' }}>{name || 'Your name'}</strong><span style={{ display: 'block', marginTop: 2, fontSize: 12, fontWeight: 700, color: '#D6E7A8' }}>{specialties.slice(0, 3).join(' · ') || 'Personal guidance'}</span></span>
         </div>
-        {/* Headline in the Guardian's chosen style (editorial serif, app bold or statement caps). */}
-        <h1 style={{ ...HEADLINE_STYLES[headlineStyle].hero, margin: '0 0 16px' }}>{HEADLINE_STYLES[headlineStyle].stripStop ? (headline || name).replace(/\.$/, '') : (headline || name)}</h1>
+        <h1 style={{ ...HEADLINE_STYLES[headlineStyle].hero, color: '#FFF', fontSize: 'clamp(48px,7vw,96px)', textShadow: '0 2px 28px rgba(0,0,0,.28)', margin: '0 0 16px' }}>{HEADLINE_STYLES[headlineStyle].stripStop ? (headline || name).replace(/\.$/, '') : (headline || name)}</h1>
         <ExpertiseTags tags={tags} color={accent} />
-        <p style={{ fontFamily: APP.font, color: APP.muted, fontSize: 16, fontWeight: 500, lineHeight: 1.55, maxWidth: 560, margin: 0 }}>{bio}</p>
+        <p style={{ fontFamily: APP.font, color: 'rgba(255,255,255,.82)', fontSize: 16, fontWeight: 500, lineHeight: 1.55, maxWidth: 590, margin: 0 }}>{bio}</p>
+        <form onSubmit={capture} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', width: '100%', maxWidth: 590, marginTop: 28, fontFamily: APP.font }}>
+          <label htmlFor="guardian-hero-email" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)' }}>Email address</label>
+          <span style={{ minWidth: 0, minHeight: 54, display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px', boxSizing: 'border-box', border: '1px solid rgba(255,255,255,.94)', borderRight: 0, background: 'rgba(255,255,255,.95)', color: '#11120F' }}><Mail size={18} /><input id="guardian-hero-email" required type="email" autoComplete="email" value={email} onChange={(event) => { setEmail(event.target.value); if (captureState === 'error') setCaptureState('idle'); }} placeholder="Enter your email address" style={{ width: '100%', minWidth: 0, border: 0, outline: 0, background: 'transparent', color: '#11120F', font: 'inherit' }} /></span>
+          <button type="submit" disabled={captureState === 'sending' || captureState === 'done'} style={{ minHeight: 54, padding: '0 clamp(14px,2vw,22px)', border: '1px solid #D6E7A8', background: '#D6E7A8', color: '#11120F', fontFamily: APP.font, fontSize: 11, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: captureState === 'sending' || captureState === 'done' ? 'default' : 'pointer', opacity: captureState === 'sending' ? .7 : 1 }}>{captureState === 'done' ? 'You’re subscribed' : captureState === 'sending' ? 'Joining…' : 'Follow by email'}</button>
+        </form>
+        {captureState === 'error' && <span role="alert" style={{ display: 'block', color: '#FFD0C8', fontFamily: APP.font, fontSize: 12, marginTop: 8 }}>We could not add your email. Please try again.</span>}
+        <nav aria-label={`${name} profile sections`} style={{ display: 'flex', gap: 0, flexWrap: 'wrap', marginTop: 14, fontFamily: APP.font }}>
+          {[['catalog','Routines'],['shop','Products'],['events','Events'],['retreats','Retreats']].map(([id, text]) => <a key={id} href={`#${id}`} onClick={goTo(id)} style={{ minHeight: 44, padding: '0 16px', background: 'rgba(8,10,7,.24)', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)', color: '#FFF', border: '1px solid rgba(255,255,255,.72)', marginLeft: -1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{text}</a>)}
+        </nav>
       </div>
-      <div style={{ display: 'grid', gap: 12 }}>
-        <span style={{ fontFamily: APP.font, color: APP.greenDark, fontSize: 15, fontWeight: 600 }}>Explore my offers</span>
-        {cards.map((card) => <Fragment key={card.key}>
-          <ProductCard {...reviewSummary} audience={audience} kind={card.kind} eyebrow={card.eyebrow} title={card.title} copy={card.copy} price={card.price} name={name} avatarUrl={avatarUrl} accent={accent} href={card.href} onClick={card.onClick} />
-          {/* A routine offer shows the routine it delivers, step by step, under its card. */}
-          {guideId && card.offerTitle && (card.kind === 'routine' || card.kind === 'routine_guidance') && <OfferProtocolItems guideId={guideId} offerTitle={card.offerTitle} />}
-        </Fragment>)}
+    </div>
+  </section>;
+}
+
+const offerProtocolKey = (value: string) => value.toLowerCase().replace(/\br3\b|\bprotocol\b/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+
+function FreeOfferFlipCard({ profile, offer, protocol, reviews, accent, upsellRamp, onUnlocked }: { profile: GuideProfile; offer: GuideOffer; protocol?: AdminProtocol; reviews: GuardianReview[]; accent: string; upsellRamp?: GuideValueRamp; onUnlocked: (offer: GuideOffer, protocol: AdminProtocol | undefined, email: string) => void }) {
+  const [flipped, setFlipped] = useState(false);
+  const [email, setEmail] = useState('');
+  const [state, setState] = useState<'idle' | 'sending' | 'error'>('idle');
+  async function unlock(event: React.FormEvent) {
+    event.preventDefault();
+    setState('sending');
+    try {
+      await submitGuardianOptIn(profile.user_id, {
+        name: email.trim().split('@')[0] || 'Subscriber', email, goal: null,
+        marketingConsent: false, consentText: CONSENT_TEXT, sourceOfferId: offer.id,
+      });
+      if (upsellRamp) {
+        try { sessionStorage.setItem('r3-guardian-offer-lead', JSON.stringify({ guideId: profile.user_id, rampId: upsellRamp.id, email })); } catch { /* continue without resume */ }
+        window.location.assign(`/guardians/${encodeURIComponent(profile.slug)}/value-ramp/${encodeURIComponent(upsellRamp.slug)}#start`);
+        return;
+      }
+      onUnlocked(offer, protocol, email);
+    } catch { setState('error'); }
+  }
+  return <div style={{ minHeight: 520, perspective: 1200 }}>
+    <div style={{ position: 'relative', minHeight: 520, transformStyle: 'preserve-3d', transition: 'transform 650ms cubic-bezier(.16,1,.3,1)', transform: flipped ? 'rotateY(180deg)' : 'rotateY(0)' }}>
+      <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden' }}>
+        <ProductCard {...reviewStats(reviews)} audience={audienceLabel(profile.social_links?.audience_details)} imageUrl={offer.cover_url} kind={offer.kind} eyebrow="Free offer" title={customerFacingOfferTitle(offer.title)} copy={offer.description || 'Open this offer to see what is included.'} price="Free" name={profile.display_name} avatarUrl={profile.avatar_url} accent={accent} cta="Get free access" onClick={() => setFlipped(true)} cardQr={protocol ? <RoutineCardQr protocolId={protocol.id} guardianSlug={profile.slug} href={`${window.location.origin}/protocol/${encodeURIComponent(protocol.id)}`} size={58} /> : undefined} />
       </div>
+      <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', transform: 'rotateY(180deg)', boxSizing: 'border-box', minHeight: 520, padding: 26, border: '1px solid rgba(242,239,231,.34)', borderRadius: 6, background: '#F2EFE7', color: '#11120F', display: 'flex', flexDirection: 'column', fontFamily: APP.font }}>
+        <button type="button" onClick={() => setFlipped(false)} aria-label={`Back to ${customerFacingOfferTitle(offer.title)}`} style={{ alignSelf: 'flex-end', border: 0, background: 'transparent', color: '#66645F', fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer' }}>Back</button>
+        <span style={{ color: APP.greenDark, fontSize: 10, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 18 }}>Free protocol</span>
+        <h3 style={{ fontFamily: serif, fontSize: 32, fontWeight: 300, lineHeight: 1.06, margin: '12px 0 10px' }}>{customerFacingOfferTitle(offer.title)}</h3>
+        <p style={{ color: '#66645F', fontSize: 14, lineHeight: 1.55, margin: 0 }}>Enter your email to unlock the complete protocol, including every day, step and linked detail.</p>
+        <form onSubmit={unlock} style={{ marginTop: 'auto', display: 'grid', gap: 10 }}>
+          <label htmlFor={`free-offer-${offer.id}`} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Email address</label>
+          <span style={{ height: 52, display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px', boxSizing: 'border-box', border: '1px solid #11120F', background: '#FFF' }}><Mail size={17} aria-hidden="true" /><input id={`free-offer-${offer.id}`} required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', color: '#11120F', font: 'inherit' }} /></span>
+          {state === 'error' && <span role="alert" style={{ color: '#A33B2B', fontSize: 12 }}>We could not unlock this protocol. Please try again.</span>}
+          <button disabled={state === 'sending'} style={{ minHeight: 50, border: '1px solid #11120F', background: '#11120F', color: '#FFF', fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer', opacity: state === 'sending' ? .6 : 1 }}>{state === 'sending' ? 'Opening protocol…' : 'Email me access & open protocol'}</button>
+          <span style={{ color: '#77746D', fontSize: 10, lineHeight: 1.45 }}>Your email is used to provide this access. No marketing subscription is added here.</span>
+        </form>
+      </div>
+    </div>
+  </div>;
+}
+
+function GuardianOfferCatalog({ profile, offers, ramps, reviews, accent, protocols, categoryOrder }: { profile: GuideProfile; offers: GuideOffer[]; ramps: GuideValueRamp[]; reviews: GuardianReview[]; accent: string; protocols: AdminProtocol[]; categoryOrder?: string }) {
+  const [activeCategory, setActiveCategory] = useState('All');
+  const [unlocked, setUnlocked] = useState<{ offer: GuideOffer; protocol?: AdminProtocol; email: string } | null>(null);
+  const [protocolItems, setProtocolItems] = useState<Awaited<ReturnType<typeof listProtocolItems>>>([]);
+  const [deliveryState, setDeliveryState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  useEffect(() => {
+    if (!unlocked?.protocol) { setProtocolItems([]); setDeliveryState('ready'); return; }
+    let live = true;
+    setDeliveryState('loading');
+    listProtocolItems('', unlocked.protocol.id).then((items) => { if (live) { setProtocolItems(items); setDeliveryState('ready'); } }).catch(() => { if (live) setDeliveryState('error'); });
+    return () => { live = false; };
+  }, [unlocked?.protocol?.id]);
+  if (!offers.length) return null;
+  const configured = (categoryOrder || '').split(',').map((value) => value.trim()).filter(Boolean);
+  const categories = ['All', ...(configured.length ? configured : DEFAULT_PROTOCOL_CATEGORIES.slice(1))].filter((category, index, all) => all.indexOf(category) === index && (category === 'All' || offers.some((offer) => offerCategory(offer) === category)));
+  const visibleOffers = activeCategory === 'All' ? offers : offers.filter((offer) => offerCategory(offer) === activeCategory);
+  const price = (offer: GuideOffer) => offer.access_model === 'free' ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Enquire';
+  const href = (offer: GuideOffer) => {
+    if (offer.kind === 'community') return `/guardians/${encodeURIComponent(profile.slug)}/community/${encodeURIComponent(communitySlug(offer.title))}`;
+    if (offer.booking_url || offer.affiliate_url) return offer.booking_url || offer.affiliate_url || '#offers';
+    const ramp = ramps.find((item) => item.offer_ids.includes(offer.id));
+    if (ramp) return `/guardians/${encodeURIComponent(profile.slug)}/value-ramp/${encodeURIComponent(ramp.slug)}`;
+    return offer.access_model === 'free' ? '#start' : '#offers';
+  };
+  return <section id="catalog" aria-label={`${profile.display_name}'s complete offer catalog`} style={{ background: '#E7E1D5', color: '#11120F', padding: `clamp(72px,10vw,132px) ${PAGE_X}` }}>
+    <div style={{ maxWidth: 1240, margin: '0 auto' }}>
+      <div style={{ maxWidth: 760, marginBottom: 'clamp(30px,5vw,52px)' }}>
+        <span style={{ display: 'block', color: '#667245', fontFamily: APP.font, fontSize: 12, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 12 }}>Complete catalog · {offers.length} {offers.length === 1 ? 'offer' : 'offers'}</span>
+        <h2 style={{ fontFamily: serif, fontSize: 'clamp(42px,7vw,82px)', fontWeight: 300, lineHeight: .94, letterSpacing: '-.045em', margin: '0 0 18px' }}>Explore every way to work with {profile.display_name}.</h2>
+        <p style={{ color: '#66645F', fontFamily: APP.font, fontSize: 16, lineHeight: 1.55, maxWidth: 620, margin: 0 }}>Browse the full published collection—free resources, protocols, sessions, communities and programs.</p>
+      </div>
+      <div role="tablist" aria-label="Offer categories" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '0 0 26px' }}>{categories.map((category) => <button key={category} type="button" role="tab" aria-selected={activeCategory === category} onClick={() => setActiveCategory(category)} style={{ minHeight: 38, padding: '0 14px', border: `1px solid ${activeCategory === category ? '#11120F' : 'rgba(17,18,15,.34)'}`, background: activeCategory === category ? '#11120F' : 'transparent', color: activeCategory === category ? '#F2EFE7' : '#11120F', fontFamily: APP.font, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{category}</button>)}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,300px),1fr))', gap: 18 }}>
+        {visibleOffers.map((offer) => {
+          const wanted = offerProtocolKey(offer.title);
+          const protocol = protocols.find((item) => offerProtocolKey(item.name) === wanted) || protocols.find((item) => offerProtocolKey(item.name).includes(wanted) || wanted.includes(offerProtocolKey(item.name)));
+          const upsellRamp = ramps.find((ramp) => { const index = ramp.offer_ids.indexOf(offer.id); return index >= 0 && ramp.offer_ids.slice(index + 1).some((id) => offers.some((candidate) => candidate.id === id && candidate.access_model === 'paid')); });
+          return offer.access_model === 'free' && offer.kind !== 'community'
+            ? <FreeOfferFlipCard key={offer.id} profile={profile} offer={offer} protocol={protocol} reviews={reviews} accent={accent} upsellRamp={upsellRamp} onUnlocked={(nextOffer, nextProtocol, email) => { setUnlocked({ offer: nextOffer, protocol: nextProtocol, email }); window.setTimeout(() => document.getElementById('unlocked-protocol')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0); }} />
+            : <ProductCard key={offer.id} {...reviewStats(reviews)} audience={audienceLabel(profile.social_links?.audience_details)} imageUrl={offer.cover_url} kind={offer.kind} eyebrow="Published offer" title={customerFacingOfferTitle(offer.title)} copy={offer.description || 'Open this offer to see what is included.'} price={price(offer)} name={profile.display_name} avatarUrl={profile.avatar_url} accent={accent} cta={offer.kind === 'community' ? 'Join community' : 'View offer'} href={href(offer)} cardQr={protocol ? <RoutineCardQr protocolId={protocol.id} guardianSlug={profile.slug} href={`${window.location.origin}/protocol/${encodeURIComponent(protocol.id)}`} size={58} /> : undefined} />;
+        })}
+      </div>
+      {unlocked && <section id="unlocked-protocol" style={{ scrollMarginTop: 84, marginTop: 34, padding: 'clamp(20px,4vw,38px)', border: '1px solid rgba(17,18,15,.22)', background: '#F2EFE7', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,320px),1fr))', gap: 'clamp(24px,5vw,64px)', alignItems: 'start' }}>
+        <div><ProductCard imageUrl={unlocked.offer.cover_url} kind={unlocked.offer.kind} eyebrow="Access unlocked" title={customerFacingOfferTitle(unlocked.offer.title)} copy={unlocked.offer.description || undefined} price="Free" name={profile.display_name} avatarUrl={profile.avatar_url} cta="Protocol ready" cardQr={unlocked.protocol ? <RoutineCardQr protocolId={unlocked.protocol.id} guardianSlug={profile.slug} href={`${window.location.origin}/protocol/${encodeURIComponent(unlocked.protocol.id)}`} size={58} /> : undefined} /></div>
+        <div style={{ minWidth: 0 }}>
+          <span style={{ color: '#667245', fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Your complete protocol</span>
+          <h3 style={{ fontFamily: serif, fontSize: 'clamp(34px,5vw,56px)', fontWeight: 300, lineHeight: 1, margin: '10px 0 16px' }}>{unlocked.protocol?.name || customerFacingOfferTitle(unlocked.offer.title)}</h3>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 22 }}>
+            <button type="button" disabled={!unlocked.protocol || deliveryState !== 'ready'} onClick={async () => { if (!unlocked.protocol) return; const { doc, filename } = await buildProtocolPdf({ accessToken: '', protocol: unlocked.protocol, items: protocolItems }); doc.save(filename); }} style={{ minHeight: 44, padding: '0 16px', border: '1px solid #11120F', background: '#11120F', color: '#FFF', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}><Download size={15} /> Download PDF</button>
+            <a href={unlocked.protocol ? `/protocol/${encodeURIComponent(unlocked.protocol.id)}` : APP_STORE_URL} style={{ minHeight: 44, padding: '0 16px', border: '1px solid #11120F', color: '#11120F', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8 }}>See in app <ArrowRight size={14} /></a>
+          </div>
+          {deliveryState === 'loading' && <p role="status">Loading every protocol item…</p>}
+          {deliveryState === 'error' && <p role="alert" style={{ color: '#A33B2B' }}>The protocol opened, but its item list could not be loaded here.</p>}
+          {deliveryState === 'ready' && <div style={{ display: 'grid', gap: 8 }}>{protocolItems.filter((item) => !item.hidden && !item.parent_protocol_item_id).map((item, index) => <article key={item.id} style={{ display: 'grid', gridTemplateColumns: '42px minmax(0,1fr) auto', gap: 12, alignItems: 'center', padding: '12px 0', borderTop: '1px solid rgba(17,18,15,.18)' }}><span style={{ width: 34, height: 34, border: '1px solid rgba(17,18,15,.3)', borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 11 }}>{index + 1}</span><span><strong style={{ display: 'block', fontSize: 14 }}>{item.display_name || 'Protocol item'}</strong>{item.notes && <span style={{ display: 'block', color: '#66645F', fontSize: 12, lineHeight: 1.45, marginTop: 3 }}>{item.notes}</span>}</span><time style={{ color: '#667245', fontSize: 11 }}>{item.scheduled_time?.slice(0, 5) || ''}</time></article>)}</div>}
+        </div>
+      </section>}
+    </div>
+  </section>;
+}
+
+const eventFormatLabel = (format: GuideEvent['format']) => format === 'virtual' ? 'Digital' : format === 'hybrid' ? 'In person + digital' : 'In person';
+const eventLocalValue = (value?: string | null) => value ? new Date(value).toISOString().slice(0, 16) : '';
+
+function WorkspaceEvents({ guideId }: { guideId: string }) {
+  const emptyDraft = () => ({ title: '', description: '', start: '', end: '', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', venue: '', location: '', format: 'in_person' as GuideEvent['format'], image: '', url: '', status: 'published' as GuideEvent['status'] });
+  const [events, setEvents] = useState<GuideEvent[]>([]);
+  const [draft, setDraft] = useState(emptyDraft);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [problem, setProblem] = useState('');
+  const [view, setView] = useState<'cards' | 'list'>('cards');
+  const refresh = () => listManagedGuideEvents(guideId).then(setEvents).catch((error) => setProblem(error.message || 'Could not load events.'));
+  useEffect(refresh, [guideId]);
+  const field: React.CSSProperties = { width: '100%', minHeight: 44, boxSizing: 'border-box', border: `1px solid ${line}`, background: panel, color: ink, padding: '10px 12px', fontFamily: sans, fontSize: 13, outline: 0 };
+  const beginEdit = (event: GuideEvent) => { setEditing(event.id); setDraft({ title: event.title, description: event.description || '', start: eventLocalValue(event.start_at), end: eventLocalValue(event.end_at), timezone: event.timezone || 'UTC', venue: event.venue || '', location: event.location || '', format: event.format, image: event.image_url || '', url: event.info_url || '', status: event.status }); setNotice(''); setProblem(''); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const reset = () => { setEditing(null); setDraft(emptyDraft()); setProblem(''); };
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!draft.title.trim() || !draft.start) { setProblem('Add an event name and start date.'); return; }
+    setBusy(true); setProblem(''); setNotice('');
+    try {
+      const saved = await saveGuideEvent(guideId, { title: draft.title, description: draft.description || null, start_at: new Date(draft.start).toISOString(), end_at: draft.end ? new Date(draft.end).toISOString() : null, timezone: draft.timezone || null, venue: draft.venue || null, location: draft.location || null, format: draft.format, image_url: draft.image || null, info_url: draft.url || null, status: draft.status }, editing || undefined);
+      setEvents((rows) => [...rows.filter((row) => row.id !== saved.id), saved].sort((a, b) => a.start_at.localeCompare(b.start_at)));
+      setNotice(editing ? 'Event updated.' : 'Event added to your Guardian site.'); reset();
+    } catch (error) { setProblem((error as Error).message || 'Could not save this event.'); }
+    finally { setBusy(false); }
+  }
+  async function remove(event: GuideEvent) {
+    if (!window.confirm(`Delete “${event.title}”?`)) return;
+    try { await deleteGuideEvent(guideId, event.id); setEvents((rows) => rows.filter((row) => row.id !== event.id)); setNotice('Event deleted.'); }
+    catch (error) { setProblem((error as Error).message || 'Could not delete this event.'); }
+  }
+  return <>
+    <div style={{ ...label, color: acid }}>Guardian site · Events</div>
+    <h1 style={{ fontFamily: serif, fontWeight: 300, fontSize: 'clamp(42px,6vw,70px)', lineHeight: .95, margin: '15px 0 16px' }}>{editing ? 'Edit event.' : 'Add an event.'}</h1>
+    <p style={{ color: muted, maxWidth: 680, lineHeight: 1.55, marginBottom: 28 }}>Publish an in-person, digital or hybrid event card on your public Guardian page.</p>
+    {notice && <p role="status" style={{ color: acid }}>{notice}</p>}{problem && <p role="alert" style={{ color: '#FFB4A8' }}>{problem}</p>}
+    <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 14, maxWidth: 900, padding: 22, border: `1px solid ${line}`, background: '#0F100D' }}>
+      <label style={{ gridColumn: '1 / -1', color: muted, fontSize: 11 }}>Event name<input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} style={{ ...field, display: 'block', marginTop: 6 }} required /></label>
+      <label style={{ color: muted, fontSize: 11 }}>Starts<input type="datetime-local" value={draft.start} onChange={(e) => setDraft({ ...draft, start: e.target.value })} style={{ ...field, display: 'block', marginTop: 6 }} required /></label>
+      <label style={{ color: muted, fontSize: 11 }}>Ends<input type="datetime-local" value={draft.end} onChange={(e) => setDraft({ ...draft, end: e.target.value })} style={{ ...field, display: 'block', marginTop: 6 }} /></label>
+      <label style={{ color: muted, fontSize: 11 }}>Event type<select value={draft.format} onChange={(e) => setDraft({ ...draft, format: e.target.value as GuideEvent['format'] })} style={{ ...field, display: 'block', marginTop: 6 }}><option value="in_person">In person</option><option value="virtual">Digital</option><option value="hybrid">In person + digital</option></select></label>
+      <label style={{ color: muted, fontSize: 11 }}>Publish status<select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as GuideEvent['status'] })} style={{ ...field, display: 'block', marginTop: 6 }}><option value="published">Published</option><option value="draft">Draft</option><option value="cancelled">Cancelled</option></select></label>
+      <label style={{ color: muted, fontSize: 11 }}>Venue / platform<input value={draft.venue} onChange={(e) => setDraft({ ...draft, venue: e.target.value })} placeholder={draft.format === 'virtual' ? 'Zoom, YouTube Live…' : 'Venue name'} style={{ ...field, display: 'block', marginTop: 6 }} /></label>
+      <label style={{ color: muted, fontSize: 11 }}>Location<input value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} placeholder={draft.format === 'virtual' ? 'Online' : 'City, country'} style={{ ...field, display: 'block', marginTop: 6 }} /></label>
+      <label style={{ color: muted, fontSize: 11 }}>Event details or ticket URL<input type="url" value={draft.url} onChange={(e) => setDraft({ ...draft, url: e.target.value })} placeholder="https://…" style={{ ...field, display: 'block', marginTop: 6 }} /></label>
+      <label style={{ color: muted, fontSize: 11 }}>Card image URL<input type="url" value={draft.image} onChange={(e) => setDraft({ ...draft, image: e.target.value })} placeholder="https://…" style={{ ...field, display: 'block', marginTop: 6 }} /></label>
+      <label style={{ gridColumn: '1 / -1', color: muted, fontSize: 11 }}>Description<textarea value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} rows={4} style={{ ...field, display: 'block', marginTop: 6, resize: 'vertical' }} /></label>
+      <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10 }}><button disabled={busy} style={btn}>{busy ? 'Saving…' : editing ? 'Save changes' : 'Publish event'}</button>{editing && <button type="button" onClick={reset} style={{ ...btn, background: 'transparent', color: ink }}>Cancel</button>}</div>
+    </form>
+    <section style={{ marginTop: 42 }}>
+      <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ ...label, color: acid, margin: 0 }}>{events.length} events</div>
+        <div role="group" aria-label="Event view" style={{ display: 'inline-flex', border: `1px solid ${line}`, borderRadius: 4, overflow: 'hidden' }}>
+          {([['cards', Grid2X2], ['list', List]] as const).map(([mode, Icon], index) => <button key={mode} type="button" aria-label={`${mode === 'cards' ? 'Card' : 'List'} view`} aria-pressed={view === mode} onClick={() => setView(mode)} style={{ width: 38, height: 34, padding: 0, border: 0, borderLeft: index ? `1px solid ${line}` : 0, background: view === mode ? ink : 'transparent', color: view === mode ? black : ink, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon size={14} /></button>)}
+        </div>
+      </div>
+      {view === 'cards'
+        ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18, marginTop: 14 }}>{events.map((event) => <ProductCard key={event.id} kind="in_person" imageUrl={event.image_url} eyebrow={[new Date(event.start_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }), event.status].join(' · ')} title={event.title} copy={event.description || event.venue || event.location || undefined} name={[eventFormatLabel(event.format), event.location].filter(Boolean).join(' · ')} accent={acid} cta="Edit event" onClick={() => beginEdit(event)} owned visibility={event.status === 'published' ? 'public' : 'private'} onEdit={() => beginEdit(event)} onDelete={() => void remove(event)} />)}</div>
+        : <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>{events.map((event) => <article key={event.id} style={{ border: `1px solid ${line}`, padding: 16, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}><span style={{ minWidth: 120, color: acid, fontSize: 11 }}>{new Date(event.start_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</span><span style={{ flex: '1 1 260px' }}><strong style={{ display: 'block' }}>{event.title}</strong><span style={{ color: muted, fontSize: 11 }}>{eventFormatLabel(event.format)} · {event.status}{event.location ? ` · ${event.location}` : ''}</span></span><button type="button" onClick={() => beginEdit(event)} style={{ ...btn, minHeight: 36, height: 36, background: 'transparent', color: ink }}>Edit</button><button type="button" onClick={() => remove(event)} style={{ ...btn, minHeight: 36, height: 36, background: 'transparent', color: '#FFB4A8' }}>Delete</button></article>)}</div>}
+    </section>
+  </>;
+}
+
+function DestinationHeader({ profile, place, kind }: { profile: GuideProfile; place: string; kind: 'event' | 'retreat' }) {
+  const mapHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`;
+  return <div style={{ position: 'relative', height: 210, overflow: 'hidden', background: kind === 'retreat' ? '#D7D0C2' : '#263024' }}>
+    <div aria-hidden="true" style={{ position: 'absolute', inset: -30, opacity: .82, backgroundImage: `radial-gradient(circle at 18% 25%,transparent 0 34px,rgba(245,242,234,.22) 35px 36px,transparent 37px),radial-gradient(circle at 72% 65%,transparent 0 58px,rgba(245,242,234,.17) 59px 60px,transparent 61px),linear-gradient(31deg,transparent 47%,rgba(245,242,234,.18) 48% 49%,transparent 50%),linear-gradient(126deg,transparent 44%,rgba(245,242,234,.12) 45% 46%,transparent 47%)`, backgroundSize: '220px 180px,300px 240px,120px 120px,170px 170px', transform: 'rotate(-5deg) scale(1.12)' }} />
+    <a href={mapHref} target="_blank" rel="noreferrer" aria-label={`Open ${place} in maps`} style={{ position: 'absolute', inset: 0, color: '#F5F2EA', textDecoration: 'none' }}>
+      <span style={{ position: 'absolute', left: 18, top: 18, maxWidth: '68%', padding: '8px 10px', border: '1px solid rgba(245,242,234,.42)', background: 'rgba(17,18,15,.52)', backdropFilter: 'blur(10px)', fontSize: 9, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>⌖ {place}</span>
+      <span aria-hidden="true" style={{ position: 'absolute', left: '38%', top: '52%', width: 16, height: 16, margin: -8, borderRadius: '50%', background: '#C7D8A3', boxShadow: '0 0 0 7px rgba(199,216,163,.2)' }} />
+    </a>
+    <span style={{ position: 'absolute', right: 18, bottom: 16, display: 'flex', alignItems: 'end', gap: 9 }}><span style={{ padding: '6px 8px', color: '#F5F2EA', background: 'rgba(17,18,15,.52)', backdropFilter: 'blur(10px)', fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{profile.display_name}</span>{profile.avatar_url ? <img src={profile.avatar_url} alt="" style={{ width: 68, height: 68, borderRadius: '50%', objectFit: 'cover', border: '3px solid #F5F2EA', boxShadow: '0 8px 22px rgba(0,0,0,.28)' }} /> : <span style={{ width: 68, height: 68, borderRadius: '50%', display: 'grid', placeItems: 'center', background: '#F5F2EA', color: '#11120F', fontFamily: serif, fontSize: 26 }}>{profile.display_name.charAt(0)}</span>}</span>
+  </div>;
+}
+
+const publicCommerceCardCta: React.CSSProperties = {
+  minHeight: 42,
+  boxSizing: 'border-box',
+  padding: '0 15px',
+  border: '1px solid #11120F',
+  borderRadius: 2,
+  background: '#11120F',
+  color: '#FFF',
+  textDecoration: 'none',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 8,
+  fontFamily: sans,
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: '.1em',
+  textTransform: 'uppercase',
+  whiteSpace: 'nowrap',
+  boxShadow: '0 0 0 1px rgba(255,255,255,.18)',
+};
+
+function EventCommerceCard({ profile, event }: { profile: GuideProfile; event: GuideEvent }) {
+  const date = new Date(event.start_at);
+  const href = event.info_url || (event.source_url !== 'manual' ? event.source_url : '');
+  const place = event.location || event.venue || (event.format === 'virtual' ? 'Online' : 'Location to be announced');
+  return <article style={{ minHeight: 520, border: '1px solid rgba(242,239,231,.28)', display: 'flex', flexDirection: 'column', background: '#171B14', overflow: 'hidden' }}>
+    <DestinationHeader profile={profile} place={place} kind="event" />
+    <div style={{ padding: 22, display: 'flex', flex: 1, flexDirection: 'column' }}><div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><span style={{ color: '#C7D8A3', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span><span style={{ border: '1px solid rgba(199,216,163,.5)', borderRadius: 999, color: '#C7D8A3', padding: '4px 7px', fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{eventFormatLabel(event.format)}</span></div><h3 style={{ fontFamily: serif, fontSize: 31, fontWeight: 300, lineHeight: 1.05, margin: '11px 0 9px' }}>{event.title}</h3><p style={{ color: '#B8B6AF', fontSize: 13, lineHeight: 1.5, margin: '0 0 8px' }}>{event.venue || place}</p>{event.description && <p style={{ color: '#9FA897', fontSize: 12, lineHeight: 1.5, margin: '0 0 20px' }}>{clipCopy(event.description, 145)}</p>}<div style={{ marginTop: 'auto', paddingTop: 18, borderTop: '1px solid rgba(242,239,231,.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}><strong style={{ fontFamily: serif, fontSize: 20, fontWeight: 300 }}>{event.price_label || 'See booking price'}</strong>{href && <a href={href} target="_blank" rel="noreferrer" style={publicCommerceCardCta}>Book <ArrowRight size={13} /></a>}</div></div>
+  </article>;
+}
+
+function GuardianEvents({ profile, events, sourceUrl, canEditSource, onImported, onSourceChanged }: { profile: GuideProfile; events: GuideEvent[]; sourceUrl: string; canEditSource: boolean; onImported: (events: GuideEvent[]) => void; onSourceChanged: (sourceUrl: string) => void }) {
+  const [draftSourceUrl, setDraftSourceUrl] = useState(sourceUrl);
+  const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [message, setMessage] = useState('');
+  useEffect(() => setDraftSourceUrl(sourceUrl), [sourceUrl]);
+  const upcoming = events.filter((event) => new Date(event.end_at || event.start_at).getTime() >= Date.now() - 86400000);
+  if (!upcoming.length && !canEditSource && !sourceUrl) return null;
+  async function pull() {
+    const requestedSource = canEditSource ? draftSourceUrl.trim() : undefined;
+    if (canEditSource && !requestedSource) { setState('error'); setMessage('Add your official events page first.'); return; }
+    if (!canEditSource && !sourceUrl) { setState('error'); setMessage('This Guardian has not added an events page yet.'); return; }
+    setState('loading'); setMessage('');
+    try {
+      const result = await importGuideEvents(profile.user_id, requestedSource);
+      onImported(result.events);
+      onSourceChanged(result.sourceUrl);
+      setState('done'); setMessage(`${result.imported} ${result.imported === 1 ? 'event' : 'events'} pulled from the source.`);
+    } catch (error: any) { setState('error'); setMessage(error?.message || 'Could not pull events.'); }
+  }
+  return <section id="events" aria-label={`${profile.display_name}'s events`} style={{ background: '#11150F', color: '#F2EFE7', padding: `clamp(72px,10vw,124px) ${PAGE_X}` }}>
+    <div style={{ maxWidth: 1240, margin: '0 auto' }}>
+      <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap', marginBottom: 34 }}>
+        <div style={{ maxWidth: 700 }}><span style={{ color: '#C7D8A3', fontSize: 11, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase' }}>Meet in person · {upcoming.length} upcoming</span><h2 style={{ fontFamily: serif, fontSize: 'clamp(46px,7vw,82px)', fontWeight: 300, lineHeight: .96, letterSpacing: '-.04em', margin: '12px 0 0' }}>Upcoming events.</h2></div>
+        {(sourceUrl || canEditSource) && <div style={{ width: 'min(100%,520px)', display: 'grid', gridTemplateColumns: canEditSource ? 'minmax(0,1fr) auto' : 'auto', justifyItems: canEditSource ? 'stretch' : 'end' }}>
+          {canEditSource && <><label htmlFor="event-source-url" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)' }}>Events page URL</label><input id="event-source-url" type="url" value={draftSourceUrl} onChange={(event) => setDraftSourceUrl(event.target.value)} placeholder="https://your-site.com/events" style={{ minWidth: 0, height: 46, boxSizing: 'border-box', border: '1px solid rgba(242,239,231,.45)', background: 'transparent', color: '#F2EFE7', padding: '0 12px', fontSize: 12, outline: 0 }} /></>}
+          <button type="button" onClick={pull} disabled={state === 'loading'} style={{ height: 46, border: '1px solid #C7D8A3', background: '#C7D8A3', color: '#11150F', padding: '0 15px', fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', cursor: state === 'loading' ? 'wait' : 'pointer' }}>{state === 'loading' ? 'Refreshing…' : canEditSource ? 'Save & refresh events' : 'Refresh events'}</button>
+          {canEditSource && <span style={{ gridColumn: '1 / -1', color: '#9FA897', fontSize: 10, marginTop: 7 }}>Only you can change this source URL. Visitors can refresh its events.</span>}
+          {message && <span role={state === 'error' ? 'alert' : 'status'} style={{ gridColumn: '1 / -1', color: state === 'error' ? '#FFB4A8' : '#C7D8A3', fontSize: 11, marginTop: 8 }}>{message}</span>}
+        </div>}
+      </div>
+      {upcoming.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,320px),1fr))', gap: 16 }}>{upcoming.map((event) => <EventCommerceCard key={event.id} profile={profile} event={event} />)}</div> : <div style={{ border: '1px dashed rgba(242,239,231,.3)', padding: 32, color: '#B8B6AF' }}>No upcoming events yet. Add one in Guardian workspace or pull from the official events page.</div>}
+    </div>
+  </section>;
+}
+
+function GuardianRetreats({ profile, retreats }: { profile: GuideProfile; retreats: GuideRetreat[] }) {
+  if (!retreats.length) return null;
+  return <section id="retreats" aria-label={`${profile.display_name}'s retreats`} style={{ background: '#E7E1D5', color: '#11120F', padding: `clamp(72px,10vw,132px) ${PAGE_X}` }}>
+    <div style={{ maxWidth: 1240, margin: '0 auto' }}>
+      <span style={{ color: '#667245', fontSize: 11, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>Stay and learn · {retreats.length}</span>
+      <h2 style={{ fontFamily: serif, fontSize: 'clamp(46px,7vw,82px)', fontWeight: 300, lineHeight: .96, letterSpacing: '-.04em', margin: '12px 0 34px' }}>Retreats.</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,360px),1fr))', gap: 18 }}>{retreats.map((retreat) => <article key={retreat.id} style={{ border: '1px solid rgba(17,18,15,.2)', background: '#F2EFE7', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <DestinationHeader profile={profile} place={retreat.location || 'Misty Mountain, Australia'} kind="retreat" />
+        <div style={{ padding: 24, display: 'flex', flex: 1, flexDirection: 'column' }}><span style={{ color: '#667245', fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>{[retreat.duration_days && `${retreat.duration_days} days`, retreat.location || 'Retreat'].filter(Boolean).join(' · ')}</span><h3 style={{ fontFamily: serif, fontSize: 36, fontWeight: 300, lineHeight: 1.05, margin: '10px 0' }}>{retreat.title}</h3><p style={{ color: '#66645F', fontSize: 14, lineHeight: 1.55 }}>{retreat.description}</p><div style={{ marginTop: 'auto', paddingTop: 18, borderTop: '1px solid rgba(17,18,15,.18)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}><strong style={{ fontFamily: serif, fontSize: 23, fontWeight: 300 }}>{retreat.price_label || 'See package price'}</strong><a href={retreat.booking_url || retreat.source_url} target="_blank" rel="noreferrer" style={publicCommerceCardCta}>Book <ArrowRight size={13} /></a></div></div>
+      </article>)}</div>
     </div>
   </section>;
 }
@@ -1502,13 +1829,58 @@ function GuardianSiteHeader({ brandName, path, right }: { brandName?: string; pa
   </header>;
 }
 
+function PublicLocaleBar({ value, onChange }: { value: GuardianLocalePreference; onChange: (value: GuardianLocalePreference) => void }) {
+  const field: React.CSSProperties = { border: 0, background: 'transparent', color: '#11120F', fontFamily: APP.font, fontSize: 10, lineHeight: 1, fontWeight: 800, letterSpacing: '.02em', outline: 0, cursor: 'pointer', padding: 0 };
+  return <div aria-label="Location, language and currency" title="Location, language and currency" style={{ maxWidth: '100%', display: 'flex', alignItems: 'center', gap: 2, minHeight: 36, padding: '0 5px', boxSizing: 'border-box', border: '1px solid rgba(17,18,15,.16)', borderRadius: 3, background: '#FFF', color: '#11120F', fontFamily: APP.font, boxShadow: '0 3px 12px rgba(0,0,0,.06)' }}>
+    <select aria-label="Store region" title={value.region} value={value.region} onChange={(event) => { const option = pricingRegions.find((item) => item.region === event.target.value) || pricingRegions[0]; onChange({ ...value, region: option.region, currency: option.currency }); }} style={{ ...field, width: 62 }}>{pricingRegions.map((option) => <option key={option.region} value={option.region}>{pricingRegionFlags[option.region] || '🌐'} {pricingRegionCodes[option.region] || option.region}</option>)}</select>
+    <span aria-hidden="true" style={{ color: 'rgba(17,18,15,.3)' }}>·</span>
+    <select aria-label="Page language" title={languageOptions.find((option) => option.code === value.locale)?.name} value={value.locale} onChange={(event) => onChange({ ...value, locale: event.target.value })} style={{ ...field, width: 48 }}>{languageOptions.map((option) => <option key={option.code} value={option.code}>{option.code === 'en' ? 'ENG' : option.code.toUpperCase()}</option>)}</select>
+    <span aria-hidden="true" style={{ color: 'rgba(17,18,15,.3)' }}>·</span>
+    <select aria-label="Display currency" value={value.currency} onChange={(event) => onChange({ ...value, currency: event.target.value })} style={{ ...field, width: 50 }}>{publicCurrencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select>
+  </div>;
+}
+
 export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn: boolean }) {
+  const { user } = useAuth();
   const pathSlug = window.location.pathname.match(/\/value-ramp\/([^/]+)\/?$/)?.[1];
   const [reviews, setReviews] = useState<GuardianReview[]>([]);
   const reviewToken = new URLSearchParams(window.location.search).get('review') || '';
   const [profile, setProfile] = useState<GuideProfile | null>(null);
   const [offers, setOffers] = useState<GuideOffer[]>([]);
   const [valueRamps, setValueRamps] = useState<GuideValueRamp[]>([]);
+  const [guardianProtocols, setGuardianProtocols] = useState<AdminProtocol[]>([]);
+  const [events, setEvents] = useState<GuideEvent[]>([]);
+  const [retreats, setRetreats] = useState<GuideRetreat[]>([]);
+  const [publicBrands, setPublicBrands] = useState<GuideBrand[]>([]);
+  const [eventSource, setEventSource] = useState('');
+  const [localePreference, setLocalePreference] = useState<GuardianLocalePreference>(() => {
+    const fallback = defaultPricingRegion();
+    const detectedLanguage = languageOptions.find((language) => language.name === defaultLanguage())?.code || 'en';
+    try { return JSON.parse(localStorage.getItem('r3-store-locale') || '') as GuardianLocalePreference; }
+    catch { return { region: fallback.region, locale: detectedLanguage, currency: fallback.currency }; }
+  });
+  const updateLocalePreference = (next: GuardianLocalePreference) => { setLocalePreference(next); try { localStorage.setItem('r3-store-locale', JSON.stringify(next)); } catch { /* storage may be disabled */ } };
+  useEffect(() => {
+    try { if (localStorage.getItem('r3-store-locale')) return; } catch { /* continue with best-effort detection */ }
+    if (user && !profile) return;
+    if (user?.id === profile?.user_id) {
+      const region = pricingRegions.find((option) => option.region === profile.social_links?.pricing_region);
+      const locale = languageOptions.find((option) => option.name === profile.social_links?.language)?.code || 'en';
+      if (region) setLocalePreference({ region: region.region, locale, currency: profile.social_links?.currency || region.currency });
+      return;
+    }
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 2500);
+    fetch('https://ipapi.co/json/', { signal: controller.signal })
+      .then((response) => response.ok ? response.json() : null)
+      .then((location: { country_code?: string } | null) => {
+        const detected = location?.country_code ? pricingRegionForCountry(location.country_code) : undefined;
+        if (detected) setLocalePreference((current) => ({ ...current, region: detected.region, currency: detected.currency }));
+      })
+      .catch(() => { /* browser-locale fallback is already active */ })
+      .finally(() => window.clearTimeout(timeout));
+    return () => { window.clearTimeout(timeout); controller.abort(); };
+  }, [profile, user]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     setLoading(true);
@@ -1517,19 +1889,25 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
       setOffers(found ? await listGuideOffers(found.user_id) : []);
       setValueRamps(found ? await listGuideValueRamps(found.user_id).catch(() => []) : []);
       setReviews(found ? await listGuardianReviews(found.user_id).catch(() => []) : []);
+      setGuardianProtocols(found ? (await listPublicProtocols('').catch(() => [])).filter((protocol) => protocol.user_id === found.user_id) : []);
+      setEvents(found ? await listGuideEvents(found.user_id).catch(() => []) : []);
+      setRetreats(found ? await listGuideRetreats(found.user_id).catch(() => []) : []);
+      setPublicBrands(found ? await listGuideBrands(found.user_id).catch(() => []) : []);
+      setEventSource(found ? await getGuideEventSource(found.user_id).catch(() => found.social_links?.events_source_url || (found.slug === 'barbara-oneill' ? 'https://www.barbaraoneill.com/pages/events' : '')) : '');
     }).catch(() => { setProfile(null); setOffers([]); }).finally(() => setLoading(false));
   }, [slug]);
   if (loading) return <div style={{ minHeight: '100vh', background: black, color: ink, display: 'grid', placeItems: 'center', fontFamily: sans }}>Building Guardian page…</div>;
   const publishedRamps = valueRamps.filter(ramp => ramp.status === 'published');
   const selectedRamp = pathSlug ? publishedRamps.find(ramp => encodeURIComponent(ramp.slug) === pathSlug) : publishedRamps[0];
   if (!profile || (pathSlug && !selectedRamp)) return <div style={{ minHeight: '100vh', background: black, color: ink, display: 'grid', placeItems: 'center', padding: 24, fontFamily: sans, textAlign: 'center' }}><div><Brand /><h1 style={{ fontFamily: serif, fontSize: 48, fontWeight: 300, margin: '48px 0 12px' }}>This page is not published yet.</h1><a href="/guardians" style={{ color: acid }}>Return to Guardians</a></div></div>;
-  const freeOffers = offers.filter((offer) => offer.access_model === 'free');
+  const publishedOffers = offers.filter((offer) => offer.status === 'published');
+  const freeOffers = publishedOffers.filter((offer) => offer.access_model === 'free');
   const socials = profile.social_links || {};
   const publicHeadingFont = serif;
   const publicBodyFont = sans;
   const publicPageColor = socials.theme_page_color || '#F2EFE7';
   const publicAccent = socials.theme_accent_color || '#667245';
-  const publicLanguage = languageOptions.find((language) => language.name === socials.language)?.code || 'en';
+  const publicLanguage = localePreference.locale || languageOptions.find((language) => language.name === socials.language)?.code || 'en';
   const publicBackgroundIsVideo = socials.theme_background_type === 'video' || /\.(mp4|webm)(?:\?|$)/i.test(socials.theme_background || '');
   const publicGreyscale = socials.theme_image_treatment === 'greyscale';
   const publicHeadlineStyle = headlineStyleOf(socials.theme_headline_style);
@@ -1537,25 +1915,38 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   const publicHeaderBackground = '#FFFFFF';
   const publicHeaderText = '#11120F';
   const publicExpertiseTags = parseExpertiseTags(socials.expertise_tags);
-  return <div lang={publicLanguage} dir={publicLanguage === 'ar' ? 'rtl' : 'ltr'} style={{ minHeight: '100vh', background: publicPageColor, color: '#11120F', fontFamily: publicBodyFont }}>
-    {publicHeaderStyle !== 'hidden' && <header style={{ minHeight: 64, background: publicHeaderBackground, color: publicHeaderText, borderBottom: '1px solid rgba(17,18,15,.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18, padding: '0 clamp(20px,6vw,84px)', flexWrap: 'wrap' }}>
+  return <div className="guardian-public-site" lang={publicLanguage} dir={publicLanguage === 'ar' ? 'rtl' : 'ltr'} style={{ minHeight: '100vh', background: publicPageColor, color: '#11120F', fontFamily: publicBodyFont }}>
+    <style>{`.guardian-public-site button,.guardian-public-site input,.guardian-public-site select,.guardian-public-site textarea{font-family:${sans}}.guardian-public-site a{font-family:inherit}.guardian-public-site h1,.guardian-public-site h2,.guardian-public-site h3{font-synthesis:none}@media(max-width:760px){.guardian-header-socials{display:none!important}}`}</style>
+    {publicHeaderStyle !== 'hidden' && <header style={{ position: 'fixed', inset: '0 0 auto', zIndex: 100, minHeight: 64, background: publicHeaderBackground, color: publicHeaderText, borderBottom: '1px solid rgba(17,18,15,.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '0 clamp(8px,4vw,84px)' }}>
       <a href="/" aria-label="ROUTINE³" style={{ color: publicHeaderText, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 12 }}><RoutineMark size={32} textColor="#16140F" hairline="#16140F" />{socials.brand_name && <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.12em' }}>{socials.brand_name}</span>}</a>
-      <div style={{ display: 'flex', gap: 13, alignItems: 'center' }}>
-        {socials.instagram && <a href={socials.instagram} aria-label="Instagram" title="Instagram" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><Instagram size={15} /></a>}
-        {socials.tiktok && <a href={socials.tiktok} aria-label="TikTok" title="TikTok" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><AtSign size={15} /></a>}
-        {socials.youtube && <a href={socials.youtube} aria-label="YouTube" title="YouTube" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><Youtube size={16} /></a>}
-        {socials.linktree && <a href={socials.linktree} aria-label="Linktree" title="Linktree" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><Link2 size={15} /></a>}
-        {socials.website && <a href={socials.website} aria-label="Website" title="Website" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><Globe2 size={15} /></a>}
-        {isSignedIn && <a href="/guardians/workspace" style={{ color: publicHeaderText, fontSize: 10, fontWeight: 700 }}>Guardian workspace →</a>}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0, marginLeft: 'auto' }}>
+        <PublicLocaleBar value={localePreference} onChange={updateLocalePreference} />
+        <span className="guardian-header-socials" style={{ display: 'flex', gap: 11, alignItems: 'center' }}>{socials.instagram && <a href={socials.instagram} aria-label="Instagram" title="Instagram" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><Instagram size={15} /></a>}{socials.facebook && <a href={socials.facebook} aria-label="Facebook" title="Facebook" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><Facebook size={15} /></a>}{socials.tiktok && <a href={socials.tiktok} aria-label="TikTok" title="TikTok" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><AtSign size={15} /></a>}{socials.youtube && <a href={socials.youtube} aria-label="YouTube" title="YouTube" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><Youtube size={16} /></a>}{socials.linktree && <a href={socials.linktree} aria-label="Linktree" title="Linktree" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><Link2 size={15} /></a>}{socials.website && <a href={socials.website} aria-label="Website" title="Website" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><Globe2 size={15} /></a>}</span>
+        {isSignedIn && <span style={{ display: 'flex', alignItems: 'center', paddingLeft: 2 }}><a href="/guardians/workspace?tab=profile" aria-label="Open Guardian profile" title="Profile" style={{ position: 'relative', zIndex: 2, color: publicHeaderText, display: 'grid', placeItems: 'center', width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', border: '2px solid #FFF', boxShadow: '0 0 0 1px rgba(17,18,15,.22)', textDecoration: 'none' }}>{profile.avatar_url ? <img src={profile.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontFamily: serif, fontSize: 16 }}>{profile.display_name.charAt(0)}</span>}</a><a href="/guardians/workspace" aria-label="Open Guardian workspace" title="Guardian workspace" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center', width: 38, height: 38, marginLeft: -6, paddingLeft: 5, boxSizing: 'border-box', border: '1px solid rgba(17,18,15,.24)', borderRadius: 4, background: '#FFF', textDecoration: 'none' }}><ShieldCheck size={17} /></a></span>}
       </div>
     </header>}
-    <main>
+    <main style={{ paddingTop: publicHeaderStyle === 'hidden' ? 0 : 64 }}>
       {/* Shared with the builder preview, so what Guardians build is what they publish. */}
-      <GuardianSiteHero guideId={profile.user_id} audience={audienceLabel(profile.social_links?.audience_details)} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={profile.display_name} avatarUrl={profile.avatar_url} specialties={profile.specialties} headline={profile.headline || profile.display_name} tags={publicExpertiseTags} bio={profile.bio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} greyscale={publicGreyscale}
-        cards={valueRamps.filter((ramp) => ramp.status === 'published').length ? valueRamps.filter((ramp) => ramp.status === 'published').map((ramp) => ({ key: ramp.id, offerTitle: offers.find((offer) => offer.id === ramp.offer_ids[0])?.title || ramp.name, eyebrow: ramp.problem || undefined, title: customerFacingOfferTitle(offers.find((offer) => offer.id === ramp.offer_ids[0])?.title || ramp.name), copy: offers.find((offer) => offer.id === ramp.offer_ids[0])?.description || '', kind: offers.find((offer) => offer.id === ramp.offer_ids[0])?.kind, price: offers.find((offer) => offer.id === ramp.offer_ids[0])?.access_model === 'free' ? 'Free' : undefined, href: pathSlug === encodeURIComponent(ramp.slug) ? '#offers' : `/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}` })) : freeOffers.slice(0, 1).map((offer) => ({ key: offer.id, offerTitle: offer.title, eyebrow: profile.specialties.slice(0, 2).join(' · '), title: customerFacingOfferTitle(offer.title), copy: offer.description || '', kind: offer.kind, price: 'Free', href: '#start' }))} />
+      <GuardianSiteHero audience={audienceLabel(profile.social_links?.audience_details)} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={profile.display_name} avatarUrl={profile.avatar_url} specialties={profile.specialties} headline={profile.headline || profile.display_name} tags={publicExpertiseTags} bio={profile.bio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} greyscale={publicGreyscale}
+        guideId={profile.user_id} sourceOfferId={freeOffers[0]?.id || null}
+        cards={publishedRamps.length ? publishedRamps.slice(0, 1).map((ramp) => { const offer = publishedOffers.find((item) => item.id === ramp.offer_ids[0]); return { key: ramp.id, offerTitle: offer?.title || ramp.name, eyebrow: ramp.problem || undefined, title: customerFacingOfferTitle(offer?.title || ramp.name), copy: offer?.description || '', kind: offer?.kind, price: offer?.access_model === 'free' ? 'Free' : undefined, imageUrl: offer?.cover_url, href: pathSlug === encodeURIComponent(ramp.slug) ? '#offers' : `/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}` }; }) : freeOffers.slice(0, 1).map((offer) => ({ key: offer.id, offerTitle: offer.title, eyebrow: profile.specialties.slice(0, 2).join(' · '), title: customerFacingOfferTitle(offer.title), copy: offer.description || '', kind: offer.kind, price: 'Free', imageUrl: offer.cover_url, href: '#start' }))} />
+      {publicBrands.filter((brand) => brand.kind === 'business').length > 0 && <section aria-labelledby="guardian-brands-title" style={{ padding: `clamp(54px,7vw,100px) ${PAGE_X}`, background: '#11120F', color: ink }}>
+        <span style={{ color: publicAccent, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Official brands</span>
+        <h2 id="guardian-brands-title" style={{ margin: '12px 0 28px', fontFamily: publicHeadingFont, fontWeight: 300, fontSize: 'clamp(42px,6vw,78px)', lineHeight: .95 }}>More from {profile.display_name}.</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 14 }}>{publicBrands.filter((brand) => brand.kind === 'business').map((brand) => <article key={brand.id || brand.name} style={{ border: '1px solid rgba(245,242,234,.26)', padding: 22, display: 'grid', gap: 18 }}>
+          <span style={{ display: 'flex', gap: 12, alignItems: 'center' }}>{brand.logo_url ? <img src={brand.logo_url} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: '50%' }} /> : <span style={{ width: 48, height: 48, border: '1px solid rgba(245,242,234,.26)', borderRadius: '50%', display: 'grid', placeItems: 'center', fontFamily: publicHeadingFont, fontSize: 20 }}>{brand.name.charAt(0)}</span>}<strong style={{ fontSize: 18 }}>{brand.name}</strong></span>
+          <span style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>{brand.website_url && <a href={brand.website_url} target="_blank" rel="noopener noreferrer" style={{ color: ink, display: 'inline-flex', alignItems: 'center', gap: 6 }}>Website <ExternalLink size={13} /></a>}{brand.social_links.instagram && <a href={brand.social_links.instagram} aria-label={`${brand.name} on Instagram`} style={{ color: ink }}><Instagram size={17} /></a>}{brand.social_links.facebook && <a href={brand.social_links.facebook} aria-label={`${brand.name} on Facebook`} style={{ color: ink }}><Facebook size={17} /></a>}{brand.social_links.tiktok && <a href={brand.social_links.tiktok} aria-label={`${brand.name} on TikTok`} style={{ color: ink }}><AtSign size={17} /></a>}</span>
+        </article>)}</div>
+      </section>}
+      <GuardianOfferCatalog profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} categoryOrder={socials.protocol_filter_order} />
+      <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} protocols={guardianProtocols} localePreference={localePreference} categoryOrder={socials.product_filter_order} />
+      <GuardianEvents profile={profile} events={events} sourceUrl={eventSource} canEditSource={isSignedIn && user?.id === profile.user_id} onImported={setEvents} onSourceChanged={setEventSource} />
+      <GuardianRetreats profile={profile} retreats={retreats} />
       {reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}
-      <GuardianFunnel key={selectedRamp?.id || 'default'} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={offers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} />
-      <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} />
+      <GuardianFunnel key={selectedRamp?.id || 'default'} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} />
+      <footer style={{ padding: `28px ${PAGE_X}`, borderTop: '1px solid rgba(17,18,15,.2)', color: '#66645F', fontSize: 11, lineHeight: 1.6 }}>
+        {profile.display_name} shares general wellbeing guidance, not medical advice. Speak to your GP or doctor before changing medication, diet or exercise, and about any health concern. Individual results vary.
+      </footer>
     </main>
   </div>;
 }
@@ -1605,6 +1996,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const [contactEmail, setContactEmail] = useState(email);
   const [whatsappPhone, setWhatsappPhone] = useState('');
   const [instagramUrl, setInstagramUrl] = useState('');
+  const [facebookUrl, setFacebookUrl] = useState('');
   const [tiktokUrl, setTiktokUrl] = useState('');
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [linktreeUrl, setLinktreeUrl] = useState('');
@@ -1637,9 +2029,22 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const [intro, setIntro] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(accountAvatarUrl || defaultAvatars[0].image);
   const navAvatarUrl = useGuardianAvatarUrl(userId, avatarUrl, logoUrl);
+  const [avatarSourceUrl, setAvatarSourceUrl] = useState<string | null>(accountAvatarUrl || defaultAvatars[0].image);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [avatarConverting, setAvatarConverting] = useState(false);
+  const [avatarApplying, setAvatarApplying] = useState(false);
+  const [houseStyleOpen, setHouseStyleOpen] = useState(false);
+  const [avatarPreviewMock, setAvatarPreviewMock] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
+  const houseStylePanelId = useId();
+  // A new source portrait (upload or stock pick) makes the last house-style error stale.
+  useEffect(() => { setAvatarError(''); }, [avatarSourceUrl]);
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null);
   const [backgroundType, setBackgroundType] = useState<'image' | 'video'>('image');
   const [uploadingBackground, setUploadingBackground] = useState(false);
+  const [backgroundSearch, setBackgroundSearch] = useState('');
+  const [backgroundMedia, setBackgroundMedia] = useState<GuideBackgroundMedia[]>([]);
+  const [searchingBackground, setSearchingBackground] = useState(false);
   const [brandName, setBrandName] = useState('');
   const [storyTemplate, setStoryTemplate] = useState<StoryTemplateId>('editorial');
   const [siteStyleStage, setSiteStyleStage] = useState(0);
@@ -1670,7 +2075,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       const links = saved.social_links || {};
       setSavedStatus(saved.status);
       if (saved.display_name) setDisplayName(saved.display_name);
-      if (saved.avatar_url) setAvatarUrl(saved.avatar_url);
+      if (saved.avatar_url) { setAvatarUrl(saved.avatar_url); setAvatarSourceUrl(saved.avatar_url); }
       if (saved.contact_email) setContactEmail(saved.contact_email);
       if (links.theme_background) setBackgroundUrl(links.theme_background);
       if (links.theme_background_type === 'image' || links.theme_background_type === 'video') setBackgroundType(links.theme_background_type);
@@ -1787,7 +2192,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       contact_email: contactEmail.trim(),
       whatsapp_phone: whatsappPhone.trim(),
       website_url: websiteUrl.trim(),
-      social_links: { instagram: instagramUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), ...brandKitLinks(brandKit) },
+      social_links: { instagram: instagramUrl.trim(), facebook: facebookUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), ...brandKitLinks(brandKit) },
       language: mainLanguage,
       pricing_region: pricingRegion,
       currency,
@@ -1795,9 +2200,9 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   }
 
   function loadBrand(brand: BrandDraft) {
-    setActiveBrandId(brand.localId); setDisplayName(brand.name); setLogoUrl(brand.logo_url); setAvatarUrl(brand.logo_url);
+    setActiveBrandId(brand.localId); setDisplayName(brand.name); setLogoUrl(brand.logo_url); setAvatarUrl(brand.logo_url); setAvatarSourceUrl(brand.logo_url); setAvatarPreviewUrl(null);
     setContactEmail(brand.contact_email); setWhatsappPhone(brand.whatsapp_phone); setWebsiteUrl(brand.website_url);
-    setInstagramUrl(brand.social_links.instagram || ''); setTiktokUrl(brand.social_links.tiktok || '');
+    setInstagramUrl(brand.social_links.instagram || ''); setFacebookUrl(brand.social_links.facebook || ''); setTiktokUrl(brand.social_links.tiktok || '');
     setYoutubeUrl(brand.social_links.youtube || ''); setLinktreeUrl(brand.social_links.linktree || '');
     setMainLanguage(brand.language); setPricingRegion(brand.pricing_region); setCurrency(brand.currency);
     setBrandKit(brandKitOf(brand.social_links));
@@ -2015,7 +2420,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       setImportedProfile(imported);
       if (imported.name) setDisplayName(imported.name);
       if (imported.bio) setIntro(imported.bio);
-      if (imported.avatarUrl) { setAvatarUrl(imported.avatarUrl); setLogoUrl(imported.avatarUrl); }
+      if (imported.avatarUrl) { setAvatarUrl(imported.avatarUrl); setAvatarSourceUrl(imported.avatarUrl); setAvatarPreviewUrl(null); setLogoUrl(imported.avatarUrl); }
       const searchable = `${imported.headline} ${imported.bio} ${imported.topics.join(' ')}`.toLowerCase();
       const inferred = specialties.filter((specialty) => imported.topics.includes(specialty) || searchable.includes(specialty.toLowerCase().replace(' health', '')));
       if (inferred.length) {
@@ -2038,11 +2443,43 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     try {
       const url = await uploadGuideImage(userId, file);
       setAvatarUrl(url);
+      setAvatarSourceUrl(url);
+      setAvatarPreviewUrl(null);
       setLogoUrl(url);
       setImportMessage('Profile image uploaded.');
     } catch (e: any) {
       setImportMessage(e.message || 'Could not upload that profile image.');
     } finally { setUploading(false); }
+  }
+
+  // The house style converts the Guardian's own portrait. A stock avatar (or any local path the function cannot fetch) has nothing of theirs to convert.
+  const avatarSource = avatarSourceUrl || avatarUrl;
+  const avatarNeedsOwnPhoto = !avatarSource || defaultAvatars.some((avatar) => avatar.image === avatarSource) || !/^(https:\/\/|data:image\/)/.test(avatarSource);
+
+  async function convertAvatarToHouseStyle() {
+    if (!avatarSource || avatarNeedsOwnPhoto) { setAvatarError('Upload your own photo first, then create your R3 house style.'); return; }
+    setAvatarConverting(true); setAvatarError('');
+    try {
+      const result = await convertGuardianAvatar(avatarSource, displayName || 'Guardian');
+      setAvatarPreviewMock(!!result.mock);
+      setAvatarPreviewUrl(result.image);
+    } catch (error) {
+      setAvatarError(error instanceof Error ? error.message : 'Could not convert that portrait.');
+    } finally { setAvatarConverting(false); }
+  }
+
+  async function applyConvertedAvatar() {
+    if (!avatarPreviewUrl) return;
+    // Test mode returns a placeholder SVG; uploadGuideImage only accepts JPG, PNG, WebP, GIF, MP4 and WebM.
+    if (avatarPreviewMock) { setAvatarError('Live image generation is currently in test mode, so this placeholder cannot be saved as your avatar.'); return; }
+    setAvatarApplying(true); setAvatarError(''); setImportMessage('');
+    try {
+      const url = await uploadGuideImage(userId, generatedImageFile(avatarPreviewUrl));
+      setAvatarUrl(url); setLogoUrl(url); setAvatarPreviewUrl(null); setHouseStyleOpen(false);
+      setImportMessage('R³ house-style avatar applied.');
+    } catch (error) {
+      setAvatarError(error instanceof Error ? error.message : 'Could not save the converted avatar.');
+    } finally { setAvatarApplying(false); }
   }
 
   async function uploadBackground(file?: File) {
@@ -2054,6 +2491,17 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     } catch (e: any) {
       setImportMessage(e.message || 'Could not upload that background.');
     } finally { setUploadingBackground(false); }
+  }
+
+  async function searchBackgroundCatalog() {
+    if (backgroundSearch.trim().length < 2) return;
+    setSearchingBackground(true); setImportMessage('');
+    try {
+      const media = await searchGuideBackgroundMedia(backgroundSearch);
+      setBackgroundMedia(media);
+      if (!media.length) setImportMessage('No ingredient or activity media matched that search.');
+    } catch (e: any) { setImportMessage(e.message || 'Could not search catalog media.'); }
+    finally { setSearchingBackground(false); }
   }
 
   async function uploadOfferVideo(key: string, file?: File) {
@@ -2090,7 +2538,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     if (step === 3 && !audience.length) { setError('Choose at least one audience.'); return; }
     if (step === 1) {
       setBrandProfiles((current) => current.map((brand) => brand.localId === activeBrandId ? currentBrandDraft() : brand));
-      const profileUrls = Array.from(new Set([instagramUrl, tiktokUrl, youtubeUrl, linktreeUrl, websiteUrl].map((value) => value.trim()).filter(Boolean)));
+      const profileUrls = Array.from(new Set([instagramUrl, facebookUrl, tiktokUrl, youtubeUrl, linktreeUrl, websiteUrl].map((value) => value.trim()).filter(Boolean)));
       if (profileUrls.length) await importPublicProfile(profileUrls);
     }
     setStep((current) => Math.min(5, current + 1));
@@ -2283,6 +2731,10 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const guardianSlug = displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || userId.slice(0, 8);
   const valueRampSlug = (leadMagnetTitle || suggestedRoutineName).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'value-ramp';
   const publishedSitePath = `/guardians/${guardianSlug}/value-ramp/${valueRampSlug}`;
+  // One state for both sites: a single save publishes the profile site and the offer path, and an admin makes them live.
+  const profileSiteState = siteStatus(savedStatus);
+  const funnelSiteState = siteStatus(savedStatus, related.ramps.find((ramp) => ramp.slug === valueRampSlug)?.status ?? 'draft');
+  const sitePublish = sitePublishAction(savedStatus);
   useEffect(() => {
     if (rampAudience !== rampTargetAudience) setRampAudience(rampTargetAudience);
     if (rampProblem !== rampTargetProblem) setRampProblem(rampTargetProblem);
@@ -2489,8 +2941,21 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         <span aria-hidden="true" style={{ width: 1, height: 14, background: line }} />
       </>} />
     </div>
+    <div className="g-workspace-shell" style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr)', height: 'calc(100vh - 63px)', margin: '0 calc(-1 * clamp(20px,6vw,90px)) -30px', maxWidth: 'none' }}>
+      <div className="g-railwrap">
+        <aside className="g-rail" aria-label="Guardian workspace and setup sections">
+          <div className="g-rlabel" style={{ padding: '12px 20px 6px', color: acid, fontSize: 8, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>Set up your Guardian</div>
+          <div className="g-setup-timeline">
+            {steps.map((item) => <button className="g-setup-step" type="button" key={item.n} onClick={() => { setSummaryView(null); setStep(item.n); }} title={`${String(item.n).padStart(2, '0')} · ${item.label}`} aria-current={!summaryView && step === item.n ? 'step' : undefined} style={{ width: '100%', height: 44, padding: '0 20px', border: 0, borderLeft: !summaryView && step === item.n ? `2px solid ${acid}` : '2px solid transparent', background: !summaryView && step === item.n ? '#1C1E19' : 'transparent', color: !summaryView && step === item.n ? ink : item.n < step ? acid : muted, display: 'flex', alignItems: 'center', gap: 11, cursor: 'pointer', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}><span className="g-setup-node" style={{ color: !summaryView && step === item.n ? acid : 'inherit' }}><SetupStageIcon stage={item.n} size={16} /></span><span className="g-rlabel"><span style={{ color: acid, marginRight: 7 }}>{String(item.n).padStart(2, '0')}</span>{item.label}</span></button>)}
+            <a className="g-setup-step" href="/guardians/workspace?tab=content" title="06 · Content" style={{ display: 'flex', alignItems: 'center', gap: 11, height: 44, padding: '0 20px', color: muted, textDecoration: 'none', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}><span className="g-setup-node" style={{ color: acid }}><SetupStageIcon stage={6} size={16} /></span><span className="g-rlabel"><span style={{ color: acid, marginRight: 7 }}>06</span>Content</span></a>
+          </div>
+          <div className="g-rail-divider" aria-hidden="true" />
+          {nav.filter((item) => item.id !== 'home' && item.id !== 'content' && !NAV_PARENT[item.id]).map(({ id, label: itemLabel, Icon }) => <a key={id} href={`/guardians/workspace?tab=${id}`} title={itemLabel} style={{ display: 'flex', alignItems: 'center', gap: 12, height: 42, padding: '0 20px', color: muted, textDecoration: 'none', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}><Icon size={16} style={{ flex: '0 0 auto' }} /><span className="g-rlabel">{itemLabel}</span></a>)}
+        </aside>
+      </div>
+      <div className="g-main-scroll" style={{ minWidth: 0, padding: '0 clamp(20px,6vw,90px) 30px' }}>
     <div aria-label="Guardian setup progress" style={{ maxWidth: 1100, margin: '42px auto 0', display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', borderTop: `1px solid ${line}`, borderBottom: `1px solid ${line}` }}>
-      {steps.map((item) => <button type="button" key={item.n} onClick={() => { setSummaryView(null); setStep(item.n); }} aria-current={!summaryView && step === item.n ? 'step' : undefined} style={{ height: 54, border: 0, borderRight: item.n < 5 ? `1px solid ${line}` : 0, background: !summaryView && step === item.n ? ink : 'transparent', color: !summaryView && step === item.n ? black : item.n < step ? acid : muted, fontFamily: sans, cursor: 'pointer', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{String(item.n).padStart(2, '0')} · {item.label}</button>)}
+      {steps.map((item) => <button type="button" key={item.n} onClick={() => { setSummaryView(null); setStep(item.n); }} aria-current={!summaryView && step === item.n ? 'step' : undefined} style={{ height: 58, border: 0, borderRight: item.n < 5 ? `1px solid ${line}` : 0, background: !summaryView && step === item.n ? ink : 'transparent', color: !summaryView && step === item.n ? black : item.n < step ? acid : muted, fontFamily: sans, cursor: 'pointer', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9 }}><SetupStageIcon stage={item.n} size={16} /><span>{String(item.n).padStart(2, '0')} · {item.label}</span></button>)}
     </div>
     {summaryView && <section style={{ maxWidth: 1100, margin: '52px auto', border: `1px solid ${line}`, background: panel }}>
       <div style={{ padding: 22, borderBottom: `1px solid ${line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
@@ -2530,20 +2995,16 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       })}</div>
       <ContentStudio creator={displayName} avatar={avatarUrl} audience={audience.map(describeAudience).join(' · ') || rampTargetAudience} problem={rampTargetProblem} siteUrl={publishedSitePath}
         offers={[{ title: customerFacingOfferTitle(leadMagnetTitle || suggestedRoutineName), free: true, description: freeAudienceValue }, ...orderedUpsells.map((kind) => ({ title: upsellDrafts[kind].title, free: offerAccess[kind] !== 'paid', price: formatMoney(upsellDrafts[kind].price, currency), description: upsellDrafts[kind].audienceValue }))]} />
-      </div> : <div style={{ padding: 22, display: 'grid', gap: 10 }}>
-        {[
-          { key: 'profile-site', type: 'Profile site', title: `${displayName || 'Guardian'} profile`, path: `/guardians/${guardianSlug}`, previewId: 'profile-site-preview' },
-          { key: 'funnel-site', type: 'Offer funnel', title: leadMagnetTitle || 'Offer site', path: publishedSitePath, previewId: 'value-ramp-funnel-preview' },
-        ].map((site) => <div key={site.key} style={{ position: 'relative', border: `1px solid ${line}`, minHeight: 92, padding: 14, display: 'grid', gridTemplateColumns: '82px minmax(0,1fr) auto auto', gap: 16, alignItems: 'center' }}>
-          <img src={effectiveBackground} alt="" style={{ width: 82, height: 62, objectFit: 'cover', filter: 'grayscale(1)' }} />
-          <span><span style={{ display: 'block', color: acid, fontSize: 7, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 5 }}>{site.type}</span><strong style={{ display: 'block', color: ink, fontSize: 13 }}>{site.title}</strong><code style={{ display: 'block', color: muted, fontSize: 9, marginTop: 6 }}>{site.path}</code></span>
-          <span style={{ color: '#D49A74', fontSize: 8, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Draft</span>
-          <button type="button" aria-label={`Actions for ${site.title}`} aria-expanded={inventoryMenu === site.key} onClick={() => setInventoryMenu((current) => current === site.key ? null : site.key)} style={{ width: 38, height: 38, border: `1px solid ${line}`, background: 'transparent', color: ink, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><MoreHorizontal size={19} /></button>
-          {inventoryMenu === site.key && <div role="menu" style={{ position: 'absolute', zIndex: 8, right: 14, top: 64, width: 158, border: `1px solid ${line}`, background: black, boxShadow: '0 14px 28px rgba(0,0,0,.42)', padding: 4 }}>
-            <button type="button" role="menuitem" onClick={() => { setInventoryMenu(null); setSummaryView(null); setStep(5); setSiteStyleStage(site.key === 'profile-site' ? 0 : 2); }} style={{ width: '100%', border: 0, background: 'transparent', color: ink, padding: '10px 12px', textAlign: 'left', fontFamily: sans, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
-            <button type="button" role="menuitem" onClick={() => { setInventoryMenu(null); setSummaryView(null); setStep(5); window.setTimeout(() => document.getElementById(site.previewId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} style={{ width: '100%', border: 0, borderTop: `1px solid ${line}`, background: 'transparent', color: ink, padding: '10px 12px', textAlign: 'left', fontFamily: sans, fontWeight: 700, cursor: 'pointer' }}>Preview and test</button>
-          </div>}
-        </div>)}
+      </div> : <div style={{ padding: 22 }}>
+        <SiteCardGrid
+          openMenu={inventoryMenu}
+          onOpenMenu={setInventoryMenu}
+          sites={[
+            { key: 'profile-site', type: 'Profile site', title: `${displayName || 'Guardian'} profile`, path: `/guardians/${guardianSlug}`, status: profileSiteState, heroKicker: displayName || undefined, heroLine: generatedHeadline, avatarUrl: avatarUrl || null, previewId: 'profile-site-preview' },
+            { key: 'funnel-site', type: 'Offer funnel', title: leadMagnetTitle || 'Offer site', path: publishedSitePath, status: funnelSiteState, heroKicker: displayName || undefined, heroLine: customerFacingOfferTitle(leadMagnetTitle || suggestedFreeOffer.title), avatarUrl: avatarUrl || null, previewId: 'value-ramp-funnel-preview' },
+          ].map((site): SiteCardData => ({ ...site, backgroundUrl: effectiveBackground, backgroundIsVideo: backgroundType === 'video', greyscale: imageTreatment === 'greyscale' }))}
+          onEdit={(site) => { setInventoryMenu(null); setSummaryView(null); setStep(5); setSiteStyleStage(site.key === 'profile-site' ? 0 : 2); }}
+          onPreview={(site) => { setInventoryMenu(null); setSummaryView(null); setStep(5); window.setTimeout(() => document.getElementById(site.previewId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} />
       </div>}
     </section>}
     {!summaryView && <form onSubmit={submit} style={{ maxWidth: step === 5 ? 1440 : 1100 /* step 05 shows two side-by-side previews */, margin: '52px auto', minHeight: 'calc(100vh - 220px)' }}>
@@ -2585,17 +3046,23 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       {/* Profile image: one compact row, like the brand line above. */}
       <PhotoDropzone onFile={uploadPortrait} validate={portraitProblem} onReject={setImportMessage} accept={PORTRAIT_ACCEPT} disabled={uploading}>
         {({ open, dragging }) => (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18, padding: dragging ? 6 : 0, outline: dragging ? `2px dashed ${ink}` : 'none' }}>
+      <>
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginTop: 18, padding: dragging ? 6 : 0, outline: dragging ? `2px dashed ${ink}` : 'none' }}>
         {avatarUrl ? <img src={avatarUrl} alt="Profile" referrerPolicy="no-referrer" style={{ width: 36, height: 36, objectFit: 'cover', border: `1px solid ${line}` }} /> : <span aria-hidden="true" style={{ width: 36, height: 36, display: 'grid', placeItems: 'center', border: `1px solid ${line}`, color: muted, fontFamily: serif, fontSize: 16 }}>{displayName.trim().charAt(0) || 'B'}</span>}
         <span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Profile image · optional</span>
         <button type="button" onClick={open} disabled={uploading} aria-label={avatarUrl ? 'Replace profile image' : 'Upload profile image'} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer', background: 'transparent', border: 0, padding: 0 }}>
           {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}{uploading ? 'Uploading' : avatarUrl ? 'Replace' : 'Upload'}
         </button>
+        {avatarUrl && <button type="button" onClick={() => setHouseStyleOpen((value) => !value)} aria-expanded={houseStyleOpen} aria-controls={houseStylePanelId} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 28, padding: '0 9px', border: `1px solid ${houseStyleOpen ? ink : line}`, borderRadius: 2, color: ink, fontFamily: sans, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer', background: 'rgba(245,242,234,.04)' }}>
+          <Sparkles size={12} />R3 house style
+        </button>}
         <span style={{ color: muted, fontSize: 9 }}>{dragging ? 'Drop to upload' : 'or drag a photo here'}</span>
-        {importMessage && <p style={{ color: importMessage.startsWith('Imported') ? acid : muted, fontSize: 11, lineHeight: 1.5, margin: '10px 0 0' }}>{importMessage}</p>}
       </div>
+      <HouseStyleAvatarPanel id={houseStylePanelId} open={houseStyleOpen && !!avatarUrl} sourceUrl={avatarSource} needsUpload={avatarNeedsOwnPhoto} converting={avatarConverting} applying={avatarApplying} uploading={uploading} resultUrl={avatarPreviewUrl} resultMock={avatarPreviewMock} error={avatarError} onCreate={convertAvatarToHouseStyle} onUpload={open} onApply={applyConvertedAvatar} onCancel={() => { setAvatarPreviewUrl(null); setAvatarError(''); }} />
+      </>
         )}
       </PhotoDropzone>
+      {importMessage && <p style={{ color: /applied|ready|imported|uploaded/i.test(importMessage) ? acid : muted, fontSize: 11, lineHeight: 1.5, margin: '10px 0 0' }}>{importMessage}</p>}
       <p style={{ color: muted, fontSize: 10, lineHeight: 1.5, margin: '9px 0 0' }}>Language applies to your page and content. Pricing region sets the currency for every paid stage.</p>
       <Disclosure id="profile-contact" title="Contact" required summary={contactEmail.trim() || 'Add your email'} open={profileOpen.contact} onToggle={() => setProfileOpen((o) => ({ ...o, contact: !o.contact }))}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12, marginTop: 18 }}>
@@ -2604,9 +3071,10 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       </div>
       <p style={{ color: muted, fontSize: 10, lineHeight: 1.5, margin: '9px 0 0' }}>If you add WhatsApp, include the international country code. These details can be changed before your Guardian page is published.</p>
       </Disclosure>
-      <Disclosure id="profile-links" title="Links" summary={[instagramUrl && 'Instagram', tiktokUrl && 'TikTok', youtubeUrl && 'YouTube', linktreeUrl && 'Linktree', websiteUrl && 'Website'].filter(Boolean).join(' · ') || 'Optional: so we can learn from your profiles'} open={profileOpen.links} onToggle={() => setProfileOpen((o) => ({ ...o, links: !o.links }))}>
+      <Disclosure id="profile-links" title="Links" summary={[instagramUrl && 'Instagram', facebookUrl && 'Facebook', tiktokUrl && 'TikTok', youtubeUrl && 'YouTube', linktreeUrl && 'Linktree', websiteUrl && 'Website'].filter(Boolean).join(' · ') || 'Optional: so we can learn from your profiles'} open={profileOpen.links} onToggle={() => setProfileOpen((o) => ({ ...o, links: !o.links }))}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12, marginTop: 22 }}>
         <SocialUrlField label="Instagram" Icon={Instagram} value={instagramUrl} onChange={setInstagramUrl} placeholder="https://instagram.com/yourname" />
+        <SocialUrlField label="Facebook" Icon={Facebook} value={facebookUrl} onChange={setFacebookUrl} placeholder="https://facebook.com/yourname" />
         <SocialUrlField label="TikTok" Icon={AtSign} value={tiktokUrl} onChange={setTiktokUrl} placeholder="https://tiktok.com/@yourname" />
         <SocialUrlField label="YouTube" Icon={Youtube} value={youtubeUrl} onChange={setYoutubeUrl} placeholder="https://youtube.com/@yourname" />
         <SocialUrlField label="Linktree" Icon={Link2} value={linktreeUrl} onChange={setLinktreeUrl} placeholder="https://linktr.ee/yourname" />
@@ -2871,6 +3339,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       {step === 5 && <>
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginBottom: 14 }}><span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Preview on</span><DeviceToggle value={previewDevice} onChange={setPreviewDevice} /></div>
         <FunnelStage number="01" eyebrow="Site 01 · Your profile" title={`${displayName || 'Your'}${displayName ? '’s' : ''} story.`} copy="Your profile site: who you are, and every published offer path.">
+          <SitePublishBar site="Profile site" status={profileSiteState} action={sitePublish} busy={busy} error={error} liveHref={`/guardians/${guardianSlug}`} />
           {/* Builder left, live preview right (stacks on narrow screens). */}
           <div className="g-split" style={{ border: `1px solid ${line}`, background: panel, padding: 16 }}>
           <div>
@@ -2912,7 +3381,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
             </div>
             <label style={label}>Choose an avatar</label>
             <div style={{ display: 'flex', gap: 7, overflowX: 'auto', paddingBottom: 8, marginBottom: 12 }}>
-              {defaultAvatars.map((avatar) => { const active = avatarUrl === avatar.image; return <button className="guardian-card" type="button" key={avatar.name} onClick={() => setAvatarUrl(avatar.image)} aria-pressed={active} style={{ position: 'relative', width: 100, flex: '0 0 100px', minHeight: 94, padding: '8px 6px 7px', border: `1px solid ${active ? acid : line}`, background: active ? acid : 'transparent', color: active ? black : ink, cursor: 'pointer', fontFamily: sans }}>
+              {defaultAvatars.map((avatar) => { const active = avatarUrl === avatar.image; return <button className="guardian-card" type="button" key={avatar.name} onClick={() => { setAvatarUrl(avatar.image); setAvatarSourceUrl(avatar.image); setAvatarPreviewUrl(null); }} aria-pressed={active} style={{ position: 'relative', width: 100, flex: '0 0 100px', minHeight: 94, padding: '8px 6px 7px', border: `1px solid ${active ? acid : line}`, background: active ? acid : 'transparent', color: active ? black : ink, cursor: 'pointer', fontFamily: sans }}>
                 {active && <span style={{ position: 'absolute', top: 5, right: 5, width: 17, height: 17, display: 'grid', placeItems: 'center', background: black, color: acid }}><Check size={10} /></span>}
                 <img src={avatar.image} alt="" style={{ display: 'block', width: 58, height: 58, maxWidth: '100%', objectFit: 'contain', margin: '0 auto 5px', filter: active ? 'grayscale(1) brightness(.25)' : 'grayscale(1) contrast(.95) brightness(.9)' }} />
                 <span style={{ display: 'block', fontSize: 8, fontWeight: 700, lineHeight: 1.2, textAlign: 'center' }}>{avatar.name}</span>
@@ -2930,7 +3399,10 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
               </button>; })}
             </div>
             <label style={{ ...label, color: ink }}>Use your own background</label>
-            <label style={{ ...btn, height: 40, background: 'transparent', color: ink, fontSize: 8, marginBottom: 14 }}>{uploadingBackground ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}{backgroundUrl ? 'Replace background' : 'Upload photo or video'}<input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={(event) => uploadBackground(event.target.files?.[0])} style={{ display: 'none' }} /></label>
+            <label style={{ ...btn, height: 40, background: 'transparent', color: ink, fontSize: 8, marginBottom: 14 }}>{uploadingBackground ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}{backgroundUrl ? 'Replace background' : 'Upload photo, GIF or video'}<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" onChange={(event) => uploadBackground(event.target.files?.[0])} style={{ display: 'none' }} /></label>
+            <label style={label}>Search ingredient and activity media <span style={{ color: acid }}>· videos first</span></label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 7, marginBottom: 10 }}><input style={input} value={backgroundSearch} onChange={(event) => setBackgroundSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void searchBackgroundCatalog(); } }} placeholder="e.g. lavender, walking, yoga" /><button type="button" onClick={() => void searchBackgroundCatalog()} disabled={searchingBackground || backgroundSearch.trim().length < 2} style={{ ...btn, minWidth: 88 }}>{searchingBackground ? 'Searching…' : 'Search'}</button></div>
+            {backgroundMedia.length > 0 && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 7, maxHeight: 300, overflowY: 'auto', marginBottom: 14 }}>{backgroundMedia.map((media) => { const active = backgroundUrl === media.url; return <button type="button" key={media.id} onClick={() => { setBackgroundUrl(media.url); setBackgroundType(media.kind); }} aria-pressed={active} style={{ position: 'relative', minWidth: 0, padding: 0, border: `1px solid ${active ? acid : line}`, background: '#0D0E0C', color: ink, cursor: 'pointer', textAlign: 'left', overflow: 'hidden' }}>{media.kind === 'video' ? <video src={media.url} muted loop autoPlay playsInline preload="metadata" style={{ display: 'block', width: '100%', aspectRatio: '4 / 3', objectFit: 'cover' }} /> : <img src={media.url} alt="" loading="lazy" style={{ display: 'block', width: '100%', aspectRatio: '4 / 3', objectFit: 'cover' }} />}<span style={{ display: 'block', padding: '7px 8px', fontSize: 7.5, lineHeight: 1.3 }}><strong style={{ display: 'block', color: media.kind === 'video' ? acid : ink, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 3 }}>{media.kind} · {media.source}</strong>{media.name}</span>{active && <span style={{ position: 'absolute', top: 6, right: 6, width: 20, height: 20, display: 'grid', placeItems: 'center', background: acid, color: black }}><Check size={12} /></span>}</button>; })}</div>}
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><button type="button" onClick={() => setSiteStyleStage(1)} style={{ ...btn, background: 'transparent', color: ink }}>← Back</button><button type="button" onClick={() => setSiteStyleStage(3)} style={btn}>Continue <ArrowRight size={14} /></button></div>
             </>}
             {siteStyleStage === 3 && <>
@@ -2960,11 +3432,14 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           <div id="profile-site-preview" className="g-sticky" style={{ scrollMarginTop: 20 }}><span style={{ ...label, display: 'block', color: acid, marginBottom: 7 }}>Profile site preview <span style={{ color: muted }}>· shows every published offer path</span></span><PreviewFrame device={previewDevice}><div style={{ flex: '1 0 auto', background: pageColor, fontFamily: sans }}>
             {headerStyle !== 'hidden' && <GuardianSiteHeader brandName={brandName.trim()} path={`routine3.com/${displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-') || 'your-name'}`} />}
             <GuardianSiteHero audience={audienceLabel(audienceDetails, audience)} reviewSummary={reviewStats(guardianReviews)} headlineStyle={headlineStyle} name={displayName} avatarUrl={avatarUrl} specialties={chosen} headline={generatedHeadline} tags={expertiseTags} bio={intro || `A practical ${chosen.slice(0, 2).join(' and ').toLowerCase() || 'guidance'} path shaped for ${audience.join(' and ').toLowerCase()}.`} accent={accentColor} headingFont={serif} background={effectiveBackground} backgroundIsVideo={backgroundType === 'video'} greyscale={imageTreatment === 'greyscale'}
-              cards={[{ key: 'first', eyebrow: rampTargetProblem, title: customerFacingOfferTitle(leadMagnetTitle || suggestedFreeOffer.title), copy: freeAudienceValue, kind: freeOfferType, price: 'Free', onClick: () => document.getElementById('value-ramp-funnel-preview')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }]} />
+              cards={[{ key: 'first', eyebrow: rampTargetProblem, title: customerFacingOfferTitle(leadMagnetTitle || suggestedFreeOffer.title), copy: freeAudienceValue, kind: freeOfferType, price: 'Free', imageUrl: effectiveBackground, onClick: () => document.getElementById('value-ramp-funnel-preview')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }]} />
+            <GuardianOfferCatalog profile={{ user_id: userId, slug: displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-') || 'your-name', display_name: displayName || 'Your name', headline: generatedHeadline, bio: intro, avatar_url: avatarUrl, contact_email: contactEmail, whatsapp_phone: whatsappPhone, social_links: { audience_details: JSON.stringify(Object.fromEntries(audience.filter((group) => audienceDetails[group]).map((group) => [group, audienceDetails[group]]))) }, specialties: chosen, status: savedStatus || 'draft', commission_percent: 0, onboarding_step: 5 }} offers={related.offers.filter((offer) => offer.status === 'published')} ramps={related.ramps.filter((ramp) => ramp.status === 'published')} reviews={guardianReviews} accent={accentColor} protocols={related.protocols} />
+            <GuardianShop guideId={userId} guardianSlug={displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-') || 'your-name'} guardianName={displayName || 'Your name'} pagePadding={PAGE_X} protocols={related.protocols} localePreference={{ region: pricingRegion, locale: languageOptions.find((option) => option.name === mainLanguage)?.code || 'en', currency }} />
           </div></PreviewFrame></div>
           </div>
         </FunnelStage>
         <FunnelStage number="02" eyebrow="Site 02 · First offer path" title={`${rampTargetAudience} · ${rampTargetProblem} → ${customerFacingOfferTitle(leadMagnetTitle || 'your first offer')}`} copy="Audience, problem, solution: the page a visitor lands on, from the free offer through to the next one." last>
+        <SitePublishBar site="Offer funnel" status={funnelSiteState} action={sitePublish} busy={busy} error={error} liveHref={publishedSitePath} />
         <div id="value-ramp-funnel-preview" style={{ scrollMarginTop: 20, border: `1px solid ${line}`, background: panel, padding: 16, marginBottom: 24 }}>
           <div className="g-split"><div>
           {/* Same pattern as "Style your page": edit what the offer pages say, who they're for, media and upsells. */}
@@ -3118,9 +3593,9 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         <div style={{ border: `1px solid ${acid}`, background: '#20251B', padding: 16, marginTop: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <span style={{ minWidth: 0, display: 'grid', gap: 8 }}>
             <span style={{ ...label, color: acid, marginBottom: 0 }}>Publishing</span>
-            {[['Profile site', `/guardians/${guardianSlug}`], ['First offer path', publishedSitePath]].map(([text, path]) => <a key={text} href={path} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'baseline', gap: 10, color: ink, textDecoration: 'none' }}><span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', minWidth: 104 }}>{text}</span><code style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10, overflowWrap: 'anywhere', borderBottom: `1px solid ${line}` }}>{path}</code><ExternalLink size={11} /></a>)}
+            {([['Profile site', `/guardians/${guardianSlug}`, profileSiteState], ['First offer path', publishedSitePath, funnelSiteState]] as const).map(([text, path, state]) => <a key={text} href={path} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'baseline', gap: 10, color: ink, textDecoration: 'none' }}><span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', minWidth: 104 }}>{text}</span><code style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10, overflowWrap: 'anywhere', borderBottom: `1px solid ${line}` }}>{path}</code><ExternalLink size={11} /><SiteStatusTag status={state} /></a>)}
           </span>
-          <button type="submit" disabled={busy} style={{ ...btn, flex: '0 0 auto' }}>{busy ? 'Publishing…' : 'Publish site'} <ArrowRight size={14} /></button>
+          <button type="submit" disabled={busy} style={{ ...btn, flex: '0 0 auto' }}>{busy ? `${sitePublish.busyLabel}…` : sitePublish.label} <ArrowRight size={14} /></button>
         </div>
       </>}
 
@@ -3133,6 +3608,8 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       </div>
     </form>}
     {!summaryView && <StepRelated step={step} guardianSlug={guardianSlug} displayName={displayName} related={related} audience={audienceLabel(audienceDetails, audience)} />}
+      </div>
+    </div>
   </div>;
 }
 
@@ -3524,21 +4001,24 @@ function GuardianProtocolAI({ accessToken, protocol, ownerId, initialRequest, in
 }
 
 const offerBuilderTypes = [
-  { kind: 'routine', title: 'R3 Protocol', eyebrow: 'Routine database', copy: 'Build a printable PDF and interactive app twin from linked meals, activities, supplements and smart lists.', Icon: HeartPulse },
-  { kind: 'ebook', title: 'PDF guide', eyebrow: 'Profile + sources', copy: 'Turn your profile links and uploaded documents into a focused downloadable guide.', Icon: FileText },
-  { kind: 'recipe_book', title: 'Recipe collection', eyebrow: 'Meals', copy: 'Build recipes grouped as breakfast, lunch, dinner, snack or drink.', Icon: Salad },
-  { kind: 'one_to_one_call', title: '1:1 booking', eyebrow: 'Private live', copy: 'Send a client to your saved booking page for individual support.', Icon: CalendarDays },
-  { kind: 'group_call', title: 'Group call', eyebrow: 'Live group', copy: 'Create a shared session using your saved booking link.', Icon: Users },
-  { kind: 'in_person', title: 'In-person offer', eyebrow: 'Physical', copy: 'Package an appointment, workshop or local experience.', Icon: Globe2 },
+  { kind: 'routine', access: 'free', value: 5, title: 'R3 Protocol', eyebrow: 'Routine database', copy: 'Build a printable PDF and interactive app twin from linked meals, activities, supplements and smart lists.', Icon: HeartPulse },
+  { kind: 'ebook', access: 'free', value: 3, title: 'PDF guide', eyebrow: 'Profile + sources', copy: 'Turn your profile links and uploaded documents into a focused downloadable guide.', Icon: FileText },
+  { kind: 'recipe_book', access: 'free', value: 4, title: 'Recipe collection', eyebrow: 'Meals', copy: 'Build recipes grouped as breakfast, lunch, dinner, snack or drink.', Icon: Salad },
+  { kind: 'course', access: 'flexible', value: 5, title: 'Course', eyebrow: 'Structured learning', copy: 'Build ordered chapters with video, checklists, links, documents, PDFs and linked R3 Protocols. Publish it free or paid.', Icon: GraduationCap },
+  { kind: 'one_to_one_call', access: 'paid', value: 5, title: '1:1 booking', eyebrow: 'Private live', copy: 'Send a client to your saved booking page for individual support.', Icon: CalendarDays },
+  { kind: 'group_call', access: 'paid', value: 4, title: 'Group call', eyebrow: 'Live group', copy: 'Create a shared session using your saved booking link.', Icon: Users },
+  { kind: 'community', access: 'paid', value: 5, title: 'Digital community', eyebrow: 'Ongoing community', copy: 'Create a private or public space for discussions, resources, questions and ongoing member support.', Icon: Users },
+  { kind: 'in_person', access: 'paid', value: 5, title: 'In-person offer', eyebrow: 'Physical', copy: 'Package an appointment, workshop or local experience.', Icon: Globe2 },
 ] as const;
 
-function OfferBuilder({ profile, protocols, offers, recipes = [], librarySources = [], onOpenProtocols, onCreated }: { profile: GuideProfile; protocols: AdminProtocol[]; offers: GuideOffer[]; recipes?: GuideRecipe[]; librarySources?: GuideLibraryItem[]; onOpenProtocols: () => void; onCreated: (offer: GuideOffer) => void }) {
+function OfferBuilder({ profile, protocols, offers, recipes = [], librarySources = [], onOpenProtocols, onCreated, onUpdated, onDeleted }: { profile: GuideProfile; protocols: AdminProtocol[]; offers: GuideOffer[]; recipes?: GuideRecipe[]; librarySources?: GuideLibraryItem[]; onOpenProtocols: () => void; onCreated: (offer: GuideOffer) => void; onUpdated: (offer: GuideOffer) => void; onDeleted: (id: string) => void }) {
   const { user } = useAuth();
   // Which routine each offer delivers (owner-only table). Quiet when the database update is not applied yet.
   const [offerRoutines, setOfferRoutines] = useState<Record<string, string>>({});
   useEffect(() => { listOfferRoutines(profile.user_id).then(setOfferRoutines).catch(() => setOfferRoutines({})); }, [profile.user_id, offers.length]);
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
+  const [typeView, setTypeView] = useState<'cards' | 'list'>('cards');
   async function build(kind: typeof offerBuilderTypes[number]['kind'], title: string) {
     if (kind === 'routine') { onOpenProtocols(); return; }
     if (!user) return;
@@ -3546,19 +4026,179 @@ function OfferBuilder({ profile, protocols, offers, recipes = [], librarySources
     try {
       const booking = kind === 'one_to_one_call' || kind === 'group_call' ? profile.social_links?.booking_url || null : null;
       const sourceNote = librarySources.length ? ` Sources: ${librarySources.map((source) => source.title).join(', ')}.` : '';
-      const created = await createGuideOffer(user.id, { kind, title, description: `${offerBuilderTypes.find((item) => item.kind === kind)?.copy || ''}${sourceNote}`.trim() || null, price_cents: 0, affiliate_url: null, access_model: kind === 'ebook' || kind === 'recipe_book' ? 'free' : 'paid', file_path: librarySources.find((source) => source.kind === 'pdf')?.file_path || null, booking_url: booking });
+      const created = await createGuideOffer(user.id, { kind, title, description: `${offerBuilderTypes.find((item) => item.kind === kind)?.copy || ''}${sourceNote}`.trim() || null, price_cents: 0, affiliate_url: null, access_model: kind === 'ebook' || kind === 'recipe_book' || kind === 'course' ? 'free' : 'paid', file_path: librarySources.find((source) => source.kind === 'pdf')?.file_path || null, booking_url: booking });
       onCreated(created); setMessage(`${title} created. Open Offers to place it in a customer journey.`);
     } catch (error: any) { setMessage(error?.message || 'Could not create this offer.'); }
     finally { setBusy(''); }
   }
+  const renderOfferType = ({ kind, access, value, title, eyebrow, copy, Icon }: typeof offerBuilderTypes[number]) => <button key={kind} type="button" onClick={() => build(kind, title)} disabled={busy === kind} style={typeView === 'cards' ? { minHeight: 238, border: `1px solid ${line}`, background: panel, color: ink, padding: 22, textAlign: 'left', cursor: 'pointer', fontFamily: sans, display: 'flex', flexDirection: 'column' } : { minHeight: 92, width: '100%', border: 0, borderTop: `1px solid ${line}`, background: 'transparent', color: ink, padding: '16px 4px', textAlign: 'left', cursor: 'pointer', fontFamily: sans, display: 'grid', gridTemplateColumns: '52px minmax(0,1fr) auto', gap: 16, alignItems: 'center' }}>
+    <span style={{ width: 48, height: 48, border: `1px solid ${line}`, display: 'grid', placeItems: 'center', color: acid }}><Icon size={22} /></span>
+    <span style={typeView === 'cards' ? { display: 'contents' } : { minWidth: 0 }}><span style={{ ...label, color: acid, margin: typeView === 'cards' ? '20px 0 7px' : '0 0 5px' }}>{eyebrow} · {access}</span><strong style={{ display: 'block', fontSize: 22 }}>{title}</strong><span style={{ color: muted, fontSize: 12, lineHeight: 1.5, marginTop: 7, display: typeView === 'cards' ? 'block' : '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{copy}</span><span aria-label={`Value potential ${value} out of 5`} title="Value potential" style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 12 }}><span aria-hidden="true" style={{ color: acid, fontSize: 14, letterSpacing: 2 }}>{'★★★★★'.split('').map((star, index) => <span key={index} style={{ opacity: index < value ? 1 : .2 }}>{star}</span>)}</span><span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>{value}/5 value</span></span></span>
+    <span style={{ marginTop: typeView === 'cards' ? 'auto' : 0, paddingTop: typeView === 'cards' ? 16 : 0, fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{busy === kind ? 'Creating...' : kind === 'routine' ? 'Open R3 builder →' : 'Create offer →'}</span>
+  </button>;
   return <>
     <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}><img src={guidePlates.offer_builder} alt="" style={{ width: 74, height: 74, objectFit: 'contain', filter: 'grayscale(1) contrast(.9) brightness(.74)' }} /><div><div style={{ ...label, color: acid }}>Reusable building blocks</div><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 300, margin: '8px 0 0' }}>Offer builder</h1></div></div>
     <p style={{ color: muted, maxWidth: 720, lineHeight: 1.6 }}>Create the things people receive. Reuse any offer across more than one offer path.</p>
     {librarySources.length > 0 && <div style={{ border: `1px solid ${acid}`, background: '#1B2017', color: acid, padding: 13, marginTop: 18, fontSize: 11 }}><strong>{librarySources.length} Library source{librarySources.length === 1 ? '' : 's'} attached:</strong> {librarySources.map((source) => source.title).join(', ')}</div>}
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 12, marginTop: 28 }}>{offerBuilderTypes.map(({ kind, title, eyebrow, copy, Icon }) => <button key={kind} type="button" onClick={() => build(kind, title)} disabled={busy === kind} style={{ minHeight: 220, border: `1px solid ${line}`, background: panel, color: ink, padding: 22, textAlign: 'left', cursor: 'pointer', fontFamily: sans, display: 'flex', flexDirection: 'column' }}><span style={{ width: 48, height: 48, border: `1px solid ${line}`, display: 'grid', placeItems: 'center', color: acid }}><Icon size={22} /></span><span style={{ ...label, color: acid, margin: '24px 0 7px' }}>{eyebrow}</span><strong style={{ fontSize: 22 }}>{title}</strong><span style={{ color: muted, fontSize: 12, lineHeight: 1.55, marginTop: 8 }}>{copy}</span><span style={{ marginTop: 'auto', paddingTop: 18, fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>{busy === kind ? 'Creating...' : kind === 'routine' ? 'Open R3 builder →' : 'Create offer →'}</span></button>)}</div>
+    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}><button type="button" aria-label="Card view" aria-pressed={typeView === 'cards'} onClick={() => setTypeView('cards')} style={{ ...iconBtn, background: typeView === 'cards' ? ink : 'transparent', color: typeView === 'cards' ? black : ink }}><Grid2X2 size={14} /></button><button type="button" aria-label="List view" aria-pressed={typeView === 'list'} onClick={() => setTypeView('list')} style={{ ...iconBtn, background: typeView === 'list' ? ink : 'transparent', color: typeView === 'list' ? black : ink }}><List size={14} /></button></div>
+    {(['free', 'flexible', 'paid'] as const).map((access) => <section key={access} style={{ marginTop: 22 }}><div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, borderBottom: `1px solid ${line}`, paddingBottom: 10 }}><h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 30, margin: 0 }}>{access === 'free' ? 'Free offers' : access === 'paid' ? 'Paid offers' : 'Free or paid'}</h2><span style={{ color: muted, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.1em' }}>{offerBuilderTypes.filter((item) => item.access === access).length} types</span></div><div style={typeView === 'cards' ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 12, marginTop: 12 } : { marginTop: 2 }}>{offerBuilderTypes.filter((item) => item.access === access).map(renderOfferType)}</div></section>)}
     {message && <p style={{ color: acid, fontSize: 11, marginTop: 16 }}>{message}</p>}
     <section style={{ borderTop: `1px solid ${line}`, marginTop: 38, paddingTop: 24 }}><h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 32, margin: 0 }}>R3 outputs</h2><p style={{ color: muted, fontSize: 12 }}>Every R3 Protocol can be edited against the full Routine database, exported as a PDF and delivered through web or iOS.</p><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><a href={APP_STORE_URL} target="_blank" rel="noreferrer" style={{ ...btn, textDecoration: 'none' }}>Open iOS app <ArrowRight size={13} /></a><button type="button" onClick={onOpenProtocols} style={{ ...btn, background: 'transparent', color: ink }}>Manage {protocols.length} Protocols</button><span style={{ ...btn, background: 'transparent', color: muted, cursor: 'default' }}><Download size={13} /> PDF export inside builder</span></div></section>
-    {offers.length > 0 && <section style={{ marginTop: 34 }}><div style={label}>Created offers · {offers.length}</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18, marginTop: 12 }}>{offers.map((offer) => { const free = offer.access_model === 'free'; return <div key={offer.id}><ProductCard kind={offer.kind} imageUrl={offer.cover_url || (offer.kind === 'recipe_book' ? recipes.find((r) => r.image_url && r.offer_ids?.includes(offer.id))?.image_url : null)} eyebrow={[audienceLabel(profile.social_links?.audience_details) || 'Everyone', offer.status === 'published' ? 'Published' : 'Draft'].join(' · ')} title={customerFacingOfferTitle(offer.title)} copy={(offer.description || '').split(' Delivery:')[0].slice(0, 120) || undefined} price={free ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid'} name={profile.display_name} avatarUrl={profile.avatar_url} accent={acid} cta={profile.slug ? 'View on your site' : 'View offer'} href={profile.slug ? `/guardians/${encodeURIComponent(profile.slug)}#offers` : undefined} /><OfferRoutineLink offer={offer} protocols={protocols} guideId={profile.user_id} guardianSlug={profile.slug} linkedProtocolId={offerRoutines[offer.id]} onChange={(offerId, protocolId) => setOfferRoutines((current) => { const next = { ...current }; if (protocolId) next[offerId] = protocolId; else delete next[offerId]; return next; })} /></div>; })}</div></section>}
+    {offers.length > 0 && <section style={{ marginTop: 34 }}><div style={label}>Created offers · {offers.length}</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18, marginTop: 12 }}>{offers.map((offer) => { const free = offer.access_model === 'free'; const linkedRoutineId = offerRoutines[offer.id]; return <div key={offer.id}><ProductCard kind={offer.kind} imageUrl={offer.cover_url || (offer.kind === 'recipe_book' ? recipes.find((r) => r.image_url && r.offer_ids?.includes(offer.id))?.image_url : null)} eyebrow={[audienceLabel(profile.social_links?.audience_details) || 'Everyone', offer.status === 'published' ? 'Published' : 'Draft'].join(' · ')} title={customerFacingOfferTitle(offer.title)} copy={(offer.description || '').split(' Delivery:')[0].slice(0, 120) || undefined} price={free ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid'} name={profile.display_name} avatarUrl={profile.avatar_url} accent={acid} cta={profile.slug ? 'View on your site' : 'View offer'} href={profile.slug ? `/guardians/${encodeURIComponent(profile.slug)}#offers` : undefined} owned visibility={offer.status === "published" ? "public" : "private"} cardQr={linkedRoutineId ? <RoutineCardQr protocolId={linkedRoutineId} guardianSlug={profile.slug} /> : undefined} onDelete={async () => { if (!window.confirm(`Delete ${offer.title}?`)) return; await deleteGuideOffer(profile.user_id, offer.id); onDeleted(offer.id); }} />{offer.kind === "community" ? <CommunityChannelSetup offer={offer} profile={profile} /> : offer.kind === 'course' ? <CourseBuilder offer={offer} profile={profile} protocols={protocols} onOfferUpdated={onUpdated} /> : <OfferRoutineLink offer={offer} protocols={protocols} guideId={profile.user_id} guardianSlug={profile.slug} linkedProtocolId={linkedRoutineId} onChange={(offerId, protocolId) => setOfferRoutines((current) => { const next = { ...current }; if (protocolId) next[offerId] = protocolId; else delete next[offerId]; return next; })} />}</div>; })}</div></section>}
+  </>;
+}
+
+const communitySlug = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 60) || 'community';
+
+function CommunityChannelSetup({ offer, profile }: { offer: GuideOffer; profile: GuideProfile }) {
+  const { user } = useAuth();
+  const [channel, setChannel] = useState<GuideCommunityChannel | null>(null);
+  const [name, setName] = useState(offer.title);
+  const [description, setDescription] = useState(offer.description || 'A place for members to ask questions, share progress and support one another.');
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  useEffect(() => { getOfferCommunityChannel(profile.user_id, offer.id).then((saved) => { setChannel(saved); if (saved) { setName(saved.name); setDescription(saved.description || ''); } }).catch(() => {}); }, [profile.user_id, offer.id]);
+  async function save() {
+    if (!user || !name.trim()) return;
+    setBusy(true); setMessage('');
+    try {
+      const saved = await saveOfferCommunityChannel(profile.user_id, offer.id, { name, slug: channel?.slug || communitySlug(name), description });
+      await joinGuideCommunity(saved.id, user.id);
+      setChannel(saved); setEditing(false); setMessage('Channel ready.');
+    } catch (error: any) { setMessage(error?.message || 'Could not save this channel. Apply the latest database migration and try again.'); }
+    finally { setBusy(false); }
+  }
+  const href = channel ? `/guardians/${encodeURIComponent(profile.slug)}/community/${encodeURIComponent(channel.slug)}` : '';
+  return <div style={{ border: `1px solid ${line}`, borderTop: 0, padding: 14, background: '#0D0E0C' }}>
+    <div style={{ ...label, color: acid, marginBottom: 8 }}>Community channel</div>
+    {!channel || editing ? <div style={{ display: 'grid', gap: 8 }}><input aria-label="Channel name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Channel name" style={input} /><textarea aria-label="Channel description" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What members discuss here" style={{ ...input, height: 76, paddingTop: 10, resize: 'vertical' }} /><div style={{ display: 'flex', gap: 8 }}><button type="button" onClick={() => void save()} disabled={busy || !name.trim()} style={btn}>{busy ? 'Saving…' : channel ? 'Save channel' : 'Create channel'}</button>{channel && <button type="button" onClick={() => setEditing(false)} style={{ ...btn, background: 'transparent', color: ink }}>Cancel</button>}</div></div>
+      : <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}><span style={{ flex: '1 1 180px' }}><strong style={{ display: 'block', fontSize: 13 }}>{channel.name}</strong><span style={{ color: muted, fontSize: 10 }}>{channel.description}</span></span><button type="button" onClick={() => setEditing(true)} style={{ ...btn, background: 'transparent', color: ink }}><PencilRuler size={13} /> Edit</button><a href={href} style={{ ...btn, textDecoration: 'none' }}>Open channel <ArrowRight size={13} /></a></div>}
+    {message && <p role="status" style={{ color: message === 'Channel ready.' ? acid : '#F0A7A7', fontSize: 10, margin: '8px 0 0' }}>{message}</p>}
+  </div>;
+}
+
+function LeadProfileModal({ lead, guideId, authorId, onClose }: { lead: GuideLead; guideId: string; authorId: string; onClose: () => void }) {
+  const [purchases, setPurchases] = useState<GuideLeadPurchase[]>([]);
+  const [comments, setComments] = useState<GuideLeadComment[]>([]);
+  const [body, setBody] = useState('');
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let live = true; setBusy(true); setError('');
+    Promise.all([listGuideLeadPurchases(guideId, lead.email), listGuideLeadComments(guideId, lead.id)])
+      .then(([savedPurchases, savedComments]) => { if (live) { setPurchases(savedPurchases); setComments(savedComments); } })
+      .catch((reason) => { if (live) setError((reason as Error).message || 'Could not load this member profile.'); })
+      .finally(() => { if (live) setBusy(false); });
+    return () => { live = false; };
+  }, [guideId, lead.id, lead.email]);
+  const post = async (event: React.FormEvent) => {
+    event.preventDefault(); if (!body.trim()) return; setBusy(true); setError('');
+    try { const saved = await addGuideLeadComment(guideId, lead.id, authorId, body); setComments((current) => [...current, saved]); setBody(''); }
+    catch (reason) { setError((reason as Error).message || 'Could not save the comment.'); }
+    finally { setBusy(false); }
+  };
+  return <GuardianModal label={`${lead.name} profile`} onClose={onClose} panelStyle={{ background: panel, color: ink, fontFamily: sans }} header={<span style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span aria-hidden="true" style={{ width: 34, height: 34, borderRadius: '50%', border: `1px solid ${line}`, display: 'grid', placeItems: 'center', color: acid }}>{lead.name.trim().charAt(0).toUpperCase()}</span><span><strong style={{ display: 'block' }}>{lead.name}</strong><span style={{ color: muted, fontSize: 10 }}>{lead.email}</span></span></span>}>
+    <div style={{ display: 'grid', gap: 22 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}><span style={{ ...label, margin: 0, border: `1px solid ${line}`, padding: '6px 8px' }}>{lead.stage}</span>{lead.user_id && <span style={{ ...label, margin: 0, border: `1px solid ${acid}`, color: acid, padding: '6px 8px' }}>Signed-in community member</span>}</div>
+      {lead.goal && <section><span style={{ ...label, color: acid }}>Goal / context</span><p style={{ color: muted, lineHeight: 1.55, margin: 0 }}>{lead.goal}</p></section>}
+      <section><span style={{ ...label, color: acid }}>Purchase history · {purchases.length}</span>{busy && !purchases.length ? <p style={{ color: muted }}>Loading purchases…</p> : purchases.length ? <div style={{ borderTop: `1px solid ${line}` }}>{purchases.map((purchase) => <div key={purchase.id} style={{ padding: '12px 0', borderBottom: `1px solid ${line}`, display: 'flex', justifyContent: 'space-between', gap: 16 }}><span><strong style={{ display: 'block', fontSize: 13 }}>{purchase.offer?.title || 'Guardian offer'}</strong><span style={{ color: muted, fontSize: 9 }}>{new Date(purchase.paid_at || purchase.created_at).toLocaleString()} · {purchase.status}</span></span><strong style={{ color: purchase.status === 'paid' ? acid : muted, whiteSpace: 'nowrap' }}>{formatMoney(purchase.amount_cents / 100, purchase.currency)}</strong></div>)}</div> : <p style={{ color: muted }}>No past purchases are linked to {lead.email}.</p>}</section>
+      <section><span style={{ ...label, color: acid }}>Private Guardian comments · {comments.length}</span><div style={{ borderTop: `1px solid ${line}` }}>{comments.map((comment) => <article key={comment.id} style={{ padding: '11px 0', borderBottom: `1px solid ${line}` }}><p style={{ margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{comment.body}</p><time style={{ display: 'block', color: muted, fontSize: 8, marginTop: 6 }}>{new Date(comment.created_at).toLocaleString()}</time></article>)}</div><form onSubmit={post} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, marginTop: 10 }}><input aria-label={`Comment about ${lead.name}`} value={body} onChange={(event) => setBody(event.target.value)} maxLength={4000} placeholder="Add a private comment…" style={input} /><button type="submit" disabled={busy || !body.trim()} style={btn}>Comment</button></form></section>
+      {error && <p role="alert" style={{ color: '#F0A7A7', margin: 0 }}>{error}</p>}
+    </div>
+  </GuardianModal>;
+}
+
+function GuardianCommunityPage({ guardianSlug, channelSlug }: { guardianSlug: string; channelSlug: string }) {
+  const { user, loading } = useAuth();
+  const [channel, setChannel] = useState<GuideCommunityChannel | null>(null);
+  const [member, setMember] = useState(false);
+  const [messages, setMessages] = useState<GuideCommunityMessage[]>([]);
+  const [questions, setQuestions] = useState<GuideCommunityQuestion[]>([]);
+  const [body, setBody] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => { if (!user) return; getCommunityChannelByRoute(guardianSlug, channelSlug).then(async (saved) => { setChannel(saved); if (saved) setMember(await isGuideCommunityMember(saved.id, user.id)); }).catch((e) => setError(e.message)); }, [user?.id, guardianSlug, channelSlug]);
+  useEffect(() => { if (!channel || !member) return; let live = true; const load = () => listGuideCommunityMessages(channel.id).then((rows) => { if (live) setMessages(rows); }).catch((e) => { if (live) setError(e.message); }); load(); const timer = window.setInterval(load, 4000); return () => { live = false; window.clearInterval(timer); }; }, [channel?.id, member]);
+  useEffect(() => { if (!channel || channel.slug !== 'questions-answers') return; listGuideCommunityQuestions(channel.guide_id).then((rows) => setQuestions(rows.filter((item) => item.status === 'published'))).catch((e) => setError(e.message)); }, [channel?.id]);
+  async function join() { if (!user || !channel) return; setBusy(true); try { await joinGuideCommunity(channel.id, user.id); setMember(true); } catch (e: any) { setError(e.message); } finally { setBusy(false); } }
+  async function post(event: React.FormEvent) { event.preventDefault(); if (!user || !channel || !body.trim()) return; setBusy(true); try { const name = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Member'; const saved = await postGuideCommunityMessage(channel.id, user.id, name, body); setMessages((current) => [...current, saved]); setBody(''); } catch (e: any) { setError(e.message); } finally { setBusy(false); } }
+  if (loading) return <div style={{ minHeight: '100vh', background: black }} />;
+  if (!user) return <div style={{ minHeight: '100vh', background: black, color: ink, padding: '70px 20px', fontFamily: sans }}><div style={{ maxWidth: 560, margin: '0 auto' }}><div style={{ ...label, color: acid }}>Guardian community</div><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 300 }}>Sign in to join the conversation.</h1><AuthPanel bare /></div></div>;
+  return <main style={{ minHeight: '100vh', background: black, color: ink, fontFamily: sans, padding: '48px 20px' }}><div style={{ maxWidth: 760, margin: '0 auto' }}><a href={`/guardians/${encodeURIComponent(guardianSlug)}`} style={{ color: acid, fontSize: 10, fontWeight: 800, textDecoration: 'none' }}>← Guardian page</a>{error && <p role="alert" style={{ color: '#F0A7A7' }}>{error}</p>}{!channel && !error ? <p>Opening channel…</p> : channel && <><div style={{ ...label, color: acid, marginTop: 34 }}>Digital community</div><h1 style={{ fontFamily: serif, fontSize: 'clamp(42px,7vw,72px)', fontWeight: 300, margin: '10px 0' }}>#{channel.name}</h1><p style={{ color: muted, lineHeight: 1.6 }}>{channel.description}</p>{channel.slug === 'questions-answers' && questions.length > 0 && <section aria-label="Guardian questions and answers" style={{ border: `1px solid ${line}`, marginTop: 28 }}>{questions.map((item) => <details key={item.id} style={{ borderBottom: `1px solid ${line}`, padding: 18 }}><summary style={{ cursor: 'pointer', fontFamily: serif, fontSize: 25 }}>{item.question}</summary><p style={{ color: muted, lineHeight: 1.65 }}>{item.answer}</p>{item.exact_quote && <blockquote style={{ borderLeft: `2px solid ${acid}`, margin: '14px 0', padding: '8px 14px', fontFamily: serif, fontSize: 20 }}>“{item.exact_quote}”</blockquote>}{item.source_url && <a href={item.source_url} target="_blank" rel="noopener noreferrer" style={{ color: acid, fontSize: 9, fontWeight: 700, textDecoration: 'none' }}>{item.source_title || 'Original source'} <ExternalLink size={10} style={{ display: 'inline' }} /></a>}</details>)}</section>}{!member ? <section style={{ border: `1px solid ${line}`, padding: 24, marginTop: 28 }}><h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 30, marginTop: 0 }}>Join this channel</h2><p style={{ color: muted }}>Members can read the conversation and post messages.</p><button type="button" disabled={busy} onClick={() => void join()} style={btn}>{busy ? 'Joining…' : 'Join channel'}</button></section> : <><section aria-label="Channel messages" style={{ border: `1px solid ${line}`, minHeight: 300, maxHeight: 560, overflowY: 'auto', marginTop: 28, padding: 18 }}>{messages.length ? messages.map((item) => <article key={item.id} style={{ borderBottom: `1px solid ${line}`, padding: '12px 0' }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}><strong style={{ fontSize: 12 }}>{item.author_name}</strong><time style={{ color: muted, fontSize: 9 }}>{new Date(item.created_at).toLocaleString()}</time></div><p style={{ margin: '7px 0 0', color: ink, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{item.body}</p></article>) : <p style={{ color: muted }}>No messages yet. Start the conversation.</p>}</section><form onSubmit={post} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, marginTop: 10 }}><input aria-label="Message" value={body} maxLength={2000} onChange={(event) => setBody(event.target.value)} placeholder="Write a message…" style={input} /><button type="submit" disabled={busy || !body.trim()} style={btn}>{busy ? 'Sending…' : 'Send'}</button></form></>}</>}</div></main>;
+}
+
+function WorkspaceCommunity({ profile, userId }: { profile: GuideProfile; userId: string }) {
+  const [channels, setChannels] = useState<GuideCommunityChannel[]>([]);
+  const [questions, setQuestions] = useState<GuideCommunityQuestion[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<GuideCommunityMessage[]>([]);
+  const [channelName, setChannelName] = useState('');
+  const [channelDescription, setChannelDescription] = useState('');
+  const [editingChannel, setEditingChannel] = useState<string | null>(null);
+  const [messageBody, setMessageBody] = useState('');
+  const [questionDraft, setQuestionDraft] = useState<Partial<GuideCommunityQuestion>>({ question: '', answer: '', exact_quote: '', source_title: '', source_url: '', status: 'draft' });
+  const [editingQuestion, setEditingQuestion] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const selected = channels.find((item) => item.id === selectedId) || null;
+  const load = async () => {
+    setError('');
+    try {
+      const [savedChannels, savedQuestions] = await Promise.all([ensureDefaultGuideCommunityChannels(userId), listGuideCommunityQuestions(userId)]);
+      setChannels(savedChannels); setQuestions(savedQuestions); setSelectedId((current) => current || savedChannels[0]?.id || null);
+    } catch (e) { setError((e as Error).message || 'Could not open the community workspace.'); }
+  };
+  useEffect(() => { void load(); }, [userId]);
+  useEffect(() => { if (!selectedId) { setMessages([]); return; } listGuideCommunityMessages(selectedId).then(setMessages).catch((e) => setError((e as Error).message)); }, [selectedId]);
+  const resetChannel = () => { setChannelName(''); setChannelDescription(''); setEditingChannel(null); };
+  const saveChannel = async () => {
+    if (!channelName.trim()) return; setBusy(true); setError('');
+    try {
+      const slug = communitySlug(channelName);
+      const saved = editingChannel
+        ? await updateGuideCommunityChannel(userId, editingChannel, { name: channelName.trim(), slug, description: channelDescription.trim() || null })
+        : await createGuideCommunityChannel(userId, { name: channelName.trim(), slug, description: channelDescription.trim() || null, sort_order: channels.length * 10 + 10 });
+      setChannels((current) => editingChannel ? current.map((item) => item.id === saved.id ? saved : item) : [...current, saved]); setSelectedId(saved.id); resetChannel();
+    } catch (e) { setError((e as Error).message || 'Could not save the channel.'); } finally { setBusy(false); }
+  };
+  const saveQuestion = async () => {
+    if (!questionDraft.question?.trim() || !questionDraft.answer?.trim()) return; setBusy(true); setError('');
+    try {
+      const saved = await saveGuideCommunityQuestion(userId, { ...questionDraft, id: editingQuestion || undefined, channel_id: questionDraft.channel_id || channels.find((item) => item.slug === 'questions-answers')?.id || null, question: questionDraft.question, answer: questionDraft.answer });
+      setQuestions((current) => editingQuestion ? current.map((item) => item.id === saved.id ? saved : item) : [...current, saved]);
+      setEditingQuestion(null); setQuestionDraft({ question: '', answer: '', exact_quote: '', source_title: '', source_url: '', status: 'draft' });
+    } catch (e) { setError((e as Error).message || 'Could not save the answer.'); } finally { setBusy(false); }
+  };
+  const post = async (event: React.FormEvent) => {
+    event.preventDefault(); if (!selected || !messageBody.trim()) return; setBusy(true); setError('');
+    try { await joinGuideCommunity(selected.id, userId); const saved = await postGuideCommunityMessage(selected.id, userId, profile.display_name, messageBody); setMessages((current) => [...current, saved]); setMessageBody(''); }
+    catch (e) { setError((e as Error).message || 'Could not post the message.'); } finally { setBusy(false); }
+  };
+  return <>
+    <div style={{ ...label, color: acid }}>Community</div>
+    <h1 style={{ fontFamily: serif, fontSize: 'clamp(46px,7vw,78px)', fontWeight: 300, lineHeight: 1, margin: '10px 0 12px' }}>Build the conversation.</h1>
+    <p style={{ color: muted, maxWidth: 720, lineHeight: 1.65, margin: '0 0 28px' }}>Create channels, talk with signed-in members, and publish sourced answers in your own words. Verbatim quotations remain visibly attributed to their original source.</p>
+    {error && <p role="alert" style={{ color: '#F0A7A7', border: `1px solid #F0A7A755`, padding: 12 }}>{error}</p>}
+    <div className="g-community-layout" style={{ display: 'grid', gridTemplateColumns: '240px minmax(0,1fr)', gap: 18, alignItems: 'start' }}>
+      <aside style={{ border: `1px solid ${line}`, background: panel }}>
+        <div style={{ padding: 16, borderBottom: `1px solid ${line}` }}><span style={{ ...label, margin: 0 }}>Channels · {channels.length}</span></div>
+        {channels.map((channel) => <button type="button" key={channel.id} onClick={() => setSelectedId(channel.id)} style={{ width: '100%', border: 0, borderBottom: `1px solid ${line}`, background: selectedId === channel.id ? '#1C1E19' : 'transparent', color: selectedId === channel.id ? ink : muted, padding: '13px 15px', textAlign: 'left', cursor: 'pointer', fontFamily: sans }}><strong style={{ display: 'block', color: selectedId === channel.id ? acid : ink, fontSize: 12 }}># {channel.name}</strong><span style={{ display: 'block', marginTop: 4, fontSize: 9, lineHeight: 1.4 }}>{channel.description}</span></button>)}
+        <div style={{ padding: 12, display: 'grid', gap: 7 }}><input aria-label="Channel name" value={channelName} onChange={(e) => setChannelName(e.target.value)} placeholder="New channel" style={{ ...input, minHeight: 38, height: 38 }} /><input aria-label="Channel description" value={channelDescription} onChange={(e) => setChannelDescription(e.target.value)} placeholder="What belongs here" style={{ ...input, minHeight: 38, height: 38 }} /><button type="button" disabled={busy || !channelName.trim()} onClick={() => void saveChannel()} style={{ ...btn, minHeight: 38 }}>{editingChannel ? 'Save channel' : 'Add channel'}</button>{editingChannel && <button type="button" onClick={resetChannel} style={{ ...btn, minHeight: 34, background: 'transparent', color: ink }}>Cancel</button>}</div>
+      </aside>
+      <div style={{ display: 'grid', gap: 18 }}>
+        {selected && <section style={{ border: `1px solid ${line}`, background: panel }}>
+          <header style={{ padding: 18, borderBottom: `1px solid ${line}`, display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start' }}><span><span style={{ ...label, color: acid }}>Channel</span><h2 style={{ fontFamily: serif, fontSize: 34, fontWeight: 300, margin: 0 }}># {selected.name}</h2><p style={{ color: muted, fontSize: 11, margin: '7px 0 0' }}>{selected.description}</p></span><span style={{ display: 'flex', gap: 7 }}><button type="button" title="Edit channel" onClick={() => { setEditingChannel(selected.id); setChannelName(selected.name); setChannelDescription(selected.description || ''); }} style={{ ...btn, width: 38, minHeight: 38, padding: 0, background: 'transparent', color: ink }}><PencilRuler size={14} /></button><button type="button" title="Delete channel" onClick={async () => { if (!window.confirm(`Delete #${selected.name} and its messages?`)) return; await deleteGuideCommunityChannel(userId, selected.id); setChannels((current) => current.filter((item) => item.id !== selected.id)); setSelectedId(channels.find((item) => item.id !== selected.id)?.id || null); }} style={{ ...btn, width: 38, minHeight: 38, padding: 0, background: 'transparent', color: muted }}><Trash2 size={14} /></button></span></header>
+          <div aria-label={`${selected.name} messages`} style={{ minHeight: 180, maxHeight: 420, overflowY: 'auto', padding: '8px 18px' }}>{messages.length ? messages.map((item) => <article key={item.id} style={{ borderBottom: `1px solid ${line}`, padding: '13px 0' }}><strong style={{ fontSize: 11 }}>{item.author_name}</strong><time style={{ float: 'right', color: muted, fontSize: 8 }}>{new Date(item.created_at).toLocaleString()}</time><p style={{ whiteSpace: 'pre-wrap', margin: '6px 0 0', lineHeight: 1.55 }}>{item.body}</p></article>) : <p style={{ color: muted, padding: '24px 0' }}>No messages yet. Start this channel.</p>}</div>
+          <form onSubmit={post} style={{ padding: 12, borderTop: `1px solid ${line}`, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8 }}><input aria-label="Message" value={messageBody} onChange={(e) => setMessageBody(e.target.value)} maxLength={2000} placeholder={`Message #${selected.name}`} style={input} /><button type="submit" disabled={busy || !messageBody.trim()} style={btn}>Send</button></form>
+        </section>}
+        <section style={{ border: `1px solid ${line}`, background: panel }}>
+          <header style={{ padding: 18, borderBottom: `1px solid ${line}` }}><span style={{ ...label, color: acid }}>Questions & answers · {questions.length}</span><h2 style={{ fontFamily: serif, fontSize: 34, fontWeight: 300, margin: 0 }}>Sourced answers.</h2><p style={{ color: muted, fontSize: 11, lineHeight: 1.5 }}>Add your answer, then attach a short exact quotation and its original source when one exists. Quotes are displayed verbatim.</p></header>
+          <div style={{ padding: 14, display: 'grid', gap: 9, borderBottom: `1px solid ${line}` }}><input value={questionDraft.question || ''} onChange={(e) => setQuestionDraft((d) => ({ ...d, question: e.target.value }))} placeholder="Question" style={input} /><textarea value={questionDraft.answer || ''} onChange={(e) => setQuestionDraft((d) => ({ ...d, answer: e.target.value }))} placeholder="Guardian’s answer" style={{ ...input, height: 92, paddingTop: 12, resize: 'vertical' }} /><textarea value={questionDraft.exact_quote || ''} onChange={(e) => setQuestionDraft((d) => ({ ...d, exact_quote: e.target.value }))} placeholder="Exact quotation (optional; kept verbatim)" style={{ ...input, height: 68, paddingTop: 12, resize: 'vertical' }} /><div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) auto', gap: 8 }}><input value={questionDraft.source_title || ''} onChange={(e) => setQuestionDraft((d) => ({ ...d, source_title: e.target.value }))} placeholder="Source title" style={input} /><input type="url" value={questionDraft.source_url || ''} onChange={(e) => setQuestionDraft((d) => ({ ...d, source_url: e.target.value }))} placeholder="https:// original source" style={input} /><select value={questionDraft.status || 'draft'} onChange={(e) => setQuestionDraft((d) => ({ ...d, status: e.target.value as 'draft' | 'published' }))} style={input}><option value="draft">Draft</option><option value="published">Published</option></select></div><button type="button" disabled={busy || !questionDraft.question?.trim() || !questionDraft.answer?.trim()} onClick={() => void saveQuestion()} style={{ ...btn, justifySelf: 'start' }}>{editingQuestion ? 'Save answer' : 'Add answer'}</button></div>
+          <div>{questions.map((item) => <article key={item.id} style={{ padding: 18, borderBottom: `1px solid ${line}` }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}><span><span style={{ ...label, color: item.status === 'published' ? acid : muted }}>{item.status}</span><h3 style={{ fontFamily: serif, fontSize: 26, fontWeight: 300, margin: '3px 0 8px' }}>{item.question}</h3></span><span style={{ display: 'flex', gap: 6 }}><button type="button" onClick={() => { setEditingQuestion(item.id); setQuestionDraft(item); }} style={{ ...btn, width: 36, minHeight: 36, padding: 0, background: 'transparent', color: ink }}><PencilRuler size={13} /></button><button type="button" onClick={async () => { await deleteGuideCommunityQuestion(userId, item.id); setQuestions((current) => current.filter((q) => q.id !== item.id)); }} style={{ ...btn, width: 36, minHeight: 36, padding: 0, background: 'transparent', color: muted }}><Trash2 size={13} /></button></span></div><p style={{ color: muted, lineHeight: 1.6 }}>{item.answer}</p>{item.exact_quote && <blockquote style={{ margin: '14px 0 8px', padding: '12px 16px', borderLeft: `2px solid ${acid}`, color: ink, fontFamily: serif, fontSize: 20 }}>“{item.exact_quote}”</blockquote>}{item.source_url && <a href={item.source_url} target="_blank" rel="noopener noreferrer" style={{ color: acid, fontSize: 9, fontWeight: 700, textDecoration: 'none' }}>{item.source_title || 'Original source'} <ExternalLink size={10} style={{ display: 'inline' }} /></a>}</article>)}</div>
+        </section>
+      </div>
+    </div>
   </>;
 }
 
@@ -3654,7 +4294,7 @@ export function GuideLibrary({ guideId, selectedIds, onSelectedIds, onUse }: { g
   return <section>
     <div style={{ minHeight: 230, border: `1px solid ${line}`, padding: 'clamp(24px,4vw,46px)', background: panel, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 180px', alignItems: 'center', gap: 24 }}><div><div style={{ ...label, color: acid }}>Source library</div><h1 style={{ fontFamily: serif, fontSize: 'clamp(42px,6vw,72px)', lineHeight: .95, fontWeight: 300, margin: '12px 0 16px' }}>Build from what you trust.</h1><p style={{ color: muted, lineHeight: 1.6, maxWidth: 650, margin: 0 }}>Keep PDFs, webpages, transcripts, books, podcasts, research papers and audio organised, then select the sources that should inform your next Protocol or PDF guide.</p></div><FolderOpen size={128} strokeWidth={.7} color={acid} style={{ opacity: .7 }} /></div>
     <div style={{ display: 'grid', gridTemplateColumns: '220px minmax(0,1fr)', border: `1px solid ${line}`, borderTop: 0 }}>
-      <aside style={{ padding: 18, borderRight: `1px solid ${line}` }}><div style={{ ...label, color: ink }}>Folders</div>{[['all','All sources'],['unfiled','Unfiled']].map(([id, name]) => <button key={id} onClick={() => setFolder(id)} style={filterButton(folder === id)}>{name}</button>)}{folders.map((entry) => <button key={entry.id} onClick={() => setFolder(entry.id)} style={filterButton(folder === entry.id)}>{entry.name}</button>)}<div style={{ display: 'flex', gap: 6, marginTop: 16 }}><input aria-label="New folder name" style={{ ...input, height: 38, minWidth: 0 }} value={folderName} onChange={(event) => setFolderName(event.target.value)} placeholder="New folder" /><button type="button" onClick={addFolder} disabled={busy || !folderName.trim()} style={{ ...btn, width: 40, minHeight: 38, padding: 0 }}><Plus size={14} /></button></div>
+      <aside style={{ padding: 18, borderRight: `1px solid ${line}` }}><div style={{ ...label, color: ink }}>Folders</div>{[['all','All sources'],['unfiled','Unfiled']].map(([id, name]) => <button key={id} onClick={() => setFolder(id)} style={filterButton(folder === id)}>{name}</button>)}{folders.map((entry) => <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 30px 30px', alignItems: 'center' }}><button onClick={() => setFolder(entry.id)} style={filterButton(folder === entry.id)}>{entry.name}</button><button type="button" aria-label={`Rename ${entry.name}`} onClick={async () => { const name = window.prompt('Folder name', entry.name)?.trim(); if (!name) return; const saved = await updateGuideLibraryFolder(guideId, entry.id, name); setFolders((current) => current.map((row) => row.id === saved.id ? saved : row)); }} style={{ border: 0, background: 'transparent', color: muted, cursor: 'pointer' }}><PencilRuler size={13} /></button><button type="button" aria-label={`Delete ${entry.name}`} onClick={async () => { if (!window.confirm(`Delete folder ${entry.name}? Sources will remain unfiled.`)) return; await deleteGuideLibraryFolder(guideId, entry.id); setFolders((current) => current.filter((row) => row.id !== entry.id)); if (folder === entry.id) setFolder('all'); }} style={{ border: 0, background: 'transparent', color: muted, cursor: 'pointer' }}><Trash2 size={13} /></button></div>)}<div style={{ display: 'flex', gap: 6, marginTop: 16 }}><input aria-label="New folder name" style={{ ...input, height: 38, minWidth: 0 }} value={folderName} onChange={(event) => setFolderName(event.target.value)} placeholder="New folder" /><button type="button" onClick={addFolder} disabled={busy || !folderName.trim()} style={{ ...btn, width: 40, minHeight: 38, padding: 0 }}><Plus size={14} /></button></div>
         <div style={{ ...label, color: ink, marginTop: 26 }}>Types</div>
         <button type="button" onClick={() => setKindFilter('all')} style={filterButton(kindFilter === 'all')}>All types</button>
         {LIBRARY_KINDS.map(({ kind, plural }) => { const Icon = LIBRARY_KIND_ICONS[kind]; const count = items.filter((item) => item.kind === kind).length; return <button key={kind} type="button" aria-pressed={kindFilter === kind} onClick={() => setKindFilter(kindFilter === kind ? 'all' : kind)} style={{ ...filterButton(kindFilter === kind), display: 'flex', alignItems: 'center', gap: 9 }}><Icon size={14} strokeWidth={1.6} /><span style={{ flex: 1 }}>{plural}</span><span style={{ fontSize: 10, opacity: count ? 1 : .45 }}>{count}</span></button>; })}
@@ -3776,6 +4416,53 @@ function GuardianAdminPanel() {
   </>;
 }
 
+function SiteBuilderOverview({ profile, valueRamps }: { profile: GuideProfile; valueRamps: GuideValueRamp[] }) {
+  const profilePath = `/guardians/${encodeURIComponent(profile.slug)}`;
+  const sites = [
+    {
+      id: `profile-${profile.user_id}`,
+      kind: 'Profile site',
+      title: `${profile.display_name} profile`,
+      description: 'Your main Guardian website with every published offer, product, event and retreat.',
+      href: profilePath,
+      status: siteStatus(profile.status).label,
+    },
+    ...valueRamps.map((ramp) => ({
+      id: ramp.id,
+      kind: 'Offer site',
+      title: ramp.name,
+      description: `${ramp.audience || 'Everyone'} · ${ramp.problem || 'Offer path'} · ${ramp.offer_ids.length} offer${ramp.offer_ids.length === 1 ? '' : 's'}`,
+      href: `${profilePath}/value-ramp/${encodeURIComponent(ramp.slug)}`,
+      status: siteStatus(profile.status, ramp.status).label,
+    })),
+  ];
+
+  return <section aria-labelledby="site-builder-overview-title" style={{ maxWidth: 1440, margin: '0 auto' }}>
+    <style>{`.g-site-overview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}.g-site-preview-card{transition:transform 180ms ease,border-color 180ms ease,box-shadow 180ms ease}.g-site-preview-card:hover{transform:translateY(-4px);border-color:${acid}!important;box-shadow:0 18px 44px rgba(0,0,0,.34)}.g-site-preview-card:focus-within{outline:2px solid ${acid};outline-offset:3px}@media(max-width:860px){.g-site-overview-grid{grid-template-columns:minmax(0,1fr)}}@media(prefers-reduced-motion:reduce){.g-site-preview-card{transition:none}.g-site-preview-card:hover{transform:none}}`}</style>
+    <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap', marginBottom: 34 }}>
+      <div>
+        <div style={{ ...label, color: acid }}>Site builder · {sites.length} site{sites.length === 1 ? '' : 's'}</div>
+        <h1 id="site-builder-overview-title" style={{ fontFamily: serif, fontWeight: 300, fontSize: 'clamp(44px,6vw,76px)', lineHeight: .95, margin: '15px 0 16px' }}>Your websites.</h1>
+        <p style={{ color: muted, maxWidth: 650, lineHeight: 1.6, margin: 0 }}>Preview every customer-facing site in one place. Select any card to open the real website.</p>
+      </div>
+      <a href={profilePath} style={{ ...btn, minHeight: 44, textDecoration: 'none' }}>Open profile site <ExternalLink size={14} /></a>
+    </div>
+    <div className="g-site-overview-grid">
+      {sites.map((site) => <article key={site.id} className="g-site-preview-card" style={{ position: 'relative', minWidth: 0, border: `1px solid ${line}`, background: panel, overflow: 'hidden' }}>
+        <div style={{ position: 'relative', height: 'clamp(250px,31vw,430px)', overflow: 'hidden', background: '#F2EFE7', borderBottom: `1px solid ${line}` }}>
+          <iframe src={site.href} title={`${site.title} website preview`} loading="lazy" tabIndex={-1} aria-hidden="true" style={{ width: '100%', height: '100%', border: 0, pointerEvents: 'none', background: '#F2EFE7' }} />
+          <span style={{ position: 'absolute', top: 14, left: 14, padding: '7px 9px', border: '1px solid rgba(255,255,255,.5)', background: 'rgba(9,10,8,.62)', backdropFilter: 'blur(12px)', color: ink, fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{site.status}</span>
+        </div>
+        <div style={{ minHeight: 118, padding: '18px 20px 20px', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'end', gap: 18 }}>
+          <div style={{ minWidth: 0 }}><div style={{ ...label, color: acid, marginBottom: 7 }}>{site.kind}</div><h2 style={{ margin: 0, fontFamily: serif, fontSize: 'clamp(25px,2.4vw,36px)', fontWeight: 300, lineHeight: 1.05 }}>{site.title}</h2><p style={{ margin: '9px 0 0', color: muted, fontSize: 11, lineHeight: 1.5 }}>{site.description}</p></div>
+          <span aria-hidden="true" style={{ width: 42, height: 42, border: `1px solid ${line}`, display: 'grid', placeItems: 'center' }}><ExternalLink size={16} /></span>
+        </div>
+        <a href={site.href} aria-label={`Open ${site.title}`} style={{ position: 'absolute', inset: 0, zIndex: 2 }}><span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Open {site.title}</span></a>
+      </article>)}
+    </div>
+  </section>;
+}
+
 export function Workspace({ profile, onProfile }: { profile: GuideProfile; onProfile: (p: GuideProfile) => void }) {
   const { user, accessToken, signOut } = useAuth();
   // Deep links from the public Guardians nav, e.g. /guardians/workspace?tab=protocols
@@ -3789,6 +4476,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
   useEffect(() => { setNavClosed([]); }, [tab]);
   const [leads, setLeads] = useState<GuideLead[]>([]);
   const [offers, setOffers] = useState<GuideOffer[]>([]);
+  const [productsCount, setProductsCount] = useState(0);
   const [recipes, setRecipes] = useState<GuideRecipe[]>([]);
   const [protocols, setProtocols] = useState<AdminProtocol[]>([]);
   // Delete flow: the protocol being removed (dialog open) and the last removal (notice, with Undo after an archive).
@@ -3829,7 +4517,9 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
   const [newTitle, setNewTitle] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newGoal, setNewGoal] = useState('');
-  useEffect(() => { setAdding(false); setNewTitle(''); setNewEmail(''); setNewGoal(''); setCreateError(''); }, [tab]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedLead, setSelectedLead] = useState<GuideLead | null>(null);
+  useEffect(() => { setAdding(false); setEditingId(null); setSelectedLead(null); setNewTitle(''); setNewEmail(''); setNewGoal(''); setCreateError(''); }, [tab]);
   const [protocolId, setProtocolId] = useState<string | null>(null);
   const [protocolView, setProtocolView] = useState<'cards' | 'list'>('cards');
   const [recipeView, setRecipeView] = useState<'cards' | 'list'>('cards');
@@ -3844,7 +4534,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
   const [protocolRevision, setProtocolRevision] = useState(0);
   const [selectedLibraryIds, setSelectedLibraryIds] = useState<string[]>([]);
   const [builderLibrarySources, setBuilderLibrarySources] = useState<GuideLibraryItem[]>([]);
-  useEffect(() => { if (!user) return; Promise.all([listGuideLeads(user.id), listGuideOffers(user.id), listGuideRecipes(user.id), accessToken ? listProtocols(accessToken, user.id) : Promise.resolve([])]).then(([l,o,r,p]) => { setLeads(l); setOffers(o); setRecipes(r); setProtocols(p); }).catch(() => {}); listGuideValueRamps(user.id).then(setValueRamps).catch(() => setValueRamps([])); listRoutineOwners(user.id, profile.display_name, profile.avatar_url).then((owners) => { setRoutineOwners(owners); setRoutineOwnersReady(true); }).catch(() => {}); }, [user?.id, accessToken]);
+  useEffect(() => { if (!user) return; Promise.all([listGuideLeads(user.id), listGuideOffers(user.id), listGuideProducts(user.id), listGuideRecipes(user.id), accessToken ? listProtocols(accessToken, user.id) : Promise.resolve([])]).then(([l,o,products,r,p]) => { setLeads(l); setOffers(o); setProductsCount(products.length); setRecipes(r); setProtocols(p); }).catch(() => {}); listGuideValueRamps(user.id).then(setValueRamps).catch(() => setValueRamps([])); listRoutineOwners(user.id, profile.display_name, profile.avatar_url).then((owners) => { setRoutineOwners(owners); setRoutineOwnersReady(true); }).catch(() => {}); }, [user?.id, accessToken]);
   useEffect(() => {
     if (!accessToken || tab !== 'protocols') return;
     let live = true;
@@ -3857,31 +4547,47 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
     return () => { live = false; };
   }, [accessToken, tab]);
   const navAvatarUrl = useGuardianAvatarUrl(user?.id, profile.avatar_url, (user?.user_metadata as { avatar_url?: string } | undefined)?.avatar_url);
-  const metric = useMemo(() => [{ n: leads.length, l: 'Leads' }, { n: valueRamps.length, l: 'Offers' }, { n: offers.length + recipes.length + protocols.length, l: 'Items' }, { n: protocols.length, l: 'R3 Protocols' }], [leads.length, offers.length, recipes.length, protocols.length, valueRamps.length]);
+  const offerInventory = useMemo(() => [
+    { label: 'Offer paths', count: valueRamps.length, tab: 'value_ramps' as Tab },
+    { label: 'Products', count: productsCount, tab: 'products' as Tab },
+    { label: 'R3 protocols', count: protocols.length, tab: 'protocols' as Tab },
+    { label: 'PDF guides', count: offers.filter((offer) => offer.kind === 'ebook').length, tab: 'offer_builder' as Tab },
+    { label: 'Recipe books', count: offers.filter((offer) => offer.kind === 'recipe_book').length, tab: 'offer_builder' as Tab },
+    { label: 'Calls & events', count: offers.filter((offer) => ['one_to_one_call', 'group_call', 'in_person', 'festival'].includes(offer.kind)).length, tab: 'offer_builder' as Tab },
+    { label: 'All offers', count: offers.length, tab: 'offer_builder' as Tab },
+  ], [offers, productsCount, protocols.length, valueRamps.length]);
   async function quickAdd() {
     if (!user || !newTitle.trim() || creating) return;
     setCreating(true); setCreateError('');
     try {
-      if (tab === 'leads') { const x = await createGuideLead(user.id, { name: newTitle, email: newEmail, goal: newGoal || null }); setLeads([x, ...leads]); }
-      if (tab === 'value_ramps') { const base = newTitle.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'value-ramp'; const x = await createGuideValueRamp(user.id, { name: newTitle.trim(), slug: `${base}-${Date.now().toString().slice(-5)}`, audience: 'Everyone', problem: newGoal.trim() || profile.specialties[0] || 'Wellbeing' }); setValueRamps([x, ...valueRamps]); }
+      if (tab === 'leads') { const x = editingId ? await updateGuideLead(user.id, editingId, { name: newTitle, email: newEmail, goal: newGoal || null }) : await createGuideLead(user.id, { name: newTitle, email: newEmail, goal: newGoal || null }); setLeads((current) => editingId ? current.map((row) => row.id === x.id ? x : row) : [x, ...current]); }
+      if (tab === 'value_ramps') { const base = newTitle.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'value-ramp'; const x = editingId ? await updateGuideValueRamp(user.id, editingId, { name: newTitle.trim(), problem: newGoal.trim() || profile.specialties[0] || 'Wellbeing' }) : await createGuideValueRamp(user.id, { name: newTitle.trim(), slug: `${base}-${Date.now().toString().slice(-5)}`, audience: 'Everyone', problem: newGoal.trim() || profile.specialties[0] || 'Wellbeing' }); setValueRamps((current) => editingId ? current.map((row) => row.id === x.id ? x : row) : [x, ...current]); }
       if (tab === 'recipes') { const x = await createGuideRecipe(user.id, { title: newTitle, description: newGoal || null, meal_slot: 'breakfast' }); setRecipes([x, ...recipes]); }
       if (tab === 'protocols' && accessToken) { const x = await createProtocol(accessToken, { user_id: user.id, name: newTitle }); setProtocols([x, ...protocols]); setProtocolId(x.id); }
-      setNewTitle(''); setNewEmail(''); setNewGoal('');
+      setNewTitle(''); setNewEmail(''); setNewGoal(''); setEditingId(null);
       setAdding(false);
     } catch (error) { setCreateError((error as Error).message || 'Could not create this item. Please try again.'); }
     finally { setCreating(false); }
   }
+  function editLead(row: GuideLead) { setEditingId(row.id); setNewTitle(row.name); setNewEmail(row.email); setNewGoal(row.goal || ''); setAdding(true); }
+  function editRamp(row: GuideValueRamp) { setEditingId(row.id); setNewTitle(row.name); setNewGoal(row.problem || ''); setAdding(true); }
+  async function removeLead(row: GuideLead) { if (!user || !window.confirm(`Delete ${row.name}?`)) return; await deleteGuideLead(user.id, row.id); setLeads((current) => current.filter((item) => item.id !== row.id)); }
+  async function removeRamp(row: GuideValueRamp) { if (!user || !window.confirm(`Delete ${row.name}?`)) return; await deleteGuideValueRamp(user.id, row.id); setValueRamps((current) => current.filter((item) => item.id !== row.id)); }
+  async function removeRecipe(row: GuideRecipe) { if (!user || !window.confirm(`Delete ${row.title}?`)) return; await deleteGuideRecipe(user.id, row.id); setRecipes((current) => current.filter((item) => item.id !== row.id)); }
   return <div style={{ minHeight: '100vh', background: black, color: ink, fontFamily: sans }}>
     <GuardianHeader isSignedIn activeTab={tab} displayName={profile.display_name} avatarUrl={navAvatarUrl} onNavigate={(next) => { setTab(next); setProtocolId(null); setRecipeId(null); setChildPlanId(null); setParentContext(null); }} onSignOut={signOut} />
-    {/* Profile → Site setup steps, kept as workspace context under the shared header. */}
-    <div aria-label="Guardian setup steps" style={{ padding: '0 clamp(20px,6vw,90px)', borderBottom: `1px solid ${line}` }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', display: 'grid', gridTemplateColumns: `repeat(${GUARDIAN_STEP_LABELS.length},1fr)` }}>
-        {GUARDIAN_STEP_LABELS.map((stepLabel, index) => <a key={stepLabel} href={guardianStepHref(stepLabel, index)} style={{ height: 50, display: 'grid', placeItems: 'center', borderRight: index < GUARDIAN_STEP_LABELS.length - 1 ? `1px solid ${line}` : 0, color: muted, textDecoration: 'none', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{String(index + 1).padStart(2, '0')} · {stepLabel}</a>)}
-      </div>
-    </div>
-    <div style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr)', minHeight: 'calc(100vh - 63px)' }}>
+    <div className="g-workspace-shell" style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr)', height: 'calc(100vh - 63px)' }}>
       <div className="g-railwrap">
-        <aside className="g-rail" aria-label="Guardian sections"><a href="/guardians/workspace" title="Dashboard" style={{ display: 'flex', alignItems: 'center', gap: 12, height: 42, padding: '0 20px', marginBottom: 10, borderBottom: `1px solid ${line}`, color: ink, textDecoration: 'none', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}><LayoutDashboard size={16} style={{ flex: '0 0 auto' }} /><span className="g-rlabel">Dashboard</span></a>{navItems.map(({ id, label: n, Icon }) => {
+        <aside className="g-rail" aria-label="Guardian sections">
+          <div className="g-rlabel" style={{ padding: '12px 20px 6px', color: acid, fontSize: 8, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>Set up your Guardian</div>
+          <div className="g-setup-timeline">
+            {GUARDIAN_STEP_LABELS.map((stepLabel, index) => {
+              const active = stepLabel === 'Content' && tab === 'content';
+              return <a className="g-setup-step" key={stepLabel} href={guardianStepHref(stepLabel, index)} aria-current={active ? 'page' : undefined} title={`${String(index + 1).padStart(2, '0')} · ${stepLabel}`} style={{ display: 'flex', alignItems: 'center', gap: 11, height: 44, padding: '0 20px', borderLeft: active ? `2px solid ${acid}` : '2px solid transparent', background: active ? '#1C1E19' : 'transparent', color: active ? ink : muted, textDecoration: 'none', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}><span className="g-setup-node" style={{ color: acid }}><SetupStageIcon stage={index + 1} size={16} /></span><span className="g-rlabel"><span style={{ color: acid, marginRight: 7 }}>{String(index + 1).padStart(2, '0')}</span>{stepLabel}</span></a>;
+            })}
+          </div>
+          <div className="g-rail-divider" aria-hidden="true" />
+          {navItems.filter((item) => item.id !== 'home' && item.id !== 'content').map(({ id, label: n, Icon }) => {
           // Sub-pages sit under their family (Diet: Recipes, Cooking techniques, Cooking equipment; Fitness: Activities) as
           // smaller child rows on a tree line; the parent stays lit while one of its children is open.
           // Tree: Protocols > Diet / Fitness / Hygiene / Beauty / Wellness / Longevity > their pages. Each level indents
@@ -3903,20 +4609,27 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
             {parent && <span aria-hidden="true" style={{ position: 'absolute', left: lineX(depth), top: '50%', width: 6, borderTop: `1px solid ${line}` }} />}
             <button onClick={() => { setTab(id); setProtocolId(null); setRecipeId(null); setChildPlanId(null); setParentContext(null); }} title={n} aria-current={on ? 'page' : undefined} style={{ flex: 1, minWidth: 0, height: depth ? 34 : 42, border: 0, background: on ? '#1C1E19' : 'transparent', color: on || family ? ink : muted, display: 'flex', alignItems: 'center', gap: depth ? 10 : 12, padding: depth ? '0 20px 0 22px' : '0 20px', cursor: 'pointer', fontFamily: sans, fontSize: depth ? 10 : 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>            <Icon size={depth ? 13 : 16} style={{ flex: '0 0 auto', marginLeft: depth ? 6 + depth * 10 : 0, color: on ? acid : undefined }} /><span className="g-rlabel" style={{ flex: 1, textAlign: 'left' }}>{n}</span></button>
             {hasChildren && <button type="button" aria-label={`${isOpen(id) ? 'Fold' : 'Unfold'} ${n}`} aria-expanded={isOpen(id)} className="g-rlabel" onClick={() => { if (isOpen(id)) { setNavOpen((o) => o.filter((x) => x !== id)); setNavClosed((c) => [...c, id]); } else { setNavClosed((c) => c.filter((x) => x !== id)); setNavOpen((o) => [...o, id]); } }} style={{ border: 0, background: 'transparent', color: muted, cursor: 'pointer', padding: '0 14px 0 4px', display: 'inline-flex', alignItems: 'center' }}><ChevronRight size={12} style={{ transform: isOpen(id) ? 'rotate(90deg)' : undefined, transition: 'transform .15s ease' }} /></button>}
-          </div>; })}</aside>
+          </div>; })}
+          <div className="g-rlabel" aria-label="Offer inventory" style={{ margin: '4px 14px 14px 31px', padding: '6px 0 3px 13px', borderLeft: `1px solid ${line}` }}>
+            {offerInventory.map((item, index) => <button key={item.label} type="button" onClick={() => { setTab(item.tab); setProtocolId(null); setRecipeId(null); }} style={{ position: 'relative', width: '100%', height: 29, border: 0, background: 'transparent', color: item.tab === tab ? ink : muted, padding: '0 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, cursor: 'pointer', fontFamily: sans, fontSize: 9, fontWeight: item.label === 'All offers' ? 800 : 600, letterSpacing: '.04em', textAlign: 'left' }}><span aria-hidden="true" style={{ position: 'absolute', left: -13, top: '50%', width: 8, borderTop: `1px solid ${line}` }} /><span>{item.label}</span><span style={{ minWidth: 20, color: item.tab === tab ? acid : muted, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{item.count}</span>{item.label === 'All offers' && index === offerInventory.length - 1 ? <span aria-hidden="true" style={{ position: 'absolute', left: -14, bottom: -4, height: 18, borderLeft: `3px solid ${black}` }} /> : null}</button>)}
+          </div>
+        </aside>
       </div>
       {/* overflow-x clip, not hidden: hidden makes main a scroll container and breaks sticky columns inside (Diet planner). */}
-      <main style={{ padding: 'clamp(26px,5vw,68px)', overflowX: 'clip' }}>
+      <main className="g-main-scroll" style={{ padding: 'clamp(26px,5vw,68px)' }}>
         {createError && <p role="alert" style={{ color: '#E8B86A' }}>{createError}</p>}
         {tab === 'admin' && isAdminUser && <GuardianAdminPanel />}
-        {tab === 'home' && <><div style={{ ...label, color: acid }}>Guardian workspace</div><h1 style={{ fontFamily: serif, fontWeight: 300, fontSize: 'clamp(44px,6vw,76px)', lineHeight: .95, margin: '15px 0 18px' }}>Build what people follow.</h1><p style={{ color: muted, maxWidth: 650, lineHeight: 1.6 }}>Create reusable offers, then arrange them into as many audience-specific offer paths as you need.</p><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', borderTop: `1px solid ${line}`, marginTop: 55 }}>{metric.map((m) => <div key={m.l} style={{ borderRight: `1px solid ${line}`, padding: '25px 18px 25px 0' }}><div style={{ fontFamily: serif, fontSize: 42 }}>{m.n}</div><div style={{ ...label, margin: '7px 0 0' }}>{m.l}</div></div>)}</div><div style={{ marginTop: 48, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 14 }}>{nav.slice(1,5).map(({ id, label: title }) => <button key={id} onClick={() => setTab(id)} style={{ border: `1px solid ${line}`, background: panel, color: ink, minHeight: 210, padding: 22, textAlign: 'left', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', position: 'relative', overflow: 'hidden' }}><span><img src={guidePlates[id]} alt="" style={{ width: 86, height: 86, objectFit: 'contain', filter: 'grayscale(1) contrast(.9) brightness(.75)', opacity: .82 }} /><span style={{ display: 'block', fontFamily: serif, fontSize: 25, fontWeight: 300, marginTop: 12 }}>{title}</span></span><ChevronRight size={17} color={muted} /></button>)}</div></>}
+        {tab === 'home' && <SiteBuilderOverview profile={profile} valueRamps={valueRamps} />}
         {/* Site builder: the same profile and brand fields as setup step 01. */}
         {tab === 'profile' && user && <><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 350 }}>Site builder</h1><SiteProfileForm userId={user.id} profile={profile} onProfile={onProfile} /></>}
+        {tab === 'events' && user && <WorkspaceEvents guideId={user.id} />}
+        {tab === 'community' && user && <WorkspaceCommunity profile={profile} userId={user.id} />}
         {tab === 'library' && user && <GuideLibrary guideId={user.id} selectedIds={selectedLibraryIds} onSelectedIds={setSelectedLibraryIds} onUse={(destination, sources) => { setBuilderLibrarySources(sources); setTab(destination === 'protocol' ? 'protocols' : 'offer_builder'); }} />}
         {(tab === 'offer_builder' || tab === 'value_ramps' || tab === 'products') && !protocolId && !recipeId && <div role="tablist" aria-label="Offers" style={{ display: 'inline-flex', border: `1px solid ${line}`, marginBottom: 18 }}>{([['offer_builder', 'Offer builder'], ['value_ramps', 'Offer paths'], ['products', 'My products']] as const).map(([id, text], index) => <button type="button" role="tab" key={id} aria-selected={tab === id} onClick={() => setTab(id)} style={{ height: 36, padding: '0 16px', border: 0, borderLeft: index ? `1px solid ${line}` : 0, background: tab === id ? ink : 'transparent', color: tab === id ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer' }}>{text}</button>)}</div>}
-        {tab === 'offer_builder' && <OfferBuilder profile={profile} protocols={protocols} offers={offers} recipes={recipes} librarySources={builderLibrarySources} onOpenProtocols={() => setTab('protocols')} onCreated={(offer) => setOffers((current) => [offer, ...current])} />}
+        {tab === 'offer_builder' && <OfferBuilder profile={profile} protocols={protocols} offers={offers} recipes={recipes} librarySources={builderLibrarySources} onOpenProtocols={() => setTab('protocols')} onCreated={(offer) => setOffers((current) => [offer, ...current])} onUpdated={(offer) => setOffers((current) => current.map((item) => item.id === offer.id ? offer : item))} onDeleted={(id) => setOffers((current) => current.filter((offer) => offer.id !== id))} />}
         {tab === 'products' && user && <GuardianProducts guideId={user.id} guardianSlug={profile.slug} commissionPercent={profile.commission_percent} protocols={protocols} />}
         {tab === 'leads' && !protocolId && !recipeId && user && <ReviewsPanel userId={user.id} slug={profile.slug} />}
+        {selectedLead && user && <LeadProfileModal lead={selectedLead} guideId={user.id} authorId={user.id} onClose={() => setSelectedLead(null)} />}
         {removing && accessToken && <ProtocolRemovalDialog accessToken={accessToken} protocol={removing} onClose={() => setRemoving(null)} onDone={onRemoved} />}
         {tab === 'protocols' && !protocolId && <div ref={noticeRef} role="status" aria-live="polite" tabIndex={-1} style={{ outline: 'none' }}>{removed && <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', margin: '0 0 14px', padding: '10px 14px', border: `1px solid ${line}`, color: ink, fontSize: 13 }}>
           <span>{removed.kind === 'archived' ? `Archived “${removed.name}”: it left your list and the public list.` : `Deleted “${removed.name}”.`}</span>
@@ -3925,7 +4638,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
         </div>}</div>}
         {tab === 'protocols' && !protocolId && protocols.length > 1 && <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}><button onClick={() => setCombining(!combining)} style={{ ...btn, background: 'transparent', color: ink }}><Combine size={14} /> Combine for a person</button></div>}
         {tab === 'protocols' && !protocolId && combining && accessToken && user && <CombineProtocols accessToken={accessToken} ownerId={user.id} protocols={protocols} leads={leads} onClose={() => setCombining(false)} onSaved={(saved) => setProtocols((current) => [saved, ...current])} onOpen={(id) => { setCombining(false); setProtocolId(id); }} />}
-        {(['leads','value_ramps','recipes','protocols'] as Tab[]).includes(tab) && !protocolId && !recipeId && <><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 20 }}><div style={{ display: 'flex', alignItems: 'center', gap: 18 }}><img src={guidePlates[tab]} alt="" style={{ width: 74, height: 74, objectFit: 'contain', filter: 'grayscale(1) contrast(.9) brightness(.74)', opacity: .86 }} /><div><div style={{ ...label, color: acid }}>{tab === 'value_ramps' ? 'Customer journeys' : 'Build'}</div><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 300, margin: '8px 0 0' }}>{tab === 'value_ramps' ? 'Offer paths' : tab === 'protocols' ? 'Protocol builder' : tab.charAt(0).toUpperCase() + tab.slice(1)}</h1></div></div><button onClick={() => setAdding(!adding)} style={btn}><Plus size={14} /> Add {tab === 'value_ramps' ? 'Offer path' : tab === 'protocols' ? 'Protocol' : tab.slice(0,-1)}</button></div>{adding && <div style={{ display: 'grid', gridTemplateColumns: tab === 'leads' ? '1fr 1fr 1.2fr auto' : '1fr 1.4fr auto', gap: 9, margin: '28px 0' }}><input style={input} placeholder={tab === 'leads' ? 'Name' : tab === 'value_ramps' ? 'Ramp name' : 'Title'} value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />{tab === 'leads' && <input style={input} type="email" placeholder="Email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />}<input style={input} placeholder={tab === 'value_ramps' ? 'Audience problem or goal' : tab === 'leads' ? 'Goal' : 'Short description'} value={newGoal} onChange={(e) => setNewGoal(e.target.value)} /><button onClick={quickAdd} disabled={creating || !newTitle.trim()} style={btn}>{creating ? 'Creating…' : 'Create'}</button></div>}<div style={{ marginTop: 30 }}>{tab === 'leads' && (leads.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18 }}>{leads.map((x) => <ProductCard key={x.id} kind="lead" imageUrl="/images/guides/lead-plate.png" eyebrow={[x.stage.charAt(0).toUpperCase() + x.stage.slice(1), new Date(x.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })].join(' · ')} title={x.name} copy={x.goal || 'No goal yet'} name={x.email} accent={acid} cta="Email" href={`mailto:${x.email}`} />)}</div> : <Empty image={guidePlates.leads} title="No leads yet" copy="Add a lead or share your public guide page." />)}{tab === 'value_ramps' && (valueRamps.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(270px,1fr))', gap: 12 }}>{valueRamps.map((ramp) => <article key={ramp.id} style={{ border: `1px solid ${line}`, background: panel, padding: 22, minHeight: 220, display: 'flex', flexDirection: 'column' }}><Route size={24} color={acid} /><div style={{ ...label, color: acid, marginTop: 24 }}>{ramp.audience} · {ramp.problem}</div><h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 29, margin: '4px 0 8px' }}>{ramp.name}</h2><p style={{ color: muted, fontSize: 11, lineHeight: 1.5 }}>{ramp.offer_ids.length} reusable offers · {ramp.status}</p><a aria-label={`Open offer path ${ramp.name}`} href={`/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}`} style={{ marginTop: 'auto', color: ink, fontSize: 9, fontWeight: 800 }}>Open offer path →</a></article>)}</div> : <Empty image={guidePlates.value_ramps} title="Create your first offer path" copy="Choose one audience problem, then arrange reusable offers from a free first win to deeper support." action={<button type="button" onClick={() => setAdding(true)} style={btn}>Create offer path</button>} />)}{tab === 'recipes' && accessToken && <GuardianRecipeAI userId={user.id} accessToken={accessToken} offers={offers} recipes={recipes} author={profile.display_name} onSaved={(saved) => setRecipes((current) => [saved, ...current.filter((r) => r.id !== saved.id)])} />}{tab === 'recipes' && (recipes.length ? (() => {
+        {(['leads','value_ramps','recipes','protocols'] as Tab[]).includes(tab) && !protocolId && !recipeId && <><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 20 }}><div style={{ display: 'flex', alignItems: 'center', gap: 18 }}><img src={guidePlates[tab]} alt="" style={{ width: 74, height: 74, objectFit: 'contain', filter: 'grayscale(1) contrast(.9) brightness(.74)', opacity: .86 }} /><div><div style={{ ...label, color: acid }}>{tab === 'value_ramps' ? 'Customer journeys' : 'Build'}</div><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 300, margin: '8px 0 0' }}>{tab === 'value_ramps' ? 'Offer paths' : tab === 'protocols' ? 'Protocol builder' : tab.charAt(0).toUpperCase() + tab.slice(1)}</h1></div></div><button onClick={() => setAdding(!adding)} style={btn}><Plus size={14} /> Add {tab === 'value_ramps' ? 'Offer path' : tab === 'protocols' ? 'Protocol' : tab.slice(0,-1)}</button></div>{adding && <div style={{ display: 'grid', gridTemplateColumns: tab === 'leads' ? '1fr 1fr 1.2fr auto' : '1fr 1.4fr auto', gap: 9, margin: '28px 0' }}><input style={input} placeholder={tab === 'leads' ? 'Name' : tab === 'value_ramps' ? 'Ramp name' : 'Title'} value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />{tab === 'leads' && <input style={input} type="email" placeholder="Email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />}<input style={input} placeholder={tab === 'value_ramps' ? 'Audience problem or goal' : tab === 'leads' ? 'Goal' : 'Short description'} value={newGoal} onChange={(e) => setNewGoal(e.target.value)} /><button onClick={quickAdd} disabled={creating || !newTitle.trim()} style={btn}>{creating ? 'Saving…' : editingId ? 'Save changes' : 'Create'}</button></div>}<div style={{ marginTop: 30 }}>{tab === 'leads' && (leads.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18 }}>{leads.map((x) => <ProductCard key={x.id} kind="lead" imageUrl="/images/guides/lead-plate.png" eyebrow={[x.stage.charAt(0).toUpperCase() + x.stage.slice(1), x.user_id ? 'Signed in' : '', new Date(x.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })].filter(Boolean).join(' · ')} title={x.name} copy={x.goal || 'No goal yet'} name={x.email} accent={acid} cta="View profile" onClick={() => setSelectedLead(x)} owned visibility="private" onEdit={() => editLead(x)} onDelete={() => void removeLead(x)} />)}</div> : <Empty image={guidePlates.leads} title="No leads yet" copy="Add a lead or share your public guide page." />)}{tab === 'value_ramps' && (valueRamps.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(270px,1fr))', gap: 12 }}>{valueRamps.map((ramp) => <article key={ramp.id} style={{ position: "relative", border: `1px solid ${line}`, background: panel, padding: 22, minHeight: 220, display: 'flex', flexDirection: 'column' }}><div style={{ position: "absolute", top: 12, right: 12, display: "flex", gap: 6 }}><span style={{ ...label, margin: 0, padding: "4px 7px", background: ink, color: black }}>Yours</span><span style={{ ...label, margin: 0, padding: "4px 7px", border: `1px solid ${line}` }}>{ramp.status === "published" ? "Public" : "Private"}</span></div><Route size={24} color={acid} /><div style={{ ...label, color: acid, marginTop: 24 }}>{ramp.audience} · {ramp.problem}</div><h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 29, margin: '4px 0 8px' }}>{ramp.name}</h2><p style={{ color: muted, fontSize: 11, lineHeight: 1.5 }}>{ramp.offer_ids.length} reusable offers · {ramp.status}</p><a aria-label={`Open offer path ${ramp.name}`} href={`/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}`} style={{ marginTop: 'auto', color: ink, fontSize: 9, fontWeight: 800 }}>Open offer path →</a><div style={{ display: "flex", gap: 7, marginTop: 14 }}><button type="button" onClick={() => editRamp(ramp)} style={{ ...btn, background: "transparent", color: ink }}><PencilRuler size={13} /> Edit</button><button type="button" onClick={() => void removeRamp(ramp)} style={{ ...btn, background: "transparent", color: "#F0A7A7" }}><Trash2 size={13} /> Delete</button></div></article>)}</div> : <Empty image={guidePlates.value_ramps} title="Create your first offer path" copy="Choose one audience problem, then arrange reusable offers from a free first win to deeper support." action={<button type="button" onClick={() => setAdding(true)} style={btn}>Create offer path</button>} />)}{tab === 'recipes' && accessToken && <GuardianRecipeAI userId={user.id} accessToken={accessToken} offers={offers} recipes={recipes} author={profile.display_name} onSaved={(saved) => setRecipes((current) => [saved, ...current.filter((r) => r.id !== saved.id)])} />}{tab === 'recipes' && (recipes.length ? (() => {
           const kcal = (x: GuideRecipe) => { const v = Number((x.nutrition_per_serving as any)?.energy_kcal); return Number.isFinite(v) && v > 0 ? `${Math.round(v)} kcal` : ''; };
           const meta = (x: GuideRecipe) => [x.meal_slot && x.meal_slot !== 'any' ? x.meal_slot.charAt(0).toUpperCase() + x.meal_slot.slice(1) : 'Any meal', kcal(x), x.status === 'published' ? 'Published' : x.status === 'submitted' ? 'Ready for review' : 'Draft'].filter(Boolean).join(' · ');
           const short = (d?: string | null) => { const t = (d || '').replace(/\s+/g, ' ').trim(); return t.length > 110 ? `${t.slice(0, 110).replace(/\s+\S*$/, '')}…` : t || undefined; };
@@ -3959,21 +4672,21 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
             return <>
               {forPeople.length > 0 && <>{sectionHead('Personal Protocols', `${forPeople.length} Protocol${forPeople.length === 1 ? '' : 's'} built for one person.`, viewToggle)}
                 {protocolView === 'cards'
-                  ? <ProtocolCardGrid>{forPeople.map((x) => { const person = personalPeople.get(x.id)!; return <ProtocolCard key={x.id} imageUrl={person.imageUrl || x.image_url} kicker={['Personal', daysLabel(x.total_days), x.is_public ? 'Published' : 'Draft'].join(' · ')} tags={protocolTags(x)} title={x.name.replace(/\s*·\s*Personal Protocol$/i, '') + '’s Protocol'} copy={shortCopy(x.description)} by={person.name} cta="Open R3 builder" onClick={() => setProtocolId(x.id)} onEdit={() => setProtocolId(x.id)} onDelete={routineOwnersReady && !routineOwners.has(x.id) ? () => setRemoving(x) : undefined} />; })}</ProtocolCardGrid>
+                  ? <ProtocolCardGrid>{forPeople.map((x) => { const person = personalPeople.get(x.id)!; return <ProtocolCard key={x.id} imageUrl={person.imageUrl || x.image_url} kicker={['Personal', daysLabel(x.total_days), x.is_public ? 'Published' : 'Draft'].join(' · ')} tags={completeProtocolTags(x)} title={x.name.replace(/\s*·\s*Personal Protocol$/i, '') + '’s Protocol'} copy={shortCopy(x.description)} by={person.name} corner={<ProtocolOutputTags />} footerCorner={<RoutineCardQr protocolId={x.id} guardianSlug={profile.slug} />} cta="Open R3 builder" onClick={() => setProtocolId(x.id)} owned visibility={x.is_public ? 'public' : 'private'} onEdit={() => setProtocolId(x.id)} onDelete={routineOwnersReady && !routineOwners.has(x.id) ? () => setRemoving(x) : undefined} />; })}</ProtocolCardGrid>
                   : forPeople.map((x) => { const person = personalPeople.get(x.id)!; return <Row key={x.id} image={person.imageUrl || x.image_url} title={x.name} meta={`${person.name} · ${meta(x)}`} action="Open R3 builder" onClick={() => setProtocolId(x.id)} onDelete={routineOwnersReady && !routineOwners.has(x.id) ? () => setRemoving(x) : undefined} />; })}</>}
               {forOthers.length > 0 && <>{sectionHead('General Protocols', `${forOthers.length} Protocol${forOthers.length === 1 ? '' : 's'} for an audience or offer, by theme.`, forPeople.length ? undefined : viewToggle)}
                 {PROTOCOL_THEMES.map((theme) => { const list = forOthers.filter((x) => protocolTheme(x) === theme); if (!list.length) return null; return <div key={theme} style={{ marginBottom: 26 }}>
                   <h3 style={{ ...label, color: ink, display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0 12px' }}>{theme}<span style={{ color: muted, fontWeight: 400 }}>· {list.length}</span></h3>
                   {protocolView === 'cards'
-                    ? <ProtocolCardGrid>{list.map((x) => <ProtocolCard key={x.id} kicker={[daysLabel(x.total_days), x.is_public ? 'Published' : 'Draft'].join(' · ')} tags={protocolTags(x, { category: false })} title={x.name.replace(/^R3 Protocol\s*>\s*/i, '')} imageUrl={x.image_url} copy={clipCopy(x.description)} by={profile.display_name} cta="Open R3 builder" onClick={() => setProtocolId(x.id)} onEdit={() => setProtocolId(x.id)} onDelete={routineOwnersReady && !routineOwners.has(x.id) ? () => setRemoving(x) : undefined} />)}</ProtocolCardGrid>
+                    ? <ProtocolCardGrid>{list.map((x) => <ProtocolCard key={x.id} kicker={[daysLabel(x.total_days), x.is_public ? 'Published' : 'Draft'].join(' · ')} tags={completeProtocolTags(x)} title={x.name.replace(/^R3 Protocol\s*>\s*/i, '')} imageUrl={x.image_url} copy={clipCopy(x.description)} by={profile.display_name} corner={<ProtocolOutputTags />} footerCorner={<RoutineCardQr protocolId={x.id} guardianSlug={profile.slug} />} cta="Open R3 builder" onClick={() => setProtocolId(x.id)} owned visibility={x.is_public ? 'public' : 'private'} onEdit={() => setProtocolId(x.id)} onDelete={routineOwnersReady && !routineOwners.has(x.id) ? () => setRemoving(x) : undefined} />)}</ProtocolCardGrid>
                     : list.map((x) => <Row key={x.id} image={x.image_url} title={x.name} meta={meta(x)} action="Open R3 builder" onClick={() => setProtocolId(x.id)} onDelete={routineOwnersReady && !routineOwners.has(x.id) ? () => setRemoving(x) : undefined} />)}
                 </div>; })}</>}
               {personal.length > 0 && sectionHead('Your routines', 'Your own routine and your family’s.', forPeople.length || forOthers.length ? undefined : viewToggle)}
               {protocolView === 'cards'
                 ? <ProtocolCardGrid>{personal.map(({ x, child }) => { const owner = routineOwners.get(x.id)!; const relation = child && owner.relation ? `${owner.relation.charAt(0).toUpperCase()}${owner.relation.slice(1)}` : owner.relation === 'self' ? 'You' : null;
                   return <ProtocolCard key={x.id} imageUrl={owner.avatarUrl} plate={<img src={memberAvatarSrc(owner)} alt="" style={{ display: 'block', width: 172, height: 172, objectFit: 'contain' }} />}
-                    kicker={[relation, daysLabel(x.total_days), x.is_public ? 'Published' : 'Draft'].filter(Boolean).join(' · ')} title={/^your routine$/i.test(x.name.trim()) ? `${owner.name}’s routine` : x.name}
-                    copy={shortCopy(x.description)} cta="Open R3 builder" onClick={() => setProtocolId(x.id)} />; })}</ProtocolCardGrid>
+                    kicker={[relation, daysLabel(x.total_days), x.is_public ? 'Published' : 'Draft'].filter(Boolean).join(' · ')} tags={completeProtocolTags(x)} title={/^your routine$/i.test(x.name.trim()) ? `${owner.name}’s routine` : x.name}
+                    copy={shortCopy(x.description)} corner={<ProtocolOutputTags />} footerCorner={<RoutineCardQr protocolId={x.id} guardianSlug={profile.slug} />} owned visibility={x.is_public ? 'public' : 'private'} cta="Open R3 builder" onClick={() => setProtocolId(x.id)} onEdit={() => setProtocolId(x.id)} />; })}</ProtocolCardGrid>
                 : personal.map(({ x, child }) => { const owner = routineOwners.get(x.id); const row = <Row key={x.id} image={owner?.avatarUrl || x.image_url} title={owner && /^your routine$/i.test(x.name.trim()) ? `${owner.name}’s routine` : x.name} meta={`${owner ? `${child && owner.relation ? `${owner.relation.charAt(0).toUpperCase()}${owner.relation.slice(1)} · ` : ''}Personal routine · ` : ''}${daysLabel(x.total_days)} · ${x.is_public ? 'Published' : 'Draft'} · PDF + app twin`} action="Open R3 builder" onClick={() => setProtocolId(x.id)} />;
                   return child ? <div key={x.id} style={{ marginLeft: 40, paddingLeft: 16, borderLeft: `1px solid ${line}` }}>{row}</div> : row; })}
             </>;
@@ -3984,10 +4697,10 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
             </div>
             {publicProtocolsError && <p role="alert" style={{ color: '#E8B86A', fontSize: 12 }}>{publicProtocolsError}</p>}
             {!publicProtocolsLoading && !publicProtocolsError && publicProtocols.length === 0 && <p style={{ color: muted, fontSize: 12 }}>No public protocols are available yet.</p>}
-            {publicProtocols.length > 0 && <ProtocolCardGrid>{publicProtocols.map((protocol) => <ProtocolCard key={protocol.id} imageUrl={protocol.image_url} kicker={[protocolWhen(protocol.category), daysLabel(protocol.total_days), 'Public'].filter(Boolean).join(' · ')} tags={protocolTags(protocol)} title={protocol.name.replace(/^R3 Protocol\s*>\s*/i, '')} copy={clipCopy(protocol.description)} by={protocol.creator || 'ROUTINE³'} cta="View public protocol" href={`/protocol/${encodeURIComponent(protocol.id)}`} />)}</ProtocolCardGrid>}
+            {publicProtocols.length > 0 && <ProtocolCardGrid>{publicProtocols.map((protocol) => <ProtocolCard key={protocol.id} imageUrl={protocol.image_url} kicker={[protocolWhen(protocol.category), daysLabel(protocol.total_days), 'Public'].filter(Boolean).join(' · ')} tags={completeProtocolTags(protocol)} title={protocol.name.replace(/^R3 Protocol\s*>\s*/i, '')} copy={clipCopy(protocol.description)} by={protocol.creator || 'ROUTINE³'} corner={<ProtocolOutputTags />} footerCorner={<RoutineCardQr protocolId={protocol.id} href={`${window.location.origin}/protocol/${encodeURIComponent(protocol.id)}`} />} visibility="public" cta="View public protocol" href={`/protocol/${encodeURIComponent(protocol.id)}`} />)}</ProtocolCardGrid>}
           </section>}
         </div></>}
-        {tab === 'content' && <ContentBuilder profile={profile} offers={offers} protocols={protocols} recipes={recipes} />}
+        {tab === 'content' && <><ContentBuilder profile={profile} offers={offers} protocols={protocols} recipes={recipes} /><SocialPublisher profile={profile} /></>}
         {parentContext && <button type="button" onClick={returnToParent} style={{ ...btn, marginBottom: 16 }}>← Back to parent Protocol</button>}
         {copyError && <p role="alert">{copyError}</p>}
         {tab === 'diet' && accessToken && user && <DietBuilder key={childPlanId || 'diet'} initialProtocolId={childPlanId} accessToken={accessToken} ownerId={user.id} protocols={protocols} recipes={recipes} onSaved={(saved) => setProtocols((current) => [saved, ...current.filter((p) => p.id !== saved.id)])} onOpen={(id) => { setTab('protocols'); setProtocolId(id); }} />}
@@ -4040,7 +4753,7 @@ export function SiteProfileForm({ userId, profile, onProfile }: { userId: string
   const [busy, setBusy] = useState<'save' | 'upload' | null>(null);
   const [message, setMessage] = useState('');
   const [stage, setStage] = useState(0);
-  const [open, setOpen] = useState({ contact: true, links: false, booking: false, about: false });
+  const [open, setOpen] = useState({ contact: true, links: false, booking: false, about: false, catalog: false });
   const [stageError, setStageError] = useState('');
   // Saving replaces every brand row, so it waits until the saved brands have loaded; a failed load blocks it.
   const [brandsLoaded, setBrandsLoaded] = useState<'loading' | 'ok' | 'failed'>('loading');
@@ -4094,7 +4807,7 @@ export function SiteProfileForm({ userId, profile, onProfile }: { userId: string
       const personal = personalRow && brands.some((b) => b.is_primary)
         ? { ...personalRow, social_links: { ...(personalRow.social_links || {}), ...brandKitLinks(personalKit) }, is_primary: false }
         : { name: saved.display_name, kind: 'personal' as const, logo_url: l.logo_url || saved.avatar_url || null, contact_email: saved.contact_email || '', whatsapp_phone: saved.whatsapp_phone || '', website_url: l.website || '',
-          social_links: { instagram: l.instagram || '', tiktok: l.tiktok || '', youtube: l.youtube || '', linktree: l.linktree || '', ...brandKitLinks(personalKit) },
+          social_links: { instagram: l.instagram || '', facebook: l.facebook || '', tiktok: l.tiktok || '', youtube: l.youtube || '', linktree: l.linktree || '', ...brandKitLinks(personalKit) },
           language: l.language || 'English', pricing_region: l.pricing_region || 'United Kingdom', currency: l.currency || 'GBP', is_primary: !brands.some((b) => b.is_primary) };
       await replaceGuideBrands(userId, [personal, ...brands.map(({ key, ...b }) => b)]);
       setMessage('Saved.');
@@ -4137,15 +4850,25 @@ export function SiteProfileForm({ userId, profile, onProfile }: { userId: string
       </label>
     </div>
     <p style={{ color: muted, fontSize: 10, lineHeight: 1.5, margin: '9px 0 0' }}>Language applies to your page and content. Pricing region sets the currency for every paid stage.</p>
+    {isPersonal && <Disclosure id="site-catalog-filters" title="Catalog filters" summary="Choose and order the Product and Protocol tabs on your public site" open={open.catalog} onToggle={() => setOpen((x) => ({ ...x, catalog: !x.catalog }))}>
+      <p style={{ color: muted, fontSize: 11, lineHeight: 1.55, margin: '18px 0 8px' }}>Visitors always get an All tab. Turn categories on or off below; their order here becomes the order on your site.</p>
+      <label style={label}>Product categories</label>
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>{DEFAULT_PRODUCT_FILTERS.map((category) => { const selected = (links.product_filter_order || DEFAULT_PRODUCT_FILTERS.join(',')).split(',').map((value) => value.trim()).includes(category); return <button key={category} type="button" aria-pressed={selected} onClick={() => { const current = (links.product_filter_order || DEFAULT_PRODUCT_FILTERS.join(',')).split(',').map((value) => value.trim()).filter(Boolean); setLinks({ product_filter_order: (selected ? current.filter((value) => value !== category) : [...current, category]).join(',') }); }} style={{ ...btn, minHeight: 34, padding: '0 11px', background: selected ? acid : 'transparent', color: selected ? black : ink, borderColor: selected ? acid : line, textTransform: 'none', letterSpacing: 0 }}>{category}</button>; })}</div>
+      <label style={label}>Product tab order <span style={{ color: muted }}>· comma separated</span></label><input style={input} value={links.product_filter_order || DEFAULT_PRODUCT_FILTERS.join(',')} onChange={(event) => setLinks({ product_filter_order: event.target.value })} />
+      <label style={label}>Protocol and offer categories</label>
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>{DEFAULT_PROTOCOL_CATEGORIES.slice(1).map((category) => { const selected = (links.protocol_filter_order || DEFAULT_PROTOCOL_CATEGORIES.slice(1).join(',')).split(',').map((value) => value.trim()).includes(category); return <button key={category} type="button" aria-pressed={selected} onClick={() => { const current = (links.protocol_filter_order || DEFAULT_PROTOCOL_CATEGORIES.slice(1).join(',')).split(',').map((value) => value.trim()).filter(Boolean); setLinks({ protocol_filter_order: (selected ? current.filter((value) => value !== category) : [...current, category]).join(',') }); }} style={{ ...btn, minHeight: 34, padding: '0 11px', background: selected ? acid : 'transparent', color: selected ? black : ink, borderColor: selected ? acid : line, textTransform: 'none', letterSpacing: 0 }}>{category}</button>; })}</div>
+      <label style={label}>Protocol tab order <span style={{ color: muted }}>· comma separated</span></label><input style={input} value={links.protocol_filter_order || DEFAULT_PROTOCOL_CATEGORIES.slice(1).join(',')} onChange={(event) => setLinks({ protocol_filter_order: event.target.value })} />
+    </Disclosure>}
     <Disclosure id="site-contact" title="Contact" required summary={v.email.trim() || 'Add your email'} open={open.contact} onToggle={() => setOpen((x) => ({ ...x, contact: !x.contact }))}>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12, marginTop: 18 }}>
       <div><label style={label}>Contact email</label><input type="email" style={input} value={v.email} onChange={(e) => set.email(e.target.value)} /></div>
       <div><label style={label}>WhatsApp number <span style={{ color: muted }}>· optional</span></label><input type="tel" inputMode="tel" style={input} value={v.whatsapp} onChange={(e) => set.whatsapp(e.target.value)} placeholder="+44 7700 900000" /></div>
     </div>
     </Disclosure>
-    <Disclosure id="site-links" title="Links" summary={[v.social.instagram && 'Instagram', v.social.tiktok && 'TikTok', v.social.youtube && 'YouTube', v.social.linktree && 'Linktree', v.social.website && 'Website'].filter(Boolean).join(' · ') || 'Optional: your social profiles'} open={open.links} onToggle={() => setOpen((x) => ({ ...x, links: !x.links }))}>
+    <Disclosure id="site-links" title="Links" summary={[v.social.instagram && 'Instagram', v.social.facebook && 'Facebook', v.social.tiktok && 'TikTok', v.social.youtube && 'YouTube', v.social.linktree && 'Linktree', v.social.website && 'Website'].filter(Boolean).join(' · ') || 'Optional: your social profiles'} open={open.links} onToggle={() => setOpen((x) => ({ ...x, links: !x.links }))}>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12, marginTop: 22 }}>
       <SocialUrlField label="Instagram" Icon={Instagram} value={v.social.instagram || ''} onChange={(x) => set.social('instagram', x)} placeholder="https://instagram.com/yourname" />
+      <SocialUrlField label="Facebook" Icon={Facebook} value={v.social.facebook || ''} onChange={(x) => set.social('facebook', x)} placeholder="https://facebook.com/yourname" />
       <SocialUrlField label="TikTok" Icon={AtSign} value={v.social.tiktok || ''} onChange={(x) => set.social('tiktok', x)} placeholder="https://tiktok.com/@yourname" />
       <SocialUrlField label="YouTube" Icon={Youtube} value={v.social.youtube || ''} onChange={(x) => set.social('youtube', x)} placeholder="https://youtube.com/@yourname" />
       <SocialUrlField label="Linktree" Icon={Link2} value={v.social.linktree || ''} onChange={(x) => set.social('linktree', x)} placeholder="https://linktr.ee/yourname" />
@@ -4197,6 +4920,7 @@ function Row({ title, meta, action, onClick, image, onDelete }: { title: string;
 // Scopes Guardian styling; globals.css exempts `.guardian-ui button` from the forced 16px button size.
 export function GuidePortal() {
   return <div className="guardian-ui"><style>{`.guardian-builders-bar::-webkit-scrollbar{display:none}.g-split{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:20px;align-items:start}.g-split>.g-sticky{position:sticky;top:16px}@media (max-width: 960px){.g-split{grid-template-columns:minmax(0,1fr)}.g-split>.g-sticky{position:static}}
+    @media (max-width:900px){.g-community-layout{grid-template-columns:minmax(0,1fr)!important}}
     /* The app shell sets overflow-x:hidden on body and (inline, App.tsx) on #main-content, which makes
        them scroll containers and stops the sticky header. clip keeps sideways overflow hidden without that;
        !important is needed to beat main's inline style, and :has() keeps it to Guardian pages. */
@@ -4224,12 +4948,19 @@ export function GuidePortal() {
     .g-builder-menu{opacity:0;visibility:hidden;transform:translateY(-4px);transition:opacity .14s ease,transform .14s ease,visibility .14s;z-index:60}
     .g-builder:hover>.g-builder-menu,.g-builder:has(:focus-visible)>.g-builder-menu{opacity:1;visibility:visible;transform:translateY(0)}
     /* Collapsible icon rail: 64px, widens to 224px on hover/focus and pushes the page aside (no overlay) */
-    .g-railwrap{position:relative;width:64px;transition:width .18s ease}
+    .g-workspace-shell{min-height:0;overflow:hidden;align-items:stretch}
+    .g-main-scroll{min-height:0;overflow-x:clip;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+    .g-railwrap{position:relative;width:64px;min-height:0;align-self:stretch;transition:width .18s ease}
     .g-railwrap:hover,.g-railwrap:has(:focus-visible){width:224px}
-    /* overflow-y:auto: on short screens (phone landscape) the grid row can be shorter than the ~512px of links;
-       the rail scrolls on its own instead of clipping them. Scrollbar hidden so the 64px icon column stays aligned. */
-    .g-rail{position:absolute;inset:0;width:100%;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;background:${black};border-right:1px solid ${line};padding:20px 0;z-index:30;}
+    /* The rail stays pinned to the viewport; only the adjacent main pane scrolls. */
+    .g-rail{position:absolute;inset:0;width:100%;overflow:hidden;background:${black};border-right:1px solid ${line};padding:20px 0;z-index:30;display:block;align-content:start;}
     .g-rail::-webkit-scrollbar{display:none}
+    .g-setup-timeline{position:relative;padding:2px 0 7px}
+    .g-setup-timeline:before{content:"";position:absolute;z-index:0;left:28px;top:24px;bottom:29px;width:1px;background:rgba(199,216,163,.34)}
+    .g-setup-step{position:relative;z-index:1}
+    .g-setup-node{width:18px;flex:0 0 18px;height:26px;display:grid;place-items:center;background:${black};border-radius:999px}
+    .g-setup-step[aria-current] .g-setup-node{box-shadow:0 0 0 1px ${acid};background:#1C1E19}
+    .g-rail-divider{height:1px;margin:7px 14px 12px;background:${line}}
     .g-rlabel{opacity:0;transition:opacity .14s ease}
     .g-railwrap:hover .g-rail .g-rlabel,.g-rail:has(:focus-visible) .g-rlabel{opacity:1}
     @media (prefers-reduced-motion:reduce){.g-railwrap,.g-rail,.g-rlabel,.g-builder-menu,.g-chip-label{transition:none}}`}</style><GuidePortalRoutes /></div>;
@@ -4239,14 +4970,22 @@ function GuidePortalRoutes() {
   const { user, accessToken, loading } = useAuth();
   const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
   const isWorkspaceRoute = pathname === '/guardians/workspace';
-  const routeSlug = pathname.match(/^\/guardians\/([^/]+)(?:\/value-ramp\/[^/]+)?$/)?.[1] || null;
+  const communityRoute = pathname.match(/^\/guardians\/([^/]+)\/community\/([^/]+)$/);
+  const rawRouteSlug = pathname.match(/^\/guardians\/([^/]+)(?:\/value-ramp\/[^/]+)?$/)?.[1] || null;
+  const routeSlug = rawRouteSlug ? canonicalGuideSlug(rawRouteSlug) : null;
   const [profile, setProfile] = useState<GuideProfile | null>(null);
   const [checking, setChecking] = useState(true);
+  useEffect(() => {
+    if (!rawRouteSlug || !routeSlug || rawRouteSlug === routeSlug) return;
+    const canonicalPath = pathname.replace(`/guardians/${rawRouteSlug}`, `/guardians/${routeSlug}`);
+    window.history.replaceState({}, '', `${canonicalPath}${window.location.search}${window.location.hash}`);
+  }, [pathname, rawRouteSlug, routeSlug]);
   useEffect(() => {
     if (!user) { setProfile(null); setChecking(false); return; }
     setChecking(true); getGuideProfile(user.id).then(setProfile).catch(() => setProfile(null)).finally(() => setChecking(false));
   }, [user?.id]);
-  if (routeSlug && !isWorkspaceRoute) return <GuardianWebsite slug={decodeURIComponent(routeSlug)} isSignedIn={Boolean(user)} />;
+  if (communityRoute) return <GuardianCommunityPage guardianSlug={canonicalGuideSlug(communityRoute[1])} channelSlug={decodeURIComponent(communityRoute[2])} />;
+  if (routeSlug && !isWorkspaceRoute) return <GuardianWebsite slug={routeSlug} isSignedIn={Boolean(user)} />;
   if (!isWorkspaceRoute) return <PublicGuidePage isSignedIn={Boolean(user)} />;
   if (loading || checking) return <div style={{ minHeight: '100vh', background: black, color: ink, display: 'grid', placeItems: 'center', fontFamily: sans }}>Opening Guardian workspace…</div>;
   if (!user) return <PublicGuidePage isSignedIn={false} />;

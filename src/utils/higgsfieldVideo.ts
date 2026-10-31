@@ -26,6 +26,16 @@ export const higgsfieldStatus = () => call<HiggsfieldStatus>({ action: 'status' 
 export const connectHiggsfield = (key: string, secret: string) => call<{ connected: true; key_hint: string; live: boolean }>({ action: 'connect', key, secret });
 /** The Higgsfield login page; Higgsfield sends the Guardian back to `returnTo` with ?higgsfield=connected|cancelled|error. */
 export const startHiggsfieldLogin = (returnTo: string) => call<{ url: string }>({ action: 'oauth_start', return_to: returnTo });
+/** Finish a loopback OAuth redirect without exposing the PKCE verifier or tokens to the browser. */
+export async function completeHiggsfieldLogin(loc: { href: string } = window.location, replace = (u: string) => window.history.replaceState(null, '', u)): Promise<'connected' | 'cancelled' | 'error' | null> {
+  const url = new URL(loc.href), state = url.searchParams.get('state'), code = url.searchParams.get('code'), error = url.searchParams.get('error');
+  if (!state || (!code && !error)) return null;
+  let outcome: 'connected' | 'cancelled' | 'error' = 'error';
+  try { outcome = (await call<{ outcome: 'connected' | 'cancelled' | 'error' }>({ action: 'oauth_complete', state, code, error })).outcome; } catch { outcome = 'error'; }
+  ['state', 'code', 'error', 'error_description', 'iss'].forEach((key) => url.searchParams.delete(key));
+  url.searchParams.set('higgsfield', outcome); replace(url.toString());
+  return outcome;
+}
 /** After the login round trip: read and remove ?higgsfield=… from the address bar. */
 export function takeLoginOutcome(loc: { href: string } = window.location, replace = (u: string) => window.history.replaceState(null, '', u)): 'connected' | 'cancelled' | 'error' | null {
   const url = new URL(loc.href);

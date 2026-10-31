@@ -31,6 +31,7 @@ export const PRICE_USD: Record<Quality, { square: number; wide: number }> = {
 export const priceFor = (aspect: Aspect, quality: Quality) => PRICE_USD[quality][SIZE[aspect] === '1024x1024' ? 'square' : 'wide'];
 
 export interface GenerateInput { prompt?: unknown; aspect_ratio?: unknown; quality?: unknown; source?: unknown }
+export interface AvatarInput { image_url?: unknown; name?: unknown; source?: unknown }
 export type Shaped =
   | { ok: true; source: Source; aspect: Aspect; quality: Quality; usd: number; body: { model: string; prompt: string; size: string; quality: Quality; n: 1; output_format: 'webp'; moderation: 'auto' } }
   | { ok: false; error: string };
@@ -46,6 +47,20 @@ export function shapeImageRequest(input: GenerateInput, model: string = DEFAULT_
   const source = input.source === 'own' ? 'own' : input.source === 'house' ? 'house' : null;
   if (!source) return { ok: false, error: 'Choose R³ images or your own OpenAI key.' };
   return { ok: true, source, aspect, quality, usd: priceFor(aspect, quality), body: { model, prompt, size: SIZE[aspect], quality, n: 1, output_format: 'webp', moderation: 'auto' } };
+}
+
+export function avatarPrompt(name?: unknown): string {
+  const person = String(name || 'the person').replace(/[\r\n]+/g, ' ').trim().slice(0, 100) || 'the person';
+  return `Create a refined R³ Guardian profile portrait of ${person} from the supplied photograph. Preserve the person's identity, facial structure, age, expression, hair, and distinguishing features exactly. Editorial black-and-white photography, soft natural window light, clean warm-light-grey seamless background, subtle film grain, calm and credible expression, head-and-shoulders framing, face centered, eyes near the upper third. Square composition with generous circle-safe space around the head and shoulders. Remove the original background, text, logos, other people, and distracting objects. Do not beautify, de-age, change ethnicity, add accessories, or alter clothing beyond simplifying it to a neutral tonal treatment.`;
+}
+
+export function shapeAvatarRequest(input: AvatarInput) {
+  const imageUrl = String(input.image_url || '').trim();
+  if (!imageUrl || (!imageUrl.startsWith('https://') && !imageUrl.startsWith('data:image/'))) return { ok: false as const, error: 'Upload or choose a portrait first.' };
+  if (imageUrl.startsWith('data:image/') && imageUrl.length > 11_000_000) return { ok: false as const, error: 'Choose an image smaller than 8 MB.' };
+  const source = input.source === 'own' ? 'own' : input.source === 'house' ? 'house' : null;
+  if (!source) return { ok: false as const, error: 'Choose R³ images or your own OpenAI key.' };
+  return { ok: true as const, imageUrl, source, quality: 'medium' as const, aspect: '1:1' as const, usd: PRICE_USD.medium.square, prompt: avatarPrompt(input.name), size: SIZE['1:1'] };
 }
 
 /** OpenAI secret keys: `sk-` then a long token (`sk-proj-…`, `sk-svcacct-…`, legacy `sk-…`). */

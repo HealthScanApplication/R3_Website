@@ -77,7 +77,7 @@ it('shows published products on the public site with attributed buy links, and n
   db.publicRows = [{ id: 'p1', shop_domain: 'shop.barbara.com', product_handle: 'tea', variant_id: null, title: 'Calm Tea', price_cents: 1250, currency: 'EUR', discount_code: 'TEA5', image_url: null, description: null, protocol_ids: [] }];
   render(<GuardianShop guideId="g" guardianSlug="barbara" guardianName="Barbara" pagePadding="24px" />);
   expect(await screen.findByText('Calm Tea')).toBeTruthy();
-  const href = screen.getByRole('link', { name: 'Buy' }).getAttribute('href')!;
+  const href = screen.getByRole('link', { name: 'View product' }).getAttribute('href')!;
   expect(href.startsWith('https://shop.barbara.com/discount/TEA5?redirect=')).toBe(true);
   expect(decodeURIComponent(decodeURIComponent(href))).toContain('attributes[routine3_guardian]=barbara');
 });

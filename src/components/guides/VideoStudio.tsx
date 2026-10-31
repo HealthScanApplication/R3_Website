@@ -16,7 +16,7 @@ import { creatorCredit } from '../../utils/postCredit';
 import { buildVideoPrompt, VIDEO_ASPECTS, VIDEO_PROMPT_MAX, type VideoAspect } from '../../utils/videoPrompt';
 import type { BrandKit } from '../../utils/brandKit';
 import { postCopy, type CopyKind, type CopyOffer } from '../../utils/postCopy';
-import { connectHiggsfield, costCopy, startHiggsfieldLogin, takeLoginOutcome, disconnectHiggsfield, estimateVideo, generateVideo, higgsfieldStatus, isFinished, listVideos, pollDelay, pollVideo, progressOf, type HiggsfieldStatus, type VideoEstimate, type VideoJob } from '../../utils/higgsfieldVideo';
+import { completeHiggsfieldLogin, connectHiggsfield, costCopy, startHiggsfieldLogin, takeLoginOutcome, disconnectHiggsfield, estimateVideo, generateVideo, higgsfieldStatus, isFinished, listVideos, pollDelay, pollVideo, progressOf, type HiggsfieldStatus, type VideoEstimate, type VideoJob } from '../../utils/higgsfieldVideo';
 
 const ink = '#F5F2EA', muted = '#B8B6AF', line = 'rgba(245,242,234,0.24)', acid = '#C7D8A3', warn = '#E8B07A';
 const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', height: 38, border: `1px solid ${line}`, background: '#090A08', color: ink, padding: '0 10px', fontSize: 13, borderRadius: 2 };
@@ -72,13 +72,19 @@ export function VideoStudio({ creator, avatar = null, audience, problem, focusKi
   const [, tick] = useState(0);
 
   useEffect(() => {
-    // Back from the Higgsfield login page?
-    const outcome = takeLoginOutcome();
-    if (outcome === 'connected') setNotice('Logged in with Higgsfield.');
-    else if (outcome === 'cancelled') setNotice('Higgsfield login was cancelled.');
-    else if (outcome === 'error') setError('Higgsfield login didn’t finish. Try again, or connect with an API key.');
-    higgsfieldStatus().then((s) => { setStatus(s); if (s.connected) listVideos().then((r) => setRecent(r.jobs)).catch(() => {}); })
-      .catch((e) => setSetupError((e as Error).message || 'Video generation is not available here yet.'));
+    let live = true;
+    (async () => {
+      await completeHiggsfieldLogin();
+      const outcome = takeLoginOutcome();
+      if (!live) return;
+      if (outcome === 'connected') setNotice('Logged in with Higgsfield.');
+      else if (outcome === 'cancelled') setNotice('Higgsfield login was cancelled.');
+      else if (outcome === 'error') setError('Higgsfield login didn’t finish. Try again, or connect with an API key.');
+      const s = await higgsfieldStatus();
+      if (!live) return;
+      setStatus(s); if (s.connected) listVideos().then((r) => live && setRecent(r.jobs)).catch(() => {});
+    })().catch((e) => live && setSetupError((e as Error).message || 'Video generation is not available here yet.'));
+    return () => { live = false; };
   }, []);
 
   // Poll the running job with backoff (2 s → 10 s); stop when it finishes or the component unmounts.
