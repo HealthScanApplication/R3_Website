@@ -1874,8 +1874,9 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   const updateLocalePreference = (next: GuardianLocalePreference) => { setLocalePreference(next); try { localStorage.setItem('r3-store-locale', JSON.stringify(next)); } catch { /* storage may be disabled */ } };
   useEffect(() => {
     try { if (localStorage.getItem('r3-store-locale')) return; } catch { /* continue with best-effort detection */ }
-    if (user && !profile) return;
-    if (user?.id === profile?.user_id) {
+    // Wait for the profile. Without this a signed-out visitor (no user, no profile yet) matched `undefined === undefined` and read social_links of null.
+    if (!profile) return;
+    if (user?.id === profile.user_id) {
       const region = pricingRegions.find((option) => option.region === profile.social_links?.pricing_region);
       const locale = languageOptions.find((option) => option.name === profile.social_links?.language)?.code || 'en';
       if (region) setLocalePreference({ region: region.region, locale, currency: profile.social_links?.currency || region.currency });
@@ -1927,6 +1928,16 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   const publicHeaderBackground = '#FFFFFF';
   const publicHeaderText = '#11120F';
   const publicExpertiseTags = parseExpertiseTags(socials.expertise_tags);
+  // An offer path ("Better sleep") is its own page. Its hero speaks about that path (the offer, who it is for, the problem),
+  // not about the Guardian in general, and its card is that path's offer; the profile site keeps the Guardian's own hero.
+  const onOfferPath = !!(pathSlug && selectedRamp);
+  const pathOffer = onOfferPath ? publishedOffers.find((offer) => offer.id === selectedRamp!.offer_ids[0]) : undefined;
+  const heroAudience = onOfferPath ? selectedRamp!.audience : audienceLabel(profile.social_links?.audience_details);
+  const heroHeadline = onOfferPath ? customerFacingOfferTitle(pathOffer?.title || selectedRamp!.name) : profile.headline || profile.display_name;
+  const heroBio = onOfferPath ? pathOffer?.description || [selectedRamp!.audience, selectedRamp!.problem].filter(Boolean).join(' · ') : profile.bio;
+  const heroSpecialties = onOfferPath ? [selectedRamp!.problem].filter(Boolean) : profile.specialties;
+  const heroTags = onOfferPath ? [selectedRamp!.audience, selectedRamp!.problem].filter(Boolean) : publicExpertiseTags;
+  const heroSourceOfferId = (onOfferPath ? pathOffer?.id : undefined) || freeOffers[0]?.id || null;
   return <div className="guardian-public-site" lang={publicLanguage} dir={publicLanguage === 'ar' ? 'rtl' : 'ltr'} style={{ minHeight: '100vh', background: publicPageColor, color: '#11120F', fontFamily: publicBodyFont }}>
     <style>{`.guardian-public-site button,.guardian-public-site input,.guardian-public-site select,.guardian-public-site textarea{font-family:${sans}}.guardian-public-site a{font-family:inherit}.guardian-public-site h1,.guardian-public-site h2,.guardian-public-site h3{font-synthesis:none}@media(max-width:760px){.guardian-header-socials{display:none!important}}`}</style>
     {publicHeaderStyle !== 'hidden' && <header style={{ position: 'fixed', inset: '0 0 auto', zIndex: 100, minHeight: 64, background: publicHeaderBackground, color: publicHeaderText, borderBottom: '1px solid rgba(17,18,15,.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '0 clamp(8px,4vw,84px)' }}>
@@ -1939,9 +1950,9 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
     </header>}
     <main style={{ paddingTop: publicHeaderStyle === 'hidden' ? 0 : 64 }}>
       {/* Shared with the builder preview, so what Guardians build is what they publish. */}
-      <GuardianSiteHero audience={audienceLabel(profile.social_links?.audience_details)} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={profile.display_name} avatarUrl={profile.avatar_url} specialties={profile.specialties} headline={profile.headline || profile.display_name} tags={publicExpertiseTags} bio={profile.bio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} clips={clipsFromLinks(socials.theme_background_clips)} greyscale={publicGreyscale}
-        guideId={profile.user_id} sourceOfferId={freeOffers[0]?.id || null}
-        cards={publishedRamps.length ? publishedRamps.slice(0, 1).map((ramp) => { const offer = publishedOffers.find((item) => item.id === ramp.offer_ids[0]); return { key: ramp.id, offerTitle: offer?.title || ramp.name, eyebrow: ramp.problem || undefined, title: customerFacingOfferTitle(offer?.title || ramp.name), copy: offer?.description || '', kind: offer?.kind, price: offer?.access_model === 'free' ? 'Free' : undefined, imageUrl: offer?.cover_url, href: pathSlug === encodeURIComponent(ramp.slug) ? '#offers' : `/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}` }; }) : freeOffers.slice(0, 1).map((offer) => ({ key: offer.id, offerTitle: offer.title, eyebrow: profile.specialties.slice(0, 2).join(' · '), title: customerFacingOfferTitle(offer.title), copy: offer.description || '', kind: offer.kind, price: 'Free', imageUrl: offer.cover_url, href: '#start' }))} />
+      <GuardianSiteHero audience={heroAudience} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={profile.display_name} avatarUrl={profile.avatar_url} specialties={heroSpecialties} headline={heroHeadline} tags={heroTags} bio={heroBio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} clips={clipsFromLinks(socials.theme_background_clips)} greyscale={publicGreyscale}
+        guideId={profile.user_id} sourceOfferId={heroSourceOfferId}
+        cards={publishedRamps.length ? (onOfferPath ? [selectedRamp!] : publishedRamps).slice(0, 1).map((ramp) => { const offer = publishedOffers.find((item) => item.id === ramp.offer_ids[0]); return { key: ramp.id, offerTitle: offer?.title || ramp.name, eyebrow: ramp.problem || undefined, title: customerFacingOfferTitle(offer?.title || ramp.name), copy: offer?.description || '', kind: offer?.kind, price: offer?.access_model === 'free' ? 'Free' : undefined, imageUrl: offer?.cover_url, href: pathSlug === encodeURIComponent(ramp.slug) ? '#offers' : `/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}` }; }) : freeOffers.slice(0, 1).map((offer) => ({ key: offer.id, offerTitle: offer.title, eyebrow: profile.specialties.slice(0, 2).join(' · '), title: customerFacingOfferTitle(offer.title), copy: offer.description || '', kind: offer.kind, price: 'Free', imageUrl: offer.cover_url, href: '#start' }))} />
       {publicBrands.filter((brand) => brand.kind === 'business').length > 0 && <section aria-labelledby="guardian-brands-title" style={{ padding: `clamp(54px,7vw,100px) ${PAGE_X}`, background: '#11120F', color: ink }}>
         <span style={{ color: publicAccent, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Official brands</span>
         <h2 id="guardian-brands-title" style={{ margin: '12px 0 28px', fontFamily: publicHeadingFont, fontWeight: 300, fontSize: 'clamp(42px,6vw,78px)', lineHeight: .95 }}>More from {profile.display_name}.</h2>
