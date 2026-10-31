@@ -98,7 +98,7 @@ describe('HardwareHero', () => {
   });
 
   it('uses the owner capture word list', () => {
-    expect(HERO_FEATURE_WORDS).toEqual(['meals', 'workouts', 'notes', 'moments', 'symptoms']);
+    expect(HERO_FEATURE_WORDS).toEqual(['meals', 'workouts', 'thoughts', 'moments', 'ideas']);
     // Short words only, so the headline never wraps past its two lines' width.
     for (const w of HERO_FEATURE_WORDS) expect(w.length).toBeLessThanOrEqual(8);
   });
