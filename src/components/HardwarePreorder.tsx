@@ -1,61 +1,67 @@
-import React from 'react';
-import { DISPLAY, GRO, ed } from '../config/editorialTheme';
+import React, { useEffect, useRef, useState } from 'react';
+import { GRO, coverStyle, deckStyle, ed } from '../config/editorialTheme';
 import { RingArt, ClipArt } from './hardware/DeviceArt';
+import { HeroBackdrop } from './hardware/HeroBackdrop';
+import { HeroDevices } from './hardware/HeroDevices';
 import { PREORDER_TERMS, PRODUCTS, formatUsd } from './hardware/copy';
 
-const ACCENT = '#C7D99F';
-const label = { margin: '0 0 10px', fontFamily: GRO, fontSize: 11, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: ACCENT } as const;
-const name = { margin: '0 0 14px', fontFamily: DISPLAY, fontSize: 'clamp(2.5rem, 4vw, 4.7rem)', fontWeight: 400, lineHeight: 0.95 } as const;
-const body = { margin: 0, maxWidth: 620, fontFamily: GRO, fontSize: 17, lineHeight: 1.55, color: ed.onDarkSoft } as const;
+const DECK = 'A touch-and-slide ring controls a camera clip you can wear as a necklace, a watch, or a clip. Your AI assistant manages your routine, calendar, and email.';
+const overline: React.CSSProperties = { fontFamily: GRO, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.2em', color: ed.inkSoft, margin: 0 };
+
+/** Mounts HeroDevices (and so the three.js import) only once the section is within 400px of the viewport. */
+function LazyHeroDevices({ targetRef }: { targetRef: React.RefObject<HTMLElement | null> }) {
+  const [near, setNear] = useState(() => typeof IntersectionObserver === 'undefined');
+  useEffect(() => {
+    if (near || !targetRef.current) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) { setNear(true); io.disconnect(); }
+    }, { rootMargin: '400px' });
+    io.observe(targetRef.current);
+    return () => io.disconnect();
+  }, [near, targetRef]);
+  if (near) return <HeroDevices />;
+  return (
+    <div data-testid="devices-fallback" style={{ display: 'flex', width: '100%', height: '100%', alignItems: 'center' }}>
+      <div style={{ flex: 1, minWidth: 0 }}><RingArt /></div>
+      <div style={{ flex: 1, minWidth: 0 }}><ClipArt /></div>
+    </div>
+  );
+}
 
 export function HardwarePreorder() {
+  const sectionRef = useRef<HTMLElement>(null);
   return (
-    <section id="hardware-preorder" aria-labelledby="hardware-preorder-title" style={{ background: ed.dark, color: ed.onDark, borderTop: `1px solid ${ed.onDarkHair}` }}>
-      <div style={{ maxWidth: 1440, margin: '0 auto', padding: 'clamp(88px, 10vw, 156px) clamp(20px, 5vw, 72px)' }}>
-        <header className="r3-hw-teaser-header" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.45fr) minmax(280px, .55fr)', gap: 'clamp(32px, 7vw, 112px)', alignItems: 'end', marginBottom: 'clamp(48px, 7vw, 92px)' }}>
+    <section ref={sectionRef} id="hardware-preorder" aria-labelledby="hardware-preorder-title" style={{ position: 'relative', minHeight: '100svh', background: ed.paper, overflow: 'hidden' }}>
+      <HeroBackdrop />
+
+      <div style={{ position: 'relative', zIndex: 2, minHeight: '100svh', display: 'flex', flexDirection: 'column', maxWidth: 1440, margin: '0 auto', paddingLeft: 'clamp(20px, 5vw, 72px)', paddingRight: 'clamp(20px, 5vw, 72px)', paddingTop: 'clamp(64px, 9vh, 104px)', paddingBottom: 'clamp(32px, 5vh, 56px)', boxSizing: 'border-box' }}>
+        <div style={{ borderTop: `1px solid ${ed.hair}`, paddingTop: 14, paddingLeft: 'clamp(16px, 2vw, 28px)', paddingRight: 'clamp(16px, 2vw, 28px)' }}>
+          <p style={overline}>R³ hardware · first batch</p>
+        </div>
+
+        <div style={{ flex: 1, minHeight: 'clamp(24px, 5vh, 80px)' }} />
+
+        <div className="r3-hw-teaser-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 0.9fr)', gap: 'clamp(28px, 5vw, 80px)', alignItems: 'end' }}>
           <div>
-            <p style={{ ...label, margin: '0 0 18px', fontSize: 12, letterSpacing: '0.18em' }}>R³ hardware · first batch</p>
-            <h2 id="hardware-preorder-title" style={{ margin: 0, maxWidth: 920, fontFamily: DISPLAY, fontSize: 'clamp(3.5rem, 7.4vw, 8.2rem)', fontWeight: 380, lineHeight: 0.9, letterSpacing: '-0.045em' }}>
+            <h2 id="hardware-preorder-title" style={{ ...coverStyle, fontSize: 'clamp(2.8rem, 7vw, 7.5rem)', color: '#FFFFFF', textShadow: '0 4px 24px rgba(0,0,0,0.38)' }}>
               Meet the R³ Note and R³ Clip.
             </h2>
+            <p style={{ ...deckStyle, color: ed.ink, marginTop: 'clamp(20px, 3vw, 36px)', maxWidth: '34ch' }}>{DECK}</p>
+            <div style={{ marginTop: 'clamp(28px, 4vh, 48px)', maxWidth: 560 }}>
+              <a href="/ring" style={{ display: 'inline-flex', alignItems: 'center', height: 42, boxSizing: 'border-box', padding: '0 16px', background: '#FFFFFF', color: '#16140F', border: '1px solid #FFFFFF', borderRadius: 2, fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' }}>
+                {`See the R³ Note — from ${formatUsd(PRODUCTS.ring.priceCents)}`}
+              </a>
+              <p style={{ margin: '16px 0 0', fontFamily: GRO, fontSize: 14, lineHeight: 1.55, color: ed.ink }}>{PREORDER_TERMS}</p>
+            </div>
           </div>
-          <p style={{ ...body, fontSize: 'clamp(16px, 1.4vw, 21px)' }}>
-            A touch-and-slide ring controls a camera clip you can wear as a necklace, a watch, or a clip. Your AI assistant manages your routine, calendar, and email.
-          </p>
-        </header>
-
-        <div className="r3-hw-teaser-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', borderTop: `1px solid ${ed.onDarkHair}`, borderBottom: `1px solid ${ed.onDarkHair}` }}>
-          <article style={{ padding: 'clamp(28px, 4vw, 54px) clamp(0px, 3vw, 48px) clamp(42px, 5vw, 68px) 0', borderRight: `1px solid ${ed.onDarkHair}` }}>
-            <div style={{ overflow: 'hidden', aspectRatio: '1.23 / 1', marginBottom: 30 }}><RingArt /></div>
-            <p style={label}>Controller</p>
-            <h3 style={name}>R³ Note</h3>
-            <p style={body}>A controller worn on the finger. Its touch and slide surface controls the clip.</p>
-          </article>
-          <article style={{ padding: 'clamp(28px, 4vw, 54px) 0 clamp(42px, 5vw, 68px) clamp(0px, 3vw, 48px)' }}>
-            <div style={{ overflow: 'hidden', aspectRatio: '1.23 / 1', marginBottom: 30 }}><ClipArt /></div>
-            <p style={label}>Camera pod</p>
-            <h3 style={name}>R³ Clip</h3>
-            <p style={body}>A camera pod you can wear as a necklace, a watch, or a clip. It captures your food, activity, voice notes, and AI requests.</p>
-          </article>
-        </div>
-
-        <div style={{ paddingTop: 'clamp(40px, 6vw, 72px)' }}>
-          <a href="/ring" style={{ display: 'inline-flex', alignItems: 'center', minHeight: 60, background: ACCENT, color: ed.dark, padding: '0 28px', fontFamily: GRO, fontSize: 12, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', textDecoration: 'none' }}>
-            {`See the R³ Note — from ${formatUsd(PRODUCTS.ring.priceCents)}`}
-          </a>
-          <p style={{ margin: '18px 0 0', fontFamily: GRO, fontSize: 15, lineHeight: 1.55, color: ed.onDarkSoft }}>
-            {PREORDER_TERMS}
-          </p>
+          <div className="r3-hw-teaser-devices" style={{ position: 'relative', width: '100%', aspectRatio: '4 / 5', minHeight: 420 }}>
+            <LazyHeroDevices targetRef={sectionRef} />
+          </div>
         </div>
       </div>
-      <style>{`
-        .r3-hw-teaser-grid svg { width: 100%; height: 100%; display: block; }
-        @media (max-width: 800px) {
-          .r3-hw-teaser-header, .r3-hw-teaser-grid { grid-template-columns: 1fr !important; }
-          .r3-hw-teaser-grid article:first-child { border-right: 0 !important; border-bottom: 1px solid ${ed.onDarkHair}; padding-right: 0 !important; }
-          .r3-hw-teaser-grid article:last-child { padding-left: 0 !important; }
-        }
-      `}</style>
+      <style>{`@supports not (min-height: 100svh) { #hardware-preorder, #hardware-preorder > div { min-height: 100vh !important; } }
+.r3-hw-teaser-devices svg { width: 100%; height: 100%; display: block; }
+@media (max-width: 800px) { .r3-hw-teaser-grid { grid-template-columns: 1fr !important; } .r3-hw-teaser-devices { aspect-ratio: 1 / 1 !important; min-height: 0 !important; max-height: 52svh; } }`}</style>
     </section>
   );
 }
