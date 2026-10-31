@@ -17,12 +17,17 @@
  * millimetres, hole axis `userData.holeAxis` = 'x') so the scene can nest the R³ Ring ring inside it.
  */
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { finishSpec, type Finish } from './finishes';
 
 /** The watch: `group` (with `userData.hole` / `userData.holeAxis`), its `screen` mesh, and `dispose`. */
 export type ClipModel = { group: THREE.Group; screen: THREE.Mesh; dispose(): void };
-/** `finish` (default 'black', today's look) colours the case, bracelet and the face around the screen. */
-export type RetroClipOptions = { screenTexture: THREE.Texture; finish?: Finish };
+/**
+ * `finish` (default 'black', today's look) colours the case, bracelet and the face around the screen. `headOnly` builds
+ * the artifact's NECKLACE head instead: the case alone (bracelet and lugs cut off, `cutHead`) with a clean end cap and a
+ * dark rail mouth on each short side; it has no bracelet hole, so `userData.hole` is left unset.
+ */
+export type RetroClipOptions = { screenTexture: THREE.Texture; finish?: Finish; headOnly?: boolean };
 export type HoleBox = { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } };
 type V3 = [number, number, number];
 
@@ -34,6 +39,29 @@ const FACE: [number, number, number] = [31.4, 27.9, 4.8], BEZEL_INNER: [number, 
 const ZF = (0.785 - 0.74) * S, Z_SHIFT = -0.74 * S;
 const RAY_BAND = 0.08;                         // model units: vertices this close to a ray count as on it
 const SCREEN_SPAN = 27.6;                      // the texture's square, mm
+
+/**
+ * The head cut, ported from the artifact's `buildRetro` (~2170): a triangle belongs to the case when all three of its
+ * vertices have z > HEAD_MIN_Z and |y| < HEAD_MAX_Y (model units); the bracelet and lugs fall outside. The artifact's
+ * measured head extents: x -0.5047..0.5124, z 0.533..0.7735, |y| 0.47.
+ */
+export const HEAD_MIN_Z = 0.3, HEAD_MAX_Y = 0.47;
+export const isHeadVertex = (positions: ArrayLike<number>, i: number) => positions[i * 3 + 2] > HEAD_MIN_Z && Math.abs(positions[i * 3 + 1]) < HEAD_MAX_Y;
+
+/** Keep only the head's triangles, compacted: only the vertices they use, re-indexed in first-use order. */
+export function cutHead(positions: Float32Array, indices: ArrayLike<number>): { positions: Float32Array; indices: Uint32Array } {
+  const remap = new Map<number, number>(), out: number[] = [], kept: number[] = [];
+  for (let t = 0; t + 2 < indices.length; t += 3) {
+    const a = indices[t], b = indices[t + 1], c = indices[t + 2];
+    if (!isHeadVertex(positions, a) || !isHeadVertex(positions, b) || !isHeadVertex(positions, c)) continue;
+    for (const v of [a, b, c]) {
+      let n = remap.get(v);
+      if (n === undefined) { n = remap.size; remap.set(v, n); out.push(positions[v * 3], positions[v * 3 + 1], positions[v * 3 + 2]); }
+      kept.push(n);
+    }
+  }
+  return { positions: new Float32Array(out), indices: new Uint32Array(kept) };
+}
 
 /** Binary model: uint32 header length, JSON {min, max, n, ni, iw?}, Int16 positions, pad to 4, Uint16/Uint32 indices. */
 export function parseWatchModel(bytes: ArrayBuffer): { positions: Float32Array; indices: Uint16Array | Uint32Array } {
@@ -105,14 +133,15 @@ export function loopHole(positions: Float32Array): HoleBox {
 }
 
 export function buildRetroWatch(bytes: ArrayBuffer, options: RetroClipOptions): ClipModel {
-  const { positions, indices } = parseWatchModel(bytes);
+  const full = parseWatchModel(bytes);
+  const { positions, indices } = options.headOnly ? cutHead(full.positions, full.indices) : full;
   const watchGeo = new THREE.BufferGeometry();
   watchGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   watchGeo.setIndex(new THREE.BufferAttribute(indices, 1));
   watchGeo.computeVertexNormals();
 
   const group = new THREE.Group();
-  group.name = 'watch';
+  group.name = options.headOnly ? 'watchHead' : 'watch';
   const head = new THREE.Group();
   head.name = 'head';
   group.add(head);
@@ -140,13 +169,23 @@ export function buildRetroWatch(bytes: ArrayBuffer, options: RetroClipOptions): 
   add(head, new THREE.ShapeGeometry(octagon(31.4, 27.9, 4.8)), crystalMat(), 0, -0.7, ZF + 0.2);
   lensBlend(head, [12.0, 14.9, -0.2], [-0.707, 0.707, 0], [0.288, 0.288, 0.914], mat);
 
-  // The bracelet's hole, in the group's millimetres.
-  const h = loopHole(positions);
-  group.userData.hole = new THREE.Box3(
-    new THREE.Vector3(h.min.x * S, h.min.y * S, h.min.z * S + Z_SHIFT),
-    new THREE.Vector3(h.max.x * S, h.max.y * S, h.max.z * S + Z_SHIFT),
-  );
-  group.userData.holeAxis = 'x';
+  if (options.headOnly) {
+    // The artifact's end caps: the case's short edge, measured (24 mm wide, about 6 mm deep, at its z centre), each with a
+    // dark rail mouth where a band slides in.
+    const ey = HEAD_MAX_Y * S, mouth = new THREE.MeshStandardMaterial({ color: '#050606', roughness: 0.5 });
+    [-1, 1].forEach(sd => {
+      add(head, new RoundedBoxGeometry(23.6, 2.4, 6, 2, 0.9), mat, 0, sd * (ey + 0.3), -3.8).name = 'endCap';
+      add(head, new RoundedBoxGeometry(15, 0.5, 3, 1, 0.4), mouth, 0, sd * (ey + 1.5), -3.8).name = 'railMouth';
+    });
+  } else {
+    // The bracelet's hole, in the group's millimetres.
+    const h = loopHole(positions);
+    group.userData.hole = new THREE.Box3(
+      new THREE.Vector3(h.min.x * S, h.min.y * S, h.min.z * S + Z_SHIFT),
+      new THREE.Vector3(h.max.x * S, h.max.y * S, h.max.z * S + Z_SHIFT),
+    );
+    group.userData.holeAxis = 'x';
+  }
 
   let disposed = false;
   const dispose = () => {
@@ -188,7 +227,7 @@ export function applyWatchFinish(model: ClipModel, finish: Finish): void {
   });
 }
 
-/** Fetch the full watch model and build it. */
+/** Fetch the full watch model and build it (or, with `headOnly`, its head). */
 export async function loadRetroWatch(url: string, options: RetroClipOptions): Promise<ClipModel> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Watch model request failed: status ${res.status} for ${url}`);

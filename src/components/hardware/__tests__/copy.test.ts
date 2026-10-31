@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PRODUCTS, BATCH_GOAL, SHIP_WINDOW, PREORDER_TERMS, formatUsd, USE_CASES, GESTURES, DEVICE_IOV, IOV_LABELS } from '../copy';
+import { PRODUCTS, BATCH_GOAL, SHIP_WINDOW, PREORDER_TERMS, formatUsd, USE_CASES, GESTURES, DEVICE_IOV, IOV_LABELS, WEAR_MODES, WEAR_MODES_INTRO, WEAR_MODES_TITLE } from '../copy';
 
 describe('hardware copy', () => {
   it('prices the ring and bundle in cents', () => {
@@ -45,5 +45,14 @@ describe('hardware copy', () => {
       outputs: 'Logged meals, activities, tasks and journals; directions to your next calendar event; replies from your AI agent; an end-of-day reel.',
       value: 'A record of your day, made in the moment.',
     });
+  });
+  it('has the three ways to wear the R³ Clip, in order, with the exact copy', () => {
+    expect(WEAR_MODES_TITLE).toBe('One clip, three ways to wear it');
+    expect(WEAR_MODES_INTRO).toBe('The R³ Clip moves from your wrist to your cap to a chain in seconds.');
+    expect(WEAR_MODES).toEqual([
+      { id: 'watch', name: 'Watch', line: "On its steel link bracelet it's a watch: time, heart rate and sleep." },
+      { id: 'clip', name: 'Cap clip', line: "Clipped to a cap's bill, a hinge aims it ahead, at your plate or down at your board." },
+      { id: 'necklace', name: 'Necklace', line: 'On a chain it hangs as a diamond at chest height and captures as you go.' },
+    ]);
   });
 });

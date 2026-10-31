@@ -82,3 +82,14 @@ export const SPEC_CLIP: SpecRow[] = [
 
 /** The /wearables hero background clips, played in this order: one first-person moment per gesture. */
 export const HERO_CLIPS = ['meal', 'navigate', 'activity', 'music', 'reel'].map((id) => `/videos/hero/${id}.mp4`);
+
+/** "One clip, three ways to wear it": the R³ Clip as a watch, on a cap's bill, and on a chain. */
+export type WearModeId = 'watch' | 'clip' | 'necklace';
+export type WearMode = { id: WearModeId; name: string; line: string };
+export const WEAR_MODES_TITLE = 'One clip, three ways to wear it';
+export const WEAR_MODES_INTRO = 'The R³ Clip moves from your wrist to your cap to a chain in seconds.';
+export const WEAR_MODES: WearMode[] = [
+  { id: 'watch', name: 'Watch', line: "On its steel link bracelet it's a watch: time, heart rate and sleep." },
+  { id: 'clip', name: 'Cap clip', line: "Clipped to a cap's bill, a hinge aims it ahead, at your plate or down at your board." },
+  { id: 'necklace', name: 'Necklace', line: 'On a chain it hangs as a diamond at chest height and captures as you go.' },
+];

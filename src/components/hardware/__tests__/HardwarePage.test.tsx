@@ -46,11 +46,11 @@ describe('HardwarePage', () => {
     expect(screen.queryByRole('heading', { name: 'How it works' })).toBeNull();
   });
 
-  it('orders the sections: hero, gestures, devices, use cases, assistant, specs, closing', () => {
+  it('orders the sections: hero, gestures, devices, use cases, wear modes, assistant, specs, closing', () => {
     const { container } = render(<HardwarePage />);
     const ids = Array.from(container.querySelectorAll('section')).map(s => s.getAttribute('aria-labelledby'));
     expect(container.querySelector('section')?.closest('#hardware-hero')).toBeTruthy(); // the hero comes first
-    expect(ids.slice(1)).toEqual(['gestures-title', 'two-devices-title', 'use-cases-title', 'ai-assistant-title', 'specs-title', 'hardware-closing-title']);
+    expect(ids.slice(1)).toEqual(['gestures-title', 'two-devices-title', 'use-cases-title', 'wear-modes-title', 'ai-assistant-title', 'specs-title', 'hardware-closing-title']);
   });
 
   it('contains the required words and no invented device names or prices', () => {
@@ -102,7 +102,7 @@ describe('HardwarePage', () => {
   it('every section has an aria-labelledby heading', () => {
     const { container } = render(<HardwarePage />);
     const sections = container.querySelectorAll('section');
-    expect(sections.length).toBe(7);
+    expect(sections.length).toBe(8);
     sections.forEach((s) => {
       const id = s.getAttribute('aria-labelledby');
       expect(id).toBeTruthy();

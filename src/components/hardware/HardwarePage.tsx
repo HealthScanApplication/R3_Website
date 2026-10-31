@@ -4,6 +4,7 @@ import { HardwareHero } from './HardwareHero';
 import { GestureSection } from './GestureSection';
 import { DevicePair } from './DevicePair';
 import { UseCases } from './UseCases';
+import { WearModes } from './WearModes';
 import { AiAssistant } from './AiAssistant';
 import { SpecSheet } from './SpecSheet';
 import { PRODUCTS, formatUsd } from './copy';
@@ -17,6 +18,7 @@ export function HardwarePage() {
       <GestureSection />
       <DevicePair />
       <UseCases />
+      <WearModes />
       <AiAssistant />
       <SpecSheet />
       <section aria-labelledby="hardware-closing-title">
