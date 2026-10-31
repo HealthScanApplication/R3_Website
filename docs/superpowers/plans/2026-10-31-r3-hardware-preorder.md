@@ -971,84 +971,53 @@ git commit -m "feat(hardware): 3D ring viewer with SVG fallback; STL conversion 
 
 ---
 
-### Task 12: Page content sections + assemble `HardwarePage`
+### Task 12: Page sections and `HardwarePage` assembly
+
+> **Plan revision (controller rulings):** (1) `HardwarePage` renders inside App's existing `<main>` via `PageRenderer` (Task 2 fix), so it MUST NOT render `Header`, `Footer`, or a `<main>`; its root is `<div id="hardware-page">` (already in place — keep it). (2) Device names follow the spec: **R³ Ring** (touch/slide controller) and **R³ Clip** (camera pod worn as a necklace, a watch, or a clip). (3) **Do not invent hardware facts.** Copy may only use claims from the owner's message and spec sheet (listed below). Ring specs are not final; say so rather than inventing numbers. (4) Shared device art moves to its own file.
 
 **Files:**
-- Create: `src/components/hardware/HardwareHero.tsx`, `HowItWorks.tsx`, `DevicePair.tsx`, `SpecSheet.tsx`, `AiAssistant.tsx`
-- Modify: `src/components/hardware/HardwarePage.tsx` (compose them with `Header`/`Footer`)
-- Test: `src/components/hardware/__tests__/HardwarePage.test.tsx`
+- Create: `src/components/hardware/DeviceArt.tsx` (exports `RingArt`, `ClipArt` — moved from `NoteRingArt` and `HeartCameraArt` in `src/components/HardwarePreorder.tsx`)
+- Modify: `src/components/HardwarePreorder.tsx` (delete the two SVG functions; import `RingArt as NoteRingArt` and `ClipArt as HeartCameraArt` temporarily so the homepage section keeps rendering — Task 13 rewrites this file's copy)
+- Create: `src/components/hardware/HardwareHero.tsx`, `HowItWorks.tsx`, `DevicePair.tsx`, `AiAssistant.tsx`, `SpecSheet.tsx`
+- Modify: `src/components/hardware/HardwarePage.tsx` (compose the sections)
+- Test: `src/components/hardware/__tests__/HardwarePage.test.tsx` (`// @vitest-environment jsdom` first line; `afterEach(cleanup)`)
 
 **Interfaces:**
-- Consumes: all prior hardware components; `ed`/`DISPLAY`/`GRO`; existing `Header`/`Footer`.
-- Produces: the full page. (Reuse `NoteRingArt`/`HeartCameraArt` from `HardwarePreorder.tsx` by extracting them into `DevicePair.tsx` or importing — see note.)
+- Consumes: `RingViewer` (Task 11, no props), `PreorderBlock` (Task 10, no required props), `BackerBar` (Task 8), `PRODUCTS`/`formatUsd`/`SHIP_WINDOW`/`BATCH_GOAL` (Task 1), `ed`/`DISPLAY`/`GRO` from `src/config/editorialTheme` (match the dark editorial look of `src/components/HardwarePreorder.tsx`: `ed.dark` background, `ed.onDark`, `ed.onDarkSoft`, `ed.onDarkHair`, accent `#C7D99F`).
+- Produces: `HardwarePage` with the sections below in this order; every section is a `<section>` with an `aria-labelledby` heading; exactly ONE `<h1>` on the page (the hero's).
 
-- [ ] **Step 1: Write the failing test**
+**Facts copy may use (nothing else about hardware):**
+- Ring: a controller worn on the finger with a touch and slide surface that controls the clip. Final ring specifications are not published yet.
+- Clip: a camera pod worn as a necklace, a watch, or a clip; it captures your food, activity, voice notes, and AI requests. Planned specs from the owner's spec sheet: 8 MP wide-angle camera (160° field of view); a physical slider that cuts the camera, microphones, and radios; a red camera LED while the camera is active.
+- AI assistant: manages your routine, your calendar, and your email.
+- Pricing/terms come ONLY from `copy.ts` (`PRODUCTS`, `formatUsd`, `SHIP_WINDOW`, `BATCH_GOAL`).
 
-```tsx
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
-vi.mock('../../../utils/hardwarePreorder', () => ({ fetchBackerCount: vi.fn().mockResolvedValue({ paid: 5, goal: 250, deadline: 'd', status: 'open' }), createPreorderIntent: vi.fn(), confirmPreorder: vi.fn() }));
-import { HardwarePage } from '../HardwarePage';
+**Sections and exact strings (tests assert these):**
+1. **Hero** (`HardwareHero`): eyebrow "R³ hardware · first batch"; `<h1>` "Track your routine without lifting a finger."; subcopy "Touch or slide the R³ Ring to control the R³ Clip's camera, record a voice note, or hand a request to your AI assistant."; two anchor links to `#preorder` with text "Reserve the R³ Ring — $179" and "Ring + Clip — $299" (prices via `formatUsd(PRODUCTS.x.priceCents)`); a `BackerBar`; the `RingViewer` in a fixed-aspect container (e.g. `aspect-ratio: 1 / 1`, min-height via the viewer).
+2. **How it works** (`HowItWorks`): `<h2>` "How it works"; an ordered list of three steps with these headings — "Touch or slide", "Capture", "Your assistant handles it" — and one-sentence bodies using only the facts above (step 1 mentions the ring's touch and slide surface controlling the clip; step 2 the clip capturing food, activity, voice notes, and AI requests; step 3 the assistant managing routine, calendar, and email).
+3. **Two devices** (`DevicePair`): `<h2>` "Two devices, one routine"; two articles: "R³ Ring" (label "Controller") with `RingArt`, and "R³ Clip" (label "Camera pod") with `ClipArt`, each with one or two sentences from the facts above; mention "necklace", "watch", and "clip" in the Clip article.
+4. **AI assistant** (`AiAssistant`): `<h2>` "A personal assistant for your routine"; three short items titled "Routine", "Calendar", "Email", one sentence each from the facts above (no specifics about features that are not in the facts).
+5. **Specifications** (`SpecSheet`): `<h2>` "Specifications"; a notice "Planned specifications. Final details are confirmed before manufacturing."; a definition list for the Ring (Control: "Touch and slide"; Works with: "R³ Clip") and for the Clip (Camera: "8 MP wide-angle, 160° field of view"; Captures: "Food, activity, voice notes, AI requests"; Worn as: "Necklace, watch, or clip"; Privacy: "Physical slider cuts the camera, microphones, and radios; red LED while the camera is on").
+6. **Preorder** (inline in `HardwarePage`): `<section id="preorder" aria-labelledby="preorder-title">` with `<h2 id="preorder-title">` "Reserve your early-backer price" and `<PreorderBlock />`.
 
-describe('HardwarePage', () => {
-  it('renders the hero headline, both products, and how-it-works', () => {
-    render(<HardwarePage />);
-    expect(screen.getByRole('heading', { name: /track your routine/i })).toBeTruthy();
-    expect(screen.getByText('R³ Ring')).toBeTruthy();
-    expect(screen.getByText(/R³ Ring \+ Clip/)).toBeTruthy();
-    expect(screen.getByText(/touch.*slide/i)).toBeTruthy();
-  });
-});
-```
+**Other requirements:**
+- `DeviceArt.tsx`: move the two SVGs verbatim EXCEPT: rename to `RingArt`/`ClipArt`; change the `aria-label`s to "Concept illustration of the R3 Ring smart ring" and "Concept illustration of the R3 Clip camera wearable"; make every gradient/filter `id` unique per instance with `useId()` (strip every non-word character from the id, e.g. `.replace(/[^\w-]/g, '')`, and prefix each id) so two instances cannot collide.
+- Inline styles only via the theme tokens; responsive layout via a small `<style>` block with `@media (max-width: 800px)` like `HardwarePreorder.tsx` does (no Tailwind classes). Keep each section component small and single-purpose.
+- No `<main>`, `Header`, or `Footer` inside `HardwarePage`.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 1: Write the failing test.** Render `<HardwarePage />` with `vi.mock('../../../utils/hardwarePreorder', ...)` (`fetchBackerCount` resolving `{ paid: 5, goal: 250, deadline: 'd', status: 'open' }`, plus `createPreorderIntent`/`confirmPreorder` as `vi.fn()`) and `vi.mock('../registerModelViewer', () => ({}))` (so the unavailable package is never resolved). Assert: exactly one heading level 1 with name "Track your routine without lifting a finger."; the two hero links have the exact texts and `href="#preorder"`; `R³ Ring` and `R³ Clip` appear as article headings; headings "How it works", "Two devices, one routine", "A personal assistant for your routine", "Specifications", "Reserve your early-backer price" exist; the page text contains "touch", "slide", "necklace", "watch", "routine", "calendar", and "email"; the `#preorder` section exists and contains the "Continue to payment" button; there is NO `main` element and no `footer`/`banner` landmark inside `#hardware-page`; the SVG ids across `RingArt` and `ClipArt` rendered together are all distinct; the page never contains the strings "Note" or "Heart" as device names and never mentions a price other than $179, $299, $199, $349 (regex-scan the text for `\$\d+` and assert the set).
 
-Run: `npx vitest run src/components/hardware/__tests__/HardwarePage.test.tsx`
-Expected: FAIL (sections not composed yet).
+- [ ] **Step 2: Run to verify it fails** — `npx vitest run src/components/hardware/__tests__/HardwarePage.test.tsx` — Expected: FAIL.
 
-- [ ] **Step 3: Write minimal implementation**
+- [ ] **Step 3: Implement** the files above. After moving the art, run the homepage section's existing tests if any (`npx vitest run src/components/__tests__` limited to files that mention HardwarePreorder) to confirm the import change did not break it.
 
-Build each section as a small component using inline editorial styles. Hero headline must read **"Track your routine without lifting a finger."** and include `<RingViewer/>` + `<PreorderBlock/>`. `HowItWorks` must contain copy matching `/touch.*slide/i` (e.g. "Touch and slide the ring"). `DevicePair` presents R³ Ring (controller) and R³ Clip (camera pod — necklace / watch / clip) reusing the existing SVG arts (extract `NoteRingArt`/`HeartCameraArt` into `DevicePair.tsx` and re-import them in `HardwarePreorder.tsx` to stay DRY). `SpecSheet` lists ring + clip specs from the pod plan; `AiAssistant` covers routine/calendar/email. Compose in `HardwarePage.tsx`:
-
-```tsx
-import React from 'react';
-import { ed } from '../../config/editorialTheme';
-import { Header } from '../Header';
-import { Footer } from '../Footer';
-import { HardwareHero } from './HardwareHero';
-import { HowItWorks } from './HowItWorks';
-import { DevicePair } from './DevicePair';
-import { SpecSheet } from './SpecSheet';
-import { AiAssistant } from './AiAssistant';
-import { PreorderBlock } from './PreorderBlock';
-
-export function HardwarePage() {
-  return (
-    <main id="hardware-page" style={{ background: ed.dark, color: ed.onDark }}>
-      <HardwareHero />
-      <HowItWorks />
-      <DevicePair />
-      <AiAssistant />
-      <SpecSheet />
-      <section style={{ maxWidth: 1440, margin: '0 auto', padding: 'clamp(64px,8vw,120px) clamp(20px,5vw,72px)' }}><PreorderBlock /></section>
-      <Footer />
-    </main>
-  );
-}
-```
-
-> `Header`/`Footer` props: open `src/components/Header.tsx` / `Footer.tsx` and pass whatever they require (navigation callbacks). If they need a `currentPage`/nav prop, thread it from `App.tsx` instead of rendering them inside the page — adjust to match the home page's usage.
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `npx vitest run src/components/hardware/__tests__/HardwarePage.test.tsx`
-Expected: PASS.
+- [ ] **Step 4: Run to verify it passes** — same command — Expected: PASS, output pristine.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/components/hardware/*.tsx src/components/hardware/__tests__/HardwarePage.test.tsx src/components/HardwarePreorder.tsx
-git commit -m "feat(hardware): product page sections and assembly"
+git add src/components/hardware/ src/components/HardwarePreorder.tsx
+git commit -m "feat(hardware): ring product page sections and assembly"
 ```
 
 ---
