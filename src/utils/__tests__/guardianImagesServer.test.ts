@@ -48,6 +48,9 @@ describe('guardian-images lib', () => {
     expect(gi.friendlyOpenAIError(401, {})).toMatch(/did not accept/);
     expect(gi.friendlyOpenAIError(429, { error: { code: 'insufficient_quota' } })).toMatch(/no credit/);
     expect(gi.friendlyOpenAIError(400, { error: { code: 'moderation_blocked' } })).toMatch(/declined/);
+    expect(gi.friendlyOpenAIError(400, { error: { message: "Invalid value: 'medium'. Supported values are: 'low'." } })).toBe("Image generation failed (400): Invalid value: 'medium'. Supported values are: 'low'.");
+    expect(gi.friendlyOpenAIError(400, { error: { message: 'bad key sk-proj-abcdef1234567890 here' } })).not.toMatch(/sk-proj/);
+    expect(gi.friendlyOpenAIError(500, { error: { message: 'internal detail' } })).toBe('Image generation failed (500).');
   });
   it('test mode returns a placeholder image, no network', () => {
     expect(gi.mockImage('4:5')).toMatch(/^data:image\/svg\+xml;base64,/);

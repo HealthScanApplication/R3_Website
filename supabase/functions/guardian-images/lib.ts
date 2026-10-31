@@ -74,7 +74,15 @@ export function friendlyOpenAIError(status: number, body: any): string {
   if (status === 429) return code === 'insufficient_quota' ? 'This OpenAI account has no credit left.' : 'OpenAI is rate-limiting this account; try again in a minute.';
   if (code === 'moderation_blocked' || /safety/i.test(body?.error?.message || '')) return 'OpenAI declined this prompt. Try describing the scene differently.';
   if (status === 403) return 'This OpenAI organisation is not verified for image generation yet.';
-  return `Image generation failed (${status}).`;
+  // A 400 means OpenAI rejected the request itself (bad size, format or parameter). Say why, so it can be fixed rather than guessed at.
+  const detail = status === 400 ? safeDetail(body?.error?.message) : '';
+  return detail ? `Image generation failed (${status}): ${detail}` : `Image generation failed (${status}).`;
+}
+
+/** OpenAI's own message, shortened and with anything shaped like a secret key removed, for 400 responses only. */
+export function safeDetail(message: unknown): string {
+  if (typeof message !== 'string') return '';
+  return message.replace(/sk-[A-Za-z0-9_-]{8,}/g, '[key]').replace(/\s+/g, ' ').trim().slice(0, 200);
 }
 
 /* ── encryption (AES-GCM, key bound to the user id) ── */
