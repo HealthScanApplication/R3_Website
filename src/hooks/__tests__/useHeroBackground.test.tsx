@@ -45,6 +45,17 @@ describe('useHeroBackground', () => {
     expect(result.current.backgroundVideos.length).toBe(10);
   });
 
+  it('with produce: false it allows video after the gate but never fetches produce clips', async () => {
+    vi.useFakeTimers(); setup();
+    const f = vi.fn(); vi.stubGlobal('fetch', f);
+    const { result } = renderHook(() => useHeroBackground({ produce: false }));
+    expect(result.current.allowVideo).toBe(false);
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    expect(result.current.allowVideo).toBe(true);
+    expect(f).not.toHaveBeenCalled();
+    expect(result.current.backgroundVideos).toEqual([]);
+  });
+
   it('a failed fetch yields []', async () => {
     vi.useFakeTimers(); setup();
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('x')));

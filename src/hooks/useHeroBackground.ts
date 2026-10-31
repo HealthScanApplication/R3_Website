@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
 
-/** Mirrors HeroSection.tsx: reduced-motion detection, video gating and the delayed produce-clip fetch. */
-export function useHeroBackground(): { reduceMotion: boolean; backgroundVideos: string[] } {
+/**
+ * Mirrors HeroSection.tsx: reduced-motion detection, video gating and the delayed produce-clip fetch.
+ * Pass `{ produce: false }` when the caller brings its own clips: the gate still runs, the fetch does not.
+ */
+export function useHeroBackground({ produce = true }: { produce?: boolean } = {}): { reduceMotion: boolean; allowVideo: boolean; backgroundVideos: string[] } {
   const [reduceMotion, setReduceMotion] = useState(false);
   const [allowVideo, setAllowVideo] = useState(false);
   const [backgroundVideos, setBackgroundVideos] = useState<string[]>([]);
@@ -21,7 +24,7 @@ export function useHeroBackground(): { reduceMotion: boolean; backgroundVideos: 
   }, []);
 
   useEffect(() => {
-    if (!allowVideo) return;
+    if (!allowVideo || !produce) return;
     let cancelled = false;
     (async () => {
       try {
@@ -39,7 +42,7 @@ export function useHeroBackground(): { reduceMotion: boolean; backgroundVideos: 
       }
     })();
     return () => { cancelled = true; };
-  }, [allowVideo]);
+  }, [allowVideo, produce]);
 
-  return { reduceMotion, backgroundVideos };
+  return { reduceMotion, allowVideo, backgroundVideos };
 }

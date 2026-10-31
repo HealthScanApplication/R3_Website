@@ -79,3 +79,6 @@ export const SPEC_CLIP: SpecRow[] = [
   ['Worn as', 'Necklace, watch, or clip'],
   ['Privacy', 'Physical slider cuts the camera, microphones, and radios; red LED while the camera is on'],
 ];
+
+/** The /ring hero background clips, played in this order: one first-person moment per gesture. */
+export const HERO_CLIPS = ['meal', 'navigate', 'activity', 'music', 'reel'].map((id) => `/videos/hero/${id}.mp4`);
