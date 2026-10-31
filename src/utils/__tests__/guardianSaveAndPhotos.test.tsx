@@ -4,12 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Onboarding } from '../../components/guides/GuidePortal';
 
-const mocks = vi.hoisted(() => ({ save: vi.fn(), brands: vi.fn(), upload: vi.fn() }));
+const mocks = vi.hoisted(() => ({ save: vi.fn(), brands: vi.fn(), upload: vi.fn(), profile: vi.fn() }));
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'owner', app_metadata: {} }, accessToken: null, signOut: () => {} }) }));
 vi.mock('../supabase/client', async (importOriginal) => ({ ...await importOriginal<any>(), getSupabaseClient: () => ({ functions: { invoke: vi.fn() } }) }));
 vi.mock('../guidePortal', async (importOriginal) => ({
   ...await importOriginal<any>(),
-  getGuideProfile: async () => null,
+  getGuideProfile: async () => mocks.profile(),
   listGuideBrands: async () => [],
   saveGuideProfile: mocks.save,
   replaceGuideBrands: mocks.brands,
@@ -20,7 +20,7 @@ const ACCOUNT_AVATAR = 'https://lh3.example/account-photo.jpg';
 const UPLOADED = 'https://cdn.example/guide-assets/owner/photo-2.webp';
 
 beforeEach(() => {
-  mocks.save.mockReset(); mocks.brands.mockReset(); mocks.upload.mockReset();
+  mocks.save.mockReset(); mocks.brands.mockReset(); mocks.upload.mockReset(); mocks.profile.mockReset(); mocks.profile.mockReturnValue(null);
   mocks.save.mockImplementation(async (row: any) => ({ ...row, status: row.status, onboarding_step: row.onboarding_step }));
   mocks.brands.mockResolvedValue(undefined);
   mocks.upload.mockResolvedValue(UPLOADED);
@@ -132,5 +132,79 @@ describe('save on every part of the flow', () => {
     await screen.findByDisplayValue('Test Guide');
     fireEvent.click(within(photos()).getByRole('button', { name: 'Save photos' }));
     expect((await within(photos()).findByRole('alert')).textContent).toBe('Network down');
+  });
+});
+
+const LIVE_PROFILE = { user_id: 'owner', slug: 'test-guide', display_name: 'Test Guide', status: 'approved', onboarding_step: 5, social_links: {}, avatar_url: null, contact_email: 'guide@example.com' };
+const addBrand = async () => { fireEvent.click(await screen.findByRole('button', { name: /add brand/i })); await screen.findByDisplayValue('New brand'); };
+// The "Publishing as" chips read as an initial plus the name ("TTest Guide"); the sites filter has a chip with the bare name too.
+const openBrand = (name: string) => fireEvent.click(screen.getAllByRole('button').find((button) => button.textContent === `${name[0]}${name}`)!);
+const pickFile = (cell: string, name: string) => fireEvent.change(within(photos()).getByLabelText(cell), { target: { files: [new File(['x'], name, { type: 'image/png' })] } });
+
+describe('photos belong to the selected brand', () => {
+  it('a new business brand starts with an empty grid: no account photo, and it says whose photos they are', async () => {
+    setup();
+    await screen.findByDisplayValue('Test Guide');
+    expect(within(photos()).getByAltText('Your account photo')).toBeTruthy();
+    await addBrand();
+    const grid = photos();
+    expect(within(grid).queryByAltText('Your account photo')).toBeNull();
+    for (const n of [1, 2, 3, 4]) expect(within(grid).getByLabelText(`Add photo ${n}`)).toBeTruthy();
+    expect(within(grid).getByText('For New brand')).toBeTruthy();
+  });
+
+  it('keeps each brand\'s photos separate while switching between them', async () => {
+    setup();
+    await screen.findByDisplayValue('Test Guide');
+    await addBrand();
+    pickFile('Add photo 1', 'brand.png');
+    await waitFor(() => expect(within(photos()).getByAltText('Photo 1')).toBeTruthy());
+    expect(within(photos()).getByText(/1 of 4 added|Add at least 2/)).toBeTruthy();
+    openBrand('Test Guide');
+    await screen.findByDisplayValue('Test Guide');
+    expect(within(photos()).getByAltText('Your account photo')).toBeTruthy(); // the personal brand's own
+    expect(within(photos()).queryByAltText('Photo 1')).toBeNull(); // not the other brand's upload
+    openBrand('New brand');
+    await screen.findByDisplayValue('New brand');
+    expect(within(photos()).getByAltText('Photo 1')).toBeTruthy(); // and it is still there
+  });
+});
+
+describe('a draft save cannot change who they publish as', () => {
+  it('keeps the live public url and status when the name is edited, and saves the photos', async () => {
+    mocks.profile.mockReturnValue(LIVE_PROFILE);
+    setup('Renamed Guide');
+    await waitFor(() => expect(screen.getByDisplayValue('Renamed Guide')).toBeTruthy());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    fireEvent.click(within(photos()).getByRole('button', { name: 'Save photos' }));
+    await waitFor(() => expect(mocks.save).toHaveBeenCalledTimes(1));
+    const row = mocks.save.mock.calls[0][0];
+    expect(row.slug).toBe('test-guide'); // not renamed to "renamed-guide"
+    expect(row.status).toBe('approved'); // a save never un-publishes
+  });
+
+  it('saving while a business brand is open leaves the profile row alone and keeps the personal brand primary', async () => {
+    mocks.profile.mockReturnValue(LIVE_PROFILE);
+    setup();
+    await screen.findByDisplayValue('Test Guide');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await addBrand();
+    fireEvent.click(within(photos()).getByRole('button', { name: 'Save photos' }));
+    await waitFor(() => expect(mocks.brands).toHaveBeenCalledTimes(1));
+    expect(mocks.save).not.toHaveBeenCalled(); // no rename, no new slug, no photos written over the profile
+    const brands = mocks.brands.mock.calls[0][1] as Array<{ name: string; kind: string; is_primary: boolean; social_links: Record<string, string> }>;
+    expect(brands.filter((brand) => brand.is_primary).map((brand) => brand.kind)).toEqual(['personal']);
+    expect(brands.find((brand) => brand.name === 'New brand')!.is_primary).toBe(false);
+    expect(JSON.parse(brands.find((brand) => brand.kind === 'personal')!.social_links.photos)).toEqual([ACCOUNT_AVATAR]);
+  });
+
+  it('asks for the personal profile to be saved first when there is no profile yet', async () => {
+    setup();
+    await screen.findByDisplayValue('Test Guide');
+    await addBrand();
+    fireEvent.click(within(photos()).getByRole('button', { name: 'Save photos' }));
+    expect((await within(photos()).findByRole('alert')).textContent).toMatch(/Save your personal profile first/);
+    expect(mocks.save).not.toHaveBeenCalled();
+    expect(mocks.brands).not.toHaveBeenCalled();
   });
 });
