@@ -15,9 +15,9 @@ const badge: React.CSSProperties = { position: 'absolute', top: 8, left: 8, padd
 const primary: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 40, padding: '0 16px', border: `1px solid ${ink}`, background: ink, color: black, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase' };
 const secondary: React.CSSProperties = { minHeight: 40, padding: '0 14px', border: `1px solid ${line}`, background: 'transparent', color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase' };
 
-/** The one reference image of the style: a carved stone bust. Their own result is the "after", so there is no example pair. */
+/** The one reference image of the style: an As-Tro plate. Their own result is the "after", so there is no example pair. */
 export const HOUSE_STYLE_EXAMPLE = {
-  goal: '/images/guides/house-style/example-before.webp',
+  goal: '/images/guides/house-style/goal-astro.webp',
 };
 
 export interface HouseStyleAvatarPanelProps {
@@ -69,12 +69,12 @@ export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, 
         {!resultUrl && featured && (
           <figure style={{ margin: 0, minWidth: 0 }}>
             <div aria-label="Your R3 house style will appear here" style={{ aspectRatio: '1', display: 'grid', placeItems: 'center', padding: 16, boxSizing: 'border-box', border: `1px dashed ${line}`, background: panel, color: muted, fontSize: 12, lineHeight: 1.5 }}>
-              {converting ? 'Carving your bust…' : 'Your R3 house style appears here'}
+              {converting ? 'Illustrating your portrait…' : 'Your R3 house style appears here'}
             </div>
             <figcaption style={{ ...label, marginTop: 8, textAlign: 'center' }}>R3 house style</figcaption>
           </figure>
         )}
-        {resultUrl && <Shot src={resultUrl} alt={resultMock ? 'Placeholder test image standing in for your R3 house style portrait' : 'Your portrait in the R3 house style'} caption="R3 house style" tag={resultMock ? 'Test image' : undefined} grey />}
+        {resultUrl && <Shot src={resultUrl} alt={resultMock ? 'Placeholder test image standing in for your R3 house style portrait' : 'Your portrait in the R3 house style'} caption="R3 house style" tag={resultMock ? 'Test image' : undefined} grey={resultMock} />}
       </div>
       {resultUrl && resultMock && (
         <p id={noteId} style={{ color: muted, fontSize: 12, lineHeight: 1.6, margin: '14px auto 0', maxWidth: 480 }}>
@@ -106,10 +106,10 @@ export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, 
       <div aria-label="The R3 house style to aim for" style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${line}` }}>
         <span style={{ ...label, textAlign: 'center' }}>The R3 house style to aim for</span>
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,200px)', justifyContent: 'center', marginTop: 12 }}>
-          <Shot src={HOUSE_STYLE_EXAMPLE.goal} alt="A carved grey stone bust of a young man with an open book at its base, lit softly on a plain white background." caption="The goal" tag="Example" size={400} />
+          <Shot src={HOUSE_STYLE_EXAMPLE.goal} alt="An As-Tro plate: an engraved fine-art illustration of a robed apostle holding a staff, in muted grey tones with fine linework, isolated on a transparent background." caption="The goal" tag="Example" size={400} />
         </div>
         <p style={{ color: muted, fontSize: 12, lineHeight: 1.6, margin: '12px auto 0', maxWidth: 520 }}>
-          R3 house style turns your photo into a carved stone bust, like the figures on As-Tro: grey stone with visible grain, one soft side light, a round stone base and a near-black backdrop. It keeps you looking like you.
+          R3 house style turns your photo into an antique fine-art illustration in the As-Tro style: classical engraved portraiture with delicate painterly shading and muted natural colours, cleanly cut out on a transparent background. It keeps you looking like you.
         </p>
       </div>
     </section>
