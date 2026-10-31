@@ -302,17 +302,52 @@ describe('PreorderBlock', () => {
       expect(root(container).style.maxWidth).toBe('');
       await waitFor(() => expect(count).toHaveBeenCalled());
     });
-    it('hero renders the frosted glass card', async () => {
+    it('hero is transparent, unboxed and has a single form row', async () => {
       const { container } = setup(okConfig, 'hero');
       const el = root(container);
       expect(el.getAttribute('data-variant')).toBe('hero');
-      expect(el.style.backgroundColor).toContain('0.78');
-      expect(el.style.maxWidth).toBe('560px');
+      expect(el.style.background).toBe('');
+      expect(el.style.backgroundColor).toBe('');
+      expect(el.style.border).toBe('');
+      expect(el.style.padding).toBe('');
+      expect(container.querySelectorAll('form')).toHaveLength(1);
+      expect(container.querySelectorAll('form input')).toHaveLength(1);
+      const filling = screen.queryByText(/first batch is filling/);
+      expect(!filling || !!filling.closest('[hidden]')).toBe(true);
       await waitFor(() => expect(count).toHaveBeenCalled());
+    });
+    it('hero input text matches the button label styling', async () => {
+      setup(okConfig, 'hero');
+      const input = screen.getByLabelText(/email/i) as HTMLInputElement;
+      const btn = screen.getByRole('button', { name: 'Reserve →' });
+      expect(input.placeholder).toBe('you@email.com');
+      for (const k of ['fontFamily', 'fontSize', 'fontWeight', 'letterSpacing', 'textTransform', 'color'] as const) {
+        expect(input.style[k]).toBeTruthy();
+        expect(input.style[k]).toBe(btn.style[k]);
+      }
+      await waitFor(() => expect(count).toHaveBeenCalled());
+    });
+    it('hero product toggles switch the price and show no struck prices', async () => {
+      setup(okConfig, 'hero');
+      expect(screen.queryByText('$199')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'R³ Note + Clip $299' }));
+      expect(screen.getByRole('button', { name: 'R³ Note + Clip $299' }).getAttribute('aria-pressed')).toBe('true');
+      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'qa@example.com' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Reserve →' }));
+      expect(await screen.findByRole('button', { name: 'Pay $299 →' })).toBeTruthy();
+      expect(intent).toHaveBeenCalledWith('bundle', 'qa@example.com', undefined);
+    });
+    it('hero shows the campaign end caption only once batch data loaded', async () => {
+      count.mockResolvedValue({ paid: 10, goal: 250, deadline: '2099-12-31T23:59:59Z', status: 'open' });
+      setup(okConfig, 'hero');
+      expect(screen.queryByText(/Campaign ends/)).toBeNull();
+      expect(await screen.findByText(/Campaign ends/)).toBeTruthy();
     });
     it('hero keeps the full happy path and success text', async () => {
       setup(okConfig, 'hero');
-      fireEvent.click(await toPayment());
+      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'qa@example.com' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Reserve →' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Pay $179 →' }));
       expect(await screen.findByText(/You're in — R³ Note reserved\./)).toBeTruthy();
       expect(handle.confirm).toHaveBeenCalledWith('qa@example.com');
     });
@@ -320,7 +355,7 @@ describe('PreorderBlock', () => {
       count.mockResolvedValue({ paid: 10, goal: 250, status: 'failed', deadline: '2099-12-31T23:59:59Z' });
       setup(okConfig, 'hero');
       expect(await screen.findByText('The first batch is closed.')).toBeTruthy();
-      expect((screen.getByRole('button', { name: 'Continue to payment' }) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByRole('button', { name: 'Reserve →' }) as HTMLButtonElement).disabled).toBe(true);
       expect((screen.getByLabelText(/email/i) as HTMLInputElement).disabled).toBe(true);
     });
   });

@@ -52,7 +52,7 @@ describe('HardwarePage', () => {
     expect(text).not.toContain('R³ Ring');
     expect(text).not.toMatch(/\bHeart\b(?!\s+rate)/);
     const prices = Array.from(new Set(text.match(/\$\d+(?:\.\d+)?/g) ?? [])).sort();
-    expect(prices).toEqual(['$179', '$199', '$299', '$349']);
+    expect(prices).toEqual(['$179', '$299']); // hero preorder shows no struck regular prices
   });
 
   it('has one #preorder inside the hero with the only checkout, and one email field', () => {
@@ -60,8 +60,8 @@ describe('HardwarePage', () => {
     expect(container.querySelectorAll('#preorder')).toHaveLength(1);
     const section = container.querySelector('#preorder') as HTMLElement;
     expect(section.closest('#hardware-hero')).toBeTruthy();
-    expect(screen.getAllByRole('button', { name: 'Continue to payment' })).toHaveLength(1);
-    expect(within(section).getByRole('button', { name: 'Continue to payment' })).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Reserve →' })).toHaveLength(1);
+    expect(within(section).getByRole('button', { name: 'Reserve →' })).toBeTruthy();
     expect(container.querySelectorAll('#preorder-email')).toHaveLength(1);
   });
 
