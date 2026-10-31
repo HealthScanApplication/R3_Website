@@ -16,14 +16,16 @@ interface ProviderSpec {
 }
 
 export const PROVIDERS: Record<Platform, ProviderSpec> = {
-  instagram: { label: 'Instagram', authorizeUrl: 'https://www.instagram.com/oauth/authorize', scopes: ['instagram_business_basic', 'instagram_business_content_publish'], scopeSeparator: ',', clientIdParam: 'client_id', extraAuthParams: { force_reauth: 'true' } },
+  // Newer Meta apps only get "Unified login": Instagram is reached through Facebook Login (the app's Facebook ID/secret) and the Page's linked Instagram account.
+  instagram: { label: 'Instagram', authorizeUrl: 'https://www.facebook.com/v21.0/dialog/oauth', scopes: ['instagram_basic', 'instagram_content_publish', 'pages_show_list', 'pages_read_engagement', 'business_management'], scopeSeparator: ',', clientIdParam: 'client_id', extraAuthParams: { auth_type: 'rerequest' } },
   facebook: { label: 'Facebook', authorizeUrl: 'https://www.facebook.com/v21.0/dialog/oauth', scopes: ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts'], scopeSeparator: ',', clientIdParam: 'client_id', extraAuthParams: {} },
   tiktok: { label: 'TikTok', authorizeUrl: 'https://www.tiktok.com/v2/auth/authorize/', scopes: ['user.info.basic', 'video.publish', 'video.upload'], scopeSeparator: ',', clientIdParam: 'client_key', extraAuthParams: {} },
   youtube: { label: 'YouTube', authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth', scopes: ['https://www.googleapis.com/auth/youtube.upload', 'https://www.googleapis.com/auth/youtube.readonly'], scopeSeparator: ' ', clientIdParam: 'client_id', extraAuthParams: { access_type: 'offline', prompt: 'consent', include_granted_scopes: 'true' } },
 };
 
 export const isPlatform = (v: unknown): v is Platform => typeof v === 'string' && (PLATFORMS as string[]).includes(v);
-export const envNames = (p: Platform) => ({ id: `${p.toUpperCase()}_CLIENT_ID`, secret: `${p.toUpperCase()}_CLIENT_SECRET` });
+/** Instagram signs in through the Meta app's Facebook Login, so it shares the FACEBOOK_* credentials. */
+export const envNames = (p: Platform) => { const base = p === 'instagram' ? 'FACEBOOK' : p.toUpperCase(); return { id: `${base}_CLIENT_ID`, secret: `${base}_CLIENT_SECRET` }; };
 
 export class ConfigError extends Error {}
 
@@ -121,16 +123,17 @@ const expiry = (seconds: unknown) => (Number(seconds) > 0 ? new Date(Date.now() 
 /** Swap the authorization code for tokens and look up the account name. The stored token JSON holds access (+ refresh) tokens. */
 export async function exchangeCode(p: Platform, code: string, creds: { clientId: string; clientSecret: string }, redirect: string, f: Fetch = fetch): Promise<ExchangeResult> {
   const form = (o: Record<string, string>) => ({ method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(o) });
-  if (p === 'instagram') {
-    const short = await jsonOrThrow(await f('https://api.instagram.com/oauth/access_token', form({ client_id: creds.clientId, client_secret: creds.clientSecret, grant_type: 'authorization_code', redirect_uri: redirect, code })), 'Instagram token exchange');
-    const long = await jsonOrThrow(await f(`https://graph.instagram.com/access_token?${new URLSearchParams({ grant_type: 'ig_exchange_token', client_secret: creds.clientSecret, access_token: short.access_token })}`), 'Instagram long-lived token');
-    const me = await jsonOrThrow(await f(`https://graph.instagram.com/me?${new URLSearchParams({ fields: 'user_id,username', access_token: long.access_token })}`), 'Instagram profile');
-    return { token: JSON.stringify({ access_token: long.access_token }), expiresAt: expiry(long.expires_in), providerAccountId: String(me.user_id || short.user_id || ''), label: me.username ? `@${me.username}` : 'Instagram', handle: me.username || '' };
-  }
-  if (p === 'facebook') {
+  if (p === 'facebook' || p === 'instagram') {
     const short = await jsonOrThrow(await f(`https://graph.facebook.com/v21.0/oauth/access_token?${new URLSearchParams({ client_id: creds.clientId, client_secret: creds.clientSecret, redirect_uri: redirect, code })}`), 'Facebook token exchange');
     const long = await jsonOrThrow(await f(`https://graph.facebook.com/v21.0/oauth/access_token?${new URLSearchParams({ grant_type: 'fb_exchange_token', client_id: creds.clientId, client_secret: creds.clientSecret, fb_exchange_token: short.access_token })}`), 'Facebook long-lived token');
     const me = await jsonOrThrow(await f(`https://graph.facebook.com/v21.0/me?${new URLSearchParams({ fields: 'id,name', access_token: long.access_token })}`), 'Facebook profile');
+    if (p === 'instagram') {
+      const pages = await jsonOrThrow(await f(`https://graph.facebook.com/v21.0/me/accounts?${new URLSearchParams({ fields: 'id,name,access_token,instagram_business_account{id,username}', access_token: long.access_token })}`), 'Instagram account lookup');
+      const page = (pages.data || []).find((x: any) => x?.instagram_business_account?.id);
+      if (!page) throw new Error('No Instagram Business or Creator account is linked to a Facebook Page you manage.');
+      const ig = page.instagram_business_account;
+      return { token: JSON.stringify({ access_token: long.access_token, page_id: page.id, page_access_token: page.access_token, ig_user_id: ig.id }), expiresAt: expiry(long.expires_in), providerAccountId: String(ig.id), label: ig.username ? `@${ig.username}` : 'Instagram', handle: ig.username || '' };
+    }
     return { token: JSON.stringify({ access_token: long.access_token }), expiresAt: expiry(long.expires_in), providerAccountId: String(me.id || ''), label: me.name || 'Facebook', handle: me.name || '' };
   }
   if (p === 'tiktok') {

@@ -22,7 +22,7 @@ describe('guardian-social state', () => {
 
 describe('guardian-social config', () => {
   it('names the missing env vars instead of failing opaquely', () => {
-    expect(() => platformCredentials('instagram', () => undefined)).toThrow('Instagram OAuth is not configured (set INSTAGRAM_CLIENT_ID and INSTAGRAM_CLIENT_SECRET).');
+    expect(() => platformCredentials('instagram', () => undefined)).toThrow('Instagram OAuth is not configured (set FACEBOOK_CLIENT_ID and FACEBOOK_CLIENT_SECRET).');
     expect(() => platformCredentials('youtube', (n) => (n === 'YOUTUBE_CLIENT_ID' ? 'id' : undefined))).toThrow(ConfigError);
     expect(platformCredentials('tiktok', (n) => `v-${n}`)).toEqual({ clientId: 'v-TIKTOK_CLIENT_ID', clientSecret: 'v-TIKTOK_CLIENT_SECRET' });
     expect(() => requireSecrets(() => undefined)).toThrow('SOCIAL_STATE_SECRET');
@@ -37,7 +37,9 @@ describe('guardian-social config', () => {
     expect(tt.searchParams.get('redirect_uri')).toBe(redirect);
     const yt = new URL(buildAuthorizeUrl('youtube', 'cid', 'st', redirect));
     expect(yt.searchParams.get('access_type')).toBe('offline');
-    expect(new URL(buildAuthorizeUrl('instagram', 'cid', 'st', redirect)).host).toBe('www.instagram.com');
+    const ig = new URL(buildAuthorizeUrl('instagram', 'cid', 'st', redirect));
+    expect(ig.host).toBe('www.facebook.com');
+    expect(ig.searchParams.get('scope')).toContain('instagram_content_publish');
     expect(new URL(buildAuthorizeUrl('facebook', 'cid', 'st', redirect)).host).toBe('www.facebook.com');
   });
   it('only returns to the site, localhost or allowed origins', () => {
@@ -73,6 +75,19 @@ describe('guardian-social tokens', () => {
     expect(JSON.parse(r.token)).toEqual({ access_token: 'at', refresh_token: 'rt' });
     expect(r).toMatchObject({ providerAccountId: 'oid', label: 'Barbara' });
     expect(calls).toHaveLength(2);
+  });
+  it('connects Instagram through Facebook Login and finds the Page-linked Instagram account', async () => {
+    const f = (async (url: string) => {
+      const u = String(url);
+      const body = u.includes('/me/accounts') ? { data: [{ id: 'p0', name: 'No IG' }, { id: 'p1', access_token: 'pt', instagram_business_account: { id: 'ig1', username: 'barbara' } }] }
+        : u.includes('fb_exchange_token') ? { access_token: 'long', expires_in: 5184000 } : { access_token: 'short' };
+      return new Response(JSON.stringify(body), { status: 200 });
+    }) as unknown as typeof fetch;
+    const r = await exchangeCode('instagram', 'c', { clientId: 'a', clientSecret: 'b' }, 'https://r', f);
+    expect(JSON.parse(r.token)).toMatchObject({ page_id: 'p1', page_access_token: 'pt', ig_user_id: 'ig1' });
+    expect(r).toMatchObject({ providerAccountId: 'ig1', label: '@barbara' });
+    const none = (async (url: string) => new Response(JSON.stringify(String(url).includes('/me/accounts') ? { data: [{ id: 'p0' }] } : { access_token: 't' }), { status: 200 })) as unknown as typeof fetch;
+    await expect(exchangeCode('instagram', 'c', { clientId: 'a', clientSecret: 'b' }, 'https://r', none)).rejects.toThrow('No Instagram Business');
   });
   it('surfaces provider errors', async () => {
     const f = (async () => new Response(JSON.stringify({ error: 'invalid_grant', error_description: 'bad code' }), { status: 400 })) as unknown as typeof fetch;

@@ -14,8 +14,7 @@ Deploy (migration `20261031120000_guide_social_oauth_nonce.sql` first; `--no-ver
 |---|---|
 | `SOCIAL_STATE_SECRET` | HMAC key for the signed OAuth state (`openssl rand -base64 32`) |
 | `SOCIAL_TOKEN_ENCRYPTION_KEY` | AES-256 key, 32 bytes base64 (`openssl rand -base64 32`). Losing it orphans stored tokens |
-| `INSTAGRAM_CLIENT_ID` / `INSTAGRAM_CLIENT_SECRET` | Meta app, "Instagram API with Instagram login" app ID + secret |
-| `FACEBOOK_CLIENT_ID` / `FACEBOOK_CLIENT_SECRET` | Meta app, Facebook Login app ID + secret |
+| `FACEBOOK_CLIENT_ID` / `FACEBOOK_CLIENT_SECRET` | Meta app ID + secret (App settings > Basic). Used for Facebook **and** Instagram (Instagram connects through Facebook Login and the Page's linked account) |
 | `TIKTOK_CLIENT_ID` / `TIKTOK_CLIENT_SECRET` | TikTok for Developers app client key + secret |
 | `YOUTUBE_CLIENT_ID` / `YOUTUBE_CLIENT_SECRET` | Google Cloud OAuth 2.0 Web client |
 | `PUBLIC_SITE_URL` | Default return origin (default `https://routine3.com`) |
