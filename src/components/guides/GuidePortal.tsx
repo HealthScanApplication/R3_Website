@@ -2034,7 +2034,6 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [avatarConverting, setAvatarConverting] = useState(false);
   const [avatarApplying, setAvatarApplying] = useState(false);
-  const [houseStyleOpen, setHouseStyleOpen] = useState(false);
   const [avatarPreviewMock, setAvatarPreviewMock] = useState(false);
   const [avatarError, setAvatarError] = useState('');
   const houseStylePanelId = useId();
@@ -2476,7 +2475,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     setAvatarApplying(true); setAvatarError(''); setImportMessage('');
     try {
       const url = await uploadGuideImage(userId, generatedImageFile(avatarPreviewUrl));
-      setAvatarUrl(url); setLogoUrl(url); setAvatarPreviewUrl(null); setHouseStyleOpen(false);
+      setAvatarUrl(url); setLogoUrl(url); setAvatarPreviewUrl(null);
       setImportMessage('R³ house-style avatar applied.');
     } catch (error) {
       setAvatarError(error instanceof Error ? error.message : 'Could not save the converted avatar.');
@@ -3048,18 +3047,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       <PhotoDropzone onFile={uploadPortrait} validate={portraitProblem} onReject={setImportMessage} accept={PORTRAIT_ACCEPT} disabled={uploading}>
         {({ open, dragging }) => (
       <>
-      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginTop: 18, padding: dragging ? 6 : 0, outline: dragging ? `2px dashed ${ink}` : 'none' }}>
-        {avatarUrl ? <img src={avatarUrl} alt="Profile" referrerPolicy="no-referrer" style={{ width: 36, height: 36, objectFit: 'cover', border: `1px solid ${line}` }} /> : <span aria-hidden="true" style={{ width: 36, height: 36, display: 'grid', placeItems: 'center', border: `1px solid ${line}`, color: muted, fontFamily: serif, fontSize: 16 }}>{displayName.trim().charAt(0) || 'B'}</span>}
-        <span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Profile image · optional</span>
-        <button type="button" onClick={open} disabled={uploading} aria-label={avatarUrl ? 'Replace profile image' : 'Upload profile image'} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer', background: 'transparent', border: 0, padding: 0 }}>
-          {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}{uploading ? 'Uploading' : avatarUrl ? 'Replace' : 'Upload'}
-        </button>
-        {avatarUrl && <button type="button" onClick={() => setHouseStyleOpen((value) => !value)} aria-expanded={houseStyleOpen} aria-controls={houseStylePanelId} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 28, padding: '0 9px', border: `1px solid ${houseStyleOpen ? ink : line}`, borderRadius: 2, color: ink, fontFamily: sans, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer', background: 'rgba(245,242,234,.04)' }}>
-          <Sparkles size={12} />R3 house style
-        </button>}
-        <span style={{ color: muted, fontSize: 9 }}>{dragging ? 'Drop to upload' : 'or drag a photo here'}</span>
-      </div>
-      <HouseStyleAvatarPanel id={houseStylePanelId} open={houseStyleOpen && !!avatarUrl} sourceUrl={avatarSource} needsUpload={avatarNeedsOwnPhoto} converting={avatarConverting} applying={avatarApplying} uploading={uploading} resultUrl={avatarPreviewUrl} resultMock={avatarPreviewMock} error={avatarError} onCreate={convertAvatarToHouseStyle} onUpload={open} onApply={applyConvertedAvatar} onCancel={() => { setAvatarPreviewUrl(null); setAvatarError(''); }} />
+      <HouseStyleAvatarPanel id={houseStylePanelId} dragging={dragging} sourceUrl={avatarSource} currentUrl={avatarUrl} needsUpload={avatarNeedsOwnPhoto} converting={avatarConverting} applying={avatarApplying} uploading={uploading} resultUrl={avatarPreviewUrl} resultMock={avatarPreviewMock} error={avatarError} onCreate={convertAvatarToHouseStyle} onUpload={open} onApply={applyConvertedAvatar} onCancel={() => { setAvatarPreviewUrl(null); setAvatarError(''); }} />
       </>
         )}
       </PhotoDropzone>

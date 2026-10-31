@@ -25,54 +25,48 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const setup = (accountAvatarUrl: string | null) => render(<Onboarding userId="owner" accessToken="t" name="Test Guide" email="guide@example.com" accountAvatarUrl={accountAvatarUrl} onDone={() => {}} />);
-const toggle = () => screen.getByRole('button', { name: /house style/i });
 const open = async (accountAvatarUrl: string | null) => {
   setup(accountAvatarUrl);
   await screen.findByDisplayValue('Test Guide');
-  fireEvent.click(toggle());
   return screen.getByRole('region', { name: 'R3 house style profile image' });
 };
 
 describe('R3 house style panel', () => {
-  it('toggles an inline panel with a large Before and After example and real alt text', async () => {
-    setup(null);
-    await screen.findByDisplayValue('Test Guide');
-    const button = toggle();
-    expect(button.getAttribute('aria-expanded')).toBe('false');
-    expect(screen.queryByRole('region', { name: 'R3 house style profile image' })).toBeNull();
-    fireEvent.click(button);
-    expect(button.getAttribute('aria-expanded')).toBe('true');
-    const panel = screen.getByRole('region', { name: 'R3 house style profile image' });
-    expect(document.getElementById(button.getAttribute('aria-controls')!)!.contains(panel)).toBe(true);
+  it('is one full-width, centred card: their photo featured, then the example, with each action once', async () => {
+    const panel = await open(OWN_PORTRAIT);
     const images = within(panel).getAllByRole('img') as HTMLImageElement[];
-    expect(images.map((image) => image.getAttribute('src'))).toEqual(['/images/guides/house-style/example-before.webp', '/images/guides/house-style/example-after.webp']);
-    for (const image of images) expect((image.getAttribute('alt') || '').length).toBeGreaterThan(30); // a real description, not a label
+    expect(images.map((image) => image.getAttribute('src'))).toEqual([OWN_PORTRAIT, '/images/guides/house-style/example-before.webp', '/images/guides/house-style/example-after.webp']);
+    for (const image of images) expect((image.getAttribute('alt') || '').length).toBeGreaterThan(10);
+    expect(within(panel).getByText('Your photo')).toBeTruthy();
     expect(within(panel).getByText('Before')).toBeTruthy();
     expect(within(panel).getByText('After')).toBeTruthy();
     expect(within(panel).getAllByText('Example').length).toBe(2);
     expect(panel.textContent).toMatch(/black and white/);
     expect(panel.textContent).toMatch(/no retouching/);
-    // The pair is two responsive squares that stack on a phone.
-    expect(panel.querySelector('div[style*="minmax(200px"]')).toBeTruthy();
-    fireEvent.click(button);
-    expect(button.getAttribute('aria-expanded')).toBe('false');
-    expect(screen.queryByRole('region', { name: 'R3 house style profile image' })).toBeNull();
+    expect((panel as HTMLElement).style.width).toBe('100%');
+    expect((panel as HTMLElement).style.textAlign).toBe('center');
+    // Replace and Create each exist exactly once on the whole form, and there is no separate toggle button any more.
+    expect(screen.getAllByRole('button', { name: 'Replace profile image' }).length).toBe(1);
+    expect(screen.getAllByRole('button', { name: 'Create my R3 house style' }).length).toBe(1);
+    expect(screen.queryByRole('button', { name: /^R3 house style$/i })).toBeNull();
+    expect(panel.querySelector('[aria-expanded]')).toBeNull();
   });
 
-  it('asks for a photo instead of converting a stock avatar, and opens the file picker', async () => {
+  it('asks for a photo instead of converting a stock avatar, and Replace opens the file picker', async () => {
     const panel = await open(null); // no account photo: the stock Guardian avatar is the portrait
     const picker = screen.getByTestId('photo-input') as HTMLInputElement;
     const opened = vi.spyOn(picker, 'click').mockImplementation(() => {});
-    expect(within(panel).queryByRole('button', { name: 'Create my R3 house style' })).toBeNull();
-    fireEvent.click(within(panel).getByRole('button', { name: 'Upload your photo to create yours' }));
+    expect((within(panel).getByRole('button', { name: 'Create my R3 house style' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(panel.textContent).toMatch(/stock image/i);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Replace profile image' }));
     expect(opened).toHaveBeenCalledTimes(1);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
 
   it('treats a stock avatar saved on the account the same way', async () => {
     const panel = await open('/images/guides/avatars/woman.png');
-    expect(within(panel).getByRole('button', { name: 'Upload your photo to create yours' })).toBeTruthy();
-    expect(within(panel).queryByRole('button', { name: 'Create my R3 house style' })).toBeNull();
+    expect((within(panel).getByRole('button', { name: 'Create my R3 house style' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(within(panel).getByRole('button', { name: 'Replace profile image' })).toBeTruthy();
   });
 
   it('converts their own portrait and shows their before and after with the three actions', async () => {
@@ -85,12 +79,13 @@ describe('R3 house style panel', () => {
     const images = within(panel).getAllByRole('img') as HTMLImageElement[];
     // Their pair first, then the house-style example kept beside it as the target to compare against.
     expect(images.map((image) => image.getAttribute('src'))).toEqual([OWN_PORTRAIT, REAL_IMAGE, '/images/guides/house-style/example-before.webp', '/images/guides/house-style/example-after.webp']);
+    expect(within(panel).queryByRole('button', { name: 'Replace profile image' })).toBeNull(); // the result's own actions replace it
     expect(within(panel).getByText('Original')).toBeTruthy();
     expect(within(panel).getByRole('button', { name: 'Try again' })).toBeTruthy();
     expect(within(panel).getByLabelText('The R3 house style to aim for')).toBeTruthy();
     expect(within(panel).getAllByText('Example').length).toBe(2);
     fireEvent.click(within(panel).getByRole('button', { name: 'Cancel' }));
-    expect(within(panel).getByRole('button', { name: 'Create my R3 house style' })).toBeTruthy(); // back to the example view
+    expect(within(panel).getByRole('button', { name: 'Create my R3 house style' })).toBeTruthy(); // back to their photo + Create
     expect(within(panel).getAllByText('Example').length).toBe(2);
   });
 
@@ -138,7 +133,7 @@ describe('R3 house style panel', () => {
     expect((within(panel).getByRole('button', { name: 'Try again' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it('lets a real result be applied as the avatar and closes the panel', async () => {
+  it('lets a real result be applied as the avatar, which then becomes the featured photo', async () => {
     mocks.invoke.mockResolvedValue({ data: { image: REAL_IMAGE, usd: 0.04, mock: false, size: '1024x1024' }, error: null });
     const panel = await open(OWN_PORTRAIT);
     fireEvent.click(within(panel).getByRole('button', { name: 'Create my R3 house style' }));
@@ -150,7 +145,10 @@ describe('R3 house style panel', () => {
     const [userId, file] = mocks.upload.mock.calls[0] as [string, File];
     expect(userId).toBe('owner');
     expect(file.type).toBe('image/webp');
-    await waitFor(() => expect(screen.queryByRole('region', { name: 'R3 house style profile image' })).toBeNull());
+    await waitFor(() => expect(within(panel).queryByRole('button', { name: 'Use this avatar' })).toBeNull());
+    const featured = within(panel).getAllByRole('img')[0] as HTMLImageElement;
+    expect(featured.getAttribute('src')).toBe('https://cdn.example/guide-assets/owner/profile-2.webp');
+    expect(within(panel).getByText('Your photo')).toBeTruthy();
     expect(screen.getByText('R³ house-style avatar applied.')).toBeTruthy();
   });
 
