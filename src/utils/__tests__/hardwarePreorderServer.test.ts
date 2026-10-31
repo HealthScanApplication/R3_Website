@@ -31,10 +31,12 @@ function server(envOverrides: Record<string, string | undefined> = {}) {
     return q;
   };
   const db = { from: (t: string) => t === 'hardware_batches' ? table(batches) : table(orders) };
+  const piCreates: Row[] = [];
+  const customerCreates: Row[] = [];
   const stripe = {
-    customers: { async list() { return { data: [] }; }, async create() { return { id: 'cus_new' }; } },
+    customers: { async list() { return { data: [] }; }, async create(p: Row) { customerCreates.push(p); return { id: 'cus_new' }; } },
     paymentIntents: {
-      async create(p: Row) { const i = { id: `pi_${intents.size + 1}`, status: 'processing', client_secret: 'sec', ...p }; intents.set(i.id, i); return i; },
+      async create(p: Row) { piCreates.push(p); const i = { id: `pi_${intents.size + 1}`, status: 'processing', client_secret: 'sec', ...p }; intents.set(i.id, i); return i; },
       async retrieve(id: string) { return intents.get(id); },
     },
     webhooks: { async constructEventAsync(body: string) { return JSON.parse(body); } },
@@ -51,7 +53,7 @@ function server(envOverrides: Record<string, string | undefined> = {}) {
   (globalThis as any).Deno = { env: { get: (k: string) => env[k] }, serve: (h: any) => { (globalThis as any).__handler = h; } };
   const mod: any = { exports: {} };
   new Function('module', 'exports', 'globalThis', js)(mod, mod.exports, globalThis);
-  return { handler: (globalThis as any).__handler as (r: Request) => Promise<Response>, orders, batches };
+  return { handler: (globalThis as any).__handler as (r: Request) => Promise<Response>, orders, batches, piCreates, customerCreates };
 }
 const post = (body: Row) => new Request('http://x', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
@@ -65,25 +67,60 @@ describe('hardware-preorders count', () => {
   });
 
   it('intent uses the server price and creates a pending row', async () => {
-    const { handler, orders } = server();
+    const { handler, orders, piCreates } = server();
     const res = await handler(post({ action: 'intent', product: 'ring', email: 'QA@Example.com', amount_cents: 1 }));
     const data = await res.json();
     expect(data.amount_cents).toBe(17900); // server price, not the browser's 1
     expect(data.client_secret).toBe('sec');
+    expect(piCreates).toHaveLength(1);
+    expect(piCreates[0]).toMatchObject({ amount: 17900, currency: 'usd', metadata: { product: 'ring' } });
     const row = orders.find(o => o.id === data.purchase_id);
-    expect(row.status).toBe('pending');
-    expect(row.email).toBe('qa@example.com'); // lowercased
-    expect(row.product).toBe('ring');
+    expect(row).toMatchObject({
+      status: 'pending', email: 'qa@example.com', product: 'ring', amount_cents: 17900, currency: 'USD',
+      batch_id: 'b1', stripe_payment_intent_id: 'pi_2', stripe_customer_id: 'cus_new',
+    });
   });
-  it('intent rejects an unknown product', async () => {
-    const { handler } = server();
-    const res = await handler(post({ action: 'intent', product: 'hat', email: 'qa@example.com' }));
-    expect(res.status).toBe(400);
+  it('intent prices the bundle server-side', async () => {
+    const { handler, orders, piCreates } = server();
+    const data = await (await handler(post({ action: 'intent', product: 'bundle', email: 'qa@example.com', amount_cents: 1 }))).json();
+    expect(data.amount_cents).toBe(29900);
+    expect(piCreates[0].amount).toBe(29900);
+    expect(orders.find(o => o.id === data.purchase_id)!.amount_cents).toBe(29900);
   });
-  it('intent rejects a bad email', async () => {
-    const { handler } = server();
-    const res = await handler(post({ action: 'intent', product: 'ring', email: 'nope' }));
+  it.each([
+    ['unknown product', { product: 'hat', email: 'qa@example.com' }, 'Choose a product.'],
+    ['__proto__ product', { product: '__proto__', email: 'qa@example.com' }, 'Choose a product.'],
+    ['constructor product', { product: 'constructor', email: 'qa@example.com' }, 'Choose a product.'],
+    ['bad email', { product: 'ring', email: 'nope' }, 'Enter a valid email.'],
+    ['over-length email', { product: 'ring', email: 'a'.repeat(250) + '@x.io' }, 'Enter a valid email.'],
+  ])('intent rejects %s', async (_n, input, message) => {
+    const { handler, piCreates } = server();
+    const res = await handler(post({ action: 'intent', ...input }));
     expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe(message);
+    expect(piCreates).toHaveLength(0);
+  });
+  it.each([
+    ['failed', { status: 'failed' }],
+    ['funded', { status: 'funded' }],
+    ['past deadline', { deadline: '2020-01-01T00:00:00Z' }],
+  ])('intent refuses a closed batch (%s) before touching Stripe', async (_n, over) => {
+    const { handler, batches, orders, piCreates, customerCreates } = server();
+    Object.assign(batches[0], over);
+    const before = orders.length;
+    const res = await handler(post({ action: 'intent', product: 'ring', email: 'qa@example.com' }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('This preorder batch is closed.');
+    expect(piCreates).toHaveLength(0);
+    expect(customerCreates).toHaveLength(0);
+    expect(orders).toHaveLength(before);
+  });
+  it('count still reports a failed batch', async () => {
+    const { handler, batches } = server();
+    batches[0].status = 'failed';
+    const res = await handler(post({ action: 'count' }));
+    expect(res.status).toBe(200);
+    expect((await res.json()).status).toBe('failed');
   });
 });
 
@@ -92,7 +129,7 @@ describe('hardware-preorders guards', () => {
     const off = server({ STRIPE_SECRET_KEY: 'sk_live_x' });
     expect((await off.handler(post({ action: 'count' }))).status).toBe(503);
     const on = server({ STRIPE_SECRET_KEY: 'sk_live_x', ALLOW_LIVE_PAYMENTS: 'true' });
-    expect((await on.handler(post({ action: 'count' }))).status).not.toBe(503);
+    expect((await on.handler(post({ action: 'count' }))).status).toBe(200);
   });
   it('returns 503 when the Stripe key is missing', async () => {
     const { handler } = server({ STRIPE_SECRET_KEY: undefined });
