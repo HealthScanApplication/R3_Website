@@ -9,7 +9,7 @@ import { PREORDER_TERMS, PRODUCTS, formatUsd } from './copy';
 import type { ProductKey } from './copy';
 
 type Step = 'details' | 'payment' | 'success' | 'processing';
-type Props = { mountPayment?: MountPayment; stripeConfig?: { enabled: boolean; error: string | null } };
+type Props = { mountPayment?: MountPayment; stripeConfig?: { enabled: boolean; error: string | null }; variant?: 'section' | 'hero' };
 
 const ACCENT = '#C7D99F';
 const ERROR = '#F3A89A';
@@ -30,7 +30,10 @@ const ghostButton: React.CSSProperties = {
   padding: '0 18px', fontFamily: GRO, fontSize: 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', cursor: 'pointer',
 };
 
-export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig }: Props) {
+export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig, variant = 'section' }: Props) {
+  const hero = variant === 'hero';
+  // Over the light hero video the small print needs more contrast than the section's soft tone.
+  const soft = hero ? 'rgba(244,241,234,0.88)' : ed.onDarkSoft;
   const config = stripeConfig ?? getGuardianStripeConfiguration();
   const [product, setProduct] = useState<ProductKey>('ring');
   const [email, setEmail] = useState('');
@@ -149,7 +152,14 @@ export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig
   const detailsDisabled = busy || !config.enabled || closed;
 
   return (
-    <div style={{ display: 'grid', gap: 20, color: ed.onDark }}>
+    <div
+      data-variant={variant}
+      style={hero ? {
+        display: 'grid', gap: 20, color: ed.onDark, background: 'rgba(16, 17, 15, 0.78)',
+        backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', border: '1px solid rgba(255,255,255,0.14)',
+        padding: 'clamp(18px, 2.4vw, 28px)', maxWidth: 560,
+      } : { display: 'grid', gap: 20, color: ed.onDark }}
+    >
       <BackerBar refreshKey={refreshKey} onData={(d) => setBatch({ status: d.status, deadline: d.deadline })} />
 
       {step !== 'success' && step !== 'processing' && (
@@ -166,7 +176,7 @@ export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig
                 onClick={() => setProduct(key)}
                 style={{ ...ghostButton, border: `1px solid ${on ? ed.onDark : ed.onDarkHair}`, background: on ? ed.onDark : 'transparent', color: on ? ed.dark : ed.onDark }}
               >
-                {p.name} {formatUsd(p.priceCents)} <s style={{ opacity: .6, fontWeight: 400 }}>{formatUsd(p.regPriceCents)}</s>
+                {p.name} {formatUsd(p.priceCents)} <s style={{ opacity: hero ? .8 : .6, fontWeight: 400 }}>{formatUsd(p.regPriceCents)}</s>
               </button>
             );
           })}
@@ -174,7 +184,7 @@ export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig
       )}
 
       {step === 'details' && endsOn && (
-        <p style={{ margin: 0, fontFamily: GRO, fontSize: 13, color: ed.onDarkSoft }}>Campaign ends {endsOn}.</p>
+        <p style={{ margin: 0, fontFamily: GRO, fontSize: 13, color: soft }}>Campaign ends {endsOn}.</p>
       )}
 
       {step === 'details' && (
@@ -185,8 +195,8 @@ export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig
             disabled={closed} onChange={(e) => setEmail(e.target.value)} placeholder="Enter your email address"
             style={{ minHeight: 60, minWidth: 0, border: `1px solid ${ed.onDarkHair}`, borderRadius: 0, background: 'rgba(255,255,255,.04)', color: ed.onDark, padding: '0 20px', fontFamily: GRO, fontSize: 15, outlineOffset: 3 }}
           />
-          {closed && <p role="status" style={{ margin: 0, fontFamily: GRO, fontSize: 13, color: ed.onDarkSoft }}>{MSG_CLOSED}</p>}
-          {!config.enabled && <p role="status" style={{ margin: 0, fontFamily: GRO, fontSize: 13, color: ed.onDarkSoft }}>{config.error || 'Preorders open soon.'}</p>}
+          {closed && <p role="status" style={{ margin: 0, fontFamily: GRO, fontSize: 13, color: soft }}>{MSG_CLOSED}</p>}
+          {!config.enabled && <p role="status" style={{ margin: 0, fontFamily: GRO, fontSize: 13, color: soft }}>{config.error || 'Preorders open soon.'}</p>}
           <button type="submit" disabled={detailsDisabled} style={primaryButton(detailsDisabled)}>
             {busy ? 'Starting…' : 'Continue to payment'}
           </button>
@@ -196,7 +206,7 @@ export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig
       {step === 'payment' && (
         <div style={{ display: 'grid', gap: 14 }}>
           <p style={{ ...eyebrow, margin: 0 }}>{selected.name} · {price}</p>
-          <div ref={containerRef} style={{ minHeight: 120 }} />
+          <div ref={containerRef} style={{ minHeight: hero ? 280 : 120 }} />
           <button type="button" onClick={pay} disabled={!ready || busy} style={primaryButton(!ready || busy)}>
             {busy ? 'Processing…' : `Pay ${price}`}
           </button>
@@ -215,7 +225,7 @@ export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig
 
       {error && step !== 'processing' && <p role="alert" style={{ margin: 0, fontFamily: GRO, fontSize: 13, color: ERROR }}>{error}</p>}
 
-      <p style={{ margin: 0, fontFamily: GRO, fontSize: 13, lineHeight: 1.55, color: ed.onDarkSoft }}>
+      <p style={{ margin: 0, fontFamily: GRO, fontSize: 13, lineHeight: 1.55, color: soft }}>
         {PREORDER_TERMS}
       </p>
     </div>

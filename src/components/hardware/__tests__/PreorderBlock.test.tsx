@@ -19,8 +19,8 @@ const okConfig = { enabled: true, error: null };
 let handle: { confirm: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn> };
 let mount: ReturnType<typeof vi.fn>;
 
-function setup(config: { enabled: boolean; error: string | null } = okConfig) {
-  return render(<PreorderBlock mountPayment={mount as any} stripeConfig={config} />);
+function setup(config: { enabled: boolean; error: string | null } = okConfig, variant?: 'section' | 'hero') {
+  return render(<PreorderBlock mountPayment={mount as any} stripeConfig={config} variant={variant} />);
 }
 async function toPayment(email = 'qa@example.com') {
   fireEvent.change(screen.getByLabelText(/email/i), { target: { value: email } });
@@ -292,5 +292,36 @@ describe('PreorderBlock', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Pay $179' }));
     expect(await screen.findByText(/You're in/)).toBeTruthy();
     expect(handle.confirm).toHaveBeenCalledTimes(1);
+  });
+
+  describe('variant', () => {
+    const root = (c: HTMLElement) => c.querySelector('[data-variant]') as HTMLElement;
+    it('defaults to the section variant', async () => {
+      const { container } = setup();
+      expect(root(container).getAttribute('data-variant')).toBe('section');
+      expect(root(container).style.maxWidth).toBe('');
+      await waitFor(() => expect(count).toHaveBeenCalled());
+    });
+    it('hero renders the frosted glass card', async () => {
+      const { container } = setup(okConfig, 'hero');
+      const el = root(container);
+      expect(el.getAttribute('data-variant')).toBe('hero');
+      expect(el.style.backgroundColor).toContain('0.78');
+      expect(el.style.maxWidth).toBe('560px');
+      await waitFor(() => expect(count).toHaveBeenCalled());
+    });
+    it('hero keeps the full happy path and success text', async () => {
+      setup(okConfig, 'hero');
+      fireEvent.click(await toPayment());
+      expect(await screen.findByText(/You're in — R³ Note reserved\./)).toBeTruthy();
+      expect(handle.confirm).toHaveBeenCalledWith('qa@example.com');
+    });
+    it('hero keeps the closed-batch notice and disabled form', async () => {
+      count.mockResolvedValue({ paid: 10, goal: 250, status: 'failed', deadline: '2099-12-31T23:59:59Z' });
+      setup(okConfig, 'hero');
+      expect(await screen.findByText('The first batch is closed.')).toBeTruthy();
+      expect((screen.getByRole('button', { name: 'Continue to payment' }) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByLabelText(/email/i) as HTMLInputElement).disabled).toBe(true);
+    });
   });
 });
