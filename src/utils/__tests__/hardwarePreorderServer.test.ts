@@ -3,10 +3,10 @@ import { transformSync } from 'esbuild';
 import { describe, expect, it } from 'vitest';
 
 type Row = Record<string, any>;
-function server() {
+function server(envOverrides: Record<string, string | undefined> = {}) {
   const batches: Row[] = [{ id: 'b1', name: 'first-run', goal_backers: 250, deadline: '2026-12-15T23:59:59Z', status: 'open' }];
   const orders: Row[] = [
-    { id: 'o1', batch_id: 'b1', product: 'ring', status: 'paid', stripe_payment_intent_id: 'pi_paid' },
+    { id: 'o1', batch_id: 'b1', product: 'ring', status: 'paid', stripe_payment_intent_id: 'pi_paid', email: 'someone@example.com', name: 'Some One' },
     { id: 'o2', batch_id: 'b1', product: 'bundle', status: 'pending', stripe_payment_intent_id: 'pi_pending' },
   ];
   const intents = new Map<string, Row>([['pi_pending', { id: 'pi_pending', status: 'processing' }]]);
@@ -47,6 +47,7 @@ function server() {
   const js = transformSync(src, { loader: 'ts', format: 'cjs' }).code;
   (globalThis as any).__stripe = stripe; (globalThis as any).__db = db;
   const env: Row = { STRIPE_SECRET_KEY: 'sk_test_x', SUPABASE_URL: 'http://x', SUPABASE_SERVICE_ROLE_KEY: 'x' };
+  for (const [k, v] of Object.entries(envOverrides)) { if (v === undefined) delete env[k]; else env[k] = v; }
   (globalThis as any).Deno = { env: { get: (k: string) => env[k] }, serve: (h: any) => { (globalThis as any).__handler = h; } };
   const mod: any = { exports: {} };
   new Function('module', 'exports', 'globalThis', js)(mod, mod.exports, globalThis);
@@ -61,5 +62,44 @@ describe('hardware-preorders count', () => {
     const data = await res.json();
     expect(data).toEqual({ paid: 1, goal: 250, deadline: '2026-12-15T23:59:59Z', status: 'open' });
     expect(JSON.stringify(data)).not.toMatch(/@/);
+  });
+
+  it('intent uses the server price and creates a pending row', async () => {
+    const { handler, orders } = server();
+    const res = await handler(post({ action: 'intent', product: 'ring', email: 'QA@Example.com', amount_cents: 1 }));
+    const data = await res.json();
+    expect(data.amount_cents).toBe(17900); // server price, not the browser's 1
+    expect(data.client_secret).toBe('sec');
+    const row = orders.find(o => o.id === data.purchase_id);
+    expect(row.status).toBe('pending');
+    expect(row.email).toBe('qa@example.com'); // lowercased
+    expect(row.product).toBe('ring');
+  });
+  it('intent rejects an unknown product', async () => {
+    const { handler } = server();
+    const res = await handler(post({ action: 'intent', product: 'hat', email: 'qa@example.com' }));
+    expect(res.status).toBe(400);
+  });
+  it('intent rejects a bad email', async () => {
+    const { handler } = server();
+    const res = await handler(post({ action: 'intent', product: 'ring', email: 'nope' }));
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('hardware-preorders guards', () => {
+  it('refuses a live Stripe key unless ALLOW_LIVE_PAYMENTS is true', async () => {
+    const off = server({ STRIPE_SECRET_KEY: 'sk_live_x' });
+    expect((await off.handler(post({ action: 'count' }))).status).toBe(503);
+    const on = server({ STRIPE_SECRET_KEY: 'sk_live_x', ALLOW_LIVE_PAYMENTS: 'true' });
+    expect((await on.handler(post({ action: 'count' }))).status).not.toBe(503);
+  });
+  it('returns 503 when the Stripe key is missing', async () => {
+    const { handler } = server({ STRIPE_SECRET_KEY: undefined });
+    expect((await handler(post({ action: 'count' }))).status).toBe(503);
+  });
+  it('rejects non-POST methods with 405', async () => {
+    const { handler } = server();
+    expect((await handler(new Request('http://x', { method: 'GET' }))).status).toBe(405);
   });
 });

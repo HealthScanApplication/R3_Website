@@ -39,6 +39,29 @@ Deno.serve(async (req) => {
       if (error) throw error;
       return json({ paid: (data ?? []).length, goal: batch.goal_backers, deadline: batch.deadline, status: batch.status });
     }
+    if (body.action === 'intent') {
+      const email = String(body.email || '').trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('Enter a valid email.');
+      const product = String(body.product || '');
+      const amount = PRICES[product];
+      if (!amount) return fail('Choose a product.');
+      const batch = await openBatch();
+      const found = await stripe.customers.list({ email, limit: 1 });
+      const customer = found.data[0] ?? await stripe.customers.create({ email, name: body.name || undefined });
+      const pi = await stripe.paymentIntents.create({
+        amount, currency: CURRENCY, customer: customer.id,
+        automatic_payment_methods: { enabled: true },
+        description: `R³ preorder (${product})`, receipt_email: email,
+        metadata: { product, batch_id: batch.id },
+      });
+      const { data, error } = await db.from('hardware_preorders').insert({
+        batch_id: batch.id, product, email, name: body.name || null,
+        amount_cents: amount, currency: CURRENCY.toUpperCase(),
+        stripe_customer_id: customer.id, stripe_payment_intent_id: pi.id,
+      }).select('id').single();
+      if (error) throw error;
+      return json({ purchase_id: data.id, client_secret: pi.client_secret, amount_cents: amount, currency: CURRENCY.toUpperCase() });
+    }
     return fail('Unknown action');
   } catch (err: any) {
     console.error('hardware-preorders', err?.message || err);
