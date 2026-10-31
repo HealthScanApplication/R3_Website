@@ -32,6 +32,18 @@ describe('workspace sites as tall website cards', () => {
     expect(within(section).queryByRole('group', { name: 'Filter sites by brand' })).toBeNull(); // one brand: no filter
   });
 
+  it('says each site\'s title and kind once, not over the picture and again under it', () => {
+    render1(one, 'personal', 'approved');
+    const section = screen.getByRole('region', { name: 'Your sites' });
+    const profileCard = section.querySelector('article[aria-label="Profile site: John Ferreira profile site"]') as HTMLElement;
+    expect(within(profileCard).getAllByText('John Ferreira profile site').length).toBe(1);
+    expect(within(profileCard).getAllByText('Profile site').length).toBe(1);
+    expect(profileCard.querySelector('[data-site-hero] span')).toBeNull(); // no text laid over the picture
+    const offerCard = section.querySelector('article[aria-label="Offer site: Better sleep"]') as HTMLElement;
+    expect(within(offerCard).getAllByText('Better sleep').length).toBe(1);
+    expect(within(offerCard).queryByText('Offer path')).toBeNull();
+  });
+
   it('shows a live preview of the page on a published site and the picture on a draft', () => {
     render1(one, 'personal', 'approved');
     const published = screen.getByRole('region', { name: 'Your sites' });
