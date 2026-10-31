@@ -13,20 +13,34 @@ const ramp = (id: string, name: string) => ({ id, name, slug: id, audience: 'Wom
 const related = { leads: [], offers: [], protocols: [], ramps: [ramp('better-sleep', 'Better sleep')] };
 const one = [{ id: 'personal', name: 'John Ferreira', kind: 'personal' as const, logo: null }];
 const two = [...one, { id: 'b2', name: 'Calm Co', kind: 'business' as const, logo: 'https://cdn.example/calm.png' }];
-const render1 = (brands = one, activeBrandId = 'personal') => render(<StepRelated step={1} guardianSlug="john-ferreira" displayName="John Ferreira" related={related} brands={brands} activeBrandId={activeBrandId} />);
+const render1 = (brands = one, activeBrandId = 'personal', profileStatus: any = null) => render(<StepRelated step={1} guardianSlug="john-ferreira" displayName="John Ferreira" related={related} brands={brands} activeBrandId={activeBrandId} profileStatus={profileStatus} />);
+const open = (section: HTMLElement, title: string) => within(section).queryByRole('button', { name: `Edit ${title}` });
 
-describe('workspace sites as wide cards', () => {
-  it('lays the sites out as wide cards in a grid that holds two per row', () => {
+describe('workspace sites as tall website cards', () => {
+  it('lays the sites out as tall cards in a grid that holds two per row', () => {
     render1();
     const section = screen.getByRole('region', { name: 'Your sites' });
-    const grid = section.querySelector('div[style*="repeat(auto-fill"]') as HTMLElement;
-    expect(grid.style.gridTemplateColumns).toMatch(/minmax\(min\(100%,\s*440px\)/); // 2 x 440 fits the 1100px column, 3 do not
-    expect(within(section).getByRole('button', { name: 'Open John Ferreira profile site' })).toBeTruthy();
-    expect(within(section).getByRole('button', { name: 'Open Better sleep' })).toBeTruthy();
+    const grid = section.querySelector('.g-sitecards') as HTMLElement;
+    expect(grid.style.gridTemplateColumns).toMatch(/minmax\(min\(440px,\s*100%\)/); // 2 x 440 fits the 1100px column, 3 do not
+    expect((section.querySelector('[data-site-hero]') as HTMLElement).style.aspectRatio).toBe('4 / 5'); // tall
+    expect(open(section, 'John Ferreira profile site')).toBeTruthy();
+    expect(open(section, 'Better sleep')).toBeTruthy();
     expect(within(section).getByText('/guardians/john-ferreira')).toBeTruthy();
-    expect(within(section).getByText(/2 offers · published/)).toBeTruthy();
+    expect(within(section).getByText('Profile site')).toBeTruthy();
+    expect(within(section).getByText('Offer site')).toBeTruthy();
     expect(within(section).getByText(/In your workspace · Your sites · 2/)).toBeTruthy();
     expect(within(section).queryByRole('group', { name: 'Filter sites by brand' })).toBeNull(); // one brand: no filter
+  });
+
+  it('shows a live preview of the page on a published site and the picture on a draft', () => {
+    render1(one, 'personal', 'approved');
+    const published = screen.getByRole('region', { name: 'Your sites' });
+    const preview = published.querySelector('[data-site-preview] iframe') as HTMLIFrameElement;
+    expect(preview.getAttribute('src')).toBe('/guardians/john-ferreira');
+    expect(preview.getAttribute('title')).toBe('John Ferreira profile site website preview');
+    cleanup();
+    render1(one, 'personal', 'draft');
+    expect(screen.getByRole('region', { name: 'Your sites' }).querySelector('[data-site-preview]')).toBeNull(); // not live: no preview of a page that is not public
   });
 
   it('shows every brand with a filter: All, the current brand first, then the others', () => {
@@ -34,19 +48,18 @@ describe('workspace sites as wide cards', () => {
     const section = screen.getByRole('region', { name: 'Your sites' });
     const chips = within(within(section).getByRole('group', { name: 'Filter sites by brand' })).getAllByRole('button').map((chip) => chip.textContent);
     expect(chips).toEqual(['All', 'Current · Calm Co', 'John Ferreira']);
-    expect(within(section).getByRole('button', { name: 'Open Calm Co profile site' })).toBeTruthy();
-    expect(within(section).getByRole('button', { name: 'Open John Ferreira profile site' })).toBeTruthy();
+    expect(open(section, 'Calm Co profile site')).toBeTruthy();
+    expect(open(section, 'John Ferreira profile site')).toBeTruthy();
     expect(within(section).getByText(/In your workspace · Your sites · 3/)).toBeTruthy(); // 2 brand sites + 1 offer path
-    expect(within(section).getByText('/guardians/john-ferreira · Business brand')).toBeTruthy();
   });
 
   it('filters to one brand, keeps the Guardian-wide offer path, and goes back to All', () => {
     render1(two, 'personal');
     const section = screen.getByRole('region', { name: 'Your sites' });
     fireEvent.click(within(section).getByRole('button', { name: 'Calm Co' }));
-    expect(within(section).queryByRole('button', { name: 'Open John Ferreira profile site' })).toBeNull();
-    expect(within(section).getByRole('button', { name: 'Open Calm Co profile site' })).toBeTruthy();
-    expect(within(section).getByRole('button', { name: 'Open Better sleep' })).toBeTruthy();
+    expect(open(section, 'John Ferreira profile site')).toBeNull();
+    expect(open(section, 'Calm Co profile site')).toBeTruthy();
+    expect(open(section, 'Better sleep')).toBeTruthy();
     expect(within(section).getByText(/In your workspace · Your sites · 2/)).toBeTruthy();
     expect(within(section).getByRole('button', { name: 'Calm Co' }).getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(within(section).getByRole('button', { name: 'All' }));
