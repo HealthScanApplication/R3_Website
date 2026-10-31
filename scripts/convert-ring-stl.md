@@ -8,7 +8,9 @@ The 3D viewer (`src/components/hardware/RingViewer.tsx`) loads two files that ar
 
 Until both exist, `/ring` shows the inline SVG ring illustration instead. Nothing is broken; the 3D model simply appears once the files are added.
 
-Source mesh: `Meshy_AI_smart_ring_refined_20261031_generate.stl`. Requires Blender 3.6+ on your machine.
+Note on the missing file: Netlify's forced `/* -> /index.html` rewrite means a missing `/models/r3-ring.glb` may come back as an HTML 200 rather than a 404. The viewer still falls back (the parse fails and `error` fires), but the poster is a silently broken image until the file exists.
+
+Source mesh: `Meshy_AI_smart_ring_refined_20261031_generate.stl`. Requires Blender on your machine. `bpy.ops.wm.stl_import` needs Blender 4.0+; on 3.6 use `bpy.ops.import_mesh.stl` instead.
 
 ## 1. Export the GLB
 
@@ -49,7 +51,7 @@ Check the size with `ls -lh public/models/r3-ring.glb`. If it is over ~2 MB, low
 
 ## 2. Make the poster
 
-The poster is a 1:1 render shown while the model loads. In Blender, open the STL, frame the ring the way you want the hero to look, and render a square image (Output properties: 1024 x 1024, PNG, transparent film). Then convert it:
+The poster is a 1:1 render shown while the model loads. In Blender, open the STL, frame the ring the way you want the hero to look, and render a square image (Output properties: 1024 x 1024, PNG, transparent film). Then convert it (needs `cwebp` or ImageMagick's `magick` installed):
 
 ```bash
 cwebp -q 82 r3-ring-poster.png -o public/models/r3-ring-poster.webp

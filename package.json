@@ -61,6 +61,7 @@
     "sonner": "^2.0.3",
     "suncalc": "2.1.1",
     "tailwind-merge": "*",
+    "three": "^0.169.0",
     "vaul": "^1.1.2"
   },
   "devDependencies": {

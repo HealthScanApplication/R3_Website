@@ -66,13 +66,15 @@ describe('RingViewer', () => {
   it('auto-rotates normally', async () => {
     const { container } = render(<RingViewer />);
     expect(viewer(container)!.getAttribute('auto-rotate')).not.toBeNull();
+    expect(viewer(container)!.getAttribute('rotation-per-second')).toBe('12deg');
     await waitFor(() => expect(reg.loads).toBe(1));
   });
 
-  it('omits auto-rotate under reduced motion', async () => {
+  it('omits auto-rotate and rotation-per-second under reduced motion', async () => {
     stubMotion(true);
     const { container } = render(<RingViewer />);
     expect(viewer(container)!.getAttribute('auto-rotate')).toBeNull();
+    expect(viewer(container)!.getAttribute('rotation-per-second')).toBeNull();
     await waitFor(() => expect(reg.loads).toBe(1));
   });
 
@@ -83,12 +85,36 @@ describe('RingViewer', () => {
     await waitFor(() => expect(reg.loads).toBe(1));
   });
 
-  it('swaps in the SVG fallback when the element fires error', async () => {
+  it('is never blank: the SVG shows and the viewer is transparent before load', async () => {
+    const { container } = render(<RingViewer />);
+    expect(screen.getByRole('img', { name: 'R³ Ring' })).toBeTruthy();
+    expect(viewer(container)!.style.opacity).toBe('0');
+    await waitFor(() => expect(reg.loads).toBe(1));
+  });
+
+  it('reveals the viewer and removes the SVG once the model loads', async () => {
+    const { container } = render(<RingViewer />);
+    await waitFor(() => expect(reg.loads).toBe(1));
+    fireEvent(viewer(container)!, new Event('load'));
+    await waitFor(() => expect(screen.queryByRole('img', { name: 'R³ Ring' })).toBeNull());
+    expect(viewer(container)!.style.opacity).toBe('1');
+  });
+
+  it('removes the viewer and keeps the SVG when the element fires error', async () => {
     const { container } = render(<RingViewer />);
     await waitFor(() => expect(reg.loads).toBe(1));
     fireEvent(viewer(container)!, new CustomEvent('error', { detail: { type: 'loadfailure' } }));
-    expect(await screen.findByRole('img', { name: 'R³ Ring' })).toBeTruthy();
-    expect(viewer(container)).toBeNull();
+    await waitFor(() => expect(viewer(container)).toBeNull());
+    expect(screen.getByRole('img', { name: 'R³ Ring' })).toBeTruthy();
+  });
+
+  it('gives each instance a distinct gradient id', async () => {
+    const { container } = render(<><RingViewer /><RingViewer /></>);
+    const ids = Array.from(container.querySelectorAll('linearGradient')).map((g) => g.id);
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).not.toBe(ids[1]);
+    expect(ids.every((id) => /^[\w-]+$/.test(id))).toBe(true);
+    await waitFor(() => expect(reg.loads).toBe(1));
   });
 
   it('shows the fallback when registration fails', async () => {
