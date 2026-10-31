@@ -48,7 +48,7 @@ function Shot({ src, alt, caption, tag, grey, size }: { src: string; alt: string
         <img src={src} alt={alt} width={size} height={size} decoding="async" style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', filter: grey ? 'grayscale(1)' : undefined }} />
         {tag && <span style={badge}>{tag}</span>}
       </div>
-      <figcaption style={{ ...label, marginTop: 8 }}>{caption}</figcaption>
+      <figcaption style={{ ...label, marginTop: 8, textAlign: 'center' }}>{caption}</figcaption>
     </figure>
   );
 }
@@ -59,8 +59,8 @@ export function HouseStyleAvatarPanel({ id, open, sourceUrl, needsUpload, conver
   return (
     <div id={id}>
       {open && (
-        <section aria-label="R3 house style profile image" style={{ maxWidth: 640, marginTop: 14, padding: 16, border: `1px solid ${line}`, background: 'rgba(245,242,234,.025)' }}>
-          <h3 style={{ ...label, margin: '0 0 12px' }}>{resultUrl ? 'Your R3 house style' : 'Example of the R3 house style'}</h3>
+        <section aria-label="R3 house style profile image" style={{ maxWidth: 640, margin: '14px auto 0', padding: 16, border: `1px solid ${line}`, background: 'rgba(245,242,234,.025)', textAlign: 'center' }}>
+          <h3 style={{ ...label, margin: '0 0 12px', textAlign: 'center' }}>{resultUrl ? 'Your R3 house style' : 'Example of the R3 house style'}</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 14 }}>
             {resultUrl ? (
               <>
@@ -74,6 +74,16 @@ export function HouseStyleAvatarPanel({ id, open, sourceUrl, needsUpload, conver
               </>
             )}
           </div>
+          {resultUrl && (
+            <div aria-label="The R3 house style to aim for" style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${line}` }}>
+              <span style={{ ...label, textAlign: 'center' }}>The R3 house style to aim for</span>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 10 }}>
+                <div style={{ width: 120 }}><Shot src={HOUSE_STYLE_EXAMPLE.before} alt="A stone bust of a young man on a plain white background, with an open book at its base." caption="Before" tag="Example" size={240} /></div>
+                <div style={{ width: 120 }}><Shot src={HOUSE_STYLE_EXAMPLE.after} alt="The same bust without the book, framed head and shoulders in black and white on a soft warm grey backdrop with gentle window light." caption="After" tag="Example" size={240} /></div>
+              </div>
+              <p style={{ color: muted, fontSize: 12, lineHeight: 1.6, margin: '10px auto 0', maxWidth: 480 }}>Yours should be black and white, softly lit from a window, with a warm grey backdrop, framed head and shoulders.</p>
+            </div>
+          )}
           {!resultUrl && (
             <p style={{ color: muted, fontSize: 12, lineHeight: 1.6, margin: '14px 0 0' }}>
               This is the default profile image before and after. R3 house style makes a calm editorial portrait: black and white, soft window light, a warm grey backdrop, framed head and shoulders. It keeps you looking like you, with no retouching, and removes the old background, text, logos and other people.
@@ -84,7 +94,7 @@ export function HouseStyleAvatarPanel({ id, open, sourceUrl, needsUpload, conver
               Live image generation is currently in test mode. This is a placeholder, so it cannot be saved as your avatar yet.
             </p>
           )}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 14 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 14 }}>
             {resultUrl ? (
               <>
                 <button type="button" onClick={onApply} disabled={applying || resultMock} aria-describedby={resultMock ? noteId : undefined} style={{ ...primary, opacity: resultMock ? 0.45 : 1, cursor: applying ? 'wait' : resultMock ? 'not-allowed' : 'pointer' }}>{applying ? 'Applying…' : 'Use this avatar'}</button>
@@ -102,7 +112,7 @@ export function HouseStyleAvatarPanel({ id, open, sourceUrl, needsUpload, conver
             )}
           </div>
           {!resultUrl && needsUpload && <p style={{ color: muted, fontSize: 11, lineHeight: 1.5, margin: '10px 0 0' }}>You are using a stock image, so there is nothing of yours to convert yet.</p>}
-          {error && <p role="alert" style={{ color: ink, background: 'rgba(245,242,234,.06)', borderLeft: `2px solid ${acid}`, fontSize: 12, lineHeight: 1.5, margin: '12px 0 0', padding: '8px 10px' }}>{error}</p>}
+          {error && <p role="alert" style={{ color: ink, background: 'rgba(245,242,234,.06)', borderLeft: `2px solid ${acid}`, fontSize: 12, lineHeight: 1.5, margin: '12px auto 0', padding: '8px 10px', maxWidth: 480, textAlign: 'left' }}>{error}</p>}
         </section>
       )}
     </div>
