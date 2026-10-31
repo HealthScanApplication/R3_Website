@@ -20,6 +20,8 @@ export type FinishSpec = {
   watch: MaterialParams;
   /** The watch screen: `ink` drawn on `ground`; the face around the window is `ground` too. */
   screen: ScreenScheme;
+  /** A thin ring around the watch face's screen ground, only where the face and case would read as one (White). */
+  bezel?: string;
 };
 
 export const FINISH_SPECS: Record<Finish, FinishSpec> = {
@@ -29,6 +31,7 @@ export const FINISH_SPECS: Record<Finish, FinishSpec> = {
     ring: { color: '#f2f1ec', metalness: 0.05, roughness: 0.25 },
     watch: { color: '#f2f1ec', metalness: 0.05, roughness: 0.25 },
     screen: { ink: '#111111', ground: '#f4f2ec' },
+    bezel: '#1a1a1a',
   },
   black: {
     label: 'Black',

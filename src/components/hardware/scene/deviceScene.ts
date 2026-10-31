@@ -54,6 +54,11 @@ export function deviceRingYaw(t: number, reducedMotion: boolean): number {
 // ---- Layout ----
 export const SCREEN_PX = 200;
 const FOV = 30;
+/**
+ * Framing margin per device (frameDistance's default is 1.15). The watch's swept cylinder includes its bracelet loop's
+ * depth, so at the default it framed small beside the ring; a tighter margin makes it fill its card about as much.
+ */
+export const FRAME_MARGIN: Record<Device, number> = { ring: 1.15, watch: 1.0 };
 const ELEVATION = THREE.MathUtils.degToRad(8);
 const RING_TILT = THREE.MathUtils.degToRad(-12);     // the standing ring leans back a little, so the hole reads
 const MAX_YAW = 0.6, MAX_PITCH = 0.25, DRAG_RATE = 12, RETURN_RATE = 4;
@@ -178,7 +183,7 @@ export async function createDeviceScene(container: HTMLElement, options: DeviceS
       const w = Math.max(1, container.clientWidth), h = Math.max(1, container.clientHeight);
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
-      const d = frameDistance(compSize, camera.aspect, FOV);
+      const d = frameDistance(compSize, camera.aspect, FOV, FRAME_MARGIN[device]);
       camera.position.set(0, Math.sin(ELEVATION) * d, Math.cos(ELEVATION) * d);
       camera.far = d + 10;
       camera.lookAt(0, 0, 0);

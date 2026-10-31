@@ -17,6 +17,7 @@ const h = vi.hoisted(() => ({
   loadRing: null as null | ((url: string, finish?: string) => Promise<unknown>),
   loadClip: null as null | ((url: string, o: { screenTexture: unknown; finish?: string }) => Promise<unknown>),
   fills: [] as string[],
+  margins: [] as Array<number | undefined>,
 }));
 
 vi.mock('three', async orig => {
@@ -44,6 +45,10 @@ vi.mock('three', async orig => {
   return { ...actual, WebGLRenderer: FakeRenderer, PMREMGenerator: FakePMREM };
 });
 
+vi.mock('../framing', async orig => {
+  const actual = await orig<typeof import('../framing')>();
+  return { ...actual, frameDistance: (...a: Parameters<typeof actual.frameDistance>) => { h.margins.push(a[3]); return actual.frameDistance(...a); } };
+});
 vi.mock('../ringModel', async orig => {
   const actual = await orig<typeof import('../ringModel')>();
   return { ...actual, loadRing: (url: string, finish?: string) => h.loadRing!(url, finish) };
@@ -54,7 +59,7 @@ vi.mock('../retroClipModel', async orig => {
 });
 
 import {
-  CLIP_URL, RING_REST_YAW, RING_URL, WATCH_MAX_OFF, WATCH_MIN_OFF, WATCH_REST_YAW,
+  CLIP_URL, FRAME_MARGIN, RING_REST_YAW, RING_URL, WATCH_MAX_OFF, WATCH_MIN_OFF, WATCH_REST_YAW,
   createDeviceScene as create, deviceWatchYaw, type DeviceSceneHandle, type DeviceSceneOptions,
 } from '../deviceScene';
 import { FINISH_SPECS } from '../finishes';
@@ -84,6 +89,7 @@ beforeEach(() => {
   h.renderers = [];
   h.pmrems = [];
   h.fills = [];
+  h.margins = [];
   ringMesh = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.1, 8, 16).rotateX(Math.PI / 2), new THREE.MeshPhysicalMaterial({ color: FINISH_SPECS.white.ring.color }));
   h.loadRing = vi.fn(async () => ringMesh);
   h.loadClip = vi.fn(async (_url: string, o: { screenTexture: unknown; finish?: string }) => buildRetroWatch(watchBytes(), o as { screenTexture: THREE.Texture; finish?: 'white' }));
@@ -162,6 +168,17 @@ describe('createDeviceScene', () => {
     expect((screen.material as THREE.MeshBasicMaterial).map).toBeInstanceOf(THREE.CanvasTexture);
     expect(h.fills[0]).toBe(FINISH_SPECS.white.screen.ground);
     expect(bodyOf(scene).color.getHexString()).toBe(FINISH_SPECS.white.watch.color.slice(1));
+  });
+
+  it('frames the watch tighter than the ring, so it fills its card about as much', async () => {
+    expect(FRAME_MARGIN.ring).toBe(1.15);   // the ring is unchanged
+    expect(FRAME_MARGIN.watch).toBeLessThan(FRAME_MARGIN.ring);
+    await createDeviceScene(container, { device: 'watch', finish: 'white', reducedMotion: false });
+    expect(h.margins.length).toBeGreaterThan(0);
+    h.margins.forEach(m => expect(m).toBe(FRAME_MARGIN.watch));
+    h.margins = [];
+    await createDeviceScene(container, { device: 'ring', finish: 'white', reducedMotion: false });
+    h.margins.forEach(m => expect(m).toBe(FRAME_MARGIN.ring));
   });
 
   it('turns the ring continuously', async () => {

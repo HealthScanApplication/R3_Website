@@ -67,6 +67,28 @@ describe('DevicePair', () => {
     expect(screen.getByText(/necklace, a watch, or a clip/)).toBeTruthy();
   });
 
+  it('lists Inputs / Outputs / Value under each card with the exact text', () => {
+    render(<DevicePair />);
+    const expected: Record<string, string[][]> = {
+      'R³ Note': [
+        ['Inputs', 'Tap, double tap, press and hold, swipe. Heart rate, sleep and activity sensors.'],
+        ['Outputs', "Commands to the R³ Clip's camera and microphone, and to your phone: music and your AI agent."],
+        ['Value', 'Log anything without taking your phone out.'],
+      ],
+      'R³ Clip': [
+        ['Inputs', "Camera (photo and video), microphone, heart rate, sleep and activity sensors, and your phone's GPS."],
+        ['Outputs', 'Logged meals, activities, tasks and journals; directions to your next calendar event; replies from your AI agent; an end-of-day reel.'],
+        ['Value', 'A record of your day, made in the moment.'],
+      ],
+    };
+    for (const [title, rows] of Object.entries(expected)) {
+      const dls = card(title).querySelectorAll('dl');
+      expect(dls).toHaveLength(1);
+      const got = Array.from(dls[0].querySelectorAll('dt')).map(dt => [dt.textContent, dt.nextElementSibling?.tagName === 'DD' ? dt.nextElementSibling.textContent : null]);
+      expect(got).toEqual(rows);
+    }
+  });
+
   it('while loading shows only the backdrop: no drawing, and the scene module is not imported before intersecting', async () => {
     render(<DevicePair />);
     expect(screen.queryByRole('img', { name: RING })).toBeNull();

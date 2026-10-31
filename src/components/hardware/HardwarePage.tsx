@@ -1,8 +1,9 @@
 import React from 'react';
 import { DISPLAY, GRO, ed } from '../../config/editorialTheme';
 import { HardwareHero } from './HardwareHero';
-import { HowItWorks } from './HowItWorks';
+import { GestureSection } from './GestureSection';
 import { DevicePair } from './DevicePair';
+import { UseCases } from './UseCases';
 import { AiAssistant } from './AiAssistant';
 import { SpecSheet } from './SpecSheet';
 import { PRODUCTS, formatUsd } from './copy';
@@ -13,8 +14,9 @@ export function HardwarePage() {
   return (
     <div id="hardware-page" style={{ background: ed.dark, color: ed.onDark, minHeight: '60vh' }}>
       <HardwareHero />
-      <HowItWorks />
+      <GestureSection />
       <DevicePair />
+      <UseCases />
       <AiAssistant />
       <SpecSheet />
       <section aria-labelledby="hardware-closing-title">

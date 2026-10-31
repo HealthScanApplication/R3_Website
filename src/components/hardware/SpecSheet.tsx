@@ -1,17 +1,8 @@
 import React from 'react';
 import { DISPLAY, GRO, ed } from '../../config/editorialTheme';
+import { SPEC_CLIP, SPEC_RING, type SpecRow } from './copy';
 
-type Row = [string, string];
-const RING: Row[] = [['Control', 'Touch and slide'], ['Works with', 'R³ Clip']];
-const CLIP: Row[] = [
-  ['Camera', '8 MP wide-angle, 160° field of view'],
-  ['Captures', 'Food, activity, voice notes, AI requests'],
-  ['Tracks', 'Heart rate'],
-  ['Worn as', 'Necklace, watch, or clip'],
-  ['Privacy', 'Physical slider cuts the camera, microphones, and radios; red LED while the camera is on'],
-];
-
-function SpecList({ title, rows }: { title: string; rows: Row[] }) {
+function SpecList({ title, rows }: { title: string; rows: SpecRow[] }) {
   return (
     <div>
       <h3 style={{ margin: '0 0 16px', fontFamily: DISPLAY, fontSize: 'clamp(1.5rem, 2.2vw, 2.2rem)', fontWeight: 400 }}>{title}</h3>
@@ -34,8 +25,8 @@ export function SpecSheet() {
         <h2 id="specs-title" style={{ margin: '0 0 16px', fontFamily: DISPLAY, fontSize: 'clamp(2.2rem, 4.4vw, 4.4rem)', fontWeight: 380, lineHeight: 1, letterSpacing: '-0.03em' }}>Specifications</h2>
         <p style={{ margin: '0 0 40px', fontFamily: GRO, fontSize: 15, color: ed.onDarkSoft }}>Planned specifications. Final details are confirmed before manufacturing.</p>
         <div className="r3-hw-specs" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'clamp(24px, 4vw, 56px)', alignItems: 'start' }}>
-          <SpecList title="R³ Note" rows={RING} />
-          <SpecList title="R³ Clip" rows={CLIP} />
+          <SpecList title="R³ Note" rows={SPEC_RING} />
+          <SpecList title="R³ Clip" rows={SPEC_CLIP} />
         </div>
       </div>
       <style>{`@media (max-width: 800px) { .r3-hw-specs { grid-template-columns: 1fr !important; } }`}</style>

@@ -153,3 +153,44 @@ describe('watch finishes', () => {
     watch.dispose();
   });
 });
+
+describe('white watch bezel', () => {
+  const bezelOf = (w: ReturnType<typeof buildRetroWatch>) => w.group.getObjectByName('screenBezel') as THREE.Mesh;
+
+  it('white shows a thin near-black bezel around the screen ground; black (the hero) and silver hide it', () => {
+    const white = buildRetroWatch(watchBytes(), { screenTexture: new THREE.Texture(), finish: 'white' });
+    const b = bezelOf(white);
+    expect(b).toBeTruthy();
+    expect(b.visible).toBe(true);
+    expect((b.material as THREE.MeshBasicMaterial).color.getHexString()).toBe('1a1a1a');
+    // Inside the face, outside the window: every vertex lies beyond the screen window and within the ground's outline.
+    const p = b.geometry.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const x = Math.abs(p.getX(i)), y = Math.abs(p.getY(i));
+      expect(x <= 15.7 + 1e-6 && y <= 13.95 + 1e-6).toBe(true);
+      expect(x >= 13.5 || y >= 11.75 || x + y >= 21).toBe(true);
+    }
+    // It draws over the ground (its parent), under the crystal.
+    expect(b.parent?.name).toBe('screenGround');
+    expect(b.position.z).toBeGreaterThan(0);
+    white.dispose();
+    for (const finish of [undefined, 'black', 'silver'] as const) {
+      const w = buildRetroWatch(watchBytes(), { screenTexture: new THREE.Texture(), finish });
+      expect(bezelOf(w).visible).toBe(false);
+      w.dispose();
+    }
+  });
+
+  it('applyWatchFinish shows the bezel on white and hides it on black and silver', () => {
+    const w = buildRetroWatch(watchBytes(), { screenTexture: new THREE.Texture(), finish: 'black' });
+    const b = bezelOf(w);
+    applyWatchFinish(w, 'white');
+    expect(b.visible).toBe(true);
+    expect((b.material as THREE.MeshBasicMaterial).color.getHexString()).toBe('1a1a1a');
+    applyWatchFinish(w, 'silver');
+    expect(b.visible).toBe(false);
+    applyWatchFinish(w, 'black');
+    expect(b.visible).toBe(false);
+    w.dispose();
+  });
+});

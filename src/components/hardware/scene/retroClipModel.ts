@@ -10,7 +10,8 @@
  * `lensBlend` camera at [12, 14.9, -0.2]; no end caps (the bracelet runs into the case). Helpers ported: `octagon`
  * (~1803), `add` (~940), `lensBlend` (~1897), `crystalMat` (~935), colours from `PRO.black` and `UI.black`.
  *
- * Changed: the finishes in finishes.ts (default black, the artifact's colourway; `applyWatchFinish` re-colours); the screen is a MeshBasicMaterial (the artifact's `displayMat`) showing the
+ * Changed: the finishes in finishes.ts (default black, the artifact's colourway; `applyWatchFinish` re-colours; White adds a
+ * thin dark bezel at the face's edge, `screenBezel`); the screen is a MeshBasicMaterial (the artifact's `displayMat`) showing the
  * caller's texture (the heartbeat, retroScreen.ts, not navigation), with UVs mapping the 27.6 mm square onto
  * [0,1]²; the bracelet's hole is measured (`loopHole`) and exposed as `group.userData.hole` (a Box3 in the group's
  * millimetres, hole axis `userData.holeAxis` = 'x') so the scene can nest the R³ Note ring inside it.
@@ -27,7 +28,9 @@ type V3 = [number, number, number];
 
 const S = 38;                                  // mm per model unit
 // Colours come from finishes.ts: black = PRO.black.body '#2a2e2d' and UI.black.ground '#000000'.
-const BODY_MAT = 'watchBody', GROUND_MESH = 'screenGround';
+const BODY_MAT = 'watchBody', GROUND_MESH = 'screenGround', BEZEL_MESH = 'screenBezel';
+// The face outline (the ground's outer edge) and the bezel's inner edge: a ~1 mm band inside the face, outside the window.
+const FACE: [number, number, number] = [31.4, 27.9, 4.8], BEZEL_INNER: [number, number, number] = [29.4, 25.9, 4.4];
 const ZF = (0.785 - 0.74) * S, Z_SHIFT = -0.74 * S;
 const RAY_BAND = 0.08;                         // model units: vertices this close to a ray count as on it
 const SCREEN_SPAN = 27.6;                      // the texture's square, mm
@@ -125,9 +128,15 @@ export function buildRetroWatch(bytes: ArrayBuffer, options: RetroClipOptions): 
   const screen = add(head, winGeo, new THREE.MeshBasicMaterial({ map: options.screenTexture, toneMapped: false }), 0, -0.7, ZF);
   screen.name = 'screen';
   // No metal edge: a ring in the screen's own colour fills the gap to the case, so the screen reads as one sheet of glass.
-  const fr = octagon(31.4, 27.9, 4.8); fr.holes.push(octagon(27, 23.5, 4));
+  const fr = octagon(...FACE); fr.holes.push(octagon(27, 23.5, 4));
   const ground = add(head, new THREE.ShapeGeometry(fr), new THREE.MeshBasicMaterial({ color: spec.screen.ground, toneMapped: false }), 0, -0.7, ZF + 0.01);
   ground.name = GROUND_MESH;
+  // White only: a thin near-black bezel at the face's outer edge, so the white face stands off the white case. It is
+  // the ground's child (just in front of it, under the crystal) and hidden on finishes without a bezel colour.
+  const bz = octagon(...FACE); bz.holes.push(octagon(...BEZEL_INNER));
+  const bezel = add(ground, new THREE.ShapeGeometry(bz), new THREE.MeshBasicMaterial({ color: spec.bezel ?? '#1a1a1a', toneMapped: false }), 0, 0, 0.01);
+  bezel.name = BEZEL_MESH;
+  bezel.visible = !!spec.bezel;
   add(head, new THREE.ShapeGeometry(octagon(31.4, 27.9, 4.8)), crystalMat(), 0, -0.7, ZF + 0.2);
   lensBlend(head, [12.0, 14.9, -0.2], [-0.707, 0.707, 0], [0.288, 0.288, 0.914], mat);
 
@@ -172,6 +181,9 @@ export function applyWatchFinish(model: ClipModel, finish: Finish): void {
       mat.roughness = spec.watch.roughness;
     } else if (m.name === GROUND_MESH) {
       (m.material as THREE.MeshBasicMaterial).color.set(spec.screen.ground);
+    } else if (m.name === BEZEL_MESH) {
+      m.visible = !!spec.bezel;
+      if (spec.bezel) (m.material as THREE.MeshBasicMaterial).color.set(spec.bezel);
     }
   });
 }

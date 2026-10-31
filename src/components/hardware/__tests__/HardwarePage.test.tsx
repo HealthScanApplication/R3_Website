@@ -33,8 +33,9 @@ describe('HardwarePage', () => {
     const names = articles.map((a) => within(a).getByRole('heading').textContent);
     expect(names).toEqual(expect.arrayContaining(['R³ Note', 'R³ Clip']));
     for (const name of [
-      'How it works',
+      'One ring, four gestures',
       'Two devices, one routine',
+      'What you can do with it',
       'A personal assistant for your routine',
       'Specifications',
       'Ready when you are.',
@@ -42,6 +43,14 @@ describe('HardwarePage', () => {
       expect(screen.getByRole('heading', { level: 2, name })).toBeTruthy();
     }
     expect(screen.queryByRole('heading', { name: 'Reserve your early-backer price' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'How it works' })).toBeNull();
+  });
+
+  it('orders the sections: hero, gestures, devices, use cases, assistant, specs, closing', () => {
+    const { container } = render(<HardwarePage />);
+    const ids = Array.from(container.querySelectorAll('section')).map(s => s.getAttribute('aria-labelledby'));
+    expect(container.querySelector('section')?.closest('#hardware-hero')).toBeTruthy(); // the hero comes first
+    expect(ids.slice(1)).toEqual(['gestures-title', 'two-devices-title', 'use-cases-title', 'ai-assistant-title', 'specs-title', 'hardware-closing-title']);
   });
 
   it('contains the required words and no invented device names or prices', () => {
@@ -94,7 +103,7 @@ describe('HardwarePage', () => {
   it('every section has an aria-labelledby heading', () => {
     const { container } = render(<HardwarePage />);
     const sections = container.querySelectorAll('section');
-    expect(sections.length).toBe(6);
+    expect(sections.length).toBe(7);
     sections.forEach((s) => {
       const id = s.getAttribute('aria-labelledby');
       expect(id).toBeTruthy();
@@ -119,12 +128,13 @@ describe('DeviceArt', () => {
     expect(container.querySelector('circle[r="34"]')).toBeNull();
   });
 
-  it('lists heart rate under Tracks in the Clip specifications', () => {
+  it('lists heart rate, sleep and activity under Tracks in the Clip specifications', () => {
     const { container } = render(<HardwarePage />);
-    const terms = Array.from(container.querySelectorAll('dt'));
-    const tracks = terms.find((dt) => dt.textContent === 'Tracks');
+    const specs = container.querySelector('[aria-labelledby="specs-title"]') as HTMLElement;
+    const clip = within(specs).getByRole('heading', { level: 3, name: 'R³ Clip' }).parentElement as HTMLElement;
+    const tracks = Array.from(clip.querySelectorAll('dt')).find((dt) => dt.textContent === 'Tracks');
     expect(tracks).toBeTruthy();
-    expect(tracks?.nextElementSibling?.textContent).toBe('Heart rate');
+    expect(tracks?.nextElementSibling?.textContent).toBe('Heart rate, sleep, activity');
   });
 
   it('promises no email anywhere on the page', () => {

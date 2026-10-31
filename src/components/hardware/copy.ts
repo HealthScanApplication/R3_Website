@@ -12,3 +12,68 @@ export function formatUsd(cents: number): string {
 }
 
 export const HERO_FEATURE_WORDS = ['meals', 'workouts', 'notes', 'moments', 'symptoms'];
+
+// ---- Task 17: owner-approved use-case copy (planned features; no numbers beyond the brief) ----
+
+export type IovKey = 'inputs' | 'outputs' | 'value';
+export type DeviceIov = Record<IovKey, string>;
+export const IOV_LABELS: Array<[IovKey, string]> = [['inputs', 'Inputs'], ['outputs', 'Outputs'], ['value', 'Value']];
+export const DEVICE_IOV: Record<'ring' | 'watch', DeviceIov> = {
+  ring: {
+    inputs: 'Tap, double tap, press and hold, swipe. Heart rate, sleep and activity sensors.',
+    outputs: "Commands to the R³ Clip's camera and microphone, and to your phone: music and your AI agent.",
+    value: 'Log anything without taking your phone out.',
+  },
+  watch: {
+    inputs: "Camera (photo and video), microphone, heart rate, sleep and activity sensors, and your phone's GPS.",
+    outputs: 'Logged meals, activities, tasks and journals; directions to your next calendar event; replies from your AI agent; an end-of-day reel.',
+    value: 'A record of your day, made in the moment.',
+  },
+};
+
+export type GestureGlyph = 'tap' | 'double' | 'hold' | 'swipe';
+export type Gesture = { id: GestureGlyph; name: string; line: string };
+export const GESTURES_TITLE = 'One ring, four gestures';
+export const GESTURES: Gesture[] = [
+  { id: 'tap', name: 'Tap', line: 'The R³ Clip takes a photo or video.' },
+  { id: 'double', name: 'Double tap', line: 'The same, with a voice note.' },
+  { id: 'hold', name: 'Press and hold', line: 'Ask your AI agent.' },
+  { id: 'swipe', name: 'Swipe', line: 'Next song on your phone.' },
+];
+
+/** `scene` is the one-sentence picture description, used as the image alt and later as the image prompt. */
+export type UseCase = { id: string; title: string; gesture: string; result: string; scene: string; image?: string };
+export const USE_CASES_TITLE = 'What you can do with it';
+export const USE_CASES: UseCase[] = [
+  { id: 'meal', title: 'Log a meal, drink or supplement', gesture: 'Tap: photo · Double tap: photo + voice note', result: "The R³ Clip captures it and it's added to today's routine as something you consumed.", scene: 'Hands holding a colourful lunch bowl at a sunny market table, thumb tapping the ring.' },
+  { id: 'activity', title: 'Log an activity', gesture: 'Tap: photo or video · Double tap: add a voice note', result: 'Your workout, walk or session is logged with what you saw and said.', scene: 'A runner mid-stride on a coastal path, watch on the wrist.' },
+  { id: 'task', title: 'Add a task or routine', gesture: 'Double tap: say it', result: 'Say the task and it lands in your routine and calendar.', scene: 'Someone at a kitchen counter speaking a quick note to their wrist.' },
+  { id: 'journal', title: 'Voice or video journal', gesture: 'Double tap: start recording', result: 'Capture a thought or a moment as a journal entry, in your own words.', scene: 'Golden-hour bench by the water, a person recording a short voice entry.' },
+  { id: 'navigate', title: 'Get to your next event', gesture: 'Glance at the R³ Clip', result: 'The watch guides you from where your phone is to the location of your next calendar event.', scene: 'City street, the watch screen showing a simple pixel arrow and the distance.' },
+  { id: 'agent', title: 'Ask your AI agent', gesture: 'Press and hold', result: 'Your pixel AI agent can see your health data, email and calendar, so it can plan or research anything for you.', scene: 'Close-up of the watch screen with a cute pixel character replying.' },
+  { id: 'music', title: 'Run with music', gesture: 'Swipe: next song', result: 'Skip to the next song on your phone without stopping, while tracking keeps running.', scene: 'A runner at dawn with earbuds, thumb swiping across the ring.' },
+  { id: 'reel', title: 'Your day as a reel', gesture: 'Clip it on your hat', result: 'Wear the R³ Clip on a cap while you surf or skate, and get a reel of the fun moments at the end of the day.', scene: 'A skater carving a bowl, the clip on their cap, sun flare.' },
+  { id: 'symptom', title: 'Log a symptom', gesture: 'Double tap: say it', result: 'Say "headache, 6 out of 10" and it\'s logged against your day.', scene: 'Someone rubbing their temple at a desk, speaking to their wrist.' },
+  { id: 'reminder', title: 'Confirm a reminder', gesture: 'Tap: mark it done', result: 'The watch reminds you to take a supplement; one tap marks it taken.', scene: 'A hand holding a supplement capsule, the watch showing a reminder.' },
+  { id: 'sleep', title: 'Sleep and recovery', gesture: 'Just wear them', result: "The ring and watch track your night, and your agent adjusts tomorrow's plan.", scene: 'Morning light on a bedside table, ring and watch resting beside a glass of water.' },
+];
+
+/** Spec rows, shown under the "Planned specifications" notice. No device lists phone pairing, so Music sits under R³ Note. */
+export type SpecRow = [string, string];
+export const SPEC_RING: SpecRow[] = [
+  ['Control', 'Touch and slide'],
+  ['Gestures', 'Tap, double tap, press and hold, swipe'],
+  ['Tracks', 'Heart rate, sleep, activity'],
+  ['Works with', 'R³ Clip'],
+  ['Music', 'Swipe the ring for the next song on your phone'],
+];
+export const SPEC_CLIP: SpecRow[] = [
+  ['Camera', '8 MP wide-angle, 160° field of view'],
+  ['Captures', 'Food, activity, voice notes, AI requests'],
+  ['Tracks', 'Heart rate, sleep, activity'],
+  ['Navigation', "Directions to your next calendar event, using your phone's GPS"],
+  ['AI agent', 'Press and hold the ring; it can use your health data, email and calendar'],
+  ['Reels', 'An end-of-day reel of your moments'],
+  ['Worn as', 'Necklace, watch, or clip'],
+  ['Privacy', 'Physical slider cuts the camera, microphones, and radios; red LED while the camera is on'],
+];

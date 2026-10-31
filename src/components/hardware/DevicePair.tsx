@@ -3,6 +3,7 @@ import { DISPLAY, GRO, ed } from '../../config/editorialTheme';
 import { RingArt, ClipArt } from './DeviceArt';
 import { DEFAULT_FINISH, FINISHES, FINISH_SPECS, type Finish } from './scene/finishes';
 import type { Device, DeviceSceneHandle } from './scene/deviceScene';
+import { DEVICE_IOV, IOV_LABELS } from './copy';
 
 const label = { margin: '0 0 10px', fontFamily: GRO, fontSize: 11, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#C7D99F' } as const;
 const body = { margin: 0, maxWidth: 560, fontFamily: GRO, fontSize: 17, lineHeight: 1.55, color: ed.onDarkSoft } as const;
@@ -155,6 +156,14 @@ function DeviceCard({ device, title, eyebrow, copy }: { device: Device; title: s
       <p style={label}>{eyebrow}</p>
       <h3 style={name}>{title}</h3>
       <p style={body}>{copy}</p>
+      <dl style={{ margin: '28px 0 0', maxWidth: 560 }}>
+        {IOV_LABELS.map(([key, term]) => (
+          <div key={key} style={{ display: 'grid', gridTemplateColumns: '96px minmax(0, 1fr)', gap: 16, padding: '12px 0', borderTop: `1px solid ${ed.onDarkHair}` }}>
+            <dt style={{ ...label, margin: 0, lineHeight: 1.9 }}>{term}</dt>
+            <dd style={{ margin: 0, fontFamily: GRO, fontSize: 15, lineHeight: 1.55, color: ed.onDarkSoft }}>{DEVICE_IOV[device][key]}</dd>
+          </div>
+        ))}
+      </dl>
     </article>
   );
 }

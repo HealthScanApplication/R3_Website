@@ -41,4 +41,10 @@ describe('finishes', () => {
     expect(FINISH_SPECS.silver.watch.metalness).toBe(1);
     expect(finishSpec(undefined)).toBe(FINISH_SPECS.black);
   });
+
+  it('gives only the white watch a near-black bezel, so its white face stands off the white case', () => {
+    expect(FINISH_SPECS.white.bezel).toBe('#1a1a1a');
+    expect(FINISH_SPECS.black.bezel).toBeUndefined();
+    expect(FINISH_SPECS.silver.bezel).toBeUndefined();
+  });
 });
