@@ -69,6 +69,7 @@ describe('HardwarePage', () => {
     render(<HardwarePage />);
     const link = screen.getByRole('link', { name: 'Reserve the R³ Note — $179' });
     expect(link.getAttribute('href')).toBe('#preorder');
+    expect((link as HTMLElement).style.background).toBe('rgb(199, 217, 143)');
   });
 
   it('renders no main, footer or banner inside the page', () => {

@@ -44,7 +44,7 @@ describe('HardwareHero', () => {
     expect(line2()).toBe('for weight loss');
   });
 
-  it('has deck, folio, preorder wrapper, devices, hidden poster and labelled section', () => {
+  it('has deck, overline, preorder wrapper, devices, hidden poster and labelled section', () => {
     const { container } = render(<HardwareHero />);
     expect(screen.getByText(DECK)).toBeTruthy();
     expect(screen.getByText('R³ hardware · first batch')).toBeTruthy();
