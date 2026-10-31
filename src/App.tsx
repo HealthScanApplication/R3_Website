@@ -12,7 +12,6 @@ import { PageRenderer } from "./components/PageRenderer";
 import { Header, RoutineMark } from "./components/Header";
 import { Footer } from "./components/Footer";
 import { HardwarePreorder } from "./components/HardwarePreorder";
-import { HardwarePage } from "./components/hardware/HardwarePage";
 import { EmailConfirmationBanner } from "./components/EmailConfirmationBanner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ThemeManager } from "./components/ThemeManager";
@@ -482,7 +481,7 @@ function AppContent() {
   const getMainContentClasses = useCallback(
     (page: string, hasEmailBanner: boolean) => {
       const baseClasses = "min-h-screen";
-      const headerOffset = page === "home" || page === "guides" ? "" : " header-offset";
+      const headerOffset = page === "home" || page === "guides" || page === "hardware" ? "" : " header-offset";
       const bannerOffset = hasEmailBanner ? " banner-offset" : "";
       
       return `${baseClasses}${headerOffset}${bannerOffset}`;
@@ -588,7 +587,6 @@ function AppContent() {
       </main>
 
       {currentPage === "home" && <HardwarePreorder />}
-      {currentPage === "hardware" && <HardwarePage />}
 
       {/* Footer */}
       {!isGuidePortal && <Footer />}

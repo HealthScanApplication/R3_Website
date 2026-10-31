@@ -10,6 +10,7 @@ import { FAQSection } from './FAQSection'
 import { EmailSubscribeSection } from './EmailSubscribeSection'
 import { BlogPreviewSection } from './BlogPreviewSection'
 import { DiscordCommunitySection } from './DiscordCommunitySection'
+import { HardwarePage } from './hardware/HardwarePage'
 import { isAdminUser } from '../utils/adminUtils'
 import { useAdminAuth, getAccessTokenDirect } from '../contexts/AuthContext'
 import { EnvironmentToggle } from './admin/EnvironmentToggle'
@@ -319,6 +320,9 @@ export function PageRenderer({
         return null
       }
       return <Suspense fallback={<PageLoadingFallback />}><EmailCaptureTestPage /></Suspense>
+
+    case 'hardware':
+      return <HardwarePage />
 
     case 'home':
     default:

@@ -318,7 +318,7 @@ export function Header({
   };
 
   // Show simplified header for admin and other non-home pages
-  const showSimplifiedHeader = currentPage !== 'home';
+  const showSimplifiedHeader = currentPage !== 'home' && currentPage !== 'hardware';
 
   // Determine if admin button should be shown
   const showAdminButton = isAdmin || userIsAdmin || adminInfo.isAdmin;
