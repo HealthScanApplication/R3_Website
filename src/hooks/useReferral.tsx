@@ -26,7 +26,7 @@ export function useReferral(): ReferralData {
     const pathReferralCode = pathSegments.length === 1 ? pathSegments[0] : null;
     
     // Exclude common page routes and file extensions from being treated as referral codes
-    const excludedPaths = ['admin', 'profile', 'settings', 'blog', 'diagnostic', 'guide', 'guides', 'guardians'];
+    const excludedPaths = ['admin', 'profile', 'settings', 'blog', 'diagnostic', 'guide', 'guides', 'guardians', 'wearables', 'ring'];
     const excludedPatterns = [
       /\.html$/i,
       /\.php$/i,
@@ -163,7 +163,7 @@ export const ReferralUtils = {
       
       // Check for path-based referral
       const pathSegments = window.location.pathname.split('/').filter(segment => segment.length > 0);
-      const excludedPaths = ['admin', 'profile', 'settings', 'blog', 'diagnostic', 'guide', 'guides', 'guardians'];
+      const excludedPaths = ['admin', 'profile', 'settings', 'blog', 'diagnostic', 'guide', 'guides', 'guardians', 'wearables', 'ring'];
       const excludedPatterns = [
         /\.html$/i,
         /\.php$/i,
