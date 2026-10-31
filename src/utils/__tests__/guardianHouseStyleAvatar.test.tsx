@@ -35,12 +35,14 @@ describe('R3 house style panel', () => {
   it('is one full-width, centred card: their photo featured, then the example, with each action once', async () => {
     const panel = await open(OWN_PORTRAIT);
     const images = within(panel).getAllByRole('img') as HTMLImageElement[];
-    expect(images.map((image) => image.getAttribute('src'))).toEqual([OWN_PORTRAIT, '/images/guides/house-style/example-before.webp', '/images/guides/house-style/example-after.webp']);
+    expect(images.map((image) => image.getAttribute('src'))).toEqual([OWN_PORTRAIT, '/images/guides/house-style/example-before.webp']); // their photo, then the one goal image
     for (const image of images) expect((image.getAttribute('alt') || '').length).toBeGreaterThan(10);
     expect(within(panel).getByText('Your photo')).toBeTruthy();
-    expect(within(panel).getByText('Before')).toBeTruthy();
-    expect(within(panel).getByText('After')).toBeTruthy();
-    expect(within(panel).getAllByText('Example').length).toBe(2);
+    expect(within(panel).getByText('The goal')).toBeTruthy();
+    expect(within(panel).queryByText('Before')).toBeNull(); // no generic Before / After pair any more
+    expect(within(panel).queryByText('After')).toBeNull();
+    expect(within(panel).getAllByText('Example').length).toBe(1);
+    expect(within(panel).getByLabelText('Your R3 house style will appear here')).toBeTruthy(); // their own result's slot
     expect(panel.textContent).toMatch(/carved stone bust/);
     expect(panel.textContent).toMatch(/round stone base/);
     expect((panel as HTMLElement).style.width).toBe('100%');
@@ -78,15 +80,16 @@ describe('R3 house style panel', () => {
     expect(mocks.invoke).toHaveBeenCalledWith('guardian-images', { body: { action: 'convert-avatar', image_url: OWN_PORTRAIT, name: 'Test Guide', source: 'house' } });
     const images = within(panel).getAllByRole('img') as HTMLImageElement[];
     // Their pair first, then the house-style example kept beside it as the target to compare against.
-    expect(images.map((image) => image.getAttribute('src'))).toEqual([OWN_PORTRAIT, REAL_IMAGE, '/images/guides/house-style/example-before.webp', '/images/guides/house-style/example-after.webp']);
+    expect(images.map((image) => image.getAttribute('src'))).toEqual([OWN_PORTRAIT, REAL_IMAGE, '/images/guides/house-style/example-before.webp']);
     expect(within(panel).queryByRole('button', { name: 'Replace profile image' })).toBeNull(); // the result's own actions replace it
     expect(within(panel).getByText('Original')).toBeTruthy();
     expect(within(panel).getByRole('button', { name: 'Try again' })).toBeTruthy();
     expect(within(panel).getByLabelText('The R3 house style to aim for')).toBeTruthy();
-    expect(within(panel).getAllByText('Example').length).toBe(2);
+    expect(within(panel).getAllByText('Example').length).toBe(1);
+    expect(within(panel).queryByLabelText('Your R3 house style will appear here')).toBeNull(); // the real result replaced the slot
     fireEvent.click(within(panel).getByRole('button', { name: 'Cancel' }));
     expect(within(panel).getByRole('button', { name: 'Create my R3 house style' })).toBeTruthy(); // back to their photo + Create
-    expect(within(panel).getAllByText('Example').length).toBe(2);
+    expect(within(panel).getAllByText('Example').length).toBe(1);
   });
 
   it('shows a busy state while the conversion runs', async () => {
