@@ -11,6 +11,7 @@ const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SE
 
 const PRICES: Record<string, number> = { ring: 17900, bundle: 29900 };
 const CURRENCY = 'usd';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BATCH = 'first-run';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -28,10 +29,11 @@ async function markFromIntent(pi: any) {
   const status = pi.status === 'succeeded' ? 'paid' : (pi.status === 'canceled' || pi.status === 'requires_payment_method') ? 'failed' : 'pending';
   const update = status === 'paid'
     ? db.from('hardware_preorders').update({ status, paid_at: new Date().toISOString() }).eq('stripe_payment_intent_id', pi.id).is('paid_at', null)
-    : db.from('hardware_preorders').update({ status }).eq('stripe_payment_intent_id', pi.id).neq('status', 'paid');
+    : db.from('hardware_preorders').update({ status }).eq('stripe_payment_intent_id', pi.id).neq('status', 'paid').neq('status', 'refunded');
   const { error } = await update;
   if (error) throw error;
-  const { data } = await db.from('hardware_preorders').select('status').eq('stripe_payment_intent_id', pi.id).maybeSingle();
+  const { data, error: readError } = await db.from('hardware_preorders').select('status').eq('stripe_payment_intent_id', pi.id).maybeSingle();
+  if (readError) throw readError;
   return data?.status ?? status;
 }
 
@@ -97,6 +99,8 @@ Deno.serve(async (req) => {
       // Intentionally not gated by batch status/deadline: it reconciles Stripe's verdict on an intent created while the batch was open.
       const purchaseId = typeof body.purchase_id === 'string' ? body.purchase_id.trim() : '';
       if (!purchaseId) return fail('Missing purchase_id.');
+      // id is a uuid column: a malformed id would raise Postgres 22P02 (500), so treat it as not found without querying.
+      if (!UUID_RE.test(purchaseId)) return fail('Preorder not found.', 404);
       const { data: row, error } = await db.from('hardware_preorders').select('stripe_payment_intent_id').eq('id', purchaseId).maybeSingle();
       if (error) throw error;
       if (!row?.stripe_payment_intent_id) return fail('Preorder not found.', 404);
