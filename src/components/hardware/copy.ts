@@ -11,7 +11,7 @@ export function formatUsd(cents: number): string {
   return `$${Number.isInteger(dollars) ? dollars : dollars.toFixed(2)}`;
 }
 
-export const HERO_FEATURE_WORDS = ['meals', 'workouts', 'thoughts', 'moments', 'ideas'];
+export const HERO_FEATURE_WORDS = ['meals', 'workouts', 'thoughts', 'moments', 'ideas', 'heartbeats'];
 
 // ---- Task 17: owner-approved use-case copy (planned features; no numbers beyond the brief) ----
 
