@@ -10,3 +10,5 @@ export function formatUsd(cents: number): string {
   const dollars = cents / 100;
   return `$${Number.isInteger(dollars) ? dollars : dollars.toFixed(2)}`;
 }
+
+export const HERO_FEATURE_WORDS = ['voice notes', 'meals', 'activity', 'symptoms', 'AI advice', 'your calendar', 'your email'];

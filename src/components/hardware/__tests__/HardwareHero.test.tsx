@@ -2,7 +2,7 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen, within } from '@testing-library/react';
-import { GOAL_WORDS } from '../../../config/goalWords';
+import { HERO_FEATURE_WORDS } from '../copy';
 
 const bg = { reduceMotion: false, backgroundVideos: [] as string[] };
 vi.mock('../HeroDevices', () => ({ HeroDevices: () => <div data-testid="devices" /> }));
@@ -11,7 +11,7 @@ vi.mock('../../FlutedGlassBackground', () => ({ FlutedGlassBackground: () => <di
 vi.mock('../../../hooks/useHeroBackground', () => ({ useHeroBackground: () => bg }));
 import { HardwareHero } from '../HardwareHero';
 
-const DECK = "Touch or slide the R³ Note to control the R³ Clip's camera, record a voice note, or hand a request to your AI assistant.";
+const DECK = "Touch or slide the R³ Note and the R³ Clip captures it in real time — your AI assistant keeps your routine, calendar, and email up to date.";
 const line2 = () => (screen.getByRole('heading', { level: 1 }).children[1] as HTMLElement).textContent;
 
 beforeEach(() => { bg.reduceMotion = false; bg.backgroundVideos = []; });
@@ -22,17 +22,17 @@ describe('HardwareHero', () => {
     render(<HardwareHero />);
     const h1s = screen.getAllByRole('heading', { level: 1 });
     expect(h1s).toHaveLength(1);
-    expect((h1s[0].children[0] as HTMLElement).textContent).toBe('Track a routine');
-    expect(line2()).toBe('for weight loss');
+    expect((h1s[0].children[0] as HTMLElement).textContent).toBe('Track your routine');
+    expect(line2()).toBe('with voice notes');
   });
 
-  it('rotates the goal word in order and wraps', () => {
+  it('rotates the feature word in order and wraps', () => {
     vi.useFakeTimers();
     render(<HardwareHero />);
     act(() => { vi.advanceTimersByTime(320); });
-    for (let i = 1; i <= GOAL_WORDS.length; i++) {
+    for (let i = 1; i <= HERO_FEATURE_WORDS.length; i++) {
       act(() => { vi.advanceTimersByTime(3200); });
-      expect(line2()).toBe(`for ${GOAL_WORDS[i % GOAL_WORDS.length]}`);
+      expect(line2()).toBe(`with ${HERO_FEATURE_WORDS[i % HERO_FEATURE_WORDS.length]}`);
     }
   });
 
@@ -41,7 +41,7 @@ describe('HardwareHero', () => {
     bg.reduceMotion = true;
     render(<HardwareHero />);
     act(() => { vi.advanceTimersByTime(20000); });
-    expect(line2()).toBe('for weight loss');
+    expect(line2()).toBe('with voice notes');
   });
 
   it('has deck, overline, preorder wrapper, devices, hidden poster and labelled section', () => {
@@ -78,7 +78,19 @@ describe('HardwareHero', () => {
     const stage = container.querySelector('.r3-hw-hero-devices') as HTMLElement;
     expect(grid.style.flex).toMatch(/^1/);
     expect(stage.style.alignSelf).toBe('center');
-    expect((grid.children[0] as HTMLElement).style.alignSelf).toBe('end');
+    expect((grid.children[0] as HTMLElement).style.alignSelf).toBe('center');
     expect(stage.contains(screen.getByTestId('devices'))).toBe(true);
+  });
+
+  it('centres the left text block (folio stays on top)', () => {
+    const { container } = render(<HardwareHero />);
+    const grid = container.querySelector('.r3-hw-hero-grid') as HTMLElement;
+    const text = grid.children[0] as HTMLElement;
+    expect(text.style.alignSelf).toBe('center');
+    expect(text.contains(screen.getByRole('heading', { level: 1 }))).toBe(true);
+  });
+
+  it('uses the owner feature word list', () => {
+    expect(HERO_FEATURE_WORDS).toEqual(['voice notes', 'meals', 'activity', 'symptoms', 'AI advice', 'your calendar', 'your email']);
   });
 });

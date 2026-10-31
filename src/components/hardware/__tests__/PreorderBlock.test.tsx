@@ -331,6 +331,22 @@ describe('PreorderBlock', () => {
       expect(input.style.background).toContain('rgba(255, 255, 255, 0.16)');
       await waitFor(() => expect(count).toHaveBeenCalled());
     });
+    it('hero placeholder matches the button type (uppercase) via a scoped rule; typed value is not uppercase', async () => {
+      const { container } = setup(okConfig, 'hero');
+      const input = screen.getByLabelText(/email/i) as HTMLInputElement;
+      const btn = screen.getByRole('button', { name: 'Reserve →' });
+      expect(input.className).toBe('r3-hw-preorder-email');
+      const css = Array.from(container.querySelectorAll('style')).map((s) => s.textContent).join('');
+      expect(css).toContain('.r3-hw-preorder-email::placeholder');
+      expect(css).toContain('color: #FFFFFF');
+      expect(css).toContain('text-transform: uppercase');
+      expect(css).toContain(`font-size: ${btn.style.fontSize}`);
+      expect(css).toContain(`font-weight: ${btn.style.fontWeight}`);
+      expect(css).toContain(`letter-spacing: ${btn.style.letterSpacing}`);
+      expect(css).toContain(btn.style.fontFamily.replace(/"/g, '"'));
+      expect(input.style.textTransform).not.toBe('uppercase');
+      await waitFor(() => expect(count).toHaveBeenCalled());
+    });
     it('hero product toggles switch the price and show no struck prices', async () => {
       setup(okConfig, 'hero');
       expect(screen.queryByText('$199')).toBeNull();

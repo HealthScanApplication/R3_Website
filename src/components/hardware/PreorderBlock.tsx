@@ -29,6 +29,8 @@ const heroInput: React.CSSProperties = {
   flex: 1, minWidth: 150, maxWidth: 260, height: 42, boxSizing: 'border-box', background: 'rgba(255,255,255,0.16)',
   border: '1px solid #FFFFFF', borderRight: 'none', borderRadius: '2px 0 0 2px', padding: '0 14px', outline: 'none',
 };
+// Placeholder mirrors the button label type exactly (uppercase, tracked); the typed value stays as-typed.
+const HERO_PLACEHOLDER_CSS = `.r3-hw-preorder-email::placeholder { color: #FFFFFF; opacity: 1; font-family: ${HERO_FONT}; font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }`;
 const heroButton = (disabled: boolean): React.CSSProperties => ({
   ...heroLabel, background: '#FFFFFF', border: '1px solid #FFFFFF', borderRadius: '0 2px 2px 0', height: 42, boxSizing: 'border-box',
   padding: '0 16px', lineHeight: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -217,8 +219,9 @@ export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig
           <label htmlFor="preorder-email" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Email address</label>
           {hero ? (
             <div style={{ display: 'flex', width: '100%', alignItems: 'center' }}>
+              <style>{HERO_PLACEHOLDER_CSS}</style>
               <input
-                id="preorder-email" type="email" required autoComplete="email" value={email}
+                id="preorder-email" className="r3-hw-preorder-email" type="email" required autoComplete="email" value={email}
                 disabled={closed} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com"
                 style={heroInput}
               />

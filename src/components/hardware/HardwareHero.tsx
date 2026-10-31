@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { ed, GRO, coverStyle, deckStyle } from '../../config/editorialTheme';
-import { GOAL_WORDS } from '../../config/goalWords';
 import { useHeroBackground } from '../../hooks/useHeroBackground';
 import { HeroBackdrop } from './HeroBackdrop';
 import { HeroDevices } from './HeroDevices';
 import { PreorderBlock } from './PreorderBlock';
+import { HERO_FEATURE_WORDS } from './copy';
 
-const DECK = "Touch or slide the R³ Note to control the R³ Clip's camera, record a voice note, or hand a request to your AI assistant.";
+const DECK = "Touch or slide the R³ Note and the R³ Clip captures it in real time — your AI assistant keeps your routine, calendar, and email up to date.";
 const overline: React.CSSProperties = { fontFamily: GRO, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.2em', color: ed.inkSoft, margin: 0 };
 
 export function HardwareHero() {
@@ -20,7 +20,7 @@ export function HardwareHero() {
     let fade: ReturnType<typeof setTimeout> | undefined;
     const t = setInterval(() => {
       setWordVisible(false);
-      fade = setTimeout(() => { setWordIndex((i) => (i + 1) % GOAL_WORDS.length); setWordVisible(true); }, 320);
+      fade = setTimeout(() => { setWordIndex((i) => (i + 1) % HERO_FEATURE_WORDS.length); setWordVisible(true); }, 320);
     }, 3200);
     return () => { clearInterval(t); if (fade) clearTimeout(fade); };
   }, [reduceMotion]);
@@ -35,13 +35,13 @@ export function HardwareHero() {
         </div>
 
         <div className="r3-hw-hero-grid" style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 0.9fr)', gap: 'clamp(28px, 5vw, 80px)', alignItems: 'end', paddingTop: 'clamp(24px, 5vh, 80px)' }}>
-          <div style={{ alignSelf: 'end' }}>
+          <div style={{ alignSelf: 'center' }}>
             <h1 id="hardware-hero-title" style={{ ...coverStyle, color: '#FFFFFF', textShadow: '0 4px 24px rgba(0,0,0,0.38)' }}>
-              <span style={{ display: 'block' }}>Track a routine</span>
+              <span style={{ display: 'block' }}>Track your routine</span>
               <span style={{ display: 'block' }}>
-                for{' '}
+                with{' '}
                 <span style={{ fontStyle: 'italic', color: ed.ink, textShadow: 'none', transition: reduceMotion ? undefined : 'opacity 320ms ease', opacity: wordVisible ? 1 : 0 }}>
-                  {GOAL_WORDS[reduceMotion ? 0 : wordIndex]}
+                  {HERO_FEATURE_WORDS[reduceMotion ? 0 : wordIndex]}
                 </span>
               </span>
             </h1>

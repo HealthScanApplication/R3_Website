@@ -40,7 +40,7 @@ export function HardwarePreorder() {
         </div>
 
         <div className="r3-hw-teaser-grid" style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 0.9fr)', gap: 'clamp(28px, 5vw, 80px)', alignItems: 'end', paddingTop: 'clamp(24px, 5vh, 80px)' }}>
-          <div style={{ alignSelf: 'end' }}>
+          <div style={{ alignSelf: 'center' }}>
             <h2 id="hardware-preorder-title" style={{ ...coverStyle, fontSize: 'clamp(2.8rem, 7vw, 7.5rem)', color: '#FFFFFF', textShadow: '0 4px 24px rgba(0,0,0,0.38)' }}>
               Meet the R³ Note and R³ Clip.
             </h2>
