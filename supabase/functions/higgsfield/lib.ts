@@ -160,7 +160,7 @@ export async function pkceChallenge(verifier: string): Promise<string> {
  * AES-GCM key so nothing needs storing and nobody can forge or read it. Expires after 15 minutes.
  */
 /** `client_id` is the OAuth client the login started with: the callback must exchange the code with that same client. */
-export interface LoginState { user_id: string; verifier: string; return_to: string; exp: number; client_id?: string }
+export interface LoginState { user_id: string; verifier: string; return_to: string; exp: number; client_id?: string; redirect_uri?: string }
 export async function sealState(s: LoginState, secretB64: string): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const out = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode('higgsfield-oauth-state') }, await aesKey(secretB64), new TextEncoder().encode(JSON.stringify(s)));

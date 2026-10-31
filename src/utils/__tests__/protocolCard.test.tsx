@@ -2,7 +2,7 @@
 import React from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { PROTOCOL_CARD_CSS, PROTOCOL_PLATE, ProtocolCard, ProtocolCardGrid, clipCopy } from '../../components/guides/ProtocolCard';
+import { PROTOCOL_CARD_CSS, PROTOCOL_PLATE, ProtocolCard, ProtocolCardGrid, clipCopy, protocolImageUrl } from '../../components/guides/ProtocolCard';
 
 afterEach(cleanup);
 
@@ -61,6 +61,22 @@ it('the picture is one sharp layer plus a blurred copy for the top and one for t
   expect(imgs.every((i) => i.getAttribute('src') === 'https://example.com/p.png')).toBe(true);
   expect(imgs.map((i) => i.getAttribute('alt'))).toEqual(['', '', '']);
   expect(imgs.slice(1).every((i) => i.getAttribute('aria-hidden') === 'true')).toBe(true);
+});
+
+it('loads Supabase pictures progressively at responsive card sizes and keeps external URLs untouched', () => {
+  const source = 'https://x.supabase.co/storage/v1/object/public/guide-assets/offers/photo.jpg?t=1';
+  expect(protocolImageUrl(source, 48, 28)).toBe('https://x.supabase.co/storage/v1/render/image/public/guide-assets/offers/photo.jpg?t=1&width=48&quality=28&resize=cover');
+  expect(protocolImageUrl('https://example.com/photo.jpg', 48, 28)).toBe('https://example.com/photo.jpg');
+  const { container } = render(<ProtocolCard title="Progressive" imageUrl={source} />);
+  const main = container.querySelector<HTMLImageElement>('.r3-pcard-img')!;
+  expect(main.getAttribute('srcset')).toContain('width=320');
+  expect(main.getAttribute('srcset')).toContain('width=640');
+  expect(main.getAttribute('srcset')).toContain('width=960');
+  expect(main.getAttribute('sizes')).toContain('360px');
+  expect(container.querySelector('.r3-pcard-progress')?.getAttribute('data-loaded')).toBeNull();
+  fireEvent.load(main);
+  expect(main.getAttribute('data-loaded')).toBe('true');
+  expect(container.querySelector('.r3-pcard-progress')?.getAttribute('data-loaded')).toBe('true');
 });
 
 it('with no picture, or a picture that fails to load, it shows the plate', () => {

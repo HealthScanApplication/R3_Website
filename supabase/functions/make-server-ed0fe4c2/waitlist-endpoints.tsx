@@ -272,6 +272,9 @@ export async function handleWaitlistSignup(c: any): Promise<Response> {
     const utm_source = requestBody?.utm_source
     const utm_medium = requestBody?.utm_medium
     const utm_campaign = requestBody?.utm_campaign
+    const hardwareInterest = ['note', 'heart', 'both'].includes(requestBody?.hardwareInterest)
+      ? requestBody.hardwareInterest
+      : null
     
     console.log('📋 Extracted fields debug:', {
       email: {
@@ -406,6 +409,10 @@ export async function handleWaitlistSignup(c: any): Promise<Response> {
         // Update existing user's last activity
         existingUser.lastActiveDate = new Date().toISOString()
         existingUser.activityCount = (existingUser.activityCount || 1) + 1
+        if (source === 'hardware-preorder' && hardwareInterest) {
+          existingUser.hardwareInterest = hardwareInterest
+          existingUser.hardwareInterestUpdatedAt = new Date().toISOString()
+        }
         
         // Save updated activity tracking
         await kv.set(`waitlist_user_${normalizedEmail}`, existingUser)
@@ -544,6 +551,10 @@ export async function handleWaitlistSignup(c: any): Promise<Response> {
           // Update existing user's last activity
           duplicateUser.lastActiveDate = new Date().toISOString()
           duplicateUser.activityCount = (duplicateUser.activityCount || 1) + 1
+          if (source === 'hardware-preorder' && hardwareInterest) {
+            duplicateUser.hardwareInterest = hardwareInterest
+            duplicateUser.hardwareInterestUpdatedAt = new Date().toISOString()
+          }
           
           // Save the duplicate user back with updated activity
           await kv.set(`waitlist_user_${normalizedEmail}`, duplicateUser)
@@ -628,6 +639,8 @@ export async function handleWaitlistSignup(c: any): Promise<Response> {
       utm_source: utm_source || null,
       utm_medium: utm_medium || null,
       utm_campaign: utm_campaign || null,
+      hardwareInterest,
+      hardwareInterestUpdatedAt: hardwareInterest ? new Date().toISOString() : null,
       ipAddress: ipAddress || null,
       userAgent: userAgent || null,
       signupDate: new Date().toISOString(),

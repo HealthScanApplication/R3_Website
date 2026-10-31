@@ -61,3 +61,38 @@ export async function recordWithOverlay(videoUrl: string, overlay: HTMLCanvasEle
   recorder.stop();
   return { blob: await done, ext: type.ext };
 }
+
+export type StillMotion = 'drift' | 'zoom' | 'orbit';
+
+/** Turn a finished still post into a short motion post without an AI-video charge. */
+export async function recordStillCanvas(source: HTMLCanvasElement, seconds = 6, motion: StillMotion = 'drift', onProgress?: (fraction: number) => void): Promise<{ blob: Blob; ext: 'mp4' | 'webm' }> {
+  const type = typeof MediaRecorder === 'undefined' ? null : pickRecorderType((t) => MediaRecorder.isTypeSupported(t));
+  if (!type) throw new Error('This browser can’t record an animated post.');
+  const canvas = document.createElement('canvas'); canvas.width = source.width; canvas.height = source.height;
+  const ctx = canvas.getContext('2d')!;
+  const recorder = new MediaRecorder(canvas.captureStream(30), { mimeType: type.mime, videoBitsPerSecond: 8_000_000 });
+  const chunks: Blob[] = [];
+  recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+  const done = new Promise<Blob>((resolve) => { recorder.onstop = () => resolve(new Blob(chunks, { type: type.mime.split(';')[0] })); });
+  const started = performance.now();
+  let frame = 0;
+  const draw = (now: number) => {
+    const p = Math.min(1, (now - started) / (seconds * 1000));
+    ctx.fillStyle = '#11120F'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const scale = motion === 'zoom' ? 1 + p * 0.075 : 1.035;
+    const sway = motion === 'drift' ? Math.sin(p * Math.PI * 2) * canvas.width * 0.018 : 0;
+    ctx.save(); ctx.translate(canvas.width / 2 + sway, canvas.height / 2); ctx.scale(scale, scale); ctx.drawImage(source, -canvas.width / 2, -canvas.height / 2); ctx.restore();
+    if (motion === 'orbit') {
+      const angle = p * Math.PI * 2, radius = Math.min(canvas.width, canvas.height) * 0.19;
+      const x = canvas.width * 0.5 + Math.cos(angle) * radius, y = canvas.height * 0.5 + Math.sin(angle) * radius;
+      const glow = ctx.createRadialGradient(x, y, 0, x, y, radius * 0.7);
+      glow.addColorStop(0, 'rgba(199,216,163,.3)'); glow.addColorStop(1, 'rgba(199,216,163,0)');
+      ctx.fillStyle = glow; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    onProgress?.(p);
+    if (p < 1) frame = requestAnimationFrame(draw); else recorder.stop();
+  };
+  recorder.start(250); frame = requestAnimationFrame(draw);
+  const blob = await done; cancelAnimationFrame(frame);
+  return { blob, ext: type.ext };
+}
