@@ -6,6 +6,7 @@ const RING: Row[] = [['Control', 'Touch and slide'], ['Works with', 'R³ Clip']]
 const CLIP: Row[] = [
   ['Camera', '8 MP wide-angle, 160° field of view'],
   ['Captures', 'Food, activity, voice notes, AI requests'],
+  ['Tracks', 'Heart rate'],
   ['Worn as', 'Necklace, watch, or clip'],
   ['Privacy', 'Physical slider cuts the camera, microphones, and radios; red LED while the camera is on'],
 ];

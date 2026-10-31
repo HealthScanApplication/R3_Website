@@ -103,11 +103,19 @@ describe('DeviceArt', () => {
     expect(ids.every((i) => /^[\w-]+$/.test(i))).toBe(true);
   });
 
-  it('ClipArt has a lens mark and no pulse line', () => {
+  it('ClipArt draws the heartbeat line', () => {
     const { container } = render(<ClipArt />);
     const paths = Array.from(container.querySelectorAll('path')).map((p) => p.getAttribute('d') ?? '');
-    expect(paths.some((d) => d.startsWith('M253 260'))).toBe(false);
-    expect(container.querySelector('circle[r="34"]')).toBeTruthy();
+    expect(paths).toContain('M253 260h34l17-38 30 72 18-34h35');
+    expect(container.querySelector('circle[r="34"]')).toBeNull();
+  });
+
+  it('lists heart rate under Tracks in the Clip specifications', () => {
+    const { container } = render(<HardwarePage />);
+    const terms = Array.from(container.querySelectorAll('dt'));
+    const tracks = terms.find((dt) => dt.textContent === 'Tracks');
+    expect(tracks).toBeTruthy();
+    expect(tracks?.nextElementSibling?.textContent).toBe('Heart rate');
   });
 
   it('promises no email anywhere on the page', () => {
