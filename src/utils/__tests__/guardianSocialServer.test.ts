@@ -109,6 +109,22 @@ describe('guardian-social tokens', () => {
     const none = (async (url: string) => new Response(JSON.stringify(String(url).includes('/me/accounts') ? { data: [{ id: 'p0' }] } : { access_token: 't' }), { status: 200 })) as unknown as typeof fetch;
     await expect(exchangeCode('instagram', 'c', { clientId: 'a', clientSecret: 'b' }, 'https://r', none)).rejects.toThrow('No Instagram Business');
   });
+  it('follows Page pagination and picks the Instagram account matching the brand handle', async () => {
+    const calls: string[] = [];
+    const f = (async (url: string) => {
+      const u = String(url); calls.push(u);
+      const acct = (id: string, name: string) => ({ id, access_token: `pt-${id}`, instagram_business_account: { id: `ig-${id}`, username: name } });
+      const body = u.includes('page=2') ? { data: [acct('p2', 'second')] }
+        : u.includes('/me/accounts') ? { data: [{ id: 'p0' }, acct('p1', 'first')], paging: { next: 'https://graph.facebook.com/v21.0/me/accounts?page=2' } }
+        : u.includes('fb_exchange_token') ? { access_token: 'long' } : { access_token: 'short' };
+      return new Response(JSON.stringify(body), { status: 200 });
+    }) as unknown as typeof fetch;
+    const creds = { clientId: 'a', clientSecret: 'b' };
+    const second = await exchangeCode('instagram', 'c', creds, 'https://r', f, { instagramHandle: 'second' });
+    expect(JSON.parse(second.token)).toMatchObject({ page_id: 'p2', ig_user_id: 'ig-p2' });
+    expect(calls.some((c) => c.includes('page=2'))).toBe(true);
+    await expect(exchangeCode('instagram', 'c', creds, 'https://r', f)).rejects.toThrow('Several Instagram accounts');
+  });
   it('surfaces provider errors', async () => {
     const f = (async () => new Response(JSON.stringify({ error: 'invalid_grant', error_description: 'bad code' }), { status: 400 })) as unknown as typeof fetch;
     await expect(exchangeCode('youtube', 'c', { clientId: 'a', clientSecret: 'b' }, 'https://r', f)).rejects.toThrow('bad code');

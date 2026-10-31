@@ -120,7 +120,12 @@ async function complete(req: Request) {
   const rowId = await connectionRow(state.u, state.b, platform);
   if (!rowId || !(await claimNonce(rowId, state.n))) return json({ error: 'This connection link was already used or expired. Start again.' }, 409);
   try {
-    const result = await exchangeCode(platform, String(body.code), platformCredentials(platform, env), redirectUri(supabaseUrl));
+    let instagramHandle = '';
+    if (platform === 'instagram' && state.b) {
+      const { data: brand } = await db.from('guide_brands').select('social_links').eq('id', state.b).eq('guide_id', state.u).maybeSingle();
+      instagramHandle = String(brand?.social_links?.instagram || '').replace(/[?#].*$/, '').replace(/\/+$/, '').split('/').pop() || '';
+    }
+    const result = await exchangeCode(platform, String(body.code), platformCredentials(platform, env), redirectUri(supabaseUrl), fetch, { instagramHandle });
     const { ciphertext, iv } = await encryptToken(result.token, encryptionKey);
     const { data: updated, error } = await db.from('guide_social_connections').update({
       status: 'connected', token_ciphertext: ciphertext, token_iv: iv, provider_account_id: result.providerAccountId,
