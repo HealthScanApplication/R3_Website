@@ -23,11 +23,40 @@ async function openBatch() {
   return data;
 }
 
+// Reconcile a row with Stripe's view of its intent. A paid row is terminal: it is never downgraded and paid_at is never rewritten.
+async function markFromIntent(pi: any) {
+  const status = pi.status === 'succeeded' ? 'paid' : (pi.status === 'canceled' || pi.status === 'requires_payment_method') ? 'failed' : 'pending';
+  const update = status === 'paid'
+    ? db.from('hardware_preorders').update({ status, paid_at: new Date().toISOString() }).eq('stripe_payment_intent_id', pi.id).is('paid_at', null)
+    : db.from('hardware_preorders').update({ status }).eq('stripe_payment_intent_id', pi.id).neq('status', 'paid');
+  const { error } = await update;
+  if (error) throw error;
+  const { data } = await db.from('hardware_preorders').select('status').eq('stripe_payment_intent_id', pi.id).maybeSingle();
+  return data?.status ?? status;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return fail('Method not allowed', 405);
   if (!Deno.env.get('STRIPE_SECRET_KEY')) return fail('Payments are not configured yet.', 503);
   if (/_live_/.test(Deno.env.get('STRIPE_SECRET_KEY')!) && Deno.env.get('ALLOW_LIVE_PAYMENTS') !== 'true') return fail('Live payments are switched off on this environment.', 503);
+
+  const signature = req.headers.get('stripe-signature');
+  if (signature) {
+    const secret = Deno.env.get('STRIPE_WEBHOOK_SECRET');
+    if (!secret) return fail('Webhook secret missing', 500);
+    let event: any;
+    try { event = await stripe.webhooks.constructEventAsync(await req.text(), signature, secret); }
+    catch { return fail('Bad signature', 400); }
+    try {
+      // Intentionally not gated by batch status/deadline: this only reconciles what Stripe says about an intent created while the batch was open.
+      if (String(event.type).startsWith('payment_intent.')) {
+        const current = await stripe.paymentIntents.retrieve(event.data.object.id);
+        await markFromIntent(current);
+      }
+      return json({ received: true });
+    } catch (err: any) { console.error('hardware webhook', err?.message || err); return fail('Retry', 500); }
+  }
 
   let body: any;
   try { body = await req.json(); } catch { return fail('Invalid JSON'); }
@@ -63,6 +92,16 @@ Deno.serve(async (req) => {
       }).select('id').single();
       if (error) throw error;
       return json({ purchase_id: data.id, client_secret: pi.client_secret, amount_cents: amount, currency: CURRENCY.toUpperCase() });
+    }
+    if (body.action === 'confirm') {
+      // Intentionally not gated by batch status/deadline: it reconciles Stripe's verdict on an intent created while the batch was open.
+      const purchaseId = typeof body.purchase_id === 'string' ? body.purchase_id.trim() : '';
+      if (!purchaseId) return fail('Missing purchase_id.');
+      const { data: row, error } = await db.from('hardware_preorders').select('stripe_payment_intent_id').eq('id', purchaseId).maybeSingle();
+      if (error) throw error;
+      if (!row?.stripe_payment_intent_id) return fail('Preorder not found.', 404);
+      const pi = await stripe.paymentIntents.retrieve(row.stripe_payment_intent_id);
+      return json({ status: await markFromIntent(pi) });
     }
     return fail('Unknown action');
   } catch (err: any) {

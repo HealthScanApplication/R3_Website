@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 type Row = Record<string, any>;
 function server(envOverrides: Record<string, string | undefined> = {}) {
-  const batches: Row[] = [{ id: 'b1', name: 'first-run', goal_backers: 250, deadline: '2026-12-15T23:59:59Z', status: 'open' }];
+  const batches: Row[] = [{ id: 'b1', name: 'first-run', goal_backers: 250, deadline: '2099-12-31T23:59:59Z', status: 'open' }];
   const orders: Row[] = [
     { id: 'o1', batch_id: 'b1', product: 'ring', status: 'paid', stripe_payment_intent_id: 'pi_paid', email: 'someone@example.com', name: 'Some One' },
     { id: 'o2', batch_id: 'b1', product: 'bundle', status: 'pending', stripe_payment_intent_id: 'pi_pending' },
@@ -31,6 +31,7 @@ function server(envOverrides: Record<string, string | undefined> = {}) {
     return q;
   };
   const db = { from: (t: string) => t === 'hardware_batches' ? table(batches) : table(orders) };
+  const webhook = { reject: false };
   const piCreates: Row[] = [];
   const customerCreates: Row[] = [];
   const stripe = {
@@ -39,7 +40,7 @@ function server(envOverrides: Record<string, string | undefined> = {}) {
       async create(p: Row) { piCreates.push(p); const i = { id: `pi_${intents.size + 1}`, status: 'processing', client_secret: 'sec', ...p }; intents.set(i.id, i); return i; },
       async retrieve(id: string) { return intents.get(id); },
     },
-    webhooks: { async constructEventAsync(body: string) { return JSON.parse(body); } },
+    webhooks: { async constructEventAsync(body: string) { if (webhook.reject) throw new Error('bad sig'); return JSON.parse(body); } },
   };
   const src = readFileSync('supabase/functions/hardware-preorders/index.ts', 'utf8')
     .replace(/import Stripe from[^\n]*\n/, '')
@@ -48,12 +49,12 @@ function server(envOverrides: Record<string, string | undefined> = {}) {
     .replace(/const db =[^\n]*\n/, 'const db = globalThis.__db;\n');
   const js = transformSync(src, { loader: 'ts', format: 'cjs' }).code;
   (globalThis as any).__stripe = stripe; (globalThis as any).__db = db;
-  const env: Row = { STRIPE_SECRET_KEY: 'sk_test_x', SUPABASE_URL: 'http://x', SUPABASE_SERVICE_ROLE_KEY: 'x' };
+  const env: Row = { STRIPE_SECRET_KEY: 'sk_test_x', SUPABASE_URL: 'http://x', SUPABASE_SERVICE_ROLE_KEY: 'x', STRIPE_WEBHOOK_SECRET: 'whsec_x' };
   for (const [k, v] of Object.entries(envOverrides)) { if (v === undefined) delete env[k]; else env[k] = v; }
   (globalThis as any).Deno = { env: { get: (k: string) => env[k] }, serve: (h: any) => { (globalThis as any).__handler = h; } };
   const mod: any = { exports: {} };
   new Function('module', 'exports', 'globalThis', js)(mod, mod.exports, globalThis);
-  return { handler: (globalThis as any).__handler as (r: Request) => Promise<Response>, orders, batches, piCreates, customerCreates };
+  return { handler: (globalThis as any).__handler as (r: Request) => Promise<Response>, orders, batches, piCreates, customerCreates, intents, webhook };
 }
 const post = (body: Row) => new Request('http://x', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
@@ -62,7 +63,7 @@ describe('hardware-preorders count', () => {
     const { handler } = server();
     const res = await handler(post({ action: 'count' }));
     const data = await res.json();
-    expect(data).toEqual({ paid: 1, goal: 250, deadline: '2026-12-15T23:59:59Z', status: 'open' });
+    expect(data).toEqual({ paid: 1, goal: 250, deadline: '2099-12-31T23:59:59Z', status: 'open' });
     expect(JSON.stringify(data)).not.toMatch(/@/);
   });
 
@@ -138,5 +139,101 @@ describe('hardware-preorders guards', () => {
   it('rejects non-POST methods with 405', async () => {
     const { handler } = server();
     expect((await handler(new Request('http://x', { method: 'GET' }))).status).toBe(405);
+  });
+});
+
+const hook = (type: string, id: string) => new Request('http://x', {
+  method: 'POST', headers: { 'content-type': 'application/json', 'stripe-signature': 'sig' },
+  body: JSON.stringify({ type, data: { object: { id } } }),
+});
+
+describe('hardware-preorders confirm', () => {
+  it('marks a pending row paid when Stripe says succeeded', async () => {
+    const { handler, orders, intents } = server();
+    intents.get('pi_pending')!.status = 'succeeded';
+    const res = await handler(post({ action: 'confirm', purchase_id: 'o2' }));
+    expect((await res.json()).status).toBe('paid');
+    const row = orders.find(o => o.id === 'o2')!;
+    expect(row.status).toBe('paid');
+    expect(row.paid_at).toBeTruthy();
+  });
+  it('leaves a processing intent pending', async () => {
+    const { handler, orders } = server();
+    expect((await (await handler(post({ action: 'confirm', purchase_id: 'o2' }))).json()).status).toBe('pending');
+    expect(orders.find(o => o.id === 'o2')!.paid_at ?? null).toBeNull();
+  });
+  it('marks a canceled intent failed', async () => {
+    const { handler, orders, intents } = server();
+    intents.get('pi_pending')!.status = 'canceled';
+    expect((await (await handler(post({ action: 'confirm', purchase_id: 'o2' }))).json()).status).toBe('failed');
+    expect(orders.find(o => o.id === 'o2')!.status).toBe('failed');
+  });
+  it('is idempotent: a repeat confirm keeps paid_at and a later cancel never downgrades paid', async () => {
+    const { handler, orders, intents } = server();
+    intents.get('pi_pending')!.status = 'succeeded';
+    await handler(post({ action: 'confirm', purchase_id: 'o2' }));
+    const row = orders.find(o => o.id === 'o2')!;
+    const firstPaidAt = row.paid_at;
+    expect(firstPaidAt).toBeTruthy();
+    await new Promise(r => setTimeout(r, 5));
+    const again = await (await handler(post({ action: 'confirm', purchase_id: 'o2' }))).json();
+    expect(again.status).toBe('paid');
+    expect(row.paid_at).toBe(firstPaidAt);
+    intents.get('pi_pending')!.status = 'canceled';
+    const hookRes = await handler(hook('payment_intent.canceled', 'pi_pending'));
+    expect((await hookRes.json()).received).toBe(true);
+    expect(row.status).toBe('paid');
+    expect(row.paid_at).toBe(firstPaidAt);
+    const late = await (await handler(post({ action: 'confirm', purchase_id: 'o2' }))).json();
+    expect(late.status).toBe('paid');
+  });
+  it('returns 404 for an unknown purchase_id', async () => {
+    const { handler } = server();
+    const res = await handler(post({ action: 'confirm', purchase_id: 'nope' }));
+    expect(res.status).toBe(404);
+    expect((await res.json()).error).toBe('Preorder not found.');
+  });
+  it.each([['missing', {}], ['blank', { purchase_id: '  ' }], ['non-string', { purchase_id: { a: 1 } }]])('rejects a %s purchase_id with 400', async (_n, input) => {
+    const { handler } = server();
+    const res = await handler(post({ action: 'confirm', ...input }));
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('hardware-preorders webhook', () => {
+  it('reconciles a succeeded intent', async () => {
+    const { handler, orders, intents } = server();
+    intents.get('pi_pending')!.status = 'succeeded';
+    const res = await handler(hook('payment_intent.succeeded', 'pi_pending'));
+    expect(res.status).toBe(200);
+    expect((await res.json()).received).toBe(true);
+    expect(orders.find(o => o.id === 'o2')!.status).toBe('paid');
+  });
+  it('marks a payment_failed intent failed', async () => {
+    const { handler, orders, intents } = server();
+    intents.get('pi_pending')!.status = 'requires_payment_method';
+    await handler(hook('payment_intent.payment_failed', 'pi_pending'));
+    expect(orders.find(o => o.id === 'o2')!.status).toBe('failed');
+  });
+  it('acknowledges unrelated event types without touching rows', async () => {
+    const { handler, orders } = server();
+    const res = await handler(hook('charge.refunded', 'ch_1'));
+    expect((await res.json()).received).toBe(true);
+    expect(orders.find(o => o.id === 'o2')!.status).toBe('pending');
+  });
+  it('returns 500 when a signature is sent but STRIPE_WEBHOOK_SECRET is unset', async () => {
+    const { handler, orders, intents } = server({ STRIPE_WEBHOOK_SECRET: undefined });
+    intents.get('pi_pending')!.status = 'succeeded';
+    const res = await handler(hook('payment_intent.succeeded', 'pi_pending'));
+    expect(res.status).toBe(500);
+    expect(orders.find(o => o.id === 'o2')!.status).toBe('pending');
+  });
+  it('returns 400 on a bad signature and changes nothing', async () => {
+    const { handler, orders, intents, webhook } = server();
+    intents.get('pi_pending')!.status = 'succeeded';
+    webhook.reject = true;
+    const res = await handler(hook('payment_intent.succeeded', 'pi_pending'));
+    expect(res.status).toBe(400);
+    expect(orders.find(o => o.id === 'o2')!.status).toBe('pending');
   });
 });
