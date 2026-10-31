@@ -392,10 +392,40 @@ export function FlutedGlassBackground({
       if (hasTexture) gl.drawArrays(gl.TRIANGLES, 0, 6);
       raf = requestAnimationFrame(render);
     };
-    raf = requestAnimationFrame(render);
+
+    // Run (and keep the video playing) only while near the viewport and the tab is visible.
+    let near = typeof IntersectionObserver === "undefined";
+    let running = false;
+    let pausedAt = 0;
+    const update = () => {
+      const shouldRun = near && document.visibilityState === "visible";
+      if (shouldRun === running) return;
+      running = shouldRun;
+      if (shouldRun) {
+        // shift the clock so the sweep continues where it left off
+        if (start && pausedAt) start += performance.now() - pausedAt;
+        pausedAt = 0;
+        if (started) video.play().catch(() => {});
+        raf = requestAnimationFrame(render);
+      } else {
+        cancelAnimationFrame(raf);
+        raf = 0;
+        pausedAt = performance.now();
+        try { video.pause(); } catch { /* noop */ }
+      }
+    };
+    const io = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver((entries) => {
+      near = entries.some((e) => e.isIntersecting);
+      update();
+    }, { rootMargin: "200px" });
+    io?.observe(canvas);
+    document.addEventListener("visibilitychange", update);
+    update();
 
     return () => {
       cancelAnimationFrame(raf);
+      io?.disconnect();
+      document.removeEventListener("visibilitychange", update);
       window.removeEventListener("resize", resize);
       try { video.pause(); video.removeAttribute("src"); video.load(); } catch { /* noop */ }
       gl.deleteTexture(tex);
