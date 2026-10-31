@@ -83,10 +83,12 @@ describe('R3 house style panel', () => {
     expect(mocks.invoke).toHaveBeenCalledTimes(1);
     expect(mocks.invoke).toHaveBeenCalledWith('guardian-images', { body: { action: 'convert-avatar', image_url: OWN_PORTRAIT, name: 'Test Guide', source: 'house' } });
     const images = within(panel).getAllByRole('img') as HTMLImageElement[];
-    expect(images.map((image) => image.getAttribute('src'))).toEqual([OWN_PORTRAIT, REAL_IMAGE]);
+    // Their pair first, then the house-style example kept beside it as the target to compare against.
+    expect(images.map((image) => image.getAttribute('src'))).toEqual([OWN_PORTRAIT, REAL_IMAGE, '/images/guides/house-style/example-before.webp', '/images/guides/house-style/example-after.webp']);
     expect(within(panel).getByText('Original')).toBeTruthy();
     expect(within(panel).getByRole('button', { name: 'Try again' })).toBeTruthy();
-    expect(within(panel).queryByText('Example')).toBeNull();
+    expect(within(panel).getByLabelText('The R3 house style to aim for')).toBeTruthy();
+    expect(within(panel).getAllByText('Example').length).toBe(2);
     fireEvent.click(within(panel).getByRole('button', { name: 'Cancel' }));
     expect(within(panel).getByRole('button', { name: 'Create my R3 house style' })).toBeTruthy(); // back to the example view
     expect(within(panel).getAllByText('Example').length).toBe(2);
