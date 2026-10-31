@@ -2187,6 +2187,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   // preselected, each choice reveals the next, and "Add this use case" then reveals the lead magnet and the offers.
   const [useCasePicked, setUseCasePicked] = useState<Record<UseCasePart, boolean>>({ audience: false, population: false, age: false, stage: false, problem: false });
   const [useCaseAdded, setUseCaseAdded] = useState(false);
+  const [showLeadMagnetPicker, setShowLeadMagnetPicker] = useState(false);
   // Photos for their page: the first cell is the account photo that comes with their email; the rest they add (2 to 4 in all).
   const [sitePhotos, setSitePhotos] = useState<string[]>(accountAvatarUrl ? [accountAvatarUrl] : []);
   const [photosUploading, setPhotosUploading] = useState(false);
@@ -2773,6 +2774,12 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     setUseCasePicked((current) => { const next = { ...current }; const from = USE_CASE_ORDER.indexOf(part); USE_CASE_ORDER.forEach((key, index) => { next[key] = index <= from; }); return next; });
     setUseCaseAdded(false);
   };
+  // The entry offer is chosen for them (the recommended one for this use case); there is no picker. Stage 0 only ever existed to choose it.
+  useEffect(() => {
+    if (step !== 4 || offerPlanStage !== 2 || !useCaseReady || freeOfferSetupStage !== 0) return;
+    const kind = suggestedFreeOffer.kind;
+    setFreeOfferType(kind); setFreeDelivery(kind === 'routine' ? ['Downloadable PDF', 'Interactive Protocol'] : [suggestedDelivery(kind)]); setFreeAudienceValue(freeValueSuggestions[kind]); setLeadMagnetTitle(suggestedFreeOffer.title); setFreeOfferSetupStage(1);
+  }, [step, offerPlanStage, useCaseReady, freeOfferSetupStage, suggestedFreeOffer.kind, suggestedFreeOffer.title]);
   const addUseCase = () => { if (freeOfferType === 'routine') setLeadMagnetTitle(suggestedRoutineName); setUseCaseAdded(true); };
   const leadMagnetIdeas = [
     `${routineTitlePrefix}3-day ${routineNameTopic} reset for ${routineNameAudience}`,
@@ -2964,6 +2971,23 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
                     {offerVideoField('free')}<span style={{ ...btn, ...compactControl, width: '100%', minHeight: 40, gridColumn: '1 / -1', boxSizing: 'border-box', background: 'transparent', color: acid, borderColor: line, cursor: 'default' }}>Lead magnet · Step 01</span>
                   </div>
                 </div>; })();
+  // The lead magnet, with a dashed "Add another" beside it. Once there are two they sit together and join into the upsell.
+  const extraLeadMagnets = selectedLeadMagnets.filter((kind) => kind !== freeOfferType);
+  const leadMagnetOptions = freeOfferTypes.filter((offer) => offer.value !== freeOfferType && !selectedLeadMagnets.includes(offer.value));
+  const leadMagnetCluster = () => <div role="group" aria-label="Lead magnets" style={{ display: 'flex', alignItems: 'stretch', gap: 12, flex: '0 0 auto' }}>
+    {leadMagnetCard()}
+    {extraLeadMagnets.map((kind) => { const type = freeOfferTypes.find((offer) => offer.value === kind); return <div key={kind} style={{ width: 260, flex: '0 0 260px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <FreeOfferCard eyebrow="LEAD MAGNET · FREE · #2" title={type?.label || kind} copy={type?.copy || ''} active art={freeOfferArt[kind]} onClick={() => {}} />
+      <button type="button" onClick={() => setSelectedLeadMagnets((current) => current.filter((item) => item !== kind))} aria-label={`Remove ${type?.label || kind}`} style={{ ...btn, minHeight: 36, height: 36, background: 'transparent', color: ink, fontSize: 9 }}>Remove</button>
+    </div>; })}
+    {extraLeadMagnets.length < 1 && <div style={{ width: 200, flex: '0 0 200px', border: `1px dashed ${line}`, display: 'flex', flexDirection: 'column' }}>
+      <button type="button" onClick={() => setShowLeadMagnetPicker((current) => !current)} aria-expanded={showLeadMagnetPicker} aria-label="Add another lead magnet" style={{ flex: '1 1 auto', minHeight: 190, border: 0, background: 'transparent', color: ink, fontFamily: sans, cursor: 'pointer', display: 'grid', placeItems: 'center', textAlign: 'center', padding: 14 }}>
+        <span><span style={{ display: 'block', fontSize: 26, fontWeight: 300, marginBottom: 6 }}>+</span><strong style={{ display: 'block', fontSize: 13, letterSpacing: '.04em' }}>Add another</strong><span style={{ display: 'block', color: muted, fontSize: 10, lineHeight: 1.4, marginTop: 4 }}>A second free way in. Both lead into your upsell.</span></span>
+      </button>
+      {showLeadMagnetPicker && <div style={{ display: 'grid', gap: 6, padding: '0 10px 10px' }}>{leadMagnetOptions.map((offer) => <button key={offer.value} type="button" onClick={() => { setSelectedLeadMagnets((current) => current.includes(offer.value) ? current : [...current, offer.value]); setShowLeadMagnetPicker(false); }} style={{ ...btn, minHeight: 36, height: 'auto', padding: '8px 10px', background: 'transparent', color: ink, fontSize: 10, textAlign: 'left' }}>{offer.label}</button>)}</div>}
+    </div>}
+    {extraLeadMagnets.length >= 1 && <span role="img" aria-label="Both lead magnets join into your upsell" title="Both lead magnets join into your upsell" style={{ width: 26, flex: '0 0 26px', alignSelf: 'stretch', margin: '44px 0', borderTop: `1px solid ${acid}`, borderRight: `1px solid ${acid}`, borderBottom: `1px solid ${acid}` }} />}
+  </div>;
   const paidOfferCard = (offer: (typeof offerCards)[number]) => {
                 const art = offerTypeArt[offer.kind];
                 const access = offerAccess[offer.kind];
@@ -3243,19 +3267,12 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
                 <span style={{ color: muted, fontSize: 11, lineHeight: 1.5 }}>A free starter for {routineNameAudience}{routineLifeStage !== 'Not specified' ? ` in ${routineLifeStage.toLowerCase()}` : ''} with {rampTargetProblem.toLowerCase()}. Add this use case and we will suggest the lead magnet and build the offers around it.</span>
                 <button type="button" onClick={addUseCase} style={{ ...btn, justifySelf: 'start' }}>Add this use case</button>
               </div>}
-              {useCaseReady && <div style={{ marginTop: 12, borderLeft: `2px solid ${acid}`, padding: '3px 0 3px 10px' }}>
-                <label htmlFor="value-ramp-name" style={{ display: 'block', color: muted, fontSize: 8, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 6 }}>Lead magnet name <span style={{ color: acid }}>· choose an idea or type your own</span></label>
-                <input id="value-ramp-name" list="lead-magnet-ideas" value={leadMagnetTitle} onChange={(event) => setLeadMagnetTitle(event.target.value)} onBlur={() => { if (freeOfferType === 'routine' && leadMagnetTitle.trim() && !leadMagnetTitle.trim().startsWith(routineTitlePrefix)) setLeadMagnetTitle(`${routineTitlePrefix}${leadMagnetTitle.trim()}`); }} placeholder={suggestedRoutineName} style={{ ...input, height: 42, minHeight: 42, fontSize: 12 }} />
-                <datalist id="lead-magnet-ideas">{leadMagnetIdeas.map((idea) => <option key={idea} value={idea} />)}</datalist>
-                <span style={{ display: 'block', color: muted, fontSize: 8, lineHeight: 1.4, marginTop: 6 }}>Suggested: {suggestedRoutineName}</span>
-                <details style={{ marginTop: 10 }}><summary style={{ color: acid, fontSize: 8, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>Browse {leadMagnetIdeas.length} lead magnet ideas</summary><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(250px,1fr))', gap: 6, marginTop: 9 }}>{leadMagnetIdeas.map((idea) => <button type="button" key={idea} onClick={() => setLeadMagnetTitle(idea)} aria-pressed={leadMagnetTitle === idea} style={{ minHeight: 48, border: `1px solid ${leadMagnetTitle === idea ? acid : line}`, background: leadMagnetTitle === idea ? 'rgba(199,216,163,.1)' : 'transparent', color: ink, padding: '8px 10px', fontFamily: sans, fontSize: 9, lineHeight: 1.35, textAlign: 'left', cursor: 'pointer' }}>{idea}</button>)}</div></details>
-              </div>}
             </div>
             {useCaseReady && <><label style={{ ...label, color: ink }}>Your offers <span style={{ color: acid }}>· value rises at every step</span></label>
             <p style={{ color: muted, fontSize: 9, lineHeight: 1.5, margin: '-1px 0 12px' }}>Add or remove steps in one continuous customer journey.</p>
             <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'stretch', gap: 0, minWidth: 'max-content' }}>
-                {leadMagnetCard()}
+                {leadMagnetCluster()}
                 {offerCards.filter((offer) => selectedUpsells.includes(offer.kind)).map((offer) => <Fragment key={offer.kind}><span aria-hidden="true" style={{ width: 34, flex: '0 0 34px', alignSelf: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: acid }}><ArrowRight size={22} strokeWidth={1.4} /></span>{paidOfferCard(offer)}</Fragment>)}
                 {offerCards.some((offer) => !selectedUpsells.includes(offer.kind)) && <Fragment><span aria-hidden="true" style={{ width: 34, flex: '0 0 34px', alignSelf: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: line }}><ArrowRight size={22} strokeWidth={1.4} /></span><div style={{ width: 320, flex: '0 0 320px', border: `1px dashed ${muted}`, background: 'transparent', display: 'flex', flexDirection: 'column' }}>
                   <button type="button" onClick={() => setShowAddOfferOptions((current) => !current)} aria-expanded={showAddOfferOptions} style={{ minHeight: 190, flex: '1 1 auto', border: 0, background: 'transparent', color: ink, fontFamily: sans, cursor: 'pointer', display: 'grid', placeItems: 'center', textAlign: 'center', padding: '38px 20px 24px' }}><span><span style={{ width: 48, height: 48, margin: '0 auto 14px', border: `1px solid ${ink}`, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 25, fontWeight: 300 }}>+</span><strong style={{ display: 'block', fontSize: 16 }}>Add next offer</strong><span style={{ display: 'block', color: muted, fontSize: 10, marginTop: 7 }}>{offerCards.filter((offer) => !selectedUpsells.includes(offer.kind)).length} options available</span></span></button>
@@ -3267,27 +3284,8 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           </div>}
         </div>
         {offerPlanStage === 2 && useCaseReady && <>
-        <section style={{ border: `1px solid ${line}`, background: panel, marginBottom: 30 }}>
-          <div style={{ padding: '16px 18px', borderBottom: `1px solid ${line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}><span><span style={{ ...label, color: acid, marginBottom: 4 }}>Offer build queue</span><strong style={{ color: ink, fontFamily: serif, fontSize: 25, fontWeight: 400 }}>{builtOfferCount} of {totalOfferCount} built</strong></span><span style={{ color: muted, fontSize: 9 }}>Finish each offer before publishing the offer site.</span></div>
-          <div style={{ overflowX: 'auto' }}><div role="table" aria-label="Offers to build" style={{ minWidth: 760 }}>
-            <div role="row" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) 120px 120px 120px 105px 130px', borderBottom: `1px solid ${line}`, padding: '9px 14px', color: muted, fontSize: 7, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{['Offer','Type','Access','Payment','Price','Status'].map((heading) => <span role="columnheader" key={heading}>{heading}</span>)}</div>
-            <div role="row" style={{ width: '100%', display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) 120px 120px 120px 105px 130px', alignItems: 'center', borderBottom: `1px solid ${line}`, padding: '13px 14px', boxSizing: 'border-box', color: ink, fontFamily: sans, textAlign: 'left' }}><strong role="cell" style={{ fontSize: 11 }}>{leadMagnetTitle || 'Entry offer'}</strong><span role="cell" style={{ color: muted, fontSize: 9 }}>{freeOfferTypes.find((item) => item.value === freeOfferType)?.label}</span><span role="cell" style={{ fontSize: 9 }}>Free</span><span role="cell" style={{ color: muted, fontSize: 9 }}>No payment</span><span role="cell" style={{ fontSize: 9 }}>{formatMoney(0, currency)}</span><button type="button" role="cell" onClick={() => freeOfferType === 'routine' ? openProtocolBuilder() : openOfferEditor()} disabled={creatingProtocol} style={{ ...btn, minHeight: 46, padding: '0 12px', background: acid, color: black, borderColor: acid, fontSize: 8 }}>{creatingProtocol ? <><Loader2 size={12} className="animate-spin" /> Creating</> : freeOfferType === 'routine' ? <>{onboardingProtocol ? 'Open builder' : 'Build Protocol'} <ArrowRight size={13} /></> : <>{freeOfferSetupStage >= 2 ? 'Edit offer' : 'Build offer'} <ArrowRight size={13} /></>}</button></div>
-            {orderedUpsells.map((kind) => { const draft = upsellDrafts[kind]; const access = offerAccess[kind]; const built = (paidOfferSetupStages[kind] || 0) >= 3; return <button type="button" role="row" key={kind} onClick={() => openOfferEditor(kind)} style={{ width: '100%', display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) 120px 120px 120px 105px 130px', alignItems: 'center', border: 0, borderBottom: `1px solid ${line}`, padding: '13px 14px', background: 'transparent', color: ink, fontFamily: sans, textAlign: 'left', cursor: 'pointer' }}><strong role="cell" style={{ fontSize: 11 }}>{draft.title}</strong><span role="cell" style={{ color: muted, fontSize: 9 }}>{upsellSuggestions.find((item) => item.kind === kind)?.label || kind.replaceAll('_', ' ')}</span><span role="cell" style={{ fontSize: 9 }}>{access === 'paid' ? 'Paid' : 'Free'}</span><span role="cell" style={{ color: muted, fontSize: 9 }}>{access === 'paid' ? billingLabels[draft.billingModel].title : 'No payment'}</span><span role="cell" style={{ fontSize: 9 }}>{access === 'paid' ? `${formatMoney(draft.price, currency)}${billingLabels[draft.billingModel].suffix}` : formatMoney(0, currency)}</span><span role="cell" style={{ color: built ? acid : '#D49A74', fontSize: 8, fontWeight: 800, textTransform: 'uppercase' }}>{built ? 'Built · Edit' : 'To build →'}</span></button>; })}
-          </div></div>
-        </section>
         <div id="offer-builder-entry" style={{ scrollMarginTop: 20 }}><FunnelStage number="01" eyebrow="Free · Build trust" title="Give your audience one useful win." copy="Choose one useful result, name it clearly, then decide how people receive it." art={freeOfferArt[freeOfferType]} aside={leadMagnetCard()}>
-          {freeOfferSetupStage > 0 && <div style={{ border: `1px solid ${line}`, padding: '12px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span><span style={{ ...label, marginBottom: 3 }}>Entry offer</span><strong style={{ color: ink, fontSize: 12, fontWeight: 600 }}>{freeOfferTypes.find((offer) => offer.value === freeOfferType)?.label}</strong></span><button type="button" onClick={() => setFreeOfferSetupStage(0)} style={{ ...btn, minHeight: 36, height: 36, background: 'transparent', color: ink, fontSize: 9 }}>Edit</button></div>}
-          {freeOfferSetupStage === 0 && <><label style={label}>Choose the entry offer</label>
-          {!showAllEntryOffers && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,220px),1fr))', gap: 10 }}>
-            <FreeOfferCard eyebrow="LEAD MAGNET · RECOMMENDED" title={suggestedFreeOffer.title} copy="Best fit for this audience." active recommended art={freeOfferArt[suggestedFreeOffer.kind]} onClick={() => { setFreeOfferType(suggestedFreeOffer.kind); setFreeDelivery(suggestedFreeOffer.kind === 'routine' ? ['Downloadable PDF', 'Interactive Protocol'] : [suggestedDelivery(suggestedFreeOffer.kind)]); setFreeAudienceValue(freeValueSuggestions[suggestedFreeOffer.kind]); setLeadMagnetTitle(suggestedFreeOffer.title); setFreeOfferSetupStage(1); }} />
-            {[0, 1].map((n) => <button key={n} type="button" onClick={() => setShowAllEntryOffers(true)} style={{ minHeight: 156, border: `1px dashed ${line}`, background: 'transparent', color: muted, fontSize: 11, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><span><span style={{ display: 'block', fontSize: 26, fontWeight: 300, color: ink, marginBottom: 6 }}>+</span>Add another</span></button>)}
-          </div>}
-          {showAllEntryOffers && <div style={{ overflowX: 'auto' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,minmax(145px,1fr))', gap: 0, minWidth: 870, borderTop: `1px solid ${line}`, borderLeft: `1px solid ${line}` }}>
-              {[...freeOfferTypes].sort((offer) => Number(offer.value !== 'routine')).map((offer) => <FreeOfferCard key={offer.value} eyebrow={offer.eyebrow} title={offer.label} copy={offer.copy} active={freeOfferType === offer.value} art={freeOfferArt[offer.value]} onClick={() => { setFreeOfferType(offer.value); setFreeDelivery(offer.value === 'routine' ? ['Downloadable PDF', 'Interactive Protocol'] : [suggestedDelivery(offer.value)]); setFreeAudienceValue(freeValueSuggestions[offer.value]); setFreeOfferSetupStage(1); }} />)}
-            </div>
-            <button type="button" onClick={() => setShowAllEntryOffers(false)} style={{ ...btn, marginTop: 10, background: 'transparent', color: ink }}>← Back to recommended</button>
-          </div>}</>}
+          {freeOfferSetupStage > 0 && <div style={{ border: `1px solid ${line}`, padding: '12px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span><span style={{ ...label, marginBottom: 3 }}>Entry offer</span><strong style={{ color: ink, fontSize: 12, fontWeight: 600 }}>{freeOfferTypes.find((offer) => offer.value === freeOfferType)?.label}</strong></span></div>}
           {freeOfferSetupStage > 1 && <div style={{ border: `1px solid ${line}`, padding: '12px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span><span style={{ ...label, marginBottom: 3 }}>Offer</span><strong style={{ color: ink, fontSize: 12, fontWeight: 600 }}>{leadMagnetTitle}</strong><span style={{ display: 'block', color: muted, fontSize: 9, marginTop: 3 }}>{freeAudienceValue}</span></span><button type="button" onClick={() => setFreeOfferSetupStage(1)} style={{ ...btn, minHeight: 36, height: 36, background: 'transparent', color: ink, fontSize: 9 }}>Edit</button></div>}
           {freeOfferSetupStage === 1 && <div>
           <label style={label}>Offer name</label>

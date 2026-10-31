@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Onboarding } from '../../components/guides/GuidePortal';
 
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'owner', app_metadata: {} }, accessToken: null, signOut: () => {} }) }));
@@ -60,10 +60,16 @@ describe('the use case is built step by step', () => {
     expect(solution.textContent).toMatch(/7-day menopause .* challenge for women/);
     expect(document.getElementById('value-ramp-name')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Add this use case' }));
-    await waitFor(() => expect(document.getElementById('value-ramp-name')).toBeTruthy());
-    expect((document.getElementById('value-ramp-name') as HTMLInputElement).value).toMatch(/7-day menopause .* challenge for women/);
-    expect(screen.getByText(/value rises at every step/)).toBeTruthy();
+    await waitFor(() => expect(screen.getByText(/value rises at every step/)).toBeTruthy());
     expect(screen.queryByLabelText('Solution for this use case')).toBeNull();
+    // Hidden on purpose: the lead magnet name box, the entry offer picker and the build queue.
+    expect(document.getElementById('value-ramp-name')).toBeNull();
+    expect(screen.queryByText('Choose the entry offer')).toBeNull();
+    expect(screen.queryByText('Offer build queue')).toBeNull();
+    expect(screen.queryByLabelText('Offers to build')).toBeNull();
+    // The recommended entry offer was chosen for them, so the builder opens on naming it.
+    expect(await screen.findByText('Entry offer')).toBeTruthy(); // the entry offer summary only shows once an entry offer is chosen
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
   });
 
   it('hides the lead magnet and offers again when an earlier choice changes', async () => {
@@ -79,5 +85,27 @@ describe('the use case is built step by step', () => {
     expect(screen.queryByText(/value rises at every step/)).toBeNull();
     expect(selectNamed('Age range')!.value).toBe(''); // later parts are cleared
     expect(selectNamed('Problem')).toBeNull();
+  });
+
+  it('puts a dashed Add another beside the first lead magnet, and a second one joins into the upsell', async () => {
+    await openUseCase();
+    choose('Audience', (selectNamed('Audience')!.options[1] as HTMLOptionElement).value);
+    choose('Sex / population', 'Women');
+    choose('Age range', 'Women 45–64');
+    choose('Health / life stage', 'Menopause');
+    choose('Problem', (selectNamed('Problem')!.options[1] as HTMLOptionElement).value);
+    fireEvent.click(await screen.findByRole('button', { name: 'Add this use case' }));
+    const group = await screen.findByRole('group', { name: 'Lead magnets' });
+    const add = within(group).getByRole('button', { name: 'Add another lead magnet' });
+    expect(within(group).getByText('Add another')).toBeTruthy();
+    expect(within(group).queryByRole('img', { name: /join into your upsell/ })).toBeNull(); // one lead magnet: nothing to join yet
+    fireEvent.click(add);
+    const options = within(group).getAllByRole('button').filter((button) => !/Add another lead magnet/.test(button.getAttribute('aria-label') || ''));
+    const pick = options.find((button) => !(button as HTMLButtonElement).disabled && /call|guide|recipe|challenge|workshop|checklist|video|webinar|book|class|template|community|session/i.test(button.textContent || '')) || options[options.length - 1];
+    fireEvent.click(pick);
+    await waitFor(() => expect(within(screen.getByRole('group', { name: 'Lead magnets' })).getByRole('img', { name: 'Both lead magnets join into your upsell' })).toBeTruthy());
+    expect(within(screen.getByRole('group', { name: 'Lead magnets' })).queryByRole('button', { name: 'Add another lead magnet' })).toBeNull(); // two is the pair that joins
+    fireEvent.click(within(screen.getByRole('group', { name: 'Lead magnets' })).getByRole('button', { name: /^Remove / }));
+    await waitFor(() => expect(within(screen.getByRole('group', { name: 'Lead magnets' })).getByRole('button', { name: 'Add another lead magnet' })).toBeTruthy());
   });
 });
