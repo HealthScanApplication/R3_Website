@@ -1022,53 +1022,38 @@ git commit -m "feat(hardware): ring product page sections and assembly"
 
 ---
 
-### Task 13: Rework homepage section into a teaser linking to `/ring`
+### Task 13: Homepage section becomes a teaser linking to `/ring`
+
+> **Plan revision (controller rulings):** (1) The CTA is a real `<a href="/ring">` — the app's own pattern (the header's Guardians link is `href: '/guardians'`), shareable, and `navigateToPage` only changes in-memory state, not the URL, so no callback prop and NO `App.tsx` change (`{currentPage === "home" && <HardwarePreorder />}` stays). (2) The old section's unverified claims must not survive (they describe the old Note/Heart design): remove "Capture the moment. Not your life.", "Nothing records until you deliberately press the control", "Press to record · release to stop · no ambient listening", "Visible capture light · deliberate clips · camera off by default". (3) The inline email waitlist form and its `make-server-ed0fe4c2/email-waitlist` POST are removed; the preorder on `/ring` replaces them. (4) Adding a link to the global header nav is intentionally NOT part of this build (it affects every page and the existing header layout tests; it is the owner's design call) — proposed as a follow-up.
 
 **Files:**
-- Modify: `src/components/HardwarePreorder.tsx`
-- Modify: `src/App.tsx` (pass a navigate callback if needed)
-- Test: `src/components/__tests__/HardwarePreorderTeaser.test.tsx`
+- Modify (rewrite): `src/components/HardwarePreorder.tsx`
+- Test: `src/components/__tests__/HardwarePreorderTeaser.test.tsx` (`// @vitest-environment jsdom` first line; `afterEach(cleanup)`)
 
 **Interfaces:**
-- Consumes: `navigateToPage('hardware')` or `setCurrentPage('hardware')` from App.
-- Produces: the homepage section's CTA navigates to the page instead of posting the inline email form.
+- Consumes: `RingArt`, `ClipArt` from `./hardware/DeviceArt` (Task 12 — import them directly; delete the temporary `NoteRingArt`/`HeartCameraArt` aliases); `PRODUCTS`, `formatUsd`, `SHIP_WINDOW` from `./hardware/copy`; `ed`, `DISPLAY`, `GRO` from `../config/editorialTheme`.
+- Produces: `export function HardwarePreorder()` — same exported name, NO props. `App.tsx` already renders `<HardwarePreorder />` on the home page.
 
-- [ ] **Step 1: Write the failing test**
+**Behavior (all covered by tests):**
+1. Root `<section id="hardware-preorder" aria-labelledby="hardware-preorder-title">` in the same dark editorial style as today (`ed.dark`/`ed.onDark`/`ed.onDarkHair`, accent `#C7D99F`), inline styles plus a small namespaced `<style>` block (`r3-hw-teaser-*` classes, `@media (max-width: 800px)` single-column); no Tailwind classes.
+2. Content, using ONLY permitted facts: eyebrow "R³ hardware · first batch"; `<h2 id="hardware-preorder-title">` "Meet the R³ Ring and R³ Clip."; deck "A touch-and-slide ring controls a camera clip you can wear as a necklace, a watch, or a clip. Your AI assistant manages your routine, calendar, and email."; two articles: **R³ Ring** (label "Controller", `RingArt`, "A controller worn on the finger. Its touch and slide surface controls the clip.") and **R³ Clip** (label "Camera pod", `ClipArt`, "A camera pod you can wear as a necklace, a watch, or a clip. It captures your food, activity, voice notes, and AI requests.").
+3. One call to action: `<a href="/ring">` with text `See the R³ Ring — from ${formatUsd(PRODUCTS.ring.priceCents)}` (renders "See the R³ Ring — from $179"); beneath it one line: "Full payment today. {SHIP_WINDOW}. If we don't reach the first-batch goal by the deadline, you're refunded in full."
+4. No form, no inputs, no buttons, no network calls, no `useState`, no imports of `projectId`/`publicAnonKey`/`FormEvent`. The only price on the section is `$179`.
+5. The `RingArt`/`ClipArt` ids are already per-instance unique (Task 12); nothing else to do for them.
 
-```tsx
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { HardwarePreorder } from '../HardwarePreorder';
+- [ ] **Step 1: Write the failing test.** Stub `globalThis.fetch` with `vi.fn()`. Render `<HardwarePreorder />` and assert: the link with accessible name matching /See the R³ Ring/ exists with `getAttribute('href') === '/ring'` and text "See the R³ Ring — from $179"; the `<h2>` text is "Meet the R³ Ring and R³ Clip."; "R³ Ring" and "R³ Clip" appear as article headings; no `textbox`, no `button`, and no `form` element; the section has `id="hardware-preorder"` and its `aria-labelledby` points at an existing heading; none of these strings appear in the text: "Note", "Heart", "Nothing records", "ambient", "camera off by default", "Capture the moment"; the `$\d+` prices in the text are exactly `['$179']`; `fetch` was never called.
 
-describe('HardwarePreorder teaser', () => {
-  it('navigates to the hardware page when the CTA is clicked', () => {
-    const onPreorder = vi.fn();
-    render(<HardwarePreorder onPreorder={onPreorder} />);
-    fireEvent.click(screen.getByRole('button', { name: /preorder|reserve/i }));
-    expect(onPreorder).toHaveBeenCalled();
-  });
-});
-```
+- [ ] **Step 2: Run to verify it fails** — `npx vitest run src/components/__tests__/HardwarePreorderTeaser.test.tsx` — Expected: FAIL (old section has the form/old copy).
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 3: Implement** the rewrite of `src/components/HardwarePreorder.tsx` per the behavior list (the file should end up well under 100 lines).
 
-Run: `npx vitest run src/components/__tests__/HardwarePreorderTeaser.test.tsx`
-Expected: FAIL (no `onPreorder` prop / button).
-
-- [ ] **Step 3: Write minimal implementation**
-
-Add an optional `onPreorder?: () => void` prop to `HardwarePreorder`. Replace the inline email `form` submit CTA with a button that calls `onPreorder` (keep the device arts + copy as a teaser). In `App.tsx`, render `<HardwarePreorder onPreorder={() => navigateToPage('hardware')} />`.
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `npx vitest run src/components/__tests__/HardwarePreorderTeaser.test.tsx`
-Expected: PASS.
+- [ ] **Step 4: Run to verify it passes** — same command — Expected: PASS, pristine output. Also run `npx vitest run src/components/hardware/__tests__/HardwarePage.test.tsx` to confirm the shared art still works for the page.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/components/HardwarePreorder.tsx src/App.tsx src/components/__tests__/HardwarePreorderTeaser.test.tsx
-git commit -m "feat(hardware): homepage section links to the /ring page"
+git add src/components/HardwarePreorder.tsx src/components/__tests__/HardwarePreorderTeaser.test.tsx
+git commit -m "feat(hardware): homepage section is now a teaser linking to /ring"
 ```
 
 ---
