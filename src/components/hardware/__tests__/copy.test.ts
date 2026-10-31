@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PRODUCTS, BATCH_GOAL, SHIP_WINDOW, formatUsd } from '../copy';
+import { PRODUCTS, BATCH_GOAL, SHIP_WINDOW, PREORDER_TERMS, formatUsd } from '../copy';
 
 describe('hardware copy', () => {
   it('prices the ring and bundle in cents', () => {
@@ -13,5 +13,9 @@ describe('hardware copy', () => {
   it('formats cents as USD', () => {
     expect(formatUsd(17900)).toBe('$179');
     expect(formatUsd(29900)).toBe('$299');
+  });
+  it('shares one terms line with the ship window and the refund promise', () => {
+    expect(PREORDER_TERMS).toContain(SHIP_WINDOW);
+    expect(PREORDER_TERMS).toContain("If we don't reach the first-batch goal by the deadline, you're refunded in full.");
   });
 });

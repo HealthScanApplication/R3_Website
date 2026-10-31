@@ -109,4 +109,9 @@ describe('DeviceArt', () => {
     expect(paths.some((d) => d.startsWith('M253 260'))).toBe(false);
     expect(container.querySelector('circle[r="34"]')).toBeTruthy();
   });
+
+  it('promises no email anywhere on the page', () => {
+    render(<HardwarePage />);
+    expect(document.body.textContent).not.toMatch(/email you/);
+  });
 });

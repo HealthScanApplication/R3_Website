@@ -15,4 +15,10 @@ describe('/ring route', () => {
     renderHook(() => useUrlParameterHandling({ setCurrentPage }));
     expect(setCurrentPage).toHaveBeenCalledWith('hardware');
   });
+  it('does not map /hardware to the hardware page', () => {
+    at('/hardware');
+    const setCurrentPage = vi.fn();
+    renderHook(() => useUrlParameterHandling({ setCurrentPage }));
+    expect(setCurrentPage).not.toHaveBeenCalledWith('hardware');
+  });
 });

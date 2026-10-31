@@ -73,4 +73,33 @@ describe('BackerBar', () => {
     expect(bar.getAttribute('aria-valuenow')).toBe('250');
     expect(bar.getAttribute('aria-valuemax')).toBe('250');
   });
+  it('calls onData with the server payload after each successful fetch, never after a failure', async () => {
+    const onData = vi.fn();
+    (fetchBackerCount as any)
+      .mockResolvedValueOnce({ paid: 4, goal: 250, deadline: '2099-12-31T23:59:59Z', status: 'open' })
+      .mockRejectedValueOnce(new Error('down'))
+      .mockResolvedValueOnce({ paid: 5, goal: 250, deadline: '2099-12-31T23:59:59Z', status: 'failed' });
+    const { rerender } = render(<BackerBar refreshKey={0} onData={onData} />);
+    await screen.findByText(/4 of 250 backers/i);
+    expect(onData).toHaveBeenCalledTimes(1);
+    expect(onData).toHaveBeenLastCalledWith({ paid: 4, goal: 250, deadline: '2099-12-31T23:59:59Z', status: 'open' });
+    rerender(<BackerBar refreshKey={1} onData={onData} />);
+    await waitFor(() => expect((fetchBackerCount as any).mock.calls.length).toBe(2));
+    await new Promise(r => setTimeout(r, 0));
+    expect(onData).toHaveBeenCalledTimes(1);
+    rerender(<BackerBar refreshKey={2} onData={onData} />);
+    await screen.findByText(/5 of 250 backers/i);
+    expect(onData).toHaveBeenCalledTimes(2);
+    expect(onData).toHaveBeenLastCalledWith({ paid: 5, goal: 250, deadline: '2099-12-31T23:59:59Z', status: 'failed' });
+  });
+  it('does not call onData after unmount', async () => {
+    const onData = vi.fn();
+    let resolve!: (v: unknown) => void;
+    (fetchBackerCount as any).mockReturnValue(new Promise(r => { resolve = r; }));
+    const { unmount } = render(<BackerBar onData={onData} />);
+    unmount();
+    resolve({ paid: 1, goal: 250, deadline: 'd', status: 'open' });
+    await new Promise(r => setTimeout(r, 0));
+    expect(onData).not.toHaveBeenCalled();
+  });
 });

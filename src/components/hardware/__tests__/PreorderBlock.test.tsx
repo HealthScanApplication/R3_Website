@@ -142,7 +142,8 @@ describe('PreorderBlock', () => {
     confirm.mockResolvedValue({ status: 'pending' });
     setup();
     fireEvent.click(await toPayment());
-    expect(await screen.findByText("Your payment is processing. We'll email you as soon as it's confirmed.")).toBeTruthy();
+    expect(await screen.findByText("Your payment is processing. Please don't pay again — check your card statement for the result.")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/email you/);
     expect(screen.queryByText(/You're in/)).toBeNull();
     expect(screen.queryByRole('button', { name: /^Pay / })).toBeNull();
     await waitFor(() => expect(count).toHaveBeenCalledTimes(1));
@@ -153,7 +154,8 @@ describe('PreorderBlock', () => {
     confirm.mockRejectedValue(new Error('boom'));
     setup();
     fireEvent.click(await toPayment());
-    expect(await screen.findByText(/Please don't pay again/)).toBeTruthy();
+    expect(await screen.findByText("We couldn't confirm your payment yet. Please don't pay again — check your card statement before trying again.")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/email you/);
     expect(screen.queryByRole('button', { name: /^Pay / })).toBeNull();
     expect(screen.queryByText(/You're in/)).toBeNull();
   });
@@ -219,5 +221,76 @@ describe('PreorderBlock', () => {
     expect(intent).toHaveBeenCalledTimes(1);
     release({ purchase_id: 'p1', client_secret: 'cs', amount_cents: 17900, currency: 'usd' });
     expect(await screen.findByRole('button', { name: 'Pay $179' })).toBeTruthy();
+  });
+
+  describe('closed batch and deadline', () => {
+    const closedNotice = () => screen.queryByText('The first batch is closed.');
+    const submit = () => {
+      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'qa@example.com' } });
+      fireEvent.submit(screen.getByRole('form', { name: 'Hardware preorder' }));
+    };
+    it.each([
+      ['failed', { status: 'failed', deadline: '2099-12-31T23:59:59Z' }],
+      ['funded', { status: 'funded', deadline: '2099-12-31T23:59:59Z' }],
+      ['open but past the deadline', { status: 'open', deadline: '2020-01-01T00:00:00Z' }],
+    ])('a %s batch shows the closed notice and disables the form', async (_n, batch) => {
+      count.mockResolvedValue({ paid: 10, goal: 250, ...batch });
+      setup();
+      expect(await screen.findByText('The first batch is closed.')).toBeTruthy();
+      expect(screen.getAllByRole('status').some(n => n.textContent === 'The first batch is closed.')).toBe(true);
+      expect((screen.getByRole('button', { name: 'Continue to payment' }) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByLabelText(/email/i) as HTMLInputElement).disabled).toBe(true);
+      expect((screen.getByRole('button', { name: /R³ Ring \$179/ }) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByRole('button', { name: /R³ Ring \+ Clip/ }) as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.queryByText(/Campaign ends/)).toBeNull();
+      submit();
+      await new Promise(r => setTimeout(r, 0));
+      expect(intent).not.toHaveBeenCalled();
+    });
+    it('an open batch before its deadline shows the end date and keeps the form enabled', async () => {
+      count.mockResolvedValue({ paid: 10, goal: 250, status: 'open', deadline: '2099-12-31T23:59:59Z' });
+      setup();
+      expect(await screen.findByText('Campaign ends December 31, 2099.')).toBeTruthy();
+      expect(closedNotice()).toBeNull();
+      expect((screen.getByRole('button', { name: 'Continue to payment' }) as HTMLButtonElement).disabled).toBe(false);
+      expect((screen.getByLabelText(/email/i) as HTMLInputElement).disabled).toBe(false);
+    });
+    it('shows neither the notice nor a date before the count resolves', async () => {
+      count.mockReturnValue(new Promise(() => {}));
+      setup();
+      expect(closedNotice()).toBeNull();
+      expect(screen.queryByText(/Campaign ends/)).toBeNull();
+      expect((screen.getByRole('button', { name: 'Continue to payment' }) as HTMLButtonElement).disabled).toBe(false);
+    });
+    it('treats an open batch with an unparseable deadline as open and shows no date', async () => {
+      setup();
+      await screen.findByText(/10 of 250 backers/);
+      expect(closedNotice()).toBeNull();
+      expect(screen.queryByText(/Campaign ends/)).toBeNull();
+      expect((screen.getByRole('button', { name: 'Continue to payment' }) as HTMLButtonElement).disabled).toBe(false);
+    });
+    it("shows the server's message when it still answers that the batch is closed", async () => {
+      intent.mockRejectedValue(new Error('This preorder batch is closed.'));
+      setup();
+      submit();
+      expect((await screen.findByRole('alert')).textContent).toBe('This preorder batch is closed.');
+    });
+  });
+
+  it('keeps Pay disabled until the payment element has mounted', async () => {
+    let release!: (h: typeof handle) => void;
+    mount.mockReturnValue(new Promise(r => { release = r; }));
+    setup();
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'qa@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to payment' }));
+    const pay = await screen.findByRole('button', { name: 'Pay $179' }) as HTMLButtonElement;
+    expect(pay.disabled).toBe(true);
+    fireEvent.click(pay);
+    expect(handle.confirm).not.toHaveBeenCalled();
+    release(handle);
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Pay $179' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Pay $179' }));
+    expect(await screen.findByText(/You're in/)).toBeTruthy();
+    expect(handle.confirm).toHaveBeenCalledTimes(1);
   });
 });

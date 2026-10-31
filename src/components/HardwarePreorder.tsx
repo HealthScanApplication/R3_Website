@@ -1,7 +1,7 @@
 import React from 'react';
 import { DISPLAY, GRO, ed } from '../config/editorialTheme';
 import { RingArt, ClipArt } from './hardware/DeviceArt';
-import { PRODUCTS, SHIP_WINDOW, formatUsd } from './hardware/copy';
+import { PREORDER_TERMS, PRODUCTS, formatUsd } from './hardware/copy';
 
 const ACCENT = '#C7D99F';
 const label = { margin: '0 0 10px', fontFamily: GRO, fontSize: 11, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: ACCENT } as const;
@@ -44,7 +44,7 @@ export function HardwarePreorder() {
             {`See the R³ Ring — from ${formatUsd(PRODUCTS.ring.priceCents)}`}
           </a>
           <p style={{ margin: '18px 0 0', fontFamily: GRO, fontSize: 15, lineHeight: 1.55, color: ed.onDarkSoft }}>
-            {`Full payment today. ${SHIP_WINDOW}. If we don't reach the first-batch goal by the deadline, you're refunded in full.`}
+            {PREORDER_TERMS}
           </p>
         </div>
       </div>

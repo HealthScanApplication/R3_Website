@@ -13,11 +13,11 @@ function server(envOverrides: Record<string, string | undefined> = {}) {
     { id: uuid(3), batch_id: 'b1', product: 'ring', status: 'refunded', paid_at: '2026-10-01T00:00:00Z', refunded_at: '2026-10-02T00:00:00Z', stripe_payment_intent_id: 'pi_refunded' },
   ];
   const intents = new Map<string, Row>([['pi_pending', { id: 'pi_pending', status: 'processing' }], ['pi_refunded', { id: 'pi_refunded', status: 'succeeded' }]]);
-  const probe = { orderQueries: 0, orderSelects: 0, failSelectAt: 0 };
+  const probe = { orderQueries: 0, orderSelects: 0, failSelectAt: 0, selectOptions: [] as any[] };
   const table = (rows: Row[], isOrders = false) => {
-    let action = 'select', payload: Row, filters: ((r: Row) => boolean)[] = [];
+    let action = 'select', payload: Row, filters: ((r: Row) => boolean)[] = [], head = false;
     const q: any = {
-      select() { return q; },
+      select(_columns?: string, options?: Row) { if (isOrders && options) probe.selectOptions.push(options); head = !!options?.head; return q; },
       eq(k: string, v: any) { filters.push(r => r[k] === v); return q; },
       is(k: string, v: any) { filters.push(r => (r[k] ?? null) === v); return q; },
       neq(k: string, v: any) { filters.push(r => r[k] !== v); return q; },
@@ -33,6 +33,7 @@ function server(envOverrides: Record<string, string | undefined> = {}) {
       }
       if (action === 'insert') { const row = { id: uuid(100 + rows.length), status: 'pending', paid_at: null, ...payload }; rows.push(row); return { data: single ? row : [row], error: null }; }
       const found = rows.filter(r => filters.every(f => f(r)));
+      if (action === 'select' && head) return { data: null, error: null, count: found.length };
       if (action === 'update') found.forEach(r => Object.assign(r, payload));
       return { data: single ? found[0] ?? null : found, error: null, count: found.length };
     }
@@ -57,7 +58,7 @@ function server(envOverrides: Record<string, string | undefined> = {}) {
     .replace(/const db =[^\n]*\n/, 'const db = globalThis.__db;\n');
   const js = transformSync(src, { loader: 'ts', format: 'cjs' }).code;
   (globalThis as any).__stripe = stripe; (globalThis as any).__db = db;
-  const env: Row = { STRIPE_SECRET_KEY: 'sk_test_x', SUPABASE_URL: 'http://x', SUPABASE_SERVICE_ROLE_KEY: 'x', STRIPE_WEBHOOK_SECRET: 'whsec_x' };
+  const env: Row = { STRIPE_SECRET_KEY: 'sk_test_x', SUPABASE_URL: 'http://x', SUPABASE_SERVICE_ROLE_KEY: 'x', HARDWARE_STRIPE_WEBHOOK_SECRET: 'whsec_x' };
   for (const [k, v] of Object.entries(envOverrides)) { if (v === undefined) delete env[k]; else env[k] = v; }
   (globalThis as any).Deno = { env: { get: (k: string) => env[k] }, serve: (h: any) => { (globalThis as any).__handler = h; } };
   const mod: any = { exports: {} };
@@ -123,6 +124,12 @@ describe('hardware-preorders count', () => {
     expect(piCreates).toHaveLength(0);
     expect(customerCreates).toHaveLength(0);
     expect(orders).toHaveLength(before);
+  });
+  it('count asks for an exact head count, not a row list capped by the row limit', async () => {
+    const { handler, probe } = server();
+    const data = await (await handler(post({ action: 'count' }))).json();
+    expect(probe.selectOptions).toEqual([{ count: 'exact', head: true }]);
+    expect(data.paid).toBe(1);
   });
   it('count still reports a failed batch', async () => {
     const { handler, batches } = server();
@@ -229,11 +236,19 @@ describe('hardware-preorders webhook', () => {
     expect((await res.json()).received).toBe(true);
     expect(orders.find(o => o.id === O2)!.status).toBe('pending');
   });
-  it('returns 500 when a signature is sent but STRIPE_WEBHOOK_SECRET is unset', async () => {
-    const { handler, orders, intents } = server({ STRIPE_WEBHOOK_SECRET: undefined });
+  it('returns 500 when a signature is sent but HARDWARE_STRIPE_WEBHOOK_SECRET is unset', async () => {
+    const { handler, orders, intents } = server({ HARDWARE_STRIPE_WEBHOOK_SECRET: undefined });
     intents.get('pi_pending')!.status = 'succeeded';
     const res = await handler(hook('payment_intent.succeeded', 'pi_pending'));
     expect(res.status).toBe(500);
+    expect(orders.find(o => o.id === O2)!.status).toBe('pending');
+  });
+  it("never falls back to Guardian's STRIPE_WEBHOOK_SECRET: 500 with the missing-secret error and no row changes", async () => {
+    const { handler, orders, intents } = server({ HARDWARE_STRIPE_WEBHOOK_SECRET: undefined, STRIPE_WEBHOOK_SECRET: 'whsec_guardian' });
+    intents.get('pi_pending')!.status = 'succeeded';
+    const res = await handler(hook('payment_intent.succeeded', 'pi_pending'));
+    expect(res.status).toBe(500);
+    expect((await res.json()).error).toBe('Webhook secret missing');
     expect(orders.find(o => o.id === O2)!.status).toBe('pending');
   });
   it('returns 400 on a bad signature and changes nothing', async () => {

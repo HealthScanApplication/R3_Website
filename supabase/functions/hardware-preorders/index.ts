@@ -3,6 +3,15 @@
 //   action "intent":  create a full-amount PaymentIntent + a pending preorder row.
 //   action "confirm": verify the PaymentIntent and mark the row paid.
 //   Stripe webhook (stripe-signature): payment_intent.succeeded / payment_failed keep rows in sync.
+//
+// Environment:
+//   STRIPE_SECRET_KEY               Stripe API key (test or live).
+//   HARDWARE_STRIPE_WEBHOOK_SECRET  Signing secret of THIS function's Stripe endpoint. It is a separate endpoint
+//                                   from guardian-payments, so it needs its own secret (never STRIPE_WEBHOOK_SECRET).
+//   ALLOW_LIVE_PAYMENTS             Must be 'true' to accept an sk_live_ key.
+//   SUPABASE_URL                    Project URL.
+//   SUPABASE_SERVICE_ROLE_KEY       Service role key (writes hardware_preorders).
+// Deploy with verify_jwt disabled: Stripe's webhook carries no Supabase JWT.
 import Stripe from 'npm:stripe@17.7.0';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -45,7 +54,7 @@ Deno.serve(async (req) => {
 
   const signature = req.headers.get('stripe-signature');
   if (signature) {
-    const secret = Deno.env.get('STRIPE_WEBHOOK_SECRET');
+    const secret = Deno.env.get('HARDWARE_STRIPE_WEBHOOK_SECRET');
     if (!secret) return fail('Webhook secret missing', 500);
     let event: any;
     try { event = await stripe.webhooks.constructEventAsync(await req.text(), signature, secret); }
@@ -66,9 +75,9 @@ Deno.serve(async (req) => {
   try {
     if (body.action === 'count') {
       const batch = await openBatch();
-      const { data, error } = await db.from('hardware_preorders').select('id').eq('batch_id', batch.id).eq('status', 'paid');
+      const { count, error } = await db.from('hardware_preorders').select('id', { count: 'exact', head: true }).eq('batch_id', batch.id).eq('status', 'paid');
       if (error) throw error;
-      return json({ paid: (data ?? []).length, goal: batch.goal_backers, deadline: batch.deadline, status: batch.status });
+      return json({ paid: count ?? 0, goal: batch.goal_backers, deadline: batch.deadline, status: batch.status });
     }
     if (body.action === 'intent') {
       const email = String(body.email || '').trim().toLowerCase();

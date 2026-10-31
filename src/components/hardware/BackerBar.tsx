@@ -1,15 +1,21 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ed, GRO } from '../../config/editorialTheme';
 import { fetchBackerCount } from '../../utils/hardwarePreorder';
 import { BATCH_GOAL } from './copy';
 
-export function BackerBar({ refreshKey = 0 }: { refreshKey?: number }) {
+export type BackerData = { paid: number; goal: number; deadline: string; status: string };
+
+export function BackerBar({ refreshKey = 0, onData }: { refreshKey?: number; onData?: (d: BackerData) => void }) {
   const [counts, setCounts] = useState<{ paid: number; goal: number } | null>(null);
-  const [, setStatus] = useState<'loading' | 'ok' | 'error'>('loading');
+  const onDataRef = useRef(onData);
+  onDataRef.current = onData;
   useEffect(() => {
     let live = true;
-    fetchBackerCount().then(d => { if (live) { setCounts({ paid: d.paid, goal: d.goal || BATCH_GOAL }); setStatus('ok'); } })
-      .catch(() => { if (live) setStatus('error'); });
+    fetchBackerCount().then(d => {
+      if (!live) return;
+      setCounts({ paid: d.paid, goal: d.goal || BATCH_GOAL });
+      onDataRef.current?.({ paid: d.paid, goal: d.goal, deadline: d.deadline, status: d.status });
+    }).catch(() => {});
     return () => { live = false; };
   }, [refreshKey]);
 

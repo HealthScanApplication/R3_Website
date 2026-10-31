@@ -5,7 +5,7 @@ import { confirmPreorder, createPreorderIntent } from '../../utils/hardwarePreor
 import { mountPayment as defaultMountPayment } from '../../utils/hardwareStripe';
 import type { MountPayment, PaymentHandle } from '../../utils/hardwareStripe';
 import { BackerBar } from './BackerBar';
-import { PRODUCTS, SHIP_WINDOW, formatUsd } from './copy';
+import { PREORDER_TERMS, PRODUCTS, formatUsd } from './copy';
 import type { ProductKey } from './copy';
 
 type Step = 'details' | 'payment' | 'success' | 'processing';
@@ -15,8 +15,10 @@ const ACCENT = '#C7D99F';
 const ERROR = '#F3A89A';
 const MSG_START = 'Could not start checkout. Please try again.';
 const MSG_NETWORK = 'Network problem — check your connection and try again.';
-const MSG_PROCESSING = "Your payment is processing. We'll email you as soon as it's confirmed.";
-const MSG_UNCONFIRMED = "We couldn't confirm your payment yet. Please don't pay again — we'll email you as soon as it's confirmed.";
+const MSG_PROCESSING = "Your payment is processing. Please don't pay again — check your card statement for the result.";
+const MSG_UNCONFIRMED = "We couldn't confirm your payment yet. Please don't pay again — check your card statement before trying again.";
+const MSG_CLOSED = 'The first batch is closed.';
+const dateFormat = new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeZone: 'UTC' });
 
 const primaryButton = (disabled: boolean): React.CSSProperties => ({
   minHeight: 60, border: 0, borderRadius: 0, background: ACCENT, color: ed.dark, padding: '0 26px',
@@ -37,6 +39,8 @@ export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [batch, setBatch] = useState<{ status: string; deadline: string } | null>(null);
+  const [ready, setReady] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<PaymentHandle | null>(null);
   const busyRef = useRef(false);
@@ -45,6 +49,9 @@ export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig
 
   const selected = PRODUCTS[product];
   const price = formatUsd(selected.priceCents);
+  const deadlineMs = batch ? new Date(batch.deadline).getTime() : NaN;
+  const closed = !!batch && (batch.status !== 'open' || (!Number.isNaN(deadlineMs) && !(deadlineMs > Date.now())));
+  const endsOn = batch && !closed && !Number.isNaN(deadlineMs) ? dateFormat.format(new Date(batch.deadline)) : '';
 
   // Mount the Payment Element while on step 2. Cleanup destroys it (leaving step 2 or unmounting);
   // a handle that resolves after cleanup is destroyed instead of leaked.
@@ -55,9 +62,11 @@ export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig
       (handle) => {
         if (cancelled) { handle.destroy(); return; }
         handleRef.current = handle;
+        setReady(true);
       },
       (err) => {
         if (cancelled) return;
+        setReady(false);
         setError(err instanceof Error ? err.message : MSG_START);
         setIntent(null);
         setStep('details');
@@ -67,13 +76,14 @@ export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig
       cancelled = true;
       handleRef.current?.destroy();
       handleRef.current = null;
+      setReady(false);
     };
   }, [step, intent]);
 
   const begin = async (event: FormEvent) => {
     event.preventDefault();
     const trimmed = email.trim();
-    if (!trimmed || busyRef.current || !config.enabled) return;
+    if (!trimmed || busyRef.current || !config.enabled || closed) return;
     busyRef.current = true;
     setBusy(true);
     setError('');
@@ -129,17 +139,18 @@ export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig
   const changeDetails = () => {
     handleRef.current?.destroy();
     handleRef.current = null;
+    setReady(false);
     setIntent(null);
     setError('');
     setStep('details');
   };
 
   const eyebrow: React.CSSProperties = { margin: '0 0 10px', fontFamily: GRO, fontSize: 11, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: ACCENT };
-  const detailsDisabled = busy || !config.enabled;
+  const detailsDisabled = busy || !config.enabled || closed;
 
   return (
     <div style={{ display: 'grid', gap: 20, color: ed.onDark }}>
-      <BackerBar refreshKey={refreshKey} />
+      <BackerBar refreshKey={refreshKey} onData={(d) => setBatch({ status: d.status, deadline: d.deadline })} />
 
       {step !== 'success' && step !== 'processing' && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -151,7 +162,7 @@ export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig
                 key={key}
                 type="button"
                 aria-pressed={on}
-                disabled={step === 'payment' || busy}
+                disabled={step === 'payment' || busy || (step === 'details' && closed)}
                 onClick={() => setProduct(key)}
                 style={{ ...ghostButton, border: `1px solid ${on ? ed.onDark : ed.onDarkHair}`, background: on ? ed.onDark : 'transparent', color: on ? ed.dark : ed.onDark }}
               >
@@ -162,14 +173,19 @@ export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig
         </div>
       )}
 
+      {step === 'details' && endsOn && (
+        <p style={{ margin: 0, fontFamily: GRO, fontSize: 13, color: ed.onDarkSoft }}>Campaign ends {endsOn}.</p>
+      )}
+
       {step === 'details' && (
         <form onSubmit={begin} aria-label="Hardware preorder" style={{ display: 'grid', gap: 14 }}>
           <label htmlFor="preorder-email" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Email address</label>
           <input
             id="preorder-email" type="email" required autoComplete="email" value={email}
-            onChange={(e) => setEmail(e.target.value)} placeholder="Enter your email address"
+            disabled={closed} onChange={(e) => setEmail(e.target.value)} placeholder="Enter your email address"
             style={{ minHeight: 60, minWidth: 0, border: `1px solid ${ed.onDarkHair}`, borderRadius: 0, background: 'rgba(255,255,255,.04)', color: ed.onDark, padding: '0 20px', fontFamily: GRO, fontSize: 15, outlineOffset: 3 }}
           />
+          {closed && <p role="status" style={{ margin: 0, fontFamily: GRO, fontSize: 13, color: ed.onDarkSoft }}>{MSG_CLOSED}</p>}
           {!config.enabled && <p role="status" style={{ margin: 0, fontFamily: GRO, fontSize: 13, color: ed.onDarkSoft }}>{config.error || 'Preorders open soon.'}</p>}
           <button type="submit" disabled={detailsDisabled} style={primaryButton(detailsDisabled)}>
             {busy ? 'Starting…' : 'Continue to payment'}
@@ -181,7 +197,7 @@ export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig
         <div style={{ display: 'grid', gap: 14 }}>
           <p style={{ ...eyebrow, margin: 0 }}>{selected.name} · {price}</p>
           <div ref={containerRef} style={{ minHeight: 120 }} />
-          <button type="button" onClick={pay} disabled={busy} style={primaryButton(busy)}>
+          <button type="button" onClick={pay} disabled={!ready || busy} style={primaryButton(!ready || busy)}>
             {busy ? 'Processing…' : `Pay ${price}`}
           </button>
           <button type="button" onClick={changeDetails} disabled={busy} style={ghostButton}>Change details</button>
@@ -200,7 +216,7 @@ export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig
       {error && step !== 'processing' && <p role="alert" style={{ margin: 0, fontFamily: GRO, fontSize: 13, color: ERROR }}>{error}</p>}
 
       <p style={{ margin: 0, fontFamily: GRO, fontSize: 13, lineHeight: 1.55, color: ed.onDarkSoft }}>
-        Full payment today. {SHIP_WINDOW}. If we don't reach the first-batch goal by the deadline, you're refunded in full.
+        {PREORDER_TERMS}
       </p>
     </div>
   );
