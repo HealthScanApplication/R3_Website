@@ -1,84 +1,26 @@
 /**
- * The /ring hero scene: the owner's R³ Note resting on the left, the R³ Clip hanging on a cord on the right, its
- * crystal showing a live heartbeat. One renderer, one rAF loop that this module owns (paused off-screen or when the
+ * The /ring hero scene: the owner's R³ Note resting on the left, the R³ Retro necklace (the measured retro watch head
+ * turned 45° as a diamond) hanging from its chain on the right, its e-paper screen showing a beating pixel heart.
+ * One renderer, one rAF loop that this module owns (paused off-screen or when the
  * tab is hidden, never started for auto-motion under reduced motion), full disposal. Camera framing lives in
  * framing.ts and the contact shadow in shadowBlob.ts.
  */
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { buildClip } from './clipModel';
 import { necklacePose } from './flip';
 import { frameDistance } from './framing';
-import { beatPhaseAt, heartbeatPoints, heartbeatY } from './heartbeat';
+import { loadRetroClip, type ClipModel } from './retroClipModel';
+import { RETRO_BPM, drawRetroScreen, type RetroScreenContext } from './retroScreen';
 import { loadRing } from './ringModel';
 import { createShadowBlob } from './shadowBlob';
 
-export type HeroSceneOptions = { ringUrl: string; reducedMotion: boolean; onReady?: () => void };
+export type HeroSceneOptions = { ringUrl: string; clipUrl?: string; reducedMotion: boolean; onReady?: () => void };
+export const CLIP_URL = '/models/r3-clip-retro.bin';
 export type HeroSceneHandle = { dispose(): void };
 
-// ---- The clip's screen texture (256 px canvas; CanvasTexture flipY, so canvas y = (1 - v) × 256) ----
-export type VisibleUV = { u0: number; v0: number; u1: number; v1: number };
-export type ScreenFrame = { scroll: number; pulse: number };
-export type ScreenContext = Pick<CanvasRenderingContext2D,
-  'fillStyle' | 'strokeStyle' | 'lineWidth' | 'lineJoin' | 'lineCap' | 'globalAlpha' | 'shadowBlur' | 'shadowColor'
-  | 'save' | 'restore' | 'fillRect' | 'beginPath' | 'moveTo' | 'lineTo' | 'arc' | 'stroke'>;
-
-export const SCREEN_PX = 256;
-/** The annulus between the button's polished ring (UV r 0.27) and the dot ring (UV r 0.38), in canvas px. */
-export const BEAT_RING = { cx: 128, cy: 128, inner: 69, outer: 97 } as const;
-/**
- * The texture sits on both `map` and `emissiveMap` (clipModel), so lit pixels roughly double; 0.6 keeps the mint
- * trace and beat ring bright and readable without clipping to white under ACES tone mapping.
- */
-export const SCREEN_EMISSIVE_INTENSITY = 0.6;
-const DEFAULT_UV: VisibleUV = { u0: 0.28, v0: 0.14, u1: 0.72, v1: 0.235 };
-const MINT = '#C7D99F';
-const BPM = 62;
-const RING_LINE = 5;
-/** Reduced motion: two whole beats on the trace (scroll 0) and the beat ring at a steady, visible glow. */
-const STATIC_FRAME: Readonly<ScreenFrame> = Object.freeze({ scroll: 0, pulse: 0.6 });
-
-export function traceRect(uv: VisibleUV) {
-  const S = SCREEN_PX;
-  return { x0: Math.round(uv.u0 * S), y0: Math.round((1 - uv.v1) * S), x1: Math.round(uv.u1 * S), y1: Math.round((1 - uv.v0) * S) };
-}
-
-/** The heartbeat state at `t` seconds: trace scroll (in beats) and the ring's alpha, synced to the trace's right edge. */
-export function screenFrameAt(t: number, reducedMotion: boolean, out: ScreenFrame = { scroll: 0, pulse: 0 }): ScreenFrame {
-  if (reducedMotion) return Object.assign(out, STATIC_FRAME);
-  out.scroll = beatPhaseAt(t, BPM);
-  out.pulse = Math.max(0, heartbeatY(out.scroll));
-  return out;
-}
-
-/** Paint one frame: near-black glass, the scrolling ECG in the lower band, and the beat ring around the button. */
-export function drawScreen(ctx: ScreenContext, frame: ScreenFrame, uv: VisibleUV = DEFAULT_UV): void {
-  const r = traceRect(uv);
-  ctx.save();
-  ctx.globalAlpha = 1;
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = '#05070a';
-  ctx.fillRect(0, 0, SCREEN_PX, SCREEN_PX);
-  ctx.strokeStyle = MINT;
-  ctx.shadowColor = MINT;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  const pts = heartbeatPoints(r.x1 - r.x0, r.y1 - r.y0, 96, frame.scroll);
-  ctx.lineWidth = 3;
-  ctx.shadowBlur = 6;
-  ctx.beginPath();
-  pts.forEach(([x, y], i) => (i ? ctx.lineTo(r.x0 + x, r.y0 + y) : ctx.moveTo(r.x0 + x, r.y0 + y)));
-  ctx.stroke();
-  if (frame.pulse > 0) {
-    ctx.globalAlpha = Math.min(1, frame.pulse);
-    ctx.lineWidth = RING_LINE;
-    ctx.shadowBlur = 10;
-    ctx.beginPath();
-    ctx.arc(BEAT_RING.cx, BEAT_RING.cy, (BEAT_RING.inner + BEAT_RING.outer) / 2, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
+// ---- The clip's screen texture (the R³ Retro necklace screen, retroScreen.ts) ----
+export const SCREEN_PX = 200;
+const BPM = RETRO_BPM;
 
 // ---- Layout (world units) ----
 const FOV = 32;
@@ -87,7 +29,7 @@ const CLIP_HEIGHT = 1;                               // the clip is scaled to th
 const RING_SIZE = 0.55 * CLIP_HEIGHT;                // the ring's largest dimension: ~0.55 of the clip
 const CLIP_CENTRE = new THREE.Vector3(0.28, 0.08, 0);
 const RING_CENTRE = new THREE.Vector3(-0.42, -0.36, 0.3);
-const CORD_LENGTH = 12;                              // far past the top of any frame we pick
+const FAR_MARGIN = 24;                               // the chain runs far up out of frame
 const SPIN_RATE = 0.25;                              // rad/s, the ring about its own vertical axis
 const MAX_YAW = 0.6, MAX_PITCH = 0.25, DRAG_RATE = 12, RETURN_RATE = 4; // drag limits and damping (1/s)
 const TEXTURE_FPS = 30;
@@ -121,8 +63,19 @@ export async function createHeroScene(container: HTMLElement, options: HeroScene
   container.appendChild(canvas);
   cleanups.push(() => canvas.remove());
 
-  let ring: THREE.Mesh | null = null;
+  let ring: THREE.Mesh | null = null, clip: ClipModel | null = null;
+  // The heartbeat canvas is made first so the clip can load (in parallel with the ring) straight onto it.
+  const screenCanvas = document.createElement('canvas');
+  screenCanvas.width = screenCanvas.height = SCREEN_PX;
+  const screenTexture = new THREE.CanvasTexture(screenCanvas);
+  screenTexture.colorSpace = THREE.SRGBColorSpace;
+  screenTexture.magFilter = THREE.NearestFilter;   // crisp e-paper pixels
+  cleanups.push(() => screenTexture.dispose());
   const ringPromise = loadRing(options.ringUrl);
+  const clipPromise = loadRetroClip(options.clipUrl ?? CLIP_URL, { screenTexture });
+  // Whichever loads, it is freed if the scene fails part-way (handled below once awaited).
+  ringPromise.catch(() => {});
+  clipPromise.catch(() => {});
   try {
     const scene = new THREE.Scene();
     const pmrem = new THREE.PMREMGenerator(renderer);
@@ -137,35 +90,32 @@ export async function createHeroScene(container: HTMLElement, options: HeroScene
     scene.add(key);
     cleanups.push(() => key.dispose());
 
-    // The heartbeat canvas and the clip that shows it.
-    const screenCanvas = document.createElement('canvas');
-    screenCanvas.width = screenCanvas.height = SCREEN_PX;
-    const ctx = screenCanvas.getContext('2d') as ScreenContext | null;
-    const screenTexture = new THREE.CanvasTexture(screenCanvas);
-    screenTexture.colorSpace = THREE.SRGBColorSpace;
-    cleanups.push(() => screenTexture.dispose());
-    const clip = buildClip({ colour: 'black', screenTexture });
-    cleanups.push(() => clip.dispose());
-    (clip.screen.material as THREE.MeshPhysicalMaterial).emissiveIntensity = SCREEN_EMISSIVE_INTENSITY;
-    const uv = (clip.screen.userData.visibleUV as VisibleUV | undefined) ?? DEFAULT_UV;
-    const frameState: ScreenFrame = { scroll: 0, pulse: 0 };
+    const ctx = screenCanvas.getContext('2d') as RetroScreenContext | null;
     const paint = (t: number) => {
       if (!ctx) return;
-      drawScreen(ctx, screenFrameAt(t, reducedMotion, frameState), uv);
+      drawRetroScreen(ctx, SCREEN_PX, t, BPM, reducedMotion);
       screenTexture.needsUpdate = true;
     };
     paint(0);
+    clip = await clipPromise;
+    const clipModel = clip;
+    cleanups.push(() => clipModel.dispose());
 
-    // rig (drag) > content (centred on the composition) > ring holder / shadow / clip pivot / cord.
+    // rig (drag) > content (centred on the composition) > ring holder / shadow / clip pivot (with its chain).
     const rig = new THREE.Group();
     rig.name = 'rig';
     const content = new THREE.Group();
     rig.add(content);
     scene.add(rig);
 
-    // Size the clip with the PRECISE box (the default one overstates the 45°-turned body by ~15%), then hang it
-    // from a pivot at its cord anchor so the flip and swing turn about the anchor.
+    // Size the clip with the PRECISE box of the head alone (the chain runs up out of frame), then hang it from a
+    // pivot at its chain anchor so the flip and swing turn about the anchor.
+    const chain = clip.group.getObjectByName('chain');
+    const chainParent = chain?.parent ?? null;
+    if (chain) chain.removeFromParent();
+    clip.group.updateMatrixWorld(true);
     const clipBox = new THREE.Box3().setFromObject(clip.group, true);
+    if (chain && chainParent) chainParent.add(chain);
     const clipScale = CLIP_HEIGHT / Math.max(1e-6, clipBox.max.y - clipBox.min.y);
     const anchor = (clip.group.userData.anchor as THREE.Vector3).clone().multiplyScalar(clipScale);
     clip.group.scale.setScalar(clipScale);
@@ -175,14 +125,6 @@ export async function createHeroScene(container: HTMLElement, options: HeroScene
     pivot.position.copy(CLIP_CENTRE).add(anchor).sub(clipBox.getCenter(new THREE.Vector3()).multiplyScalar(clipScale));
     pivot.add(clip.group);
     content.add(pivot);
-    // The cord: the clip's own bail loop plus a thin straight cord from the anchor up out of the frame.
-    const cordGeo = new THREE.CylinderGeometry(0.006, 0.006, CORD_LENGTH, 8, 1, true);
-    const cordMat = new THREE.MeshStandardMaterial({ color: '#141716', roughness: 0.55, metalness: 0.2 });
-    cleanups.push(() => { cordGeo.dispose(); cordMat.dispose(); });
-    const cord = new THREE.Mesh(cordGeo, cordMat);
-    cord.position.set(pivot.position.x, pivot.position.y + CORD_LENGTH / 2, pivot.position.z);
-    content.add(cord);
-
     ring = await ringPromise;
     const ringMesh = ring;
     cleanups.push(() => { ringMesh.geometry.dispose(); (ringMesh.material as THREE.Material).dispose(); });
@@ -207,8 +149,11 @@ export async function createHeroScene(container: HTMLElement, options: HeroScene
     cleanups.push(() => shadow.dispose());
     shadow.mesh.position.set(RING_CENTRE.x, ringBox.min.y - 0.004, RING_CENTRE.z);
     content.add(shadow.mesh);
-    // Centre the composition (ring + clip at rest, not the cord) on the rig's origin and frame it.
+    // Centre the composition (ring + clip at rest, not the chain) on the rig's origin and frame it.
+    if (chain) chain.removeFromParent();
+    content.updateMatrixWorld(true);
     const comp = ringBox.clone().union(new THREE.Box3().setFromObject(pivot, true));
+    if (chain && chainParent) chainParent.add(chain);
     const compSize = comp.getSize(new THREE.Vector3());
     content.position.copy(comp.getCenter(new THREE.Vector3())).negate();
 
@@ -219,7 +164,7 @@ export async function createHeroScene(container: HTMLElement, options: HeroScene
       camera.aspect = w / h;
       const d = frameDistance(compSize, camera.aspect, FOV);
       camera.position.set(0, Math.sin(ELEVATION) * d, Math.cos(ELEVATION) * d);
-      camera.far = d + CORD_LENGTH * 2;
+      camera.far = d + FAR_MARGIN;
       camera.lookAt(0, 0, 0);
       camera.updateProjectionMatrix();
     };
@@ -302,6 +247,7 @@ export async function createHeroScene(container: HTMLElement, options: HeroScene
     return { dispose: disposeAll };
   } catch (err) {
     if (!ring) ringPromise.then(m => { m.geometry.dispose(); (m.material as THREE.Material).dispose(); }, () => {});
+    if (!clip) clipPromise.then(c => c.dispose(), () => {});
     disposeAll();
     throw err;
   }

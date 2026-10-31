@@ -16,6 +16,7 @@ const h = vi.hoisted(() => ({
   renderers: [] as StubRenderer[],
   pmrems: [] as Array<{ dispose: () => void; target: { dispose: () => void } }>,
   loadRing: null as null | ((url: string) => Promise<unknown>),
+  loadClip: null as null | ((url: string, o: { screenTexture: unknown }) => Promise<unknown>),
 }));
 
 vi.mock('three', async orig => {
@@ -46,8 +47,23 @@ vi.mock('three', async orig => {
 });
 
 vi.mock('../ringModel', () => ({ loadRing: (url: string) => h.loadRing!(url) }));
+vi.mock('../retroClipModel', async orig => {
+  const actual = await orig<typeof import('../retroClipModel')>();
+  return { ...actual, loadRetroClip: (url: string, o: { screenTexture: THREE.Texture }) => h.loadClip!(url, o) };
+});
 
-import { SCREEN_EMISSIVE_INTENSITY, createHeroScene as create, type HeroSceneHandle } from '../heroScene';
+import { CLIP_URL, createHeroScene as create, type HeroSceneHandle } from '../heroScene';
+import { buildRetroClip } from '../retroClipModel';
+// @ts-expect-error - plain .mjs script without type declarations
+import { encodeModel } from '../../../../../scripts/decode-watch-model.mjs';
+
+// A tiny stand-in for the watch head, in the artifact's model units.
+function headBytes(): ArrayBuffer {
+  const g = new THREE.BoxGeometry(1.0, 0.9, 0.24).translate(0, 0, 0.65);
+  const u = encodeModel({ positions: new Float32Array(g.attributes.position.array as Float32Array), indices: new Uint32Array(g.index!.array as ArrayLike<number>) }) as Uint8Array;
+  g.dispose();
+  return u.buffer.slice(u.byteOffset, u.byteOffset + u.byteLength) as ArrayBuffer;
+}
 
 // Every scene a test makes is disposed afterwards, so no listener leaks into the next test.
 const live: HeroSceneHandle[] = [];
@@ -69,6 +85,7 @@ beforeEach(() => {
   h.pmrems = [];
   ringMesh = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.1, 8, 16), new THREE.MeshPhysicalMaterial());
   h.loadRing = vi.fn(async () => ringMesh);
+  h.loadClip = vi.fn(async (_url: string, o: { screenTexture: unknown }) => buildRetroClip(headBytes(), o as { screenTexture: THREE.Texture }));
   frames = [];
   rafCalls = 0;
   ioInstances = [];
@@ -105,6 +122,7 @@ describe('createHeroScene', () => {
     await expect(createHeroScene(container, { ringUrl: '/r.stl', reducedMotion: false })).rejects.toThrow(/WebGL.*no webgl/);
     expect(container.childElementCount).toBe(0);
     expect(h.loadRing).not.toHaveBeenCalled();
+    expect(h.loadClip).not.toHaveBeenCalled();
   });
 
   it('appends a styled canvas and calls onReady exactly once, right after the first render', async () => {
@@ -112,6 +130,8 @@ describe('createHeroScene', () => {
     await createHeroScene(container, { ringUrl: '/models/r3-ring.stl', reducedMotion: false, onReady });
     const [r] = h.renderers;
     expect(h.loadRing).toHaveBeenCalledWith('/models/r3-ring.stl');
+    expect(h.loadClip).toHaveBeenCalledWith(CLIP_URL, expect.objectContaining({ screenTexture: expect.any(THREE.CanvasTexture) }));
+    expect(CLIP_URL).toBe('/models/r3-clip-retro.bin');
     expect(container.querySelector('canvas')).toBe(r.domElement);
     expect(r.domElement.getAttribute('style')).toMatch(/touch-action:\s*pan-y/);
     expect(r.domElement.style.width).toBe('100%');
@@ -137,7 +157,7 @@ describe('createHeroScene', () => {
     expect(h.renderers[0].render).toHaveBeenCalledTimes(2);
   });
 
-  it('puts the ring, the clip on a pivot and the screen emissive level in the scene', async () => {
+  it('puts the ring, the Retro clip on a pivot with its chain, and the unlit e-paper screen in the scene', async () => {
     await createHeroScene(container, { ringUrl: '/r.stl', reducedMotion: false });
     flush();
     const scene = sceneOf(h.renderers[0]);
@@ -145,12 +165,23 @@ describe('createHeroScene', () => {
     scene.traverse(o => { if (o === ringMesh) hasRing = true; });
     expect(hasRing).toBe(true);
     const screen = scene.getObjectByName('screen') as THREE.Mesh;
-    expect((screen.material as THREE.MeshPhysicalMaterial).emissiveIntensity).toBe(SCREEN_EMISSIVE_INTENSITY);
-    expect(SCREEN_EMISSIVE_INTENSITY).toBeGreaterThan(0);
-    expect(SCREEN_EMISSIVE_INTENSITY).toBeLessThan(1);
+    const sm = screen.material as THREE.MeshBasicMaterial;
+    expect(sm.map).toBeInstanceOf(THREE.CanvasTexture);
+    expect(sm.toneMapped).toBe(false);
+    expect(scene.getObjectByName('chain')).toBeTruthy();
     expect(scene.environment).toBe(h.pmrems[0].target.texture);
     const clip = scene.getObjectByName('clip')!;
     expect(clip.parent?.name).toBe('clipPivot');
+    // Framed by the head alone: the clip is ~1 unit tall and hangs from the pivot (the anchor) above it.
+    const chain = scene.getObjectByName('chain')!;
+    const parent = chain.parent!;
+    chain.removeFromParent();
+    scene.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(clip, true);
+    parent.add(chain);
+    expect(box.max.y - box.min.y).toBeCloseTo(1, 3);
+    const pivot = scene.getObjectByName('clipPivot')!;
+    expect(box.max.y).toBeLessThan(pivot.getWorldPosition(new THREE.Vector3()).y);
   });
 
   it('keeps animating the clip and ring between frames when motion is allowed', async () => {
@@ -245,6 +276,28 @@ describe('createHeroScene', () => {
     const before = r.render.mock.calls.length;
     flush(64);
     expect(r.render.mock.calls.length).toBe(before);
+  });
+
+  it('rejects and cleans up when the clip model fails to load', async () => {
+    h.loadClip = vi.fn(async () => { throw new Error('Clip model request failed: 404'); });
+    await expect(createHeroScene(container, { ringUrl: '/r.stl', reducedMotion: false })).rejects.toThrow(/Clip.*404/);
+    expect(container.childElementCount).toBe(0);
+    expect(h.renderers[0].dispose).toHaveBeenCalledTimes(1);
+    expect(frames).toHaveLength(0);
+  });
+
+  it('frees the loaded clip when the ring fails', async () => {
+    let built: { dispose: () => void } | null = null;
+    h.loadClip = vi.fn(async (_u: string, o: { screenTexture: unknown }) => {
+      const c = buildRetroClip(headBytes(), o as { screenTexture: THREE.Texture });
+      built = c;
+      vi.spyOn(c, 'dispose');
+      return c;
+    });
+    h.loadRing = vi.fn(async () => { throw new Error('Ring model request failed: 404'); });
+    await expect(createHeroScene(container, { ringUrl: '/r.stl', reducedMotion: false })).rejects.toThrow(/404/);
+    await Promise.resolve();
+    expect(built!.dispose).toHaveBeenCalledTimes(1);
   });
 
   it('rejects and cleans up when the ring fails to load', async () => {
