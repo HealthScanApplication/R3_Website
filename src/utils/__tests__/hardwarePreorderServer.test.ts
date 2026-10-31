@@ -80,15 +80,22 @@ describe('hardware-preorders count', () => {
     const { handler, orders, piCreates } = server();
     const res = await handler(post({ action: 'intent', product: 'ring', email: 'QA@Example.com', amount_cents: 1 }));
     const data = await res.json();
-    expect(data.amount_cents).toBe(17900); // server price, not the browser's 1
+    expect(data.amount_cents).toBe(14900); // server price, not the browser's 1
     expect(data.client_secret).toBe('sec');
     expect(piCreates).toHaveLength(1);
-    expect(piCreates[0]).toMatchObject({ amount: 17900, currency: 'usd', metadata: { product: 'ring' } });
+    expect(piCreates[0]).toMatchObject({ amount: 14900, currency: 'usd', metadata: { product: 'ring' } });
     const row = orders.find(o => o.id === data.purchase_id);
     expect(row).toMatchObject({
-      status: 'pending', email: 'qa@example.com', product: 'ring', amount_cents: 17900, currency: 'USD',
+      status: 'pending', email: 'qa@example.com', product: 'ring', amount_cents: 14900, currency: 'USD',
       batch_id: 'b1', stripe_payment_intent_id: 'pi_2', stripe_customer_id: 'cus_new',
     });
+  });
+  it('intent prices the clip server-side', async () => {
+    const { handler, orders, piCreates } = server();
+    const data = await (await handler(post({ action: 'intent', product: 'clip', email: 'qa@example.com', amount_cents: 1 }))).json();
+    expect(data.amount_cents).toBe(19900);
+    expect(piCreates[0]).toMatchObject({ amount: 19900, metadata: { product: 'clip' } });
+    expect(orders.find(o => o.id === data.purchase_id)!.amount_cents).toBe(19900);
   });
   it('intent prices the bundle server-side', async () => {
     const { handler, orders, piCreates } = server();

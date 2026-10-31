@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 vi.mock('../../../utils/hardwarePreorder', () => ({
   createPreorderIntent: vi.fn(),
@@ -25,25 +25,29 @@ function setup(config: { enabled: boolean; error: string | null } = okConfig, va
 async function toPayment(email = 'qa@example.com') {
   fireEvent.change(screen.getByLabelText(/email/i), { target: { value: email } });
   fireEvent.click(screen.getByRole('button', { name: 'Continue to payment' }));
-  return screen.findByRole('button', { name: 'Pay $179' });
+  return screen.findByRole('button', { name: 'Pay $149' });
 }
 
 beforeEach(() => {
   handle = { confirm: vi.fn().mockResolvedValue(undefined), destroy: vi.fn() };
   mount = vi.fn().mockResolvedValue(handle);
-  intent.mockReset().mockResolvedValue({ purchase_id: 'p1', client_secret: 'cs', amount_cents: 17900, currency: 'usd' });
+  intent.mockReset().mockResolvedValue({ purchase_id: 'p1', client_secret: 'cs', amount_cents: 14900, currency: 'usd' });
   confirm.mockReset().mockResolvedValue({ status: 'paid' });
   count.mockReset().mockResolvedValue({ paid: 10, goal: 250, deadline: 'd', status: 'open' });
 });
 afterEach(cleanup);
 
 describe('PreorderBlock', () => {
-  it('shows both prices with ring selected by default', async () => {
+  it('shows the ring, clip and ring + clip prices with ring selected by default', async () => {
     setup();
-    expect(screen.getByRole('button', { name: /R³ Ring \$179/ }).getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getByRole('button', { name: /R³ Ring \+ Clip \$299/ }).getAttribute('aria-pressed')).toBe('false');
-    expect(screen.getByText('$199')).toBeTruthy();
-    expect(screen.getByText('$349')).toBeTruthy();
+    const ring = screen.getByRole('button', { name: /R³ Ring \$149/ });
+    const clip = screen.getByRole('button', { name: /R³ Clip \$199/ });
+    const bundle = screen.getByRole('button', { name: /R³ Ring \+ Clip \$299/ });
+    expect([ring, clip, bundle].map(b => b.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false']);
+    // Each option strikes through its regular price.
+    expect(within(ring).getByText('$199')).toBeTruthy();
+    expect(within(clip).getByText('$249')).toBeTruthy();
+    expect(within(bundle).getByText('$399')).toBeTruthy();
     expect(screen.getByText(/Full payment today\. Ships Q3 2027\. If we don't reach the first-batch goal by the deadline, you're refunded in full\./)).toBeTruthy();
     await waitFor(() => expect(count).toHaveBeenCalled());
   });
@@ -134,7 +138,7 @@ describe('PreorderBlock', () => {
     const pay = await toPayment();
     fireEvent.click(pay);
     expect(await screen.findByText('Card declined.')).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Pay $179' }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('button', { name: 'Pay $149' }) as HTMLButtonElement).disabled).toBe(false);
     expect(confirm).not.toHaveBeenCalled();
   });
 
@@ -165,7 +169,7 @@ describe('PreorderBlock', () => {
     setup();
     fireEvent.click(await toPayment());
     expect(await screen.findByText('Payment did not complete.')).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Pay $179' }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('button', { name: 'Pay $149' }) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.queryByText(/You're in/)).toBeNull();
     expect(count).toHaveBeenCalledTimes(1);
   });
@@ -219,8 +223,8 @@ describe('PreorderBlock', () => {
     await waitFor(() => expect((screen.getByRole('button', { name: /Continue|Starting/ }) as HTMLButtonElement).disabled).toBe(true));
     fireEvent.click(screen.getByRole('button', { name: /Continue|Starting/ }));
     expect(intent).toHaveBeenCalledTimes(1);
-    release({ purchase_id: 'p1', client_secret: 'cs', amount_cents: 17900, currency: 'usd' });
-    expect(await screen.findByRole('button', { name: 'Pay $179' })).toBeTruthy();
+    release({ purchase_id: 'p1', client_secret: 'cs', amount_cents: 14900, currency: 'usd' });
+    expect(await screen.findByRole('button', { name: 'Pay $149' })).toBeTruthy();
   });
 
   describe('closed batch and deadline', () => {
@@ -240,7 +244,7 @@ describe('PreorderBlock', () => {
       expect(screen.getAllByRole('status').some(n => n.textContent === 'The first batch is closed.')).toBe(true);
       expect((screen.getByRole('button', { name: 'Continue to payment' }) as HTMLButtonElement).disabled).toBe(true);
       expect((screen.getByLabelText(/email/i) as HTMLInputElement).disabled).toBe(true);
-      expect((screen.getByRole('button', { name: /R³ Ring \$179/ }) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByRole('button', { name: /R³ Ring \$149/ }) as HTMLButtonElement).disabled).toBe(true);
       expect((screen.getByRole('button', { name: /R³ Ring \+ Clip/ }) as HTMLButtonElement).disabled).toBe(true);
       expect(screen.queryByText(/Campaign ends/)).toBeNull();
       submit();
@@ -283,13 +287,13 @@ describe('PreorderBlock', () => {
     setup();
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'qa@example.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'Continue to payment' }));
-    const pay = await screen.findByRole('button', { name: 'Pay $179' }) as HTMLButtonElement;
+    const pay = await screen.findByRole('button', { name: 'Pay $149' }) as HTMLButtonElement;
     expect(pay.disabled).toBe(true);
     fireEvent.click(pay);
     expect(handle.confirm).not.toHaveBeenCalled();
     release(handle);
-    await waitFor(() => expect((screen.getByRole('button', { name: 'Pay $179' }) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByRole('button', { name: 'Pay $179' }));
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Pay $149' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Pay $149' }));
     expect(await screen.findByText(/You're in/)).toBeTruthy();
     expect(handle.confirm).toHaveBeenCalledTimes(1);
   });
@@ -367,7 +371,7 @@ describe('PreorderBlock', () => {
       setup(okConfig, 'hero');
       fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'qa@example.com' } });
       fireEvent.click(screen.getByRole('button', { name: 'Reserve →' }));
-      fireEvent.click(await screen.findByRole('button', { name: 'Pay $179 →' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Pay $149 →' }));
       expect(await screen.findByText(/You're in — R³ Ring reserved\./)).toBeTruthy();
       expect(handle.confirm).toHaveBeenCalledWith('qa@example.com');
     });

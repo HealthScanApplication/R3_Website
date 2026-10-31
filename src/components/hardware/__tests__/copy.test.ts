@@ -2,16 +2,24 @@ import { describe, expect, it } from 'vitest';
 import { PRODUCTS, BATCH_GOAL, SHIP_WINDOW, PREORDER_TERMS, formatUsd, USE_CASES, GESTURES, DEVICE_IOV, IOV_LABELS, WEAR_MODES, WEAR_MODES_INTRO, WEAR_MODES_TITLE } from '../copy';
 
 describe('hardware copy', () => {
-  it('prices the ring and bundle in cents', () => {
-    expect(PRODUCTS.ring.priceCents).toBe(17900);
-    expect(PRODUCTS.bundle.priceCents).toBe(29900);
+  it('sells the ring, the clip and the ring + clip, in that order, priced in cents', () => {
+    expect(Object.keys(PRODUCTS)).toEqual(['ring', 'clip', 'bundle']);
+    expect([PRODUCTS.ring, PRODUCTS.clip, PRODUCTS.bundle].map(p => [p.name, p.priceCents, p.regPriceCents])).toEqual([
+      ['R³ Ring', 14900, 19900], ['R³ Clip', 19900, 24900], ['R³ Ring + Clip', 29900, 39900],
+    ]);
+  });
+  it('keeps the page prices in step with the checkout function', async () => {
+    const fs = await import('node:fs');
+    const src = fs.readFileSync('supabase/functions/hardware-preorders/index.ts', 'utf8');
+    const prices = Object.fromEntries([...src.match(/const PRICES[^{]*\{([^}]*)\}/)![1].matchAll(/(\w+):\s*(\d+)/g)].map(m => [m[1], Number(m[2])]));
+    expect(prices).toEqual({ ring: PRODUCTS.ring.priceCents, clip: PRODUCTS.clip.priceCents, bundle: PRODUCTS.bundle.priceCents });
   });
   it('exposes the batch goal and a ship window', () => {
     expect(BATCH_GOAL).toBe(250);
     expect(SHIP_WINDOW).toMatch(/\w/);
   });
   it('formats cents as USD', () => {
-    expect(formatUsd(17900)).toBe('$179');
+    expect(formatUsd(14900)).toBe('$149');
     expect(formatUsd(29900)).toBe('$299');
   });
   it('shares one terms line with the ship window and the refund promise', () => {

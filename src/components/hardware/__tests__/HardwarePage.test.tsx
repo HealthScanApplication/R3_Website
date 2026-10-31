@@ -61,7 +61,7 @@ describe('HardwarePage', () => {
     }
     expect(text).not.toMatch(/\bHeart\b(?!\s+rate)/);
     const prices = Array.from(new Set(text.match(/\$\d+(?:\.\d+)?/g) ?? [])).sort();
-    expect(prices).toEqual(['$179', '$299']); // hero preorder shows no struck regular prices
+    expect(prices).toEqual(['$149', '$199', '$299']); // hero preorder shows no struck regular prices
   });
 
   it('has one #preorder inside the hero with the only checkout, and one email field', () => {
@@ -76,7 +76,7 @@ describe('HardwarePage', () => {
 
   it('closing band links to #preorder', () => {
     render(<HardwarePage />);
-    const link = screen.getByRole('link', { name: 'Reserve the R³ Ring — $179' });
+    const link = screen.getByRole('link', { name: 'Reserve the R³ Ring — $149' });
     expect(link.getAttribute('href')).toBe('#preorder');
     expect((link as HTMLElement).style.background).toBe('rgb(199, 217, 159)');
   });

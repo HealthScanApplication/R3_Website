@@ -1,6 +1,9 @@
+// Early-bird and regular prices, set against Oura (ring from $349 plus membership) and Pebble (e-paper watch $149-225).
+// Keep in step with PRICES in supabase/functions/hardware-preorders/index.ts.
 export const PRODUCTS = {
-  ring:   { key: 'ring'   as const, name: 'R³ Ring',        priceCents: 17900, regPriceCents: 19900 },
-  bundle: { key: 'bundle' as const, name: 'R³ Ring + Clip', priceCents: 29900, regPriceCents: 34900 },
+  ring:   { key: 'ring'   as const, name: 'R³ Ring',        priceCents: 14900, regPriceCents: 19900 },
+  clip:   { key: 'clip'   as const, name: 'R³ Clip',        priceCents: 19900, regPriceCents: 24900 },
+  bundle: { key: 'bundle' as const, name: 'R³ Ring + Clip', priceCents: 29900, regPriceCents: 39900 },
 };
 export type ProductKey = keyof typeof PRODUCTS;
 export const BATCH_GOAL = 250;
