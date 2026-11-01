@@ -15,8 +15,8 @@ beforeEach(() => { bg.reduceMotion = false; bg.allowVideo = false; hookArgs.leng
 afterEach(cleanup);
 
 describe('GuardianHeroBackdrop', () => {
-  it('the clips are the six Guardians, in order', () => {
-    expect(GUARDIAN_CLIPS).toEqual(['trainer', 'dietitian', 'herbalist', 'breathwork', 'yoga', 'sleep'].map(id => `/videos/guardians/${id}.mp4`));
+  it('the clips are the seven Guardians, in order', () => {
+    expect(GUARDIAN_CLIPS).toEqual(['trainer', 'dietitian', 'herbs-for-kids', 'breathwork-drum', 'constellations', 'yoga', 'sleep'].map(id => `/videos/guardians/${id}.mp4`));
   });
 
   it('shows the hidden poster and never asks the hook for produce clips', () => {
