@@ -98,16 +98,20 @@ describe('Upload your products (setup step 04)', () => {
     await waitFor(() => expect(built(paid).length).toBe(2));
   });
 
-  it('every type has a "build a new one" link to its own builder', async () => {
+  it('every type has a "build a new one" link that opens the builder that makes it', async () => {
     setup();
     const paid = await group('paid');
     const href = (type: string) => paid.querySelector(`[data-build-type="${type}"]`)?.getAttribute('href');
+    // made by the Offer builder: it opens with that type picked out
+    for (const type of ['ebook', 'course', 'one_to_one_call', 'group_call', 'in_person', 'community']) expect(href(type)).toBe(`/guardians/workspace?tab=offer_builder&type=${type}`);
+    // made elsewhere
     expect(href('routine')).toBe('/guardians/workspace?tab=protocols');
+    expect(href('routine_guidance')).toBe('/guardians/workspace?tab=protocols');
     expect(href('recipe_book')).toBe('/guardians/workspace?tab=recipes');
-    expect(href('course')).toBe('/guardians/workspace?tab=offer_builder');
-    expect(href('community')).toBe('/guardians/workspace?tab=community');
     expect(href('festival')).toBe('/guardians/workspace?tab=events');
     expect(href('product')).toBe('/guardians/workspace?tab=products');
+    // the dotted cards link the same way
+    expect(paid.querySelector('[data-suggestion="course"] [data-suggestion-build]')?.getAttribute('href')).toBe('/guardians/workspace?tab=offer_builder&type=course');
   });
 
   it('Delete works without the browser dialog: it asks in the page, then deletes', async () => {

@@ -562,6 +562,8 @@ const input: React.CSSProperties = {
   fontFamily: sans, fontSize: 14, outline: 'none',
 };
 const label: React.CSSProperties = { display: 'block', color: muted, fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8, lineHeight: 1.35 };
+// The Offer builder's Card/List toggle uses this; it was never defined here, so opening the Offer builder threw a ReferenceError.
+const iconBtn: React.CSSProperties = { border: 0, background: 'transparent', color: muted, cursor: 'pointer', padding: 2, display: 'inline-flex' };
 // Homepage-style CTA: a label cell joined to a solid button on one shared seam.
 function CtaLockup({ href, label, action, dark = false, avatar = null, arrow = true }: { href: string; label: string; action: string; dark?: boolean; avatar?: React.ReactNode; arrow?: boolean }) {
   const edge = dark ? '#11120F' : '#FFFFFF';
@@ -3959,8 +3961,14 @@ const PRODUCT_UPLOAD_TYPES: Array<{ value: GuideOffer['kind']; label: string; bo
   { value: 'in_person', label: 'Workshop or in person', booking: true },
   { value: 'product', label: 'Physical product' },
 ];
-/** Where each type is built: the workspace builder that makes that kind of product. */
-const PRODUCT_BUILDER_TAB: Record<string, Tab> = { ebook: 'content', recipe_book: 'recipes', course: 'offer_builder', routine: 'protocols', routine_guidance: 'protocols', one_to_one_call: 'offer_builder', group_call: 'offer_builder', community: 'community', festival: 'events', in_person: 'events', product: 'products' };
+/** Where each type is built. Types the Offer builder makes open it with that type picked out; the rest go to their own builder. */
+const PRODUCT_BUILDER_HREF: Record<string, string> = {
+  ebook: '/guardians/workspace?tab=offer_builder&type=ebook', course: '/guardians/workspace?tab=offer_builder&type=course',
+  one_to_one_call: '/guardians/workspace?tab=offer_builder&type=one_to_one_call', group_call: '/guardians/workspace?tab=offer_builder&type=group_call',
+  in_person: '/guardians/workspace?tab=offer_builder&type=in_person', community: '/guardians/workspace?tab=offer_builder&type=community',
+  recipe_book: '/guardians/workspace?tab=recipes', routine: '/guardians/workspace?tab=protocols', routine_guidance: '/guardians/workspace?tab=protocols',
+  festival: '/guardians/workspace?tab=events', product: '/guardians/workspace?tab=products',
+};
 const PRODUCT_UPLOAD_GROUPS: Array<{ id: 'free' | 'paid'; title: string; copy: string }> = [
   { id: 'free', title: 'Lead magnets', copy: 'Free things that bring people in: a PDF, a short video series, a starter Protocol, a booking link for a free call.' },
   { id: 'paid', title: 'Paid products', copy: 'What people pay for, from a low-priced guide up to a retreat.' },
@@ -4096,7 +4104,7 @@ function ProductUploadSection({ group, userId, currency, offers, onSaved, onDele
               title={`Add a ${group.id === 'free' ? 'free ' : ''}${type.label.toLowerCase()}`} copy={suggestion.why}
               extra={<span style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 <button type="button" data-suggestion-upload onClick={() => prefill(suggestion.kind, group.id === 'free' ? '' : String(suggestion.price), type.label)} style={{ minHeight: 40, background: '#F5F2EA', color: '#090A08', border: 0, fontFamily: sans, fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>Add link</button>
-                <a data-suggestion-build href={`/guardians/workspace?tab=${PRODUCT_BUILDER_TAB[suggestion.kind]}`} style={{ minHeight: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #F5F2EA', color: '#F5F2EA', textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Build it</a>
+                <a data-suggestion-build href={PRODUCT_BUILDER_HREF[suggestion.kind]} style={{ minHeight: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #F5F2EA', color: '#F5F2EA', textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Build it</a>
               </span>} />
           </div>;
         })}
@@ -4121,7 +4129,7 @@ function ProductUploadSection({ group, userId, currency, offers, onSaved, onDele
     <div data-build-new style={{ marginTop: 18, paddingTop: 14, borderTop: `1px dashed ${line}` }}>
       <span style={{ ...label, color: acid }}>Or build a new one</span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        {PRODUCT_UPLOAD_TYPES.map((type) => <a key={type.value} data-build-type={type.value} href={`/guardians/workspace?tab=${PRODUCT_BUILDER_TAB[type.value]}`} aria-label={`Build a new ${type.label.toLowerCase()}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 34, padding: '0 12px', border: `1px dashed ${line}`, color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', textDecoration: 'none' }}>{type.label} <ArrowRight size={12} /></a>)}
+        {PRODUCT_UPLOAD_TYPES.map((type) => <a key={type.value} data-build-type={type.value} href={PRODUCT_BUILDER_HREF[type.value]} aria-label={`Build a new ${type.label.toLowerCase()}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 34, padding: '0 12px', border: `1px dashed ${line}`, color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', textDecoration: 'none' }}>{type.label} <ArrowRight size={12} /></a>)}
       </div>
     </div>
   </section>;
@@ -4597,6 +4605,9 @@ function OfferBuilder({ profile, protocols, offers, recipes = [], librarySources
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
   const [typeView, setTypeView] = useState<'cards' | 'list'>('cards');
+  // Arriving from Upload your products with ?type=…: that type's card is picked out and scrolled into view (nothing is created for them).
+  const wantedType = useMemo(() => new URLSearchParams(window.location.search).get('type'), []);
+  useEffect(() => { if (wantedType) window.setTimeout(() => { try { document.querySelector('[data-offer-wanted="true"]')?.scrollIntoView({ block: 'center', behavior: prefersReducedMotionNow() ? 'auto' : 'smooth' }); } catch { /* a convenience */ } }, 60); }, [wantedType]);
   async function build(kind: typeof offerBuilderTypes[number]['kind'], title: string) {
     if (kind === 'routine') { onOpenProtocols(); return; }
     if (!user) return;
@@ -4609,12 +4620,13 @@ function OfferBuilder({ profile, protocols, offers, recipes = [], librarySources
     } catch (error: any) { setMessage(error?.message || 'Could not create this offer.'); }
     finally { setBusy(''); }
   }
-  const renderOfferType = ({ kind, access, value, title, eyebrow, copy, Icon }: typeof offerBuilderTypes[number]) => <button key={kind} type="button" onClick={() => build(kind, title)} disabled={busy === kind} style={typeView === 'cards' ? { minHeight: 238, border: `1px solid ${line}`, background: panel, color: ink, padding: 22, textAlign: 'left', cursor: 'pointer', fontFamily: sans, display: 'flex', flexDirection: 'column' } : { minHeight: 92, width: '100%', border: 0, borderTop: `1px solid ${line}`, background: 'transparent', color: ink, padding: '16px 4px', textAlign: 'left', cursor: 'pointer', fontFamily: sans, display: 'grid', gridTemplateColumns: '52px minmax(0,1fr) auto', gap: 16, alignItems: 'center' }}>
+  const renderOfferType = ({ kind, access, value, title, eyebrow, copy, Icon }: typeof offerBuilderTypes[number]) => <button key={kind} type="button" data-offer-type={kind} data-offer-wanted={wantedType === kind ? 'true' : undefined} onClick={() => build(kind, title)} disabled={busy === kind} style={typeView === 'cards' ? { minHeight: 238, border: `1px solid ${line}`, background: panel, color: ink, padding: 22, textAlign: 'left', cursor: 'pointer', fontFamily: sans, display: 'flex', flexDirection: 'column' } : { minHeight: 92, width: '100%', border: 0, borderTop: `1px solid ${line}`, background: 'transparent', color: ink, padding: '16px 4px', textAlign: 'left', cursor: 'pointer', fontFamily: sans, display: 'grid', gridTemplateColumns: '52px minmax(0,1fr) auto', gap: 16, alignItems: 'center' }}>
     <span style={{ width: 48, height: 48, border: `1px solid ${line}`, display: 'grid', placeItems: 'center', color: acid }}><Icon size={22} /></span>
     <span style={typeView === 'cards' ? { display: 'contents' } : { minWidth: 0 }}><span style={{ ...label, color: acid, margin: typeView === 'cards' ? '20px 0 7px' : '0 0 5px' }}>{eyebrow} · {access}</span><strong style={{ display: 'block', fontSize: 22 }}>{title}</strong><span style={{ color: muted, fontSize: 12, lineHeight: 1.5, marginTop: 7, display: typeView === 'cards' ? 'block' : '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{copy}</span><span aria-label={`Value potential ${value} out of 5`} title="Value potential" style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 12 }}><span aria-hidden="true" style={{ color: acid, fontSize: 14, letterSpacing: 2 }}>{'★★★★★'.split('').map((star, index) => <span key={index} style={{ opacity: index < value ? 1 : .2 }}>{star}</span>)}</span><span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>{value}/5 value</span></span></span>
     <span style={{ marginTop: typeView === 'cards' ? 'auto' : 0, paddingTop: typeView === 'cards' ? 16 : 0, fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{busy === kind ? 'Creating...' : kind === 'routine' ? 'Open R3 builder →' : 'Create offer →'}</span>
   </button>;
   return <>
+    <style>{`[data-offer-wanted="true"]{outline:2px solid #C7D8A3;outline-offset:3px}`}</style>
     <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}><img src={guidePlates.offer_builder} alt="" style={{ width: 74, height: 74, objectFit: 'contain', filter: 'grayscale(1) contrast(.9) brightness(.74)' }} /><div><div style={{ ...label, color: acid }}>Reusable building blocks</div><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 300, margin: '8px 0 0' }}>Offer builder</h1></div></div>
     <p style={{ color: muted, maxWidth: 720, lineHeight: 1.6 }}>Create the things people receive. Reuse any offer across more than one offer path.</p>
     {librarySources.length > 0 && <div style={{ border: `1px solid ${acid}`, background: '#1B2017', color: acid, padding: 13, marginTop: 18, fontSize: 11 }}><strong>{librarySources.length} Library source{librarySources.length === 1 ? '' : 's'} attached:</strong> {librarySources.map((source) => source.title).join(', ')}</div>}
