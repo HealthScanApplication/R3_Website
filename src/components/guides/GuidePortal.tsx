@@ -21,6 +21,7 @@ import { createMonoLogo, isMonoLogoUrl, logoImageStyle } from '../../utils/brand
 import { PullFromLink } from './PullFromLink';
 import { eventDay, eventRangeLabel, eventYear } from '../../utils/eventDates';
 import { LogoBadge } from './LogoBadge';
+import { sectionTones, type Tone } from '../../utils/sectionTones';
 import { PublicLocaleContext, useDisplayMoney } from '../../utils/displayMoney';
 import { EventsCalendar } from './EventsCalendar';
 import { guestsLabel, parseRetreatOptions, roomPrice, type RetreatRoomOption } from '../../utils/retreatRooms';
@@ -1300,7 +1301,8 @@ export function OfferCheckout({ offer, upsells, profile, accent, onClose, onFres
  * The email sign-up at the bottom of a page that has no free offer to hand over (so no offer funnel): a plain Follow form.
  * It saves the same lead the hero's Follow box does. The owner can turn it off for the page in the site builder (Order tab).
  */
-function FollowSignup({ profile, accent, headingFont }: { profile: GuideProfile; accent: string; headingFont: string }) {
+function FollowSignup({ profile, accent, headingFont, tone = 'dark' }: { profile: GuideProfile; accent: string; headingFont: string; tone?: Tone }) {
+  const light = tone === 'light';
   const [form, setForm] = useState({ email: '', consent: false });
   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
   async function submit(event: React.FormEvent) {
@@ -1312,18 +1314,18 @@ function FollowSignup({ profile, accent, headingFont }: { profile: GuideProfile;
       setState('done');
     } catch { setState('error'); }
   }
-  return <section id="follow" data-page-section="follow" aria-label={`Follow ${profile.display_name}`} style={{ background: '#11150F', color: '#F2EFE7', padding: `clamp(64px,9vw,112px) ${PAGE_X}`, borderTop: '1px solid rgba(242,239,231,.14)' }}>
+  return <section id="follow" data-page-section="follow" aria-label={`Follow ${profile.display_name}`} style={{ background: light ? '#E7E1D5' : '#11150F', color: light ? '#11120F' : '#F2EFE7', padding: `clamp(64px,9vw,112px) ${PAGE_X}`, borderTop: light ? '1px solid rgba(17,18,15,.12)' : '1px solid rgba(242,239,231,.14)' }} data-tone={tone}>
     <div style={{ maxWidth: 560, margin: '0 auto', textAlign: 'center' }}>
       <h2 style={{ fontFamily: headingFont, fontWeight: 300, fontSize: 'clamp(34px,5vw,56px)', lineHeight: 1, margin: '0 0 10px' }}>Follow {profile.display_name}.</h2>
-      <p style={{ color: '#B8B6AF', fontSize: 14, lineHeight: 1.55, margin: '0 0 22px' }}>New guidance, events and products, straight to your inbox.</p>
-      {state === 'done' ? <p role="status" style={{ color: accent, fontSize: 15, margin: 0 }}>You’re subscribed. Thank you.</p> : <form onSubmit={submit} style={{ display: 'grid', gap: 12 }}>
+      <p style={{ color: light ? '#66645F' : '#B8B6AF', fontSize: 14, lineHeight: 1.55, margin: '0 0 22px' }}>New guidance, events and products, straight to your inbox.</p>
+      {state === 'done' ? <p role="status" style={{ color: light ? '#667245' : accent, fontSize: 15, margin: 0 }}>You’re subscribed. Thank you.</p> : <form onSubmit={submit} style={{ display: 'grid', gap: 12 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto' }}>
           <label htmlFor="follow-email" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)' }}>Email address</label>
-          <input id="follow-email" type="email" required autoComplete="email" placeholder="Enter your email address" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} style={{ minHeight: 50, boxSizing: 'border-box', padding: '0 16px', border: 0, background: '#F5F5F3', color: '#11120F', fontSize: 14, minWidth: 0 }} />
-          <button type="submit" disabled={state === 'sending'} style={{ minHeight: 50, padding: '0 22px', border: 0, background: '#C7D8A3', color: '#11150F', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', cursor: state === 'sending' ? 'wait' : 'pointer' }}>{state === 'sending' ? 'Joining…' : 'Follow'}</button>
+          <input id="follow-email" type="email" required autoComplete="email" placeholder="Enter your email address" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} style={{ minHeight: 50, boxSizing: 'border-box', padding: '0 16px', border: 0, background: light ? '#FFFFFF' : '#F5F5F3', color: '#11120F', fontSize: 14, minWidth: 0 }} />
+          <button type="submit" disabled={state === 'sending'} style={{ minHeight: 50, padding: '0 22px', border: 0, background: light ? '#11120F' : '#C7D8A3', color: light ? '#FFFFFF' : '#11150F', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', cursor: state === 'sending' ? 'wait' : 'pointer' }}>{state === 'sending' ? 'Joining…' : 'Follow'}</button>
         </div>
-        <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', justifyContent: 'center', fontSize: 11, color: '#B8B6AF', textAlign: 'left' }}><input type="checkbox" checked={form.consent} onChange={(event) => setForm((current) => ({ ...current, consent: event.target.checked }))} style={{ marginTop: 2 }} />{CONSENT_TEXT}</label>
-        {state === 'error' && <span role="alert" style={{ color: '#FFB4A8', fontSize: 12 }}>We could not sign you up just now. Please try again.</span>}
+        <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', justifyContent: 'center', fontSize: 11, color: light ? '#66645F' : '#B8B6AF', textAlign: 'left' }}><input type="checkbox" checked={form.consent} onChange={(event) => setForm((current) => ({ ...current, consent: event.target.checked }))} style={{ marginTop: 2 }} />{CONSENT_TEXT}</label>
+        {state === 'error' && <span role="alert" style={{ color: light ? '#A33B2B' : '#FFB4A8', fontSize: 12 }}>We could not sign you up just now. Please try again.</span>}
       </form>}
     </div>
   </section>;
@@ -1956,8 +1958,8 @@ const MAP_WITHOUT_CONTROLS: React.CSSProperties = {
 };
 
 function DestinationHeader({ profile, place, lines = [place], kind, virtual = false }: { profile: GuideProfile; place: string; lines?: Array<string | null | undefined>; kind: 'event' | 'retreat'; virtual?: boolean }) {
-  // The card under the map is light (white for an event, cream for a retreat), so the logo badge is cut from it and shown black. The logo badge is cut from the same surface, so it reads as part of the card.
-  const surface = kind === 'retreat' ? '#F2EFE7' : '#FFFFFF';
+  // The card under the map is white (events and retreats), so the logo badge is cut from it and shown black. The logo badge is cut from the same surface, so it reads as part of the card.
+  const surface = '#FFFFFF';
   const onDark = false;
   const query = mapQueryFor(...lines) || place;
   const online = virtual || /^online$/i.test(place.trim()) || /to be announced/i.test(place); // nothing to put on a map
@@ -2022,7 +2024,7 @@ function GuardianEvents({ retreats = [], profile, events, sourceUrl, canEditSour
   // Different events (another brand's page, or a fresh import) start without dates chosen from the old ones.
   const eventSet = upcoming.map((event) => event.id).join(',');
   useEffect(() => { setRange(null); }, [eventSet]);
-  if (!upcoming.length && !canEditSource && !sourceUrl) return null;
+  if (!upcoming.length && !canEditSource) return null; // no events: the section is hidden (only the owner sees it, to add or pull some in)
   async function pull() {
     const requestedSource = canEditSource ? draftSourceUrl.trim() : undefined;
     if (canEditSource && !requestedSource) { setState('error'); setMessage('Add your official events page first.'); return; }
@@ -2054,7 +2056,7 @@ function GuardianEvents({ retreats = [], profile, events, sourceUrl, canEditSour
           {fitting.length ? <div className="g-events-stack" role="region" aria-label="Events" tabIndex={0} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 16 }}>{fitting.map((event) => <EventCommerceCard key={event.id} profile={profile} event={event} rooms={roomsFor(event)} />)}</div>
             : <p style={{ color: '#C7D8A3', fontSize: 14 }}>Nothing is on for those dates. Choose other days, or <button type="button" onClick={() => setRange(null)} style={{ border: 0, background: 'transparent', color: '#C7D8A3', padding: 0, font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>clear the dates</button>.</p>}
         </div>
-      </div> : <div style={{ border: '1px dashed rgba(242,239,231,.3)', padding: 32, color: '#B8B6AF' }}>No upcoming events yet. Add one in Guardian workspace or pull from the official events page.</div>}
+      </div> : <div style={{ border: '1px dashed rgba(242,239,231,.3)', padding: 32, color: '#B8B6AF' }}>No upcoming events yet, so visitors do not see this section. Add one in the Guardian workspace or pull from the official events page.</div>}
     </div>
   </section>;
 }
@@ -2121,7 +2123,7 @@ function RetreatCard({ profile, retreat, sessions = [] }: { profile: GuideProfil
   const locale = useContext(PublicLocaleContext)?.locale;
   const [sessionIndex, setSessionIndex] = useState(0);
   const session = sessions[Math.min(sessionIndex, sessions.length - 1)];
-  return <article data-retreat-card style={{ border: '1px solid rgba(17,18,15,.2)', background: '#F2EFE7', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+  return <article data-retreat-card style={{ border: '1px solid rgba(17,18,15,.2)', background: '#FFFFFF', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
     <DestinationHeader profile={profile} place={retreat.location || 'Misty Mountain, Australia'} lines={[retreat.location, retreat.title]} kind="retreat" />
     <div style={{ padding: 24, display: 'flex', flex: 1, flexDirection: 'column' }}><span style={{ color: '#667245', fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>{[retreat.duration_days && `${retreat.duration_days} days`, retreat.location || 'Retreat'].filter(Boolean).join(' · ')}</span><h3 style={{ fontFamily: serif, fontSize: 36, fontWeight: 300, lineHeight: 1.05, margin: '10px 0' }}>{retreat.title}</h3><p style={{ color: '#66645F', fontSize: 14, lineHeight: 1.55 }}>{retreat.description}</p>
       <RoomSelectors title={retreat.title} rooms={rooms} choice={choice} />
@@ -2239,7 +2241,8 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   // Every section of the page in value-ramp order. A section with something in it is a tag under the call to action; the owner also sees the empty ones.
   const isOwner = isSignedIn && user?.id === profile.user_id;
   const siteEvents = events.filter((event) => onSite(event.brand_id));
-  const siteRetreats = retreats.filter((retreat) => onSite(retreat.brand_id));
+  // The main page also offers the company retreats (Misty Mountain); a brand's own page shows only its own.
+  const siteRetreats = activeBrand ? retreats.filter((retreat) => onSite(retreat.brand_id)) : retreats;
   const profileSections = profileSectionStates({ offers: publishedOffers, products: shopProducts.filter((product) => onSite(product.brand_id)).length, events: siteEvents.length, retreats: siteRetreats.length });
   const sectionTags: HeroSection[] = profileSections.filter((section) => section.filled || isOwner).map((section): HeroSection => section.filled ? [section.anchor, section.label, 'filled', section.category] : [`section-${section.id}`, section.label, 'empty']);
   const freeOffers = publishedOffers.filter((offer) => offer.access_model === 'free');
@@ -2277,6 +2280,20 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   // The email sign-up at the bottom: the offer funnel when there is a free offer to hand over, else a plain Follow form. The owner can turn it off (an offer path page keeps its own).
   const emailCaptureOn = socials.email_capture !== 'off';
   const funnelHasEntry = orderFunnelOffers(publishedOffers, selectedRamp || null).some((offer) => offer.access_model === 'free');
+  // Which sections will show (a section with no records is hidden), then the tone each takes so dark and light alternate down the page.
+  const brandsShown = publicBrands.length > 1 && publicBrands.some((brand) => brand.kind === 'business');
+  const upcomingHere = siteEvents.filter((event) => new Date(event.end_at || event.start_at).getTime() >= Date.now() - 86400000);
+  const ofKind = (kind: string) => offers.filter((offer) => offer.kind === kind && offer.status === 'published' && onSite(offer.brand_id)).length > 0;
+  const shownSections = new Set<PageSectionKey>();
+  if (publishedOffers.length) shownSections.add('offers');
+  if (shopProducts.some((product) => product.status === 'published' && onSite(product.brand_id))) shownSections.add('shop');
+  if (upcomingHere.length || (isSignedIn && user?.id === profile.user_id)) shownSections.add('events');
+  if (ofKind('talk')) shownSections.add('talks');
+  if (ofKind('treat')) shownSections.add('treats');
+  if (siteRetreats.length) shownSections.add('retreats');
+  if (emailCaptureOn || pathSlug) shownSections.add('funnel');
+  if (brandsShown) shownSections.add('brands');
+  const tones = sectionTones(orderPageSections(socials.section_order), shownSections, funnelHasEntry ? { funnel: emailBackdrop ? 'dark' : 'light' } : {});
   const ownerName = ownerProfile?.display_name || profile.display_name;
   const ownerLinks = (ownerProfile?.social_links || {}) as Record<string, string>;
   const brandTiles = publicBrands.map((brand) => brand.kind === 'personal'
@@ -2291,8 +2308,8 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
     treats: <GuardianOfferShelf kind="treat" profile={profile} offers={offers.filter((offer) => onSite(offer.brand_id))} pagePadding={PAGE_X} />,
     forum: <GuardianForumTeaser profile={profile} pagePadding={PAGE_X} />,
     retreats: <GuardianRetreats profile={profile} retreats={siteRetreats} events={siteEvents} />,
-    funnel: <>{reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}{isOwner && <ProfileSectionSkeleton sections={profileSections} />}{emailCaptureOn || pathSlug ? (funnelHasEntry ? <GuardianFunnel key={selectedRamp?.id || 'default'} backdrop={emailBackdrop} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} /> : <FollowSignup profile={profile} accent={publicAccent} headingFont={publicHeadingFont} />) : null}</>,
-    brands: brandTiles.length > 1 && publicBrands.some((brand) => brand.kind === 'business') ? <section aria-labelledby="guardian-brands-title" data-page-section="brands" style={{ padding: `clamp(54px,7vw,100px) ${PAGE_X}`, background: '#11120F', color: ink }}>
+    funnel: <>{reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}{isOwner && <ProfileSectionSkeleton sections={profileSections} />}{emailCaptureOn || pathSlug ? (funnelHasEntry ? <GuardianFunnel key={selectedRamp?.id || 'default'} backdrop={emailBackdrop} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} /> : <FollowSignup profile={profile} accent={publicAccent} headingFont={publicHeadingFont} tone={tones.funnel || 'dark'} />) : null}</>,
+    brands: brandsShown ? <section aria-labelledby="guardian-brands-title" data-page-section="brands" data-tone={tones.brands || 'dark'} style={{ padding: `clamp(54px,7vw,100px) ${PAGE_X}`, background: tones.brands === 'light' ? '#E7E1D5' : '#11120F', color: tones.brands === 'light' ? '#11120F' : ink }}>
       <span style={{ color: publicAccent, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Official brands</span>
       <h2 id="guardian-brands-title" style={{ margin: '12px 0 28px', fontFamily: publicHeadingFont, fontWeight: 300, fontSize: 'clamp(42px,6vw,78px)', lineHeight: .95 }}>More from {ownerName}.</h2>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 14 }}>{brandTiles.map((tile) => <article key={tile.key} data-brand-tile {...tiltHandlers(6)} style={tiltStyle({ border: '1px solid rgba(17,18,15,.14)', background: '#FFFFFF', color: '#11120F', padding: 22, display: 'grid', gap: 18 })}>
