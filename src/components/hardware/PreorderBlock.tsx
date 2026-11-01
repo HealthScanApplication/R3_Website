@@ -150,6 +150,11 @@ export function PreorderBlock({ mountPayment = defaultMountPayment, stripeConfig
         setError(MSG_START);
         return;
       }
+      // Never charge a price other than the one shown: an older function would still serve the old amounts.
+      if (typeof res.amount_cents === 'number' && res.amount_cents !== PRODUCTS[product].priceCents) {
+        setError(MSG_START);
+        return;
+      }
       setIntent({ purchaseId: res.purchase_id, clientSecret: res.client_secret });
       setStep('payment');
     } catch (err) {

@@ -17,8 +17,8 @@ const BY_SPECIALTY: Record<string, GuardianClipId> = {
 
 export function guardianTypeClip(specialties: readonly string[] | null | undefined): GuardianClipId {
   for (const item of specialties ?? []) {
-    const hit = BY_SPECIALTY[String(item).trim().toLowerCase()];
-    if (hit) return hit;
+    const key = String(item).trim().toLowerCase();
+    if (Object.hasOwn(BY_SPECIALTY, key)) return BY_SPECIALTY[key];
   }
   return 'yoga';
 }

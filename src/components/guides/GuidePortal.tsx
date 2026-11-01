@@ -896,14 +896,15 @@ function PublicGuidePage({ isSignedIn }: { isSignedIn: boolean }) {
   // Who is signed in: their Guardian profile's name and photo, else the account's.
   const [ownProfile, setOwnProfile] = useState<GuideProfile | null>(null);
   useEffect(() => {
-    if (!isSignedIn || !user?.id) { setOwnProfile(null); return undefined; }
+    setOwnProfile(null);
+    if (!isSignedIn || !user?.id) return undefined;
     let live = true;
     getGuideProfile(user.id).then((found) => { if (live) setOwnProfile(found); }).catch(() => { if (live) setOwnProfile(null); });
     return () => { live = false; };
   }, [isSignedIn, user?.id]);
-  const accountMeta = (user?.user_metadata ?? {}) as { full_name?: string; name?: string; avatar_url?: string };
+  const accountMeta = (user?.user_metadata ?? {}) as { full_name?: string; name?: string; avatar_url?: string; picture?: string };
   const signedInName = ownProfile?.display_name || accountMeta.full_name || accountMeta.name || (user?.email ? user.email.split('@')[0] : '');
-  const signedInAvatar = useGuardianAvatarUrl(user?.id, ownProfile?.avatar_url, accountMeta.avatar_url);
+  const signedInAvatar = useGuardianAvatarUrl(user?.id, ownProfile?.avatar_url, accountMeta.avatar_url, accountMeta.picture);
   const [authMode, setAuthMode] = useState<'login' | 'signup' | null>(null);
   const [heroEmail, setHeroEmail] = useState('');
   useEffect(() => {
@@ -1561,12 +1562,32 @@ export function ownBackground(url?: string | null): string | null {
 
 const prefersReducedMotionNow = () => { try { return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
 
+/** The Guardian-type clip behind the hero. It stops for people who ask for reduced motion, including when they switch it on while the page is open. */
+function TypeVideo({ src, greyscale }: { src: string; greyscale: boolean }) {
+  const ref = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const query = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+    if (!query) return undefined;
+    const apply = () => {
+      const video = ref.current;
+      if (!video) return;
+      try {
+        if (query.matches) video.pause();
+        else Promise.resolve(video.play()).catch(() => {});
+      } catch { /* a player that cannot be controlled just keeps its initial state */ }
+    };
+    query.addEventListener?.('change', apply);
+    return () => query.removeEventListener?.('change', apply);
+  }, [src]);
+  return <video ref={ref} src={src} data-type-video autoPlay={!prefersReducedMotionNow()} muted loop playsInline preload="metadata" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />;
+}
+
 function HeroBackdrop({ heroMedia: chosenMedia, backgroundIsVideo = false, clips = [], typeVideo = null, glass = false, greyscale = false }: { heroMedia: string | null; backgroundIsVideo?: boolean; clips?: YtClip[]; typeVideo?: string | null; glass?: boolean; greyscale?: boolean }) {
   const heroMedia = ownBackground(chosenMedia);
   return <>
     {/* No background of their own: the clip for their Guardian type, else the produce footage. */}
     {!clips.length && !heroMedia && (typeVideo
-      ? <video key={typeVideo} src={typeVideo} data-type-video autoPlay={!prefersReducedMotionNow()} muted loop playsInline preload="metadata" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />
+      ? <TypeVideo key={typeVideo} src={typeVideo} greyscale={greyscale} />
       : <ProduceVideoBackdrop greyscale={greyscale} />)}
     {clips.length > 0 && <YouTubeClipBackground clips={clips} greyscale={greyscale} />}
     {!clips.length && heroMedia && !backgroundIsVideo && <img src={heroMedia} alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />}
@@ -2211,6 +2232,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       if (typeof saved.onboarding_step === 'number') setSavedStep(saved.onboarding_step);
       if (saved.slug) setSavedSlug(saved.slug);
       if (links.roles) setRoles(String(links.roles).split(',').filter(Boolean));
+      if (saved.specialties?.length) setChosen(saved.specialties);
     }).catch(() => {});
   }, [userId]);
   // Saved brands come back (they were written on publish but never read): the personal brand stays active and
@@ -3170,7 +3192,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         <span aria-hidden="true" style={{ width: 1, height: 14, background: line }} />
       </>} />
     </div>
-    <div className="g-workspace-shell" style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr)', height: 'calc(100vh - 63px)', margin: '0 calc(-1 * clamp(20px,6vw,90px)) -30px', maxWidth: 'none' }}>
+    <div className="g-workspace-shell" style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr)', height: 'calc(100vh - 78px)', margin: '0 calc(-1 * clamp(20px,6vw,90px)) -30px', maxWidth: 'none' }}>
       <div className="g-railwrap">
         <aside className="g-rail" aria-label="Guardian workspace and setup sections">
           <div className="g-rlabel" style={{ padding: '12px 20px 6px', color: acid, fontSize: 8, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>Set up your Guardian</div>
@@ -4833,7 +4855,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
   async function removeRecipe(row: GuideRecipe) { if (!user || !window.confirm(`Delete ${row.title}?`)) return; await deleteGuideRecipe(user.id, row.id); setRecipes((current) => current.filter((item) => item.id !== row.id)); }
   return <div style={{ minHeight: '100vh', background: black, color: ink, fontFamily: sans }}>
     <GuardianHeader isSignedIn activeTab={tab} displayName={profile.display_name} avatarUrl={navAvatarUrl} onNavigate={(next) => { setTab(next); setProtocolId(null); setRecipeId(null); setChildPlanId(null); setParentContext(null); }} onSignOut={signOut} />
-    <div className="g-workspace-shell" style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr)', height: 'calc(100vh - 63px)' }}>
+    <div className="g-workspace-shell" style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr)', height: 'calc(100vh - 78px)' }}>
       <div className="g-railwrap">
         <aside className="g-rail" aria-label="Guardian sections">
           <div className="g-rlabel" style={{ padding: '12px 20px 6px', color: acid, fontSize: 8, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>Set up your Guardian</div>

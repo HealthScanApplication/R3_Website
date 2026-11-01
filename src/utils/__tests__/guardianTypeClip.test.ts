@@ -17,6 +17,7 @@ describe('guardianTypeClip', () => {
     expect(guardianTypeClip([])).toBe('yoga');
     expect(guardianTypeClip(undefined)).toBe('yoga');
     expect(guardianTypeClip(['Basket weaving'])).toBe('yoga');
+    expect(guardianTypeClip(['constructor', 'toString'])).toBe('yoga'); // inherited object keys are not specialties
   });
   it('only points at clips that exist in public/videos/guardians', () => {
     for (const s of ['Yoga', 'Fitness', 'Nutrition', 'Wellness', 'Breathwork', 'Astrology', 'Sleep']) {

@@ -27,6 +27,7 @@ export async function captureWaitlistEmail(email: string): Promise<void> {
     const res = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-ed0fe4c2/email-waitlist`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${publicAnonKey}` },
+      keepalive: true, // finishes even if the visitor leaves the page while checkout starts
       body: JSON.stringify({ email, name: email.split('@')[0], referralCode: ReferralUtils.getPendingReferral() }),
     });
     if (res.ok) { try { localStorage.setItem('healthscan_user_email', email); } catch { /* storage is optional */ } }

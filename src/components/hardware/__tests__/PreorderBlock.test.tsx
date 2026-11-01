@@ -10,6 +10,8 @@ vi.mock('../../../utils/hardwarePreorder', () => ({
 }));
 import { createPreorderIntent, confirmPreorder, fetchBackerCount } from '../../../utils/hardwarePreorder';
 import { PreorderBlock } from '../PreorderBlock';
+import { PRODUCTS } from '../copy';
+import type { ProductKey } from '../copy';
 
 const intent = createPreorderIntent as unknown as ReturnType<typeof vi.fn>;
 const confirm = confirmPreorder as unknown as ReturnType<typeof vi.fn>;
@@ -31,7 +33,7 @@ async function toPayment(email = 'qa@example.com') {
 beforeEach(() => {
   handle = { confirm: vi.fn().mockResolvedValue(undefined), destroy: vi.fn() };
   mount = vi.fn().mockResolvedValue(handle);
-  intent.mockReset().mockResolvedValue({ purchase_id: 'p1', client_secret: 'cs', amount_cents: 20900, currency: 'usd' });
+  intent.mockReset().mockImplementation(async (product: ProductKey) => ({ purchase_id: 'p1', client_secret: 'cs', amount_cents: PRODUCTS[product].priceCents, currency: 'usd' }));
   confirm.mockReset().mockResolvedValue({ status: 'paid' });
   count.mockReset().mockResolvedValue({ paid: 10, goal: 250, deadline: 'd', status: 'open' });
 });
@@ -225,6 +227,15 @@ describe('PreorderBlock', () => {
     expect(intent).toHaveBeenCalledTimes(1);
     release({ purchase_id: 'p1', client_secret: 'cs', amount_cents: 20900, currency: 'usd' });
     expect(await screen.findByRole('button', { name: 'Pay $209' })).toBeTruthy();
+  });
+
+  it('does not start payment when the server price differs from the price shown', async () => {
+    intent.mockResolvedValue({ purchase_id: 'p1', client_secret: 'cs', amount_cents: 14900, currency: 'usd' });
+    setup();
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'qa@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to payment' }));
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Pay / })).toBeNull();
   });
 
   describe('closed batch and deadline', () => {
