@@ -1587,7 +1587,9 @@ function HeroBackdrop({ heroMedia: chosenMedia, backgroundIsVideo = false, clips
   return <>
     {/* No background of their own: the clip for their Guardian type, else the produce footage. */}
     {!clips.length && !heroMedia && (typeVideo
-      ? <TypeVideo key={typeVideo} src={typeVideo} greyscale={greyscale} />
+      ? (/\.mp4$/i.test(typeVideo)
+        ? <TypeVideo key={typeVideo} src={typeVideo} greyscale={greyscale} />
+        : <img key={typeVideo} src={typeVideo} alt="" aria-hidden="true" data-type-still style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />)
       : <ProduceVideoBackdrop greyscale={greyscale} />)}
     {clips.length > 0 && <YouTubeClipBackground clips={clips} greyscale={greyscale} />}
     {!clips.length && heroMedia && !backgroundIsVideo && <img src={heroMedia} alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />}
