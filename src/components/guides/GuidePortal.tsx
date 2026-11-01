@@ -21,6 +21,8 @@ import { createMonoLogo, isMonoLogoUrl, logoImageStyle } from '../../utils/brand
 import { PullFromLink } from './PullFromLink';
 import { eventDay } from '../../utils/eventDates';
 import { LogoBadge } from './LogoBadge';
+import { EventsCalendar } from './EventsCalendar';
+import { eventsInRange, type DayRange } from '../../utils/eventCalendar';
 import { DEFAULT_SECTION_ORDER, PAGE_SECTIONS, moveSection, orderPageSections, serializeSectionOrder, type PageSectionKey } from '../../utils/pageSections';
 import { BrandScopeBar, useBrandScope } from './BrandScopeBar';
 import { brandSiteProfile, brandSitePath, brandSlugFromPath, savedBrandId, savedBrandMoves, siteOwns } from '../../utils/brandSite';
@@ -1964,6 +1966,11 @@ function GuardianEvents({ profile, events, sourceUrl, canEditSource, onImported,
   const [message, setMessage] = useState('');
   useEffect(() => setDraftSourceUrl(sourceUrl), [sourceUrl]);
   const upcoming = events.filter((event) => new Date(event.end_at || event.start_at).getTime() >= Date.now() - 86400000);
+  const [range, setRange] = useState<DayRange | null>(null);
+  const fitting = eventsInRange(upcoming, range);
+  // Different events (another brand's page, or a fresh import) start without dates chosen from the old ones.
+  const eventSet = upcoming.map((event) => event.id).join(',');
+  useEffect(() => { setRange(null); }, [eventSet]);
   if (!upcoming.length && !canEditSource && !sourceUrl) return null;
   async function pull() {
     const requestedSource = canEditSource ? draftSourceUrl.trim() : undefined;
@@ -1988,7 +1995,12 @@ function GuardianEvents({ profile, events, sourceUrl, canEditSource, onImported,
           {message && <span role={state === 'error' ? 'alert' : 'status'} style={{ gridColumn: '1 / -1', color: state === 'error' ? '#FFB4A8' : '#C7D8A3', fontSize: 11, marginTop: 8 }}>{message}</span>}
         </div>}
       </div>
-      {upcoming.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,320px),1fr))', gap: 16 }}>{upcoming.map((event) => <EventCommerceCard key={event.id} profile={profile} event={event} />)}</div> : <div style={{ border: '1px dashed rgba(242,239,231,.3)', padding: 32, color: '#B8B6AF' }}>No upcoming events yet. Add one in Guardian workspace or pull from the official events page.</div>}
+      {upcoming.length ? <>
+        <div style={{ marginBottom: 28 }}><EventsCalendar events={upcoming} range={range} onChange={setRange} /></div>
+        <p data-events-count role="status" style={{ color: '#9FA897', fontSize: 12, margin: '0 0 14px' }}>{range ? `${fitting.length} of ${upcoming.length} events fit your dates` : `${upcoming.length} upcoming`}</p>
+        {fitting.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,320px),1fr))', gap: 16 }}>{fitting.map((event) => <EventCommerceCard key={event.id} profile={profile} event={event} />)}</div>
+          : <p style={{ color: '#C7D8A3', fontSize: 14 }}>Nothing is on for those dates. Choose other days, or <button type="button" onClick={() => setRange(null)} style={{ border: 0, background: 'transparent', color: '#C7D8A3', padding: 0, font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>clear the dates</button>.</p>}
+      </> : <div style={{ border: '1px dashed rgba(242,239,231,.3)', padding: 32, color: '#B8B6AF' }}>No upcoming events yet. Add one in Guardian workspace or pull from the official events page.</div>}
     </div>
   </section>;
 }
