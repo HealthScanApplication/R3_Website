@@ -223,6 +223,9 @@ export interface GuideCommunityChannel {
   slug: string;
   description: string | null;
   sort_order?: number;
+  /** A members-only channel needs a paid purchase of `membership_offer_id` (the Guardian always has access). */
+  members_only?: boolean;
+  membership_offer_id?: string | null;
   created_at: string;
 }
 
@@ -247,6 +250,10 @@ export interface GuideCommunityMessage {
   user_id: string;
   author_name: string;
   body: string;
+  kind?: 'message' | 'question' | 'answer';
+  parent_id?: string | null;
+  pinned?: boolean;
+  hidden?: boolean;
   created_at: string;
 }
 
@@ -678,7 +685,7 @@ export async function ensureDefaultGuideCommunityChannels(guideId: string): Prom
     { guide_id: guideId, offer_id: null, name: 'General', slug: 'general', description: 'Introductions, updates and conversations for the whole community.', sort_order: 10 },
     { guide_id: guideId, offer_id: null, name: 'Protocols', slug: 'protocols', description: 'Questions and discussion about the Guardian’s published protocols.', sort_order: 20 },
     { guide_id: guideId, offer_id: null, name: 'Daily details', slug: 'daily-details', description: 'Practical details, progress notes and everyday implementation.', sort_order: 30 },
-    { guide_id: guideId, offer_id: null, name: 'Questions & answers', slug: 'questions-answers', description: 'Sourced questions and answers from the Guardian.', sort_order: 40 },
+    { guide_id: guideId, offer_id: null, name: 'Questions & answers', slug: 'questions-answers', description: 'Sourced questions and answers from the Guardian.', sort_order: 40, members_only: true },
   ];
   const { error } = await db().from('guide_community_channels').upsert(defaults, { onConflict: 'guide_id,slug', ignoreDuplicates: true });
   if (error) throw error;
@@ -730,10 +737,61 @@ export async function listGuideCommunityMessages(channelId: string): Promise<Gui
   return (data || []) as GuideCommunityMessage[];
 }
 
-export async function postGuideCommunityMessage(channelId: string, userId: string, authorName: string, body: string): Promise<GuideCommunityMessage> {
-  const { data, error } = await db().from('guide_community_messages').insert({ channel_id: channelId, user_id: userId, author_name: authorName.trim().slice(0, 80) || 'Member', body: body.trim() }).select().single();
+export async function postGuideCommunityMessage(channelId: string, userId: string, authorName: string, body: string, options: { kind?: 'message' | 'question' | 'answer'; parentId?: string | null } = {}): Promise<GuideCommunityMessage> {
+  const row: Record<string, unknown> = { channel_id: channelId, user_id: userId, author_name: authorName.trim().slice(0, 80) || 'Member', body: body.trim() };
+  if (options.kind && options.kind !== 'message') row.kind = options.kind;
+  if (options.parentId) row.parent_id = options.parentId;
+  const { data, error } = await db().from('guide_community_messages').insert(row).select().single();
   if (error) throw error;
   return data as GuideCommunityMessage;
+}
+
+/** The Guardian pins or hides a forum post. */
+export async function moderateGuideCommunityMessage(id: string, changes: { pinned?: boolean; hidden?: boolean }): Promise<void> {
+  const { error } = await db().from('guide_community_messages').update(changes).eq('id', id);
+  if (error) throw error;
+}
+
+/** Whether the signed-in user may join the channel: the Guardian, an open channel, or a paid purchase of its membership offer. */
+export async function hasGuideCommunityAccess(channel: Pick<GuideCommunityChannel, 'id' | 'members_only'>): Promise<boolean> {
+  if (!channel.members_only) return true;
+  const { data, error } = await db().rpc('has_guide_membership', { p_channel_id: channel.id });
+  if (error) throw error;
+  return data === true;
+}
+
+/** Link a members-only channel to the paid community offer that unlocks it. */
+export async function setGuideCommunityMembership(guideId: string, channelId: string, input: { members_only: boolean; membership_offer_id: string | null }): Promise<GuideCommunityChannel> {
+  const { data, error } = await db().from('guide_community_channels').update({ members_only: input.members_only, membership_offer_id: input.members_only ? input.membership_offer_id : null }).eq('guide_id', guideId).eq('id', channelId).select().single();
+  if (error) throw error;
+  return data as GuideCommunityChannel;
+}
+
+/** The published membership offer behind a members-only channel (readable by anyone, so a visitor sees what they would buy). */
+export async function getForumMembershipOffer(offerId: string): Promise<GuideOffer | null> {
+  const { data, error } = await db().from('guide_offers').select('*').eq('id', offerId).eq('status', 'published').maybeSingle();
+  if (error) throw error;
+  return data as GuideOffer | null;
+}
+
+export interface GuideForumTeaser {
+  channelSlug: string;
+  membersOnly: boolean;
+  membershipOffer: Pick<GuideOffer, 'id' | 'title' | 'price_cents' | 'currency'> | null;
+  questions: GuideCommunityQuestion[];
+}
+
+/** What a visitor may see of a Guardian's forum before joining: published sourced answers and the membership on offer. */
+export async function getGuideForumTeaser(guideId: string): Promise<GuideForumTeaser | null> {
+  const { data: channel, error } = await db().from('guide_community_channels').select('*').eq('guide_id', guideId).eq('slug', 'questions-answers').maybeSingle();
+  if (error) throw error;
+  if (!channel) return null;
+  const [questions, offer] = await Promise.all([
+    db().from('guide_community_questions').select('*').eq('guide_id', guideId).eq('status', 'published').order('sort_order').order('created_at').limit(3),
+    channel.membership_offer_id ? db().from('guide_offers').select('id,title,price_cents,currency').eq('id', channel.membership_offer_id).eq('status', 'published').maybeSingle() : Promise.resolve({ data: null, error: null }),
+  ]);
+  if (questions.error) throw questions.error;
+  return { channelSlug: channel.slug, membersOnly: Boolean(channel.members_only), membershipOffer: (offer.data as GuideForumTeaser['membershipOffer']) || null, questions: (questions.data || []) as GuideCommunityQuestion[] };
 }
 
 type GuideOfferInput = Pick<GuideOffer, 'kind' | 'title' | 'description' | 'price_cents' | 'affiliate_url' | 'access_model' | 'file_path' | 'booking_url'> & Partial<Pick<GuideOffer, 'currency' | 'status'>>;
