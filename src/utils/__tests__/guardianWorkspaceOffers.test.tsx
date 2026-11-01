@@ -13,7 +13,7 @@ afterEach(cleanup);
 
 const offer = (id: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, kind: 'protocol', access_model: 'free', status: 'draft', price_cents: 0, currency: 'GBP', description: 'A short description.', cover_url: null, ...extra }) as any;
 const related = { leads: [], protocols: [], ramps: [], offers: [offer('o1', '21-day sleep reset', { access_model: 'paid', price_cents: 2900 }), offer('o2', '7-day menopause sleep challenge')] };
-const view = (onOfferDeleted = vi.fn()) => render(<StepRelated step={4} guardianSlug="john-ferreira" displayName="John Ferreira" related={related} userId="owner" onOfferDeleted={onOfferDeleted} />);
+const view = (onOfferDeleted = vi.fn()) => render(<StepRelated step={5} guardianSlug="john-ferreira" displayName="John Ferreira" related={related} userId="owner" onOfferDeleted={onOfferDeleted} />);
 
 describe('your offers in the workspace', () => {
   it('shows each offer as the same card as a Protocol, with Edit and Delete', () => {
@@ -72,7 +72,7 @@ describe('protocols, audiences and sites under each setup step', () => {
 
   it('lists every site under Site, with All / Profile / Offer path tabs and a brand filter', () => {
     const brands = [{ id: 'personal', name: 'John Ferreira', kind: 'personal' as const, logo: null }, { id: 'b2', name: 'Calm Co', kind: 'business' as const, logo: null }];
-    render(<StepRelated step={5} guardianSlug="john-ferreira" displayName="John Ferreira" related={{ leads: [], offers: [], protocols: [], ramps: [ramp('better-sleep', 'Better sleep')] }} brands={brands} activeBrandId="personal" />);
+    render(<StepRelated step={6} guardianSlug="john-ferreira" displayName="John Ferreira" related={{ leads: [], offers: [], protocols: [], ramps: [ramp('better-sleep', 'Better sleep')] }} brands={brands} activeBrandId="personal" />);
     const section = screen.getByRole('region', { name: 'Your sites' });
     expect(within(section).getByText(/In your workspace · Your sites · 3/)).toBeTruthy();
     expect(within(section).getByRole('group', { name: 'Filter sites by brand' })).toBeTruthy();

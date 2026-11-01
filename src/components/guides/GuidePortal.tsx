@@ -12,6 +12,7 @@ import { CombineProtocols, DietBuilder, FitnessBuilder } from './GuardianBuilder
 import { ProtocolCard, ProtocolCardGrid, ProtocolOutputTags, clipCopy } from './ProtocolCard';
 import { OfferProtocolItems } from './OfferProtocolItems';
 import { ProtocolRemovalDialog, type ProtocolRemoval } from './ProtocolRemoval';
+import type { GuideProduct } from '../../utils/guidePortal';
 import { PROTOCOL_THEMES, completeProtocolTags, daysLabel, protocolTags, protocolTheme, protocolWhen } from '../../utils/protocolTags';
 import { defaultAvatarKeyFor } from '../../utils/memberAvatar';
 import { PhotoDropzone } from '../PhotoDropzone';
@@ -133,9 +134,9 @@ function ExpertiseTags({ tags, color = '#667245', compact = false }: { tags: str
 
 type Tab = 'home' | 'profile' | 'events' | 'library' | 'leads' | 'community' | 'value_ramps' | 'offer_builder' | 'products' | 'recipes' | 'diet' | 'diet_protocols' | 'fitness' | 'activities' | 'cooking' | 'equipment' | 'ingredients' | 'routines' | 'hygiene' | 'hygiene_protocols' | 'hygiene_activities' | 'beauty' | 'beauty_protocols' | 'beauty_activities' | 'wellness' | 'wellness_protocols' | 'wellness_activities' | 'longevity' | 'longevity_protocols' | 'detox' | 'detox_protocols' | 'content' | 'protocols' | 'admin';
 const WORKSPACE_TABS: readonly Tab[] = ['home', 'profile', 'events', 'library', 'leads', 'community', 'value_ramps', 'offer_builder', 'products', 'recipes', 'diet', 'diet_protocols', 'fitness', 'activities', 'cooking', 'equipment', 'ingredients', 'routines', 'hygiene', 'hygiene_protocols', 'hygiene_activities', 'beauty', 'beauty_protocols', 'beauty_activities', 'wellness', 'wellness_protocols', 'wellness_activities', 'longevity', 'longevity_protocols', 'detox', 'detox_protocols', 'content', 'protocols', 'admin'];
-// 0 is the Get started page a new Guardian meets first; 1–5 are the setup steps (Profile … Site).
-const SETUP_STEPS = [0, 1, 2, 3, 4, 5] as const;
-const SETUP_STAGE_ICONS = [FileText, HeartPulse, Users, Package, Blocks, Clapperboard] as const;
+// 0 is the Get started page a new Guardian meets first; 1–6 are the setup steps (Profile, Guidance, Audience, Products, Offers, Site).
+const SETUP_STEPS = [0, 1, 2, 3, 4, 5, 6] as const;
+const SETUP_STAGE_ICONS = [FileText, HeartPulse, Users, ShoppingBag, Package, Blocks, Clapperboard] as const;
 function SetupStageIcon({ stage, size = 15 }: { stage: number; size?: number }) {
   const Icon = SETUP_STAGE_ICONS[Math.max(0, Math.min(SETUP_STAGE_ICONS.length - 1, stage - 1))];
   return <Icon aria-hidden="true" size={size} strokeWidth={1.7} style={{ flex: '0 0 auto' }} />;
@@ -2097,7 +2098,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   </div>;
 }
 
-const GET_STARTED_STEPS = ['Profile', 'Guidance', 'Audience', 'Offers', 'Site'] as const;
+const GET_STARTED_STEPS = ['Profile', 'Guidance', 'Audience', 'Products', 'Offers', 'Site'] as const;
 
 /**
  * What a new Guardian meets before the profile step: what the role is, in three plain promises, and the five steps ahead.
@@ -2120,8 +2121,8 @@ export function GuardianGetStarted({ onStart }: { onStart: () => void }) {
         <p style={{ margin: '10px 0 0', color: muted, fontSize: 14, lineHeight: 1.65 }}>{copy}</p>
       </li>)}
     </ul>
-    <section aria-label="The five steps" style={{ marginTop: 'clamp(30px,5vw,52px)' }}>
-      <span style={label}>Five short steps</span>
+    <section aria-label="The six steps" style={{ marginTop: 'clamp(30px,5vw,52px)' }}>
+      <span style={label}>Six short steps</span>
       <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexWrap: 'wrap', gap: '10px 28px' }}>
         {GET_STARTED_STEPS.map((name, index) => <li key={name} style={{ display: 'flex', alignItems: 'baseline', gap: 9, fontFamily: sans, fontSize: 12, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}><span style={{ color: acid }}>0{index + 1}</span>{name}</li>)}
       </ol>
@@ -2273,14 +2274,15 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     }).catch(() => setBrandsLoaded('failed'));
   }, [userId]);
   // Existing items shown under each step ("In your workspace").
-  const [related, setRelated] = useState<{ leads: GuideLead[]; offers: GuideOffer[]; ramps: GuideValueRamp[]; protocols: AdminProtocol[] }>({ leads: [], offers: [], ramps: [], protocols: [] });
+  const [related, setRelated] = useState<{ leads: GuideLead[]; offers: GuideOffer[]; ramps: GuideValueRamp[]; protocols: AdminProtocol[]; products: GuideProduct[] }>({ leads: [], offers: [], ramps: [], protocols: [], products: [] });
   useEffect(() => {
     Promise.all([
       listGuideLeads(userId).catch(() => []),
       listGuideOffers(userId).catch(() => []),
       listGuideValueRamps(userId).catch(() => []),
       listProtocols(accessToken, userId).catch(() => []),
-    ]).then(([leads, offers, ramps, protocols]) => setRelated({ leads, offers, ramps, protocols }));
+      listGuideProducts(userId).catch(() => [] as GuideProduct[]),
+    ]).then(([leads, offers, ramps, protocols, products]) => setRelated({ leads, offers, ramps, protocols, products }));
   }, [userId, accessToken]);
   const [offerPlanStage, setOfferPlanStage] = useState(0);
   // Paid offers are built one at a time: the next appears when the Guardian asks for it (progressive disclosure under Step 3).
@@ -2936,8 +2938,9 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     { n: 1, label: 'Profile', title: 'Start with what you know.', copy: 'Add your name and any public profile you want us to learn from.', image: '/images/guides/guide-plate.png' },
     { n: 2, label: 'Guidance', title: 'Where can you help?', copy: 'Choose the areas where your experience is most useful.', image: '/images/guides/build-plate.png' },
     { n: 3, label: 'Audience', title: 'Who do you help?', copy: 'Tell us who you work with and the problems you help solve.', image: '/images/guides/lead-plate.png' },
-    { n: 4, label: 'Offers', title: 'Build your offers.', copy: 'Plan the journey, then build every free and paid offer it contains.', image: '/images/guides/offer-plate.png' },
-    { n: 5, label: 'Site', title: 'Build your site.', copy: 'Preview the customer journey, then publish.', image: '/images/guides/guide-plate.png' },
+    { n: 4, label: 'Products', title: 'What do you recommend?', copy: 'Your products, listed by value, so your offers can point to them.', image: '/images/guides/build-plate.png' },
+    { n: 5, label: 'Offers', title: 'Build your offers.', copy: 'Plan the journey, then build every free and paid offer it contains.', image: '/images/guides/offer-plate.png' },
+    { n: 6, label: 'Site', title: 'Build your site.', copy: 'Preview the customer journey, then publish.', image: '/images/guides/guide-plate.png' },
   ];
   const activeStep = steps[Math.max(step, 1) - 1];
   const rampAudienceOptions = audience.length ? audience : ['Everyone'];
@@ -2964,7 +2967,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   };
   // The entry offer is chosen for them (the recommended one for this use case); there is no picker. Stage 0 only ever existed to choose it.
   useEffect(() => {
-    if (step !== 4 || offerPlanStage !== 2 || !useCaseReady || freeOfferSetupStage !== 0) return;
+    if (step !== 5 || offerPlanStage !== 2 || !useCaseReady || freeOfferSetupStage !== 0) return;
     const kind = suggestedFreeOffer.kind;
     setFreeOfferType(kind); setFreeDelivery(kind === 'routine' ? ['Downloadable PDF', 'Interactive Protocol'] : [suggestedDelivery(kind)]); setFreeAudienceValue(freeValueSuggestions[kind]); setLeadMagnetTitle(suggestedFreeOffer.title); setFreeOfferSetupStage(1);
   }, [step, offerPlanStage, useCaseReady, freeOfferSetupStage, suggestedFreeOffer.kind, suggestedFreeOffer.title]);
@@ -3229,8 +3232,8 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         </aside>
       </div>
       <div className="g-main-scroll" style={{ minWidth: 0, padding: '0 clamp(20px,6vw,90px) 30px' }}>
-    <div aria-label="Guardian setup progress" style={{ maxWidth: 1100, margin: '42px auto 0', display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', borderTop: `1px solid ${line}`, borderBottom: `1px solid ${line}` }}>
-      {steps.map((item) => <button type="button" key={item.n} onClick={() => { setSummaryView(null); setStep(item.n); }} aria-current={!summaryView && step === item.n ? 'step' : undefined} style={{ height: 58, border: 0, borderRight: item.n < 5 ? `1px solid ${line}` : 0, background: !summaryView && step === item.n ? ink : 'transparent', color: !summaryView && step === item.n ? black : item.n < step ? acid : muted, fontFamily: sans, cursor: 'pointer', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9 }}><SetupStageIcon stage={item.n} size={16} /><span>{String(item.n).padStart(2, '0')} · {item.label}</span></button>)}
+    <div aria-label="Guardian setup progress" style={{ maxWidth: 1100, margin: '42px auto 0', display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', borderTop: `1px solid ${line}`, borderBottom: `1px solid ${line}` }}>
+      {steps.map((item) => <button type="button" key={item.n} onClick={() => { setSummaryView(null); setStep(item.n); }} aria-current={!summaryView && step === item.n ? 'step' : undefined} style={{ height: 58, border: 0, borderRight: item.n < 6 ? `1px solid ${line}` : 0, background: !summaryView && step === item.n ? ink : 'transparent', color: !summaryView && step === item.n ? black : item.n < step ? acid : muted, fontFamily: sans, cursor: 'pointer', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9 }}><SetupStageIcon stage={item.n} size={16} /><span>{String(item.n).padStart(2, '0')} · {item.label}</span></button>)}
     </div>
     {summaryView && <section style={{ maxWidth: 1100, margin: '52px auto', border: `1px solid ${line}`, background: panel }}>
       <div style={{ padding: 22, borderBottom: `1px solid ${line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
@@ -3282,16 +3285,16 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           onPreview={(site) => { setInventoryMenu(null); setSummaryView(null); setStep(5); window.setTimeout(() => document.getElementById(site.previewId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} />
       </div>}
     </section>}
-    {!summaryView && <form onSubmit={submit} style={{ maxWidth: step === 5 ? 1440 : 1100 /* step 05 shows two side-by-side previews */, margin: '52px auto 36px' /* no min-height: the workspace list under each step peeks into the first screen */ }}>
+    {!summaryView && <form onSubmit={submit} style={{ maxWidth: step === 6 ? 1440 : 1100 /* step 06 shows two side-by-side previews */, margin: '52px auto 36px' /* no min-height: the workspace list under each step peeks into the first screen */ }}>
       <div style={{ display: 'block' }}>
         <aside style={{ display: 'none' }}>
           <div style={{ ...label, color: acid }}>Step {step} · {activeStep.label}</div>
           <img src={activeStepImage} alt="" style={{ width: '100%', maxWidth: 220, height: 220, objectFit: 'contain', filter: 'grayscale(1) contrast(.92) brightness(.8)', opacity: .92, margin: '12px 0 18px' }} />
           <p style={{ color: muted, fontSize: 12, lineHeight: 1.65, maxWidth: 220, margin: 0 }}>{activeStep.copy}</p>
         </aside>
-        <section style={{ width: '100%', maxWidth: step === 5 ? 1440 : 920, minWidth: 0, margin: '0 auto' }}>
+        <section style={{ width: '100%', maxWidth: step === 6 ? 1440 : 920, minWidth: 0, margin: '0 auto' }}>
           <header style={{ maxWidth: 720, margin: '0 auto 44px', textAlign: 'center' }}>
-            <div style={{ ...label, color: acid }}>Guardian setup · {step} of 5</div>
+            <div style={{ ...label, color: acid }}>Guardian setup · {step} of 6</div>
             <img src={activeStepImage} alt="" style={{ display: 'block', width: 138, height: 138, objectFit: 'contain', filter: 'grayscale(1) contrast(.92) brightness(.86)', margin: '18px auto 14px' }} />
             <h1 style={{ color: ink, fontFamily: serif, fontSize: 'clamp(44px,7vw,76px)', fontWeight: 300, lineHeight: .98, margin: 0 }}>{perspectiveTitle}</h1>
             <p style={{ color: muted, fontSize: 14, lineHeight: 1.6, margin: '14px auto 0', maxWidth: 600 }}>{activeStep.copy}</p>
@@ -3400,7 +3403,15 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         </div>}
       </>}
 
-      {step === 4 && <>
+      {step === 4 && <div data-products-step>
+        <p style={{ color: muted, fontSize: 12, lineHeight: 1.6, margin: '0 0 16px' }}>Everything you recommend or sell, highest value first. Your offers can point to these, and visitors see the visible ones on your site.</p>
+        {related.products.length
+          ? <ProtocolCardGrid>{valueSortedProducts(related.products).map((product, index) => <ProtocolCard key={product.id} badge={product.price_cents ? formatMoney(product.price_cents / 100, product.currency || 'GBP') : undefined} kicker={`#${String(index + 1).padStart(2, '0')} by value`} title={product.title} imageUrl={product.image_url} copy={clipCopy(product.description || '')} by={displayName} cta="Manage products" onClick={() => { window.location.href = '/guardians/workspace?tab=products'; }} owned />)}</ProtocolCardGrid>
+          : <Empty title="No products yet" copy="Add the products you recommend, from your own shop or ones you earn commission on. They appear here from highest value down." action={<a href="/guardians/workspace?tab=products" style={{ ...btn, textDecoration: 'none' }}>Add products</a>} />}
+        <div style={{ marginTop: 14 }}><a href="/guardians/workspace?tab=products" style={{ color: muted, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', textDecoration: 'none' }}>Add or edit products →</a></div>
+      </div>}
+
+      {step === 5 && <>
         <div style={{ border: `1px solid ${line}`, background: panel, padding: 16, marginBottom: 28 }}>
           {(() => { const stageCopy = [
             { title: 'Choose a business goal', copy: 'Decide whether this offer system should convert your current audience or help you build a larger one.' },
@@ -3594,7 +3605,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         </>}
       </>}
 
-      {step === 5 && <>
+      {step === 6 && <>
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginBottom: 14 }}><span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Preview on</span><DeviceToggle value={previewDevice} onChange={setPreviewDevice} /></div>
         <FunnelStage number="01" eyebrow="Site 01 · Your profile" title={`${displayName || 'Your'}${displayName ? '’s' : ''} story.`} copy="Your profile site: who you are, and every published offer path.">
           <SitePublishBar site="Profile site" status={profileSiteState} action={sitePublish} busy={busy} error={error} liveHref={`/guardians/${guardianSlug}`} />
@@ -3863,9 +3874,9 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
 
       {error && <p style={{ color: '#F0A7A7', fontSize: 12 }}>{error}</p>}
       <div aria-label="Save this step" style={{ display: 'flex', justifyContent: 'center', marginTop: 26 }}><SaveButton state={saveState} onSave={() => saveProgress()} label="Save progress" /></div>
-      {step !== 3 && step !== 5 && (step !== 4 || offerPlanStage === 2) && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', alignItems: 'center', gap: 12, marginTop: 34 }}>
-        {step > 1 ? <button type="button" onClick={() => { setError(''); if (step === 3) setAudienceSetupStage(1); else if (step === 4) setOfferPlanStage(1); else setStep((current) => current - 1); }} style={{ ...btn, width: '100%', background: 'transparent', color: ink }}>← Back</button> : <span />}
-        {(step !== 4 || offerPlanStage === 2) && (step !== 5 || freeOfferSetupStage === 2) ? step < 5 ? <button type="button" onClick={step === 1 && profileStage === 0 ? goToBrandStage : continueSetup} disabled={importing || (step === 4 && offerPlanStage === 2 && !useCaseReady)} style={{ ...btn, width: '100%' }}>{importing ? <><Loader2 size={14} className="animate-spin" /> Reading profiles</> : <>{step === 1 && profileStage === 0 ? 'Continue to brand' : 'Continue'} <ArrowRight size={14} /></>}</button> : <button disabled={busy} style={{ ...btn, width: '100%' }}>{busy ? 'Creating your Guardian' : 'Create my Guardian profile'} <ArrowRight size={14} /></button> : <span />}
+      {step !== 3 && step !== 6 && (step !== 5 || offerPlanStage === 2) && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', alignItems: 'center', gap: 12, marginTop: 34 }}>
+        {step > 1 ? <button type="button" onClick={() => { setError(''); if (step === 3) setAudienceSetupStage(1); else if (step === 5) setOfferPlanStage(1); else setStep((current) => current - 1); }} style={{ ...btn, width: '100%', background: 'transparent', color: ink }}>← Back</button> : <span />}
+        {(step !== 5 || offerPlanStage === 2) && (step !== 6 || freeOfferSetupStage === 2) ? step < 6 ? <button type="button" onClick={step === 1 && profileStage === 0 ? goToBrandStage : continueSetup} disabled={importing || (step === 5 && offerPlanStage === 2 && !useCaseReady)} style={{ ...btn, width: '100%' }}>{importing ? <><Loader2 size={14} className="animate-spin" /> Reading profiles</> : <>{step === 1 && profileStage === 0 ? 'Continue to brand' : 'Continue'} <ArrowRight size={14} /></>}</button> : <button disabled={busy} style={{ ...btn, width: '100%' }}>{busy ? 'Creating your Guardian' : 'Create my Guardian profile'} <ArrowRight size={14} /></button> : <span />}
       </div>}
         </section>
       </div>
@@ -3894,7 +3905,10 @@ function WideCard({ row, onOpen }: { row: RelatedRow; onOpen: () => void }) {
 }
 
 /** Below the fold of each setup step: the Guardian's existing items for that stage, as wide cards two to a row. */
-export function StepRelated({ step, guardianSlug, displayName, related, audience = '', brands = [], activeBrandId = 'personal', profileStatus = null, userId, onOfferDeleted, audiences = [], onEditAudience, onRemoveAudience, accessToken, onProtocolRemoved }: { accessToken?: string; onProtocolRemoved?: (protocolId: string) => void; audiences?: Array<{ group: string; ages: string; stages: string[]; problems: string[] }>; onEditAudience?: (group: string) => void; onRemoveAudience?: (group: string) => void; userId?: string; onOfferDeleted?: (offerId: string) => void; audience?: string; profileStatus?: GuideProfile['status'] | null;  step: number; guardianSlug: string; displayName: string; related: { leads: GuideLead[]; offers: GuideOffer[]; ramps: GuideValueRamp[]; protocols: AdminProtocol[] }; brands?: RelatedBrand[]; activeBrandId?: string }) {
+/** Products by value: the dearest first, unpriced ones last. */
+const valueSortedProducts = (products: GuideProduct[]): GuideProduct[] => [...products].sort((a, b) => (b.price_cents || 0) - (a.price_cents || 0) || a.title.localeCompare(b.title));
+
+export function StepRelated({ step, guardianSlug, displayName, related, audience = '', brands = [], activeBrandId = 'personal', profileStatus = null, userId, onOfferDeleted, audiences = [], onEditAudience, onRemoveAudience, accessToken, onProtocolRemoved }: { accessToken?: string; onProtocolRemoved?: (protocolId: string) => void; audiences?: Array<{ group: string; ages: string; stages: string[]; problems: string[] }>; onEditAudience?: (group: string) => void; onRemoveAudience?: (group: string) => void; userId?: string; onOfferDeleted?: (offerId: string) => void; audience?: string; profileStatus?: GuideProfile['status'] | null;  step: number; guardianSlug: string; displayName: string; related: { leads: GuideLead[]; offers: GuideOffer[]; ramps: GuideValueRamp[]; protocols: AdminProtocol[]; products?: GuideProduct[] }; brands?: RelatedBrand[]; activeBrandId?: string }) {
   const [brandFilter, setBrandFilter] = useState<string>('all');
   const [siteKind, setSiteKind] = useState<'all' | 'profile' | 'offer'>('all');
   const [siteMenu, setSiteMenu] = useState<string | null>(null);
@@ -3913,12 +3927,12 @@ export function StepRelated({ step, guardianSlug, displayName, related, audience
     1: { title: 'Your sites', tab: 'value_ramps', rows: siteRows },
     2: { title: 'Your Protocols', tab: 'protocols', rows: related.protocols.map((protocol) => ({ key: protocol.id, title: protocol.name, meta: `${protocol.total_days || 1} days · ${protocol.is_public ? 'Published' : 'Draft'}`, image: protocol.image_url, href: '/guardians/workspace?tab=protocols' })) },
     3: { title: audiences.length ? 'Your audiences' : 'Your leads', tab: audiences.length ? 'value_ramps' : 'leads', rows: audiences.length ? audiences.map((a) => ({ key: a.group, title: a.group, meta: a.ages, href: '/guardians/workspace?step=3' })) : related.leads.map((lead) => ({ key: lead.id, title: lead.name, meta: `${lead.email} · ${lead.goal || 'No goal yet'} · ${lead.stage}`, href: '/guardians/workspace?tab=leads' })) },
-    4: { title: 'Your offers', tab: 'offer_builder', rows: related.offers.map((offer) => ({ key: offer.id, title: offer.title, meta: [APP_PLAN_KINDS.includes(offer.kind) ? 'PDF + ROUTINE³' : OTHER_FORMATS[offer.kind] || offer.kind.replaceAll('_', ' '), offer.access_model === 'free' ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid', audience, offer.status].filter(Boolean).join(' · '), image: offerImage(offer), href: '/guardians/workspace?tab=offer_builder' })) },
-    5: { title: 'Your sites', tab: 'value_ramps', rows: siteRows },
+    5: { title: 'Your offers', tab: 'offer_builder', rows: related.offers.map((offer) => ({ key: offer.id, title: offer.title, meta: [APP_PLAN_KINDS.includes(offer.kind) ? 'PDF + ROUTINE³' : OTHER_FORMATS[offer.kind] || offer.kind.replaceAll('_', ' '), offer.access_model === 'free' ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid', audience, offer.status].filter(Boolean).join(' · '), image: offerImage(offer), href: '/guardians/workspace?tab=offer_builder' })) },
+    6: { title: 'Your sites', tab: 'value_ramps', rows: siteRows },
   };
   const section = sections[step];
   if (!section) return null;
-  const siteStep = step === 1 || step === 5;
+  const siteStep = step === 1 || step === 6;
   const filterable = siteStep && brandList.length > 1;
   const kindTabs = siteStep && section.rows.some((row) => row.kind === 'profile') && section.rows.some((row) => row.kind === 'offer');
   const filterIds = ['all', ...[...brandList].sort((a, b) => Number(b.id === activeBrandId) - Number(a.id === activeBrandId)).map((brand) => brand.id)];
@@ -3951,7 +3965,7 @@ export function StepRelated({ step, guardianSlug, displayName, related, audience
         plate={art ? <span aria-hidden="true" style={{ display: 'block', width: 116 * art.cellAspect, height: 116, backgroundImage: `url(${art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${art.cols * 100}% ${art.rows * 100}%`, backgroundPosition: `${art.cols === 1 ? 0 : (art.index % art.cols) * 100 / (art.cols - 1)}% ${art.rows === 1 ? 0 : Math.floor(art.index / art.cols) * 100 / (art.rows - 1)}%` }} /> : undefined}
         by={displayName} owned inert onEdit={onEditAudience ? () => onEditAudience(a.group) : undefined}
         onDelete={onRemoveAudience ? () => { if (window.confirm(`Remove ${name} from the people you help?`)) onRemoveAudience(a.group); } : undefined} />;
-    })}</ProtocolCardGrid> : step === 4 && related.offers.length ? <ProtocolCardGrid>{related.offers.slice(0, 8).map((offer) => {
+    })}</ProtocolCardGrid> : step === 5 && related.offers.length ? <ProtocolCardGrid>{related.offers.slice(0, 8).map((offer) => {
       const free = offer.access_model === 'free';
       return <ProductCard key={offer.id} kind={offer.kind} imageUrl={offer.cover_url}
         eyebrow={[audience || 'Everyone', offer.status === 'published' ? 'Published' : 'Draft'].join(' · ')}
@@ -3961,7 +3975,7 @@ export function StepRelated({ step, guardianSlug, displayName, related, audience
         owned visibility={offer.status === 'published' ? 'public' : 'private'}
         onEdit={() => open('/guardians/workspace?tab=offer_builder')()}
         onDelete={userId ? async () => { if (!window.confirm(`Delete ${offer.title}?`)) return; await deleteGuideOffer(userId, offer.id); onOfferDeleted?.(offer.id); } : undefined} />;
-    })}</ProtocolCardGrid> : rows.length && (step === 1 || step === 5) ? <SiteCardGrid
+    })}</ProtocolCardGrid> : rows.length && (step === 1 || step === 6) ? <SiteCardGrid
       minCardWidth={440}
       openMenu={siteMenu}
       onOpenMenu={setSiteMenu}
@@ -5273,7 +5287,7 @@ export function SiteProfileForm({ userId, profile, onProfile }: { userId: string
   </div>;
 }
 
-const GUARDIAN_STEP_LABELS = ['Profile', 'Guidance', 'Audience', 'Offers', 'Site', 'Content'];
+const GUARDIAN_STEP_LABELS = ['Profile', 'Guidance', 'Audience', 'Products', 'Offers', 'Site', 'Content'];
 /** Steps 1–5 are the setup flow; 06 opens the Content builder. */
 const guardianStepHref = (label: string, index: number) => (label === 'Content' ? '/guardians/workspace?tab=content' : `/guardians/workspace?step=${index + 1}`);
 

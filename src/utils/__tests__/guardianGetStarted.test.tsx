@@ -19,10 +19,10 @@ describe('the Get started page', () => {
     expect(screen.getByText(/booking link or ROUTINE³ Booking/)).toBeTruthy();
   });
 
-  it('previews the five steps in order', () => {
+  it('previews the six steps in order', () => {
     render(<GuardianGetStarted onStart={() => {}} />);
-    const items = within(screen.getByLabelText('The five steps')).getAllByRole('listitem').map((li) => li.textContent);
-    expect(items).toEqual(['01Profile', '02Guidance', '03Audience', '04Offers', '05Site']);
+    const items = within(screen.getByLabelText('The six steps')).getAllByRole('listitem').map((li) => li.textContent);
+    expect(items).toEqual(['01Profile', '02Guidance', '03Audience', '04Products', '05Offers', '06Site']);
   });
 
   it('promises nothing about money while payments are not live', () => {
