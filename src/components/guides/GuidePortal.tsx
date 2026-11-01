@@ -22,6 +22,7 @@ import { PullFromLink } from './PullFromLink';
 import { eventDay } from '../../utils/eventDates';
 import { LogoBadge } from './LogoBadge';
 import { EventsCalendar } from './EventsCalendar';
+import { guestsLabel, parseRetreatOptions, roomPrice } from '../../utils/retreatRooms';
 import { eventsInRange, type DayRange } from '../../utils/eventCalendar';
 import { DEFAULT_SECTION_ORDER, PAGE_SECTIONS, moveSection, orderPageSections, serializeSectionOrder, type PageSectionKey } from '../../utils/pageSections';
 import { BrandScopeBar, useBrandScope } from './BrandScopeBar';
@@ -1995,14 +1996,52 @@ function GuardianEvents({ profile, events, sourceUrl, canEditSource, onImported,
           {message && <span role={state === 'error' ? 'alert' : 'status'} style={{ gridColumn: '1 / -1', color: state === 'error' ? '#FFB4A8' : '#C7D8A3', fontSize: 11, marginTop: 8 }}>{message}</span>}
         </div>}
       </div>
-      {upcoming.length ? <>
-        <div style={{ marginBottom: 28 }}><EventsCalendar events={upcoming} range={range} onChange={setRange} /></div>
-        <p data-events-count role="status" style={{ color: '#9FA897', fontSize: 12, margin: '0 0 14px' }}>{range ? `${fitting.length} of ${upcoming.length} events fit your dates` : `${upcoming.length} upcoming`}</p>
-        {fitting.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,320px),1fr))', gap: 16 }}>{fitting.map((event) => <EventCommerceCard key={event.id} profile={profile} event={event} />)}</div>
-          : <p style={{ color: '#C7D8A3', fontSize: 14 }}>Nothing is on for those dates. Choose other days, or <button type="button" onClick={() => setRange(null)} style={{ border: 0, background: 'transparent', color: '#C7D8A3', padding: 0, font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>clear the dates</button>.</p>}
-      </> : <div style={{ border: '1px dashed rgba(242,239,231,.3)', padding: 32, color: '#B8B6AF' }}>No upcoming events yet. Add one in Guardian workspace or pull from the official events page.</div>}
+      {upcoming.length ? <div className="g-events-layout">
+        <style>{`.g-events-layout{display:grid;grid-template-columns:minmax(260px,300px) minmax(0,1fr);gap:36px;align-items:start}.g-events-calendar{position:sticky;top:84px}.g-events-stack{max-height:min(80vh,820px);overflow-y:auto;overscroll-behavior:contain;padding-right:6px}@media (max-width:860px){.g-events-layout{grid-template-columns:minmax(0,1fr)}.g-events-calendar{position:static}.g-events-stack{max-height:none;overflow:visible;padding-right:0}}`}</style>
+        <div className="g-events-calendar"><EventsCalendar events={upcoming} range={range} onChange={setRange} /></div>
+        <div style={{ minWidth: 0 }}>
+          <p data-events-count role="status" style={{ color: '#9FA897', fontSize: 12, margin: '0 0 14px' }}>{range ? `${fitting.length} of ${upcoming.length} events fit your dates` : `${upcoming.length} upcoming`}</p>
+          {fitting.length ? <div className="g-events-stack" role="region" aria-label="Events" tabIndex={0} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 16 }}>{fitting.map((event) => <EventCommerceCard key={event.id} profile={profile} event={event} />)}</div>
+            : <p style={{ color: '#C7D8A3', fontSize: 14 }}>Nothing is on for those dates. Choose other days, or <button type="button" onClick={() => setRange(null)} style={{ border: 0, background: 'transparent', color: '#C7D8A3', padding: 0, font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>clear the dates</button>.</p>}
+        </div>
+      </div> : <div style={{ border: '1px dashed rgba(242,239,231,.3)', padding: 32, color: '#B8B6AF' }}>No upcoming events yet. Add one in Guardian workspace or pull from the official events page.</div>}
     </div>
   </section>;
+}
+
+/**
+ * A brand's name on its tile: the name on one line and, in grey under it, a short descriptor. A brand can say its name ends in
+ * a descriptor (`name_suffix`: "Misty Mountain" then "Lifestyle Retreat"), or give one (`about_short`: "Tre Lune", "Natural products").
+ */
+function brandTileName(name: string, links: Record<string, string>): { name: string; title: string; blurb: string } {
+  const suffix = (links.name_suffix || '').trim();
+  const stripped = suffix && name.toLowerCase().endsWith(suffix.toLowerCase()) ? name.slice(0, name.length - suffix.length).trim() : '';
+  return stripped ? { name, title: stripped, blurb: suffix } : { name, title: name, blurb: (links.about_short || '').trim() };
+}
+
+/** A web address as people read it: no protocol, no closing slash ("www.mmh.com.au"). */
+const websiteLabel = (url: string) => url.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+
+function RetreatCard({ profile, retreat }: { profile: GuideProfile; retreat: GuideRetreat }) {
+  const rooms = parseRetreatOptions(retreat.options);
+  const [roomIndex, setRoomIndex] = useState(0);
+  const [guests, setGuests] = useState<number | null>(null);
+  const room = rooms[Math.min(roomIndex, rooms.length - 1)];
+  const price = room ? roomPrice(room, guests ?? room.prices[0].guests) : null;
+  const label = { color: '#66645F', fontSize: 9, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' } as const;
+  const select = { width: '100%', minHeight: 42, boxSizing: 'border-box', padding: '0 10px', border: '1px solid rgba(17,18,15,.3)', background: '#FFF', color: '#11120F', fontFamily: sans, fontSize: 13 } as const;
+  return <article data-retreat-card style={{ border: '1px solid rgba(17,18,15,.2)', background: '#F2EFE7', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <DestinationHeader profile={profile} place={retreat.location || 'Misty Mountain, Australia'} lines={[retreat.location, retreat.title]} kind="retreat" />
+    <div style={{ padding: 24, display: 'flex', flex: 1, flexDirection: 'column' }}><span style={{ color: '#667245', fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>{[retreat.duration_days && `${retreat.duration_days} days`, retreat.location || 'Retreat'].filter(Boolean).join(' · ')}</span><h3 style={{ fontFamily: serif, fontSize: 36, fontWeight: 300, lineHeight: 1.05, margin: '10px 0' }}>{retreat.title}</h3><p style={{ color: '#66645F', fontSize: 14, lineHeight: 1.55 }}>{retreat.description}</p>
+      {room && <div data-retreat-rooms style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
+        <label style={{ display: 'grid', gap: 5 }}><span style={label}>Room</span><select aria-label={`Room for ${retreat.title}`} value={roomIndex} onChange={(event) => { setRoomIndex(Number(event.target.value)); setGuests(null); }} style={select}>{rooms.map((option, index) => <option key={option.label} value={index}>{option.label}</option>)}</select></label>
+        <label style={{ display: 'grid', gap: 5 }}><span style={label}>Guests</span><select aria-label={`Guests for ${retreat.title}`} value={price!.guests} onChange={(event) => setGuests(Number(event.target.value))} style={select}>{room.prices.map((option) => <option key={option.guests} value={option.guests}>{guestsLabel(option.guests)}</option>)}</select></label>
+        {room.note && <p data-room-note style={{ gridColumn: '1 / -1', margin: 0, color: '#66645F', fontSize: 12, lineHeight: 1.5 }}>{room.note}</p>}
+      </div>}
+      <div style={{ marginTop: 'auto', paddingTop: 18, borderTop: '1px solid rgba(17,18,15,.18)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, ...(room ? { marginTop: 16 } : {}) }}>
+        {price && room ? <span data-room-price><strong style={{ fontFamily: serif, fontSize: 26, fontWeight: 300 }}>{formatMoney(price.cents / 100, room.currency)}</strong><span style={{ display: 'block', color: '#66645F', fontSize: 11 }}>{guestsLabel(price.guests)} · {room.label}</span></span> : <strong style={{ fontFamily: serif, fontSize: 23, fontWeight: 300 }}>{retreat.price_label || 'See package price'}</strong>}
+        <a href={retreat.booking_url || retreat.source_url} target="_blank" rel="noreferrer" style={publicCommerceCardCta}>Book <ArrowRight size={13} /></a></div></div>
+  </article>;
 }
 
 function GuardianRetreats({ profile, retreats }: { profile: GuideProfile; retreats: GuideRetreat[] }) {
@@ -2011,10 +2050,7 @@ function GuardianRetreats({ profile, retreats }: { profile: GuideProfile; retrea
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
       <span style={{ color: '#667245', fontSize: 11, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>Stay and learn · {retreats.length}</span>
       <h2 style={{ fontFamily: serif, fontSize: 'clamp(46px,7vw,82px)', fontWeight: 300, lineHeight: .96, letterSpacing: '-.04em', margin: '12px 0 34px' }}>Retreats.</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,360px),1fr))', gap: 18 }}>{retreats.map((retreat) => <article key={retreat.id} style={{ border: '1px solid rgba(17,18,15,.2)', background: '#F2EFE7', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <DestinationHeader profile={profile} place={retreat.location || 'Misty Mountain, Australia'} lines={[retreat.location, retreat.title]} kind="retreat" />
-        <div style={{ padding: 24, display: 'flex', flex: 1, flexDirection: 'column' }}><span style={{ color: '#667245', fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>{[retreat.duration_days && `${retreat.duration_days} days`, retreat.location || 'Retreat'].filter(Boolean).join(' · ')}</span><h3 style={{ fontFamily: serif, fontSize: 36, fontWeight: 300, lineHeight: 1.05, margin: '10px 0' }}>{retreat.title}</h3><p style={{ color: '#66645F', fontSize: 14, lineHeight: 1.55 }}>{retreat.description}</p><div style={{ marginTop: 'auto', paddingTop: 18, borderTop: '1px solid rgba(17,18,15,.18)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}><strong style={{ fontFamily: serif, fontSize: 23, fontWeight: 300 }}>{retreat.price_label || 'See package price'}</strong><a href={retreat.booking_url || retreat.source_url} target="_blank" rel="noreferrer" style={publicCommerceCardCta}>Book <ArrowRight size={13} /></a></div></div>
-      </article>)}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,360px),1fr))', gap: 18 }}>{retreats.map((retreat) => <RetreatCard key={retreat.id} profile={profile} retreat={retreat} />)}</div>
     </div>
   </section>;
 }
@@ -2147,8 +2183,8 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   const ownerName = ownerProfile?.display_name || profile.display_name;
   const ownerLinks = (ownerProfile?.social_links || {}) as Record<string, string>;
   const brandTiles = publicBrands.map((brand) => brand.kind === 'personal'
-    ? { key: brand.id || 'personal', name: ownerName, logo: ownerProfile?.avatar_url || brand.logo_url, website: ownerLinks.website || '', links: ownerLinks, href: brandSitePath(profile.slug, null), here: !brandSlug }
-    : { key: brand.id || brand.name, name: brand.name, logo: brand.logo_url, website: brand.website_url, links: (brand.social_links || {}) as Record<string, string>, href: brandSitePath(profile.slug, brand), here: brand.id === activeBrand?.id });
+    ? { key: brand.id || 'personal', name: ownerName, title: ownerName, blurb: (brand.social_links as Record<string, string> | undefined)?.about_short || ownerProfile?.headline || '', logo: ownerProfile?.avatar_url || brand.logo_url, website: ownerLinks.website || '', links: ownerLinks, href: brandSitePath(profile.slug, null), here: !brandSlug }
+    : { key: brand.id || brand.name, ...brandTileName(brand.name, (brand.social_links || {}) as Record<string, string>), logo: brand.logo_url, website: brand.website_url, links: (brand.social_links || {}) as Record<string, string>, href: brandSitePath(profile.slug, brand), here: brand.id === activeBrand?.id });
   // The sections between the hero and the footer, in the order the owner chose (see pageSections). Each is a whole section that draws nothing when it has nothing to show.
   const sectionNodes: Record<PageSectionKey, React.ReactNode> = {
     offers: <GuardianOfferCatalog profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} categoryOrder={socials.protocol_filter_order} />,
@@ -2162,11 +2198,11 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
     brands: brandTiles.length > 1 && publicBrands.some((brand) => brand.kind === 'business') ? <section aria-labelledby="guardian-brands-title" data-page-section="brands" style={{ padding: `clamp(54px,7vw,100px) ${PAGE_X}`, background: '#11120F', color: ink }}>
       <span style={{ color: publicAccent, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Official brands</span>
       <h2 id="guardian-brands-title" style={{ margin: '12px 0 28px', fontFamily: publicHeadingFont, fontWeight: 300, fontSize: 'clamp(42px,6vw,78px)', lineHeight: .95 }}>More from {ownerName}.</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 14 }}>{brandTiles.map((tile) => <article key={tile.key} data-brand-tile style={{ border: '1px solid rgba(17,18,15,.14)', background: '#FFFFFF', color: '#11120F', padding: 22, display: 'grid', gap: 18 }}>
-        <span style={{ display: 'flex', gap: 12, alignItems: 'center' }}>{tile.logo ? <img src={tile.logo} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: '50%', ...logoImageStyle(tile.logo, false) }} /> : <span style={{ width: 48, height: 48, border: '1px solid rgba(17,18,15,.2)', borderRadius: '50%', display: 'grid', placeItems: 'center', fontFamily: publicHeadingFont, fontSize: 20 }}>{tile.name.charAt(0)}</span>}<strong style={{ fontSize: 18 }}>{tile.name}</strong></span>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 14 }}>{brandTiles.map((tile) => <article key={tile.key} data-brand-tile {...tiltHandlers(6)} style={tiltStyle({ border: '1px solid rgba(17,18,15,.14)', background: '#FFFFFF', color: '#11120F', padding: 22, display: 'grid', gap: 18 })}>
+        <span style={{ display: 'flex', gap: 12, alignItems: 'center' }}>{tile.logo ? <img src={tile.logo} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: '50%', ...logoImageStyle(tile.logo, false) }} /> : <span style={{ width: 48, height: 48, border: '1px solid rgba(17,18,15,.2)', borderRadius: '50%', display: 'grid', placeItems: 'center', fontFamily: publicHeadingFont, fontSize: 20 }}>{tile.name.charAt(0)}</span>}<span style={{ display: 'grid', gap: 3, minWidth: 0 }}><strong style={{ fontSize: 18 }}>{tile.title}</strong>{tile.blurb ? <span data-brand-blurb style={{ color: '#66645F', fontSize: 12, lineHeight: 1.4 }}>{tile.blurb}</span> : null}</span></span>
         <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
-          <a href={tile.href} data-r3-icon aria-label={`${tile.name} on R³ Guardians`} aria-current={tile.here ? 'page' : undefined} title="Open on R³ Guardians" style={{ color: '#11120F', display: 'inline-grid', placeItems: 'center', width: 26, height: 26, border: '1px solid #11120F', fontFamily: sans, fontSize: 10, fontWeight: 800, letterSpacing: '-.02em', textDecoration: 'none', background: tile.here ? '#11120F' : 'transparent', ...(tile.here ? { color: '#FFFFFF' } : {}) }}>R<sup style={{ fontSize: 7, lineHeight: 1 }}>3</sup></a>
-          {tile.website && <a href={tile.website} target="_blank" rel="noopener noreferrer" style={{ color: '#11120F', display: 'inline-flex', alignItems: 'center', gap: 6 }}>Website <ExternalLink size={13} /></a>}{tile.links.instagram && <a href={tile.links.instagram} aria-label={`${tile.name} on Instagram`} style={{ color: '#11120F' }}><Instagram size={17} /></a>}{tile.links.facebook && <a href={tile.links.facebook} aria-label={`${tile.name} on Facebook`} style={{ color: '#11120F' }}><Facebook size={17} /></a>}{tile.links.tiktok && <a href={tile.links.tiktok} aria-label={`${tile.name} on TikTok`} style={{ color: '#11120F' }}><AtSign size={17} /></a>}
+          {tile.website && <a href={tile.website} target="_blank" rel="noopener noreferrer" data-brand-website style={{ color: '#11120F', display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>{websiteLabel(tile.website)}</a>}{tile.links.instagram && <a href={tile.links.instagram} aria-label={`${tile.name} on Instagram`} style={{ color: '#11120F' }}><Instagram size={17} /></a>}{tile.links.facebook && <a href={tile.links.facebook} aria-label={`${tile.name} on Facebook`} style={{ color: '#11120F' }}><Facebook size={17} /></a>}{tile.links.tiktok && <a href={tile.links.tiktok} aria-label={`${tile.name} on TikTok`} style={{ color: '#11120F' }}><AtSign size={17} /></a>}
+          <a href={tile.href} data-r3-icon aria-label={`${tile.name} on R³ Guardians`} aria-current={tile.here ? 'page' : undefined} title="Open on R³ Guardians" style={{ color: tile.here ? '#FFFFFF' : '#11120F', display: 'inline-grid', placeItems: 'center', width: 28, height: 28, border: '1px solid #11120F', fontFamily: sans, fontSize: 12, fontWeight: 800, letterSpacing: '-.03em', lineHeight: 1, textDecoration: 'none', background: tile.here ? '#11120F' : 'transparent' }}>R³</a>
         </span>
       </article>)}</div>
     </section> : null,

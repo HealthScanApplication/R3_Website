@@ -9,8 +9,8 @@ const treat = (id: string, title: string, brand_id: string | null) => ({ id, gui
 const PROFILE = { user_id: 'owner', slug: 'barbara-oneill', display_name: "Barbara O'Neill", headline: 'Self Heal by Design', bio: 'Her bio.', avatar_url: 'https://x/barbara.jpg', specialties: ['Wellness'], status: 'approved', onboarding_step: 5, contact_email: 'barbara@example.com', social_links: { instagram: 'https://instagram.com/barbara' } };
 const BRANDS = [
   { id: 'b-personal', guide_id: 'owner', name: "Barbara O'Neill", kind: 'personal', slug: null, logo_url: null, website_url: '', social_links: {}, is_primary: true },
-  { id: 'b-tre', guide_id: 'owner', name: 'Tre Lune', kind: 'business', slug: 'tre-lune', logo_url: 'https://x/logo-mono-1.png', website_url: 'https://www.trelune.com.au/', social_links: { headline: 'Natural hormonal support', instagram: 'https://instagram.com/trelune_' }, is_primary: false },
-  { id: 'b-mmh', guide_id: 'owner', name: 'Misty Mountain Lifestyle Retreat', kind: 'business', slug: 'misty-mountain', logo_url: null, website_url: 'https://www.mmh.com.au/', social_links: { section_order: 'treats,events' }, is_primary: false },
+  { id: 'b-tre', guide_id: 'owner', name: 'Tre Lune', kind: 'business', slug: 'tre-lune', logo_url: 'https://x/logo-mono-1.png', website_url: 'https://www.trelune.com.au/', social_links: { headline: 'Natural hormonal support', about_short: 'Natural products', instagram: 'https://instagram.com/trelune_' }, is_primary: false },
+  { id: 'b-mmh', guide_id: 'owner', name: 'Misty Mountain Lifestyle Retreat', kind: 'business', slug: 'misty-mountain', logo_url: null, website_url: 'https://www.mmh.com.au/', social_links: { section_order: 'treats,events', name_suffix: 'Lifestyle Retreat' }, is_primary: false },
 ];
 const shopSpy = vi.hoisted(() => vi.fn());
 const event = (id: string, title: string, brand_id: string | null) => ({ id, guide_id: 'owner', title, description: null, start_at: '2099-03-28T00:00:00.000Z', end_at: null, timezone: 'Australia/Sydney', venue: null, location: 'Bellbrook NSW', format: 'in_person', image_url: null, info_url: null, source_url: 'manual', source_name: null, source_external_id: id, status: 'published', brand_id });
@@ -155,6 +155,17 @@ describe('the public page of each brand', () => {
     expect(r3).toEqual(['/guardians/barbara-oneill', '/guardians/barbara-oneill/tre-lune', '/guardians/barbara-oneill/misty-mountain']); // each tile opens that brand's R³ Guardian page
     expect((tiles[0].querySelector('[data-r3-icon]') as HTMLElement).getAttribute('aria-current')).toBe('page'); // you are on Barbara's page
     for (const tile of tiles) { expect(tile.style.background).toMatch(/rgb\(255, 255, 255\)|#FFFFFF/i); expect(tile.style.color).toMatch(/rgb\(17, 18, 15\)|#11120F/i); }
+    // The address as people read it, a short description under each name, and the R³ mark last in the row.
+    const tre = tiles[1];
+    expect(tre.querySelector('[data-brand-website]')!.textContent).toMatch(/^www\.trelune\.com\.au/);
+    expect(tre.querySelector('[data-brand-website]')!.querySelector('svg')).toBeNull(); // the address alone, no arrow icon
+    for (const tile of tiles) expect(tile.style.transform).toMatch(/perspective/); // tilts under the pointer like the review cards
+    expect(tre.querySelector('strong')!.textContent).toBe('Tre Lune');
+    expect(tre.querySelector('[data-brand-blurb]')!.textContent).toBe('Natural products');
+    expect(tiles[2].querySelector('strong')!.textContent).toBe('Misty Mountain'); // the name, then the grey descriptor under it
+    expect(tiles[2].querySelector('[data-brand-blurb]')!.textContent).toBe('Lifestyle Retreat');
+    expect(tiles[0].querySelector('[data-brand-blurb]')!.textContent).toBe('Self Heal by Design'); // Barbara: her own headline
+    for (const tile of tiles) { const row = tile.querySelector('[data-r3-icon]')!.parentElement!; expect(row.lastElementChild).toBe(tile.querySelector('[data-r3-icon]')); expect(tile.querySelector('[data-r3-icon]')!.textContent).toBe('R³'); }
     const logo = brands.querySelector('img[src="https://x/logo-mono-1.png"]') as HTMLImageElement;
     expect(logo.style.filter).toBe(''); // black logo on the white tile, not inverted
   });
