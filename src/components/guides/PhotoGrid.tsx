@@ -28,12 +28,42 @@ export interface PhotoGridProps {
   embedded?: boolean;
   /** The brand these photos belong to; shown when the Guardian has more than one brand. */
   forBrand?: string;
+  /** 'quad' is a square two-by-two block that sits beside the house-style result; 'row' is the full-width row of four. */
+  layout?: 'row' | 'quad';
 }
 
-export function PhotoGrid({ photos, accountAvatarUrl, uploading, onAdd, onRemove, save, onSave, embedded = false, forBrand }: PhotoGridProps) {
+export function PhotoGrid({ photos, accountAvatarUrl, uploading, onAdd, onRemove, save, onSave, embedded = false, forBrand, layout = 'row' }: PhotoGridProps) {
   const filled = photos.slice(0, PHOTO_SLOTS);
   const cells = Array.from({ length: PHOTO_SLOTS }, (_, index) => filled[index] || null);
   const enough = filled.length >= PHOTO_MIN;
+  if (layout === 'quad') {
+    return (
+      <figure data-photo-quad aria-label="Your photos" style={{ margin: 0, minWidth: 0 }}>
+        <div style={{ aspectRatio: '1', display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', gap: 6 }}>
+          {cells.map((url, index) => url ? (
+            <div key={`${url}-${index}`} style={{ position: 'relative', overflow: 'hidden', border: `1px solid ${line}`, background: panel, minWidth: 0, minHeight: 0 }}>
+              <img src={url} alt={url === accountAvatarUrl ? 'Your account photo' : `Photo ${index + 1}`} referrerPolicy="no-referrer" decoding="async" style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }} />
+              <button type="button" onClick={() => onRemove(index)} aria-label={`Remove photo ${index + 1}`} style={{ position: 'absolute', top: 4, right: 4, width: 22, height: 22, display: 'grid', placeItems: 'center', border: `1px solid ${line}`, background: black, color: ink, cursor: 'pointer', padding: 0 }}><X size={12} /></button>
+            </div>
+          ) : (
+            <label key={`empty-${index}`} style={{ position: 'relative', display: 'grid', placeItems: 'center', border: `1px dashed ${line}`, background: panel, color: muted, cursor: uploading ? 'wait' : 'pointer', fontFamily: sans, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', minWidth: 0, minHeight: 0 }}>
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple disabled={uploading} aria-label={`Add photo ${index + 1}`} onChange={(event) => { onAdd(event.target.files); event.target.value = ''; }} style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }} />
+              <span style={{ display: 'grid', placeItems: 'center', gap: 4 }}>{uploading ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}<span>{index < PHOTO_MIN ? 'Add photo' : 'Optional'}</span></span>
+            </label>
+          ))}
+        </div>
+        <figcaption style={{ ...label, marginTop: 8, textAlign: 'center' }}>Your photos · {filled.length} of {PHOTO_SLOTS}</figcaption>
+        {forBrand && <p style={{ ...label, color: acid, margin: '4px 0 0', textAlign: 'center' }}>For {forBrand}</p>}
+        <p style={{ color: enough ? acid : muted, fontFamily: sans, fontSize: 11, lineHeight: 1.5, margin: '4px 0 0', textAlign: 'center' }}>{enough ? 'Add up to 4. The first is used for your house style.' : `Add at least ${PHOTO_MIN} real photos of you.`}</p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 10 }}>
+          <button type="button" onClick={onSave} disabled={save.status === 'saving'} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 36, padding: '0 14px', border: `1px solid ${ink}`, background: 'transparent', color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase', cursor: save.status === 'saving' ? 'wait' : 'pointer' }}>
+            {save.status === 'saving' ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Save photos
+          </button>
+          <SaveStatus state={save} />
+        </div>
+      </figure>
+    );
+  }
   return (
     <section aria-label="Your photos" style={embedded ? { width: '100%', boxSizing: 'border-box', marginTop: 20, paddingTop: 18, borderTop: `1px solid ${line}`, textAlign: 'center' } : { width: '100%', boxSizing: 'border-box', marginTop: 18, padding: 20, border: `1px solid ${line}`, background: 'rgba(245,242,234,.025)', textAlign: 'center' }}>
       <h3 style={{ ...label, margin: '0 0 6px', textAlign: 'center' }}>Your photos · add 2 to 4</h3>

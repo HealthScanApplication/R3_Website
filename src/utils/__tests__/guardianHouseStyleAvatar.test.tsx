@@ -41,9 +41,9 @@ describe('R3 house style panel', () => {
   it('is one full-width, centred card: their photo featured, then the example, with each action once', async () => {
     const panel = await open(OWN_PORTRAIT);
     const images = panelImages(panel);
-    expect(images.map((image) => image.getAttribute('src'))).toEqual([OWN_PORTRAIT, '/images/guides/house-style/goal-astro.webp']); // their photo, then the one goal image
+    expect(images.map((image) => image.getAttribute('src'))).toEqual(['/images/guides/house-style/goal-astro.webp']); // the one goal image (their photos are the 2x2 block beside the house style)
     for (const image of images) expect((image.getAttribute('alt') || '').length).toBeGreaterThan(10);
-    expect(within(panel).getByText('Your photo')).toBeTruthy();
+    expect(within(panel).getByRole('figure', { name: 'Your photos' })).toBeTruthy();
     expect(within(panel).getByText('The goal')).toBeTruthy();
     expect(within(panel).queryByText('Before')).toBeNull(); // no generic Before / After pair any more
     expect(within(panel).queryByText('After')).toBeNull();
@@ -81,14 +81,14 @@ describe('R3 house style panel', () => {
     mocks.invoke.mockResolvedValue({ data: { image: REAL_IMAGE, usd: 0.04, mock: false, size: '1024x1024' }, error: null });
     const panel = await open(OWN_PORTRAIT);
     fireEvent.click(within(panel).getByRole('button', { name: 'Create my R3 house style' }));
-    expect(await within(panel).findByRole('button', { name: 'Use this avatar' })).toBeTruthy();
+    expect(await within(panel).findByRole('button', { name: 'Add to profile' })).toBeTruthy();
     expect(mocks.invoke).toHaveBeenCalledTimes(1);
     expect(mocks.invoke).toHaveBeenCalledWith('guardian-images', { body: { action: 'convert-avatar', image_url: OWN_PORTRAIT, name: 'Test Guide', source: 'house' } });
     const images = panelImages(panel);
     // Their pair first, then the house-style example kept beside it as the target to compare against.
-    expect(images.map((image) => image.getAttribute('src'))).toEqual([OWN_PORTRAIT, REAL_IMAGE, '/images/guides/house-style/goal-astro.webp']);
+    expect(images.map((image) => image.getAttribute('src'))).toEqual([REAL_IMAGE, '/images/guides/house-style/goal-astro.webp']);
     expect(within(panel).queryByRole('button', { name: 'Replace profile image' })).toBeNull(); // the result's own actions replace it
-    expect(within(panel).getByText('Original')).toBeTruthy();
+    expect(within(panel).getByRole('figure', { name: 'Your photos' })).toBeTruthy(); // their photos stay beside the result
     expect(within(panel).getByRole('button', { name: 'Try again' })).toBeTruthy();
     expect(within(panel).getByLabelText('The R3 house style to aim for')).toBeTruthy();
     expect(within(panel).getAllByText('Example').length).toBe(1);
@@ -104,15 +104,15 @@ describe('R3 house style panel', () => {
     mocks.invoke.mockResolvedValue({ data: { image: REAL_IMAGE, usd: 0.04, mock: false, size: '1024x1024' }, error: null });
     let panel = await open(OWN_PORTRAIT);
     fireEvent.click(within(panel).getByRole('button', { name: 'Create my R3 house style' }));
-    await within(panel).findByRole('button', { name: 'Use this avatar' });
+    await within(panel).findByRole('button', { name: 'Add to profile' });
     expect(mocks.key).toHaveBeenCalledWith(REAL_IMAGE);
-    expect(panelImages(panel)[1].getAttribute('src')).toBe(KEYED); // the keyed picture is what they see and what is saved
+    expect(panelImages(panel)[0].getAttribute('src')).toBe(KEYED); // the keyed picture is what they see and what is saved
     cleanup();
     mocks.key.mockClear();
     mocks.invoke.mockResolvedValue({ data: { image: MOCK_IMAGE, usd: 0, mock: true, size: '1024x1024' }, error: null });
     panel = await open(OWN_PORTRAIT);
     fireEvent.click(within(panel).getByRole('button', { name: 'Create my R3 house style' }));
-    await within(panel).findByRole('button', { name: 'Use this avatar' });
+    await within(panel).findByRole('button', { name: 'Add to profile' });
     expect(mocks.key).not.toHaveBeenCalled();
   });
 
@@ -125,7 +125,7 @@ describe('R3 house style panel', () => {
     expect((busy as HTMLButtonElement).disabled).toBe(true);
     expect(busy.getAttribute('aria-busy')).toBe('true');
     finish({ data: { image: REAL_IMAGE, usd: 0, mock: false, size: '1024x1024' }, error: null });
-    expect(await within(panel).findByRole('button', { name: 'Use this avatar' })).toBeTruthy();
+    expect(await within(panel).findByRole('button', { name: 'Add to profile' })).toBeTruthy();
   });
 
   it('maps "Unknown action." to a friendly message inside the panel, as an alert', async () => {
@@ -151,7 +151,7 @@ describe('R3 house style panel', () => {
     mocks.invoke.mockResolvedValue({ data: { image: MOCK_IMAGE, usd: 0, mock: true, size: '1024x1024' }, error: null });
     const panel = await open(OWN_PORTRAIT);
     fireEvent.click(within(panel).getByRole('button', { name: 'Create my R3 house style' }));
-    const apply = (await within(panel).findByRole('button', { name: 'Use this avatar' })) as HTMLButtonElement;
+    const apply = (await within(panel).findByRole('button', { name: 'Add to profile' })) as HTMLButtonElement;
     expect(within(panel).getByText('Test image')).toBeTruthy();
     expect(panel.textContent).toMatch(/Live image generation is currently in test mode/);
     expect(apply.disabled).toBe(true);
@@ -164,7 +164,7 @@ describe('R3 house style panel', () => {
     mocks.invoke.mockResolvedValue({ data: { image: REAL_IMAGE, usd: 0.04, mock: false, size: '1024x1024' }, error: null });
     const panel = await open(OWN_PORTRAIT);
     fireEvent.click(within(panel).getByRole('button', { name: 'Create my R3 house style' }));
-    const apply = (await within(panel).findByRole('button', { name: 'Use this avatar' })) as HTMLButtonElement;
+    const apply = (await within(panel).findByRole('button', { name: 'Add to profile' })) as HTMLButtonElement;
     expect(apply.disabled).toBe(false);
     expect(within(panel).queryByText('Test image')).toBeNull();
     fireEvent.click(apply);
@@ -172,11 +172,11 @@ describe('R3 house style panel', () => {
     const [userId, file] = mocks.upload.mock.calls[0] as [string, File];
     expect(userId).toBe('owner');
     expect(file.type).toBe('image/webp');
-    await waitFor(() => expect(within(panel).queryByRole('button', { name: 'Use this avatar' })).toBeNull());
-    const featured = within(panel).getAllByRole('img')[0] as HTMLImageElement;
+    await waitFor(() => expect(within(panel).queryByRole('button', { name: 'Add to profile' })).toBeNull());
+    const featured = within(panel).getByAltText('Your portrait in the R3 house style') as HTMLImageElement;
     expect(featured.getAttribute('src')).toBe('https://cdn.example/guide-assets/owner/profile-2.webp');
-    expect(within(panel).getByText('Your photo')).toBeTruthy();
-    expect(screen.getByText('R³ house-style avatar applied and saved.')).toBeTruthy();
+    expect(within(panel).getByRole('figure', { name: 'Your photos' })).toBeTruthy();
+    expect(screen.getByText('Added to your profile and saved. It now shows across your website.')).toBeTruthy();
     // Applying saves it: the profile row and the brand carry the new avatar, so the site and the nav show it without a separate Save.
     await waitFor(() => expect(mocks.save).toHaveBeenCalledTimes(1));
     const row = mocks.save.mock.calls[0][0];
@@ -191,9 +191,9 @@ describe('R3 house style panel', () => {
     mocks.upload.mockRejectedValue(new Error('Storage is unavailable.'));
     const panel = await open(OWN_PORTRAIT);
     fireEvent.click(within(panel).getByRole('button', { name: 'Create my R3 house style' }));
-    fireEvent.click(await within(panel).findByRole('button', { name: 'Use this avatar' }));
+    fireEvent.click(await within(panel).findByRole('button', { name: 'Add to profile' }));
     expect((await within(panel).findByRole('alert')).textContent).toBe('Storage is unavailable.');
-    expect(within(panel).getByRole('button', { name: 'Use this avatar' })).toBeTruthy();
+    expect(within(panel).getByRole('button', { name: 'Add to profile' })).toBeTruthy();
   });
 });
 

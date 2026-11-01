@@ -2680,7 +2680,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       setAvatarUrl(url); setLogoUrl(url); addHouseAvatars(url); setAvatarPreviewUrl(null);
       // Applying it saves it: the profile and brand are updated now, so the site, the nav and the cards show the new avatar without a separate Save.
       const saved = await saveProgress({ avatarUrl: url, houseAvatarUrl: url });
-      setImportMessage(saved ? 'R³ house-style avatar applied and saved.' : 'R³ house-style avatar applied. Save your profile to keep it.');
+      setImportMessage(saved ? 'Added to your profile and saved. It now shows across your website.' : 'R³ house-style avatar applied. Save your profile to keep it.');
     } catch (error) {
       setAvatarError(error instanceof Error ? error.message : 'Could not save the converted avatar.');
     } finally { setAvatarApplying(false); }
@@ -3354,9 +3354,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       <PhotoDropzone onFile={uploadPortrait} validate={portraitProblem} onReject={setImportMessage} accept={PORTRAIT_ACCEPT} disabled={uploading}>
         {({ open, dragging }) => (
       <>
-      <HouseStyleAvatarPanel id={houseStylePanelId} houseStyle={avatarIsHouseStyle} save={saveState} onSave={() => saveProgress()} dragging={dragging} sourceUrl={avatarSource} currentUrl={avatarUrl} needsUpload={avatarNeedsOwnPhoto} converting={avatarConverting} applying={avatarApplying} uploading={uploading} resultUrl={avatarPreviewUrl} resultMock={avatarPreviewMock} error={avatarError} onCreate={convertAvatarToHouseStyle} onUpload={open} onApply={applyConvertedAvatar} onCancel={() => { setAvatarPreviewUrl(null); setAvatarError(''); }}>
-        <PhotoGrid embedded photos={sitePhotos} accountAvatarUrl={activeBrandId === 'personal' ? accountAvatarUrl || null : null} forBrand={brandProfiles.length > 1 ? displayName.trim() || 'this brand' : undefined} uploading={photosUploading} onAdd={addSitePhotos} onRemove={(index) => setSitePhotos((current) => current.filter((_, position) => position !== index))} save={saveState} onSave={() => saveProgress()} />
-      </HouseStyleAvatarPanel>
+      <HouseStyleAvatarPanel id={houseStylePanelId} houseStyle={avatarIsHouseStyle} save={saveState} onSave={() => saveProgress()} dragging={dragging} sourceUrl={avatarSource} currentUrl={avatarUrl} needsUpload={avatarNeedsOwnPhoto} converting={avatarConverting} applying={avatarApplying} uploading={uploading} resultUrl={avatarPreviewUrl} resultMock={avatarPreviewMock} error={avatarError} onCreate={convertAvatarToHouseStyle} onUpload={open} onApply={applyConvertedAvatar} onCancel={() => { setAvatarPreviewUrl(null); setAvatarError(''); }} photosSlot={<PhotoGrid layout="quad" photos={sitePhotos} accountAvatarUrl={activeBrandId === 'personal' ? accountAvatarUrl || null : null} forBrand={brandProfiles.length > 1 ? displayName.trim() || 'this brand' : undefined} uploading={photosUploading} onAdd={addSitePhotos} onRemove={(index) => setSitePhotos((current) => current.filter((_, position) => position !== index))} save={saveState} onSave={() => saveProgress()} />} />
       </>
         )}
       </PhotoDropzone>
