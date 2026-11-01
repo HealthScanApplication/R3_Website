@@ -3,11 +3,12 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { StepRelated } from '../../components/guides/GuidePortal';
+import { writeBrandScope } from '../brandScope';
 
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'owner', app_metadata: {} }, accessToken: null, signOut: () => {} }) }));
 vi.mock('../supabase/client', async (importOriginal) => ({ ...await importOriginal<any>(), getSupabaseClient: () => ({ functions: { invoke: vi.fn() } }) }));
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); localStorage.clear(); });
 
 const ramp = (id: string, name: string) => ({ id, name, slug: id, audience: 'Women', problem: 'Sleep', offer_ids: ['a', 'b'], status: 'published' }) as any;
 const related = { leads: [], offers: [], protocols: [], ramps: [ramp('better-sleep', 'Better sleep')] };
@@ -55,26 +56,30 @@ describe('workspace sites as tall website cards', () => {
     expect(screen.getByRole('region', { name: 'Your sites' }).querySelector('[data-site-preview]')).toBeNull(); // not live: no preview of a page that is not public
   });
 
-  it('shows every brand with a filter: All, the current brand first, then the others', () => {
+  it('shows every brand\'s site under All, each at its own address', () => {
     render1(two, 'b2');
     const section = screen.getByRole('region', { name: 'Your sites' });
-    const chips = within(within(section).getByRole('group', { name: 'Filter sites by brand' })).getAllByRole('button').map((chip) => chip.textContent);
-    expect(chips).toEqual(['All', 'Current · Calm Co', 'John Ferreira']);
+    expect(within(section).queryByRole('group', { name: 'Filter sites by brand' })).toBeNull(); // the brand filter is one bar at the top of the workspace
     expect(open(section, 'Calm Co profile site')).toBeTruthy();
     expect(open(section, 'John Ferreira profile site')).toBeTruthy();
     expect(within(section).getByText(/In your workspace · Your sites · 3/)).toBeTruthy(); // 2 brand sites + 1 offer path
   });
 
-  it('filters to one brand, keeps the Guardian-wide offer path, and goes back to All', () => {
+  it('follows the workspace brand filter: one brand\'s site, the Guardian-wide offer path, and back to All', () => {
+    writeBrandScope('b2');
     render1(two, 'personal');
     const section = screen.getByRole('region', { name: 'Your sites' });
-    fireEvent.click(within(section).getByRole('button', { name: 'Calm Co' }));
     expect(open(section, 'John Ferreira profile site')).toBeNull();
     expect(open(section, 'Calm Co profile site')).toBeTruthy();
     expect(open(section, 'Better sleep')).toBeTruthy();
     expect(within(section).getByText(/In your workspace · Your sites · 2/)).toBeTruthy();
-    expect(within(section).getByRole('button', { name: 'Calm Co' }).getAttribute('aria-pressed')).toBe('true');
-    fireEvent.click(within(section).getByRole('button', { name: 'All' }));
-    expect(within(section).getByText(/In your workspace · Your sites · 3/)).toBeTruthy();
+    cleanup();
+    writeBrandScope('personal');
+    render1(two, 'personal');
+    expect(open(screen.getByRole('region', { name: 'Your sites' }), 'Calm Co profile site')).toBeNull();
+    cleanup();
+    writeBrandScope('all');
+    render1(two, 'personal');
+    expect(within(screen.getByRole('region', { name: 'Your sites' })).getByText(/In your workspace · Your sites · 3/)).toBeTruthy();
   });
 });

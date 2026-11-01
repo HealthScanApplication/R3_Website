@@ -19,6 +19,9 @@ import { PhotoDropzone } from '../PhotoDropzone';
 import { IMAGE_ACCEPT, describeRejections, quickImageProblem, validateImageFile, validateImageFiles } from '../../utils/imageValidation';
 import { createMonoLogo, isMonoLogoUrl, logoImageStyle } from '../../utils/brandLogo';
 import { PullFromLink } from './PullFromLink';
+import { BrandScopeBar, useBrandScope } from './BrandScopeBar';
+import { brandSiteProfile, brandSitePath, brandSlugFromPath, siteOwns } from '../../utils/brandSite';
+import { inBrandScope } from '../../utils/brandScope';
 import { GuardianAvatar, useGuardianAvatarUrl } from './GuardianAvatar';
 import { ProtocolChildrenPanel } from './ProtocolChildrenPanel';
 import { customizeProtocolRecipe } from '../../utils/protocolCopies';
@@ -78,7 +81,7 @@ import {
   recoverUpsellPayment, createGuideLead, createGuideOffer, createGuideRecipe, createGuideValueRamp, getGuideProfile, getGuideProfileBySlug, canonicalGuideSlug,
   importGuideProfile, listGuideLeads, listGuideOffers, listGuideProducts, listGuideRecipes, listGuideValueRamps, listRoutineOwners, upsertGuideOffer, upsertGuideValueRamp, listPublicGuideProfiles, saveGuideProfile, listGuardianReviews, listGuardianReviewRequests, createGuardianReviewRequest, submitGuardianReview, setGuardianReviewStatus, createOfferPayment, confirmOfferPayment, buyUpsellOneClick, getFreeOfferDownload, requestGuardianReview, decideGuardianSite, listAllGuideProfiles, listGuardianSuggestions, setGuardianSuggestionStatus, listPublicGuardianOffers, listReviewSummaries, type AdminGuideProfile, type GuardianSuggestionRow, type GuardianReview, type GuardianReviewRequest, submitGuardianSuggestion, submitGuardianOptIn,
   createGuideLibraryFolder, createGuideLibraryItem, deleteGuideLibraryItem, getGuideFileDownloadUrl,
-  listGuideLibraryFolders, listGuideLibraryItems, replaceGuideBrands, listGuideBrands, updateGuideRecipe, saveGuideRecipeDraft, listPersonalProtocolPeople, uploadGuideFile, uploadGuideImage, uploadGuideLibraryAudio,
+  listGuideLibraryFolders, listGuideLibraryItems, replaceGuideBrands, listGuideBrands, listPublicGuideBrands, updateGuideRecipe, saveGuideRecipeDraft, listPersonalProtocolPeople, uploadGuideFile, uploadGuideImage, uploadGuideLibraryAudio,
   updateGuideLead, deleteGuideLead, updateGuideValueRamp, deleteGuideValueRamp, deleteGuideRecipe, deleteGuideOffer,
   updateGuideLibraryFolder, deleteGuideLibraryFolder, updateGuideLibraryItem,
   getOfferCommunityChannel, saveOfferCommunityChannel, getCommunityChannelByRoute, joinGuideCommunity, isGuideCommunityMember, listGuideCommunityMessages, postGuideCommunityMessage,
@@ -264,6 +267,9 @@ const storyTemplates: { id: StoryTemplateId; name: string; style: string; descri
 /** A portrait is an image: the upload helper also accepts videos (for page backgrounds), which make no sense here. */
 const portraitProblem = (file: File) => quickImageProblem(file);
 const PORTRAIT_ACCEPT = IMAGE_ACCEPT;
+
+/** A saved brand's local id is `brand-<uuid>`; a brand added this session has `brand-<time>` and no saved id yet. */
+const savedBrandId = (localId: string): string | undefined => (/^brand-[0-9a-f]{8}-[0-9a-f]{4}-/.test(localId) ? localId.slice('brand-'.length) : undefined);
 
 /** Copies a picture found on another site into a File. Most sites allow it for their public images; when one does not, the person is told what to do instead. */
 async function copyRemoteImage(url: string): Promise<File> {
@@ -2015,19 +2021,24 @@ function PublicLocaleBar({ value, onChange }: { value: GuardianLocalePreference;
   </div>;
 }
 
-export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn: boolean }) {
+export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string; brandSlug?: string; isSignedIn: boolean }) {
   const { user } = useAuth();
   const pathSlug = window.location.pathname.match(/\/value-ramp\/([^/]+)\/?$/)?.[1];
   const [reviews, setReviews] = useState<GuardianReview[]>([]);
   const reviewToken = new URLSearchParams(window.location.search).get('review') || '';
-  const [profile, setProfile] = useState<GuideProfile | null>(null);
+  const [ownerProfile, setProfile] = useState<GuideProfile | null>(null);
   const [offers, setOffers] = useState<GuideOffer[]>([]);
   const [valueRamps, setValueRamps] = useState<GuideValueRamp[]>([]);
   const [guardianProtocols, setGuardianProtocols] = useState<AdminProtocol[]>([]);
   const [events, setEvents] = useState<GuideEvent[]>([]);
   const [retreats, setRetreats] = useState<GuideRetreat[]>([]);
-  const [shopProductCount, setShopProductCount] = useState(0);
+  const [shopProducts, setShopProducts] = useState<GuideProduct[]>([]);
   const [publicBrands, setPublicBrands] = useState<GuideBrand[]>([]);
+  // A brand's page (/guardians/<guardian>/<brand>) is the Guardian's page with the brand's own name, logo, links and content.
+  const activeBrand = brandSlug ? publicBrands.find((brand) => (brand.slug || '').toLowerCase() === brandSlug.toLowerCase()) : undefined;
+  const personalBrandId = publicBrands.find((brand) => brand.kind === 'personal')?.id;
+  const onSite = (brandId: string | null | undefined) => siteOwns(activeBrand?.id, personalBrandId, brandId);
+  const profile = brandSiteProfile(ownerProfile, activeBrand);
   const [eventSource, setEventSource] = useState('');
   const [localePreference, setLocalePreference] = useState<GuardianLocalePreference>(() => {
     const fallback = defaultPricingRegion();
@@ -2069,19 +2080,21 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
       setGuardianProtocols(found ? (await listPublicProtocols('').catch(() => [])).filter((protocol) => protocol.user_id === found.user_id) : []);
       setEvents(found ? await listGuideEvents(found.user_id).catch(() => []) : []);
       setRetreats(found ? await listGuideRetreats(found.user_id).catch(() => []) : []);
-      setShopProductCount(found ? (await listGuideProducts(found.user_id).catch(() => [])).length : 0);
-      setPublicBrands(found ? await listGuideBrands(found.user_id).catch(() => []) : []);
+      setShopProducts(found ? await listGuideProducts(found.user_id).catch(() => []) : []);
+      setPublicBrands(found ? await listPublicGuideBrands(found.user_id).then((list) => list.length ? list : listGuideBrands(found.user_id)).catch(() => listGuideBrands(found.user_id).catch(() => [])) : []);
       setEventSource(found ? await getGuideEventSource(found.user_id).catch(() => found.social_links?.events_source_url || (found.slug === 'barbara-oneill' ? 'https://www.barbaraoneill.com/pages/events' : '')) : '');
     }).catch(() => { setProfile(null); setOffers([]); }).finally(() => setLoading(false));
   }, [slug]);
   if (loading) return <div style={{ minHeight: '100vh', background: black, color: ink, display: 'grid', placeItems: 'center', fontFamily: sans }}>Building Guardian page…</div>;
   const publishedRamps = valueRamps.filter(ramp => ramp.status === 'published');
   const selectedRamp = pathSlug ? publishedRamps.find(ramp => encodeURIComponent(ramp.slug) === pathSlug) : publishedRamps[0];
-  if (!profile || (pathSlug && !selectedRamp)) return <div style={{ minHeight: '100vh', background: black, color: ink, display: 'grid', placeItems: 'center', padding: 24, fontFamily: sans, textAlign: 'center' }}><div><Brand /><h1 style={{ fontFamily: serif, fontSize: 48, fontWeight: 300, margin: '48px 0 12px' }}>This page is not published yet.</h1><a href="/guardians" style={{ color: acid }}>Return to Guardians</a></div></div>;
-  const publishedOffers = offers.filter((offer) => offer.status === 'published');
+  if (!profile || (pathSlug && !selectedRamp) || (brandSlug && !activeBrand)) return <div style={{ minHeight: '100vh', background: black, color: ink, display: 'grid', placeItems: 'center', padding: 24, fontFamily: sans, textAlign: 'center' }}><div><Brand /><h1 style={{ fontFamily: serif, fontSize: 48, fontWeight: 300, margin: '48px 0 12px' }}>This page is not published yet.</h1><a href="/guardians" style={{ color: acid }}>Return to Guardians</a></div></div>;
+  const publishedOffers = offers.filter((offer) => offer.status === 'published' && onSite(offer.brand_id));
   // Every section of the page in value-ramp order. A section with something in it is a tag under the call to action; the owner also sees the empty ones.
   const isOwner = isSignedIn && user?.id === profile.user_id;
-  const profileSections = profileSectionStates({ offers: publishedOffers, products: shopProductCount, events: events.length, retreats: retreats.length });
+  const siteEvents = events.filter((event) => onSite(event.brand_id));
+  const siteRetreats = retreats.filter((retreat) => onSite(retreat.brand_id));
+  const profileSections = profileSectionStates({ offers: publishedOffers, products: shopProducts.filter((product) => onSite(product.brand_id)).length, events: siteEvents.length, retreats: siteRetreats.length });
   const sectionTags: HeroSection[] = profileSections.filter((section) => section.filled || isOwner).map((section): HeroSection => section.filled ? [section.anchor, section.label, 'filled', section.category] : [`section-${section.id}`, section.label, 'empty']);
   const freeOffers = publishedOffers.filter((offer) => offer.access_model === 'free');
   const socials = profile.social_links || {};
@@ -2137,12 +2150,12 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
         </article>)}</div>
       </section>}
       <GuardianOfferCatalog profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} categoryOrder={socials.protocol_filter_order} />
-      <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} protocols={guardianProtocols} localePreference={localePreference} categoryOrder={socials.product_filter_order} />
-      <GuardianEvents profile={profile} events={events} sourceUrl={eventSource} canEditSource={isSignedIn && user?.id === profile.user_id} onImported={setEvents} onSourceChanged={setEventSource} />
-      <GuardianOfferShelf kind="talk" profile={profile} offers={offers} pagePadding={PAGE_X} />
-      <GuardianOfferShelf kind="treat" profile={profile} offers={offers} pagePadding={PAGE_X} />
+      <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} protocols={guardianProtocols} owns={onSite} localePreference={localePreference} categoryOrder={socials.product_filter_order} />
+      <GuardianEvents profile={profile} events={siteEvents} sourceUrl={eventSource} canEditSource={isSignedIn && user?.id === profile.user_id} onImported={setEvents} onSourceChanged={setEventSource} />
+      <GuardianOfferShelf kind="talk" profile={profile} offers={offers.filter((offer) => onSite(offer.brand_id))} pagePadding={PAGE_X} />
+      <GuardianOfferShelf kind="treat" profile={profile} offers={offers.filter((offer) => onSite(offer.brand_id))} pagePadding={PAGE_X} />
       <GuardianForumTeaser profile={profile} pagePadding={PAGE_X} />
-      <GuardianRetreats profile={profile} retreats={retreats} />
+      <GuardianRetreats profile={profile} retreats={siteRetreats} />
       {reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}
       {isOwner && <ProfileSectionSkeleton sections={profileSections} />}
       <GuardianFunnel key={selectedRamp?.id || 'default'} backdrop={emailBackdrop} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} />
@@ -2335,7 +2348,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     listGuideBrands(userId).then((saved) => {
       setBrandsLoaded('ok');
       if (!saved.length) return;
-      const drafts: BrandDraft[] = saved.map((b) => ({ localId: b.kind === 'personal' ? 'personal' : `brand-${b.id}`, name: b.name, kind: b.kind, logo_url: b.logo_url, contact_email: b.contact_email, whatsapp_phone: b.whatsapp_phone, website_url: b.website_url, social_links: b.social_links || {}, language: b.language, pricing_region: b.pricing_region, currency: b.currency as BrandDraft['currency'] }));
+      const drafts: BrandDraft[] = saved.map((b) => ({ localId: b.kind === 'personal' ? 'personal' : `brand-${b.id}`, name: b.name, kind: b.kind, slug: b.slug, logo_url: b.logo_url, contact_email: b.contact_email, whatsapp_phone: b.whatsapp_phone, website_url: b.website_url, social_links: b.social_links || {}, language: b.language, pricing_region: b.pricing_region, currency: b.currency as BrandDraft['currency'] }));
       addHouseAvatars(...drafts.map((d) => d.social_links.avatar_house_url));
       setBrandProfiles((current) => [drafts.find((d) => d.localId === 'personal') || current.find((d) => d.localId === 'personal')!, ...drafts.filter((d) => d.localId !== 'personal')].filter(Boolean));
       const personal = drafts.find((d) => d.localId === 'personal');
@@ -2361,6 +2374,8 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   // Paid offers are built one at a time: the next appears when the Guardian asks for it (progressive disclosure under Step 3).
   const [paidStepsOpen, setPaidStepsOpen] = useState(1);
   const [productTab, setProductTab] = useState<'free' | 'paid'>('free');
+  const brandScope = useBrandScope();
+  const shopProducts = related.products.filter((product) => brandProfiles.length < 2 || inBrandScope(brandScope, product.brand_id));
   const [showProtocolInfo, setShowProtocolInfo] = useState(false);
   const [summaryView, setSummaryView] = useState<'offers' | 'sites' | null>(null);
   const [inventoryMenu, setInventoryMenu] = useState<string | null>(null);
@@ -2973,7 +2988,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       // Brands are only replaced once they have loaded, so a failed load can never wipe saved business brands.
       if (brandsLoaded === 'ok') {
         const brandsToSave = brandProfiles.map((brand) => brand.localId === activeBrandId ? currentBrandDraft(freshAvatar, houses) : brand);
-        await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, is_primary: localId === (writesProfile && !savedStatus ? activeBrandId : savedPrimaryId) })));
+        await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, id: savedBrandId(localId), is_primary: localId === (writesProfile && !savedStatus ? activeBrandId : savedPrimaryId) })));
       }
       setSaveState({ status: 'saved', at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
       return true;
@@ -3008,7 +3023,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       const profile = await saveGuideProfile(profileRow(savedStatus === 'approved' ? 'approved' : 'submitted', 6));
       const selectedBrand = currentBrandDraft();
       const brandsToSave = brandProfiles.map((brand) => brand.localId === activeBrandId ? selectedBrand : brand);
-      await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, is_primary: localId === activeBrandId })));
+      await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, id: savedBrandId(localId), is_primary: localId === activeBrandId })));
       if (profile.status !== 'approved') await requestGuardianReview().catch(() => null);
       setSavedStatus(profile.status);
     } catch (e: any) { setError(e.message?.includes('guide_profiles') ? 'Guardian database is not installed yet. Apply the portal migration first.' : e.message); }
@@ -3030,7 +3045,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       const profile = await saveGuideProfile(profileRow(savedStatus === 'approved' ? 'approved' : 'submitted', 6));
       const selectedBrand = currentBrandDraft();
       const brandsToSave = brandProfiles.map((brand) => brand.localId === activeBrandId ? selectedBrand : brand);
-      await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, is_primary: localId === activeBrandId })));
+      await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, id: savedBrandId(localId), is_primary: localId === activeBrandId })));
       // Republishing updates the offers saved last time (matched by type + free/paid) instead of duplicating them.
       const [existingOffers, existingRecipes] = await Promise.all([listGuideOffers(userId).catch(() => [] as GuideOffer[]), listGuideRecipes(userId).catch(() => [] as GuideRecipe[])]);
       const claimed = new Set<string>();
@@ -3567,9 +3582,9 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           onSaved={(created) => setRelated((current) => ({ ...current, offers: [...current.offers, ...created] }))}
           onDeleted={(offerId) => setRelated((current) => ({ ...current, offers: current.offers.filter((offer) => offer.id !== offerId) }))}
           displayName={displayName} /></div>)}
-        {related.products.length > 0 && <section data-shop-products aria-label="Shop products" style={{ marginTop: 28 }}>
-          <span style={{ ...label, color: acid }}>Shop products · {related.products.length} · by value</span>
-          <ProtocolCardGrid>{valueSortedProducts(related.products).map((product, index) => <ProtocolCard key={product.id} badge={product.price_cents ? formatMoney(product.price_cents / 100, product.currency || 'GBP') : undefined} kicker={`#${String(index + 1).padStart(2, '0')} by value`} title={product.title} imageUrl={product.image_url} copy={clipCopy(product.description || '')} by={displayName} cta="Manage products" onClick={() => { window.location.href = '/guardians/workspace?tab=products'; }} owned />)}</ProtocolCardGrid>
+        {productTab === 'paid' && shopProducts.length > 0 && <section data-shop-products aria-label="Shop products" style={{ marginTop: 28 }}>
+          <span style={{ ...label, color: acid }}>Shop products · {shopProducts.length} · by value</span>
+          <ProtocolCardGrid>{valueSortedProducts(shopProducts).map((product, index) => <ProtocolCard key={product.id} badge={product.price_cents ? formatMoney(product.price_cents / 100, product.currency || 'GBP') : undefined} kicker={`#${String(index + 1).padStart(2, '0')} by value`} title={product.title} imageUrl={product.image_url} copy={clipCopy(product.description || '')} by={displayName} cta="Manage products" onClick={() => { window.location.href = '/guardians/workspace?tab=products'; }} owned />)}</ProtocolCardGrid>
         </section>}
       </div>}
 
@@ -4038,14 +4053,14 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         </section>
       </div>
     </form>}
-    {!summaryView && <StepRelated step={step} profileStatus={savedStatus} guardianSlug={savedSlug || guardianSlug} displayName={displayName} brands={brandProfiles.map((brand) => ({ id: brand.localId, name: (brand.localId === activeBrandId ? displayName : brand.name) || 'Untitled brand', kind: brand.kind, logo: brand.localId === activeBrandId ? avatarUrl || brand.logo_url : brand.logo_url }))} activeBrandId={activeBrandId} related={related} audience={audienceLabel(audienceDetails, audience)} audiences={audience.map((group) => ({ group, ages: audienceDetails[group] ? `${audienceDetails[group].min}–${audienceDetails[group].max}` : '', stages: audienceDetails[group]?.stages || [], problems: audienceProblemsByGroup[group] || [] }))} onEditAudience={() => { setAudienceSetupStage(0); window.scrollTo({ top: 0, behavior: 'smooth' }); }} onRemoveAudience={(group) => toggleAudience(group)} accessToken={accessToken} onProtocolRemoved={(protocolId) => setRelated((current) => ({ ...current, protocols: current.protocols.filter((protocol) => protocol.id !== protocolId) }))} userId={userId} onOfferDeleted={(offerId) => setRelated((current) => ({ ...current, offers: current.offers.filter((offer) => offer.id !== offerId) }))} />}
+    {!summaryView && <StepRelated step={step} profileStatus={savedStatus} guardianSlug={savedSlug || guardianSlug} displayName={displayName} brands={brandProfiles.map((brand) => ({ id: brand.localId, name: (brand.localId === activeBrandId ? displayName : brand.name) || 'Untitled brand', kind: brand.kind, slug: brand.slug, logo: brand.localId === activeBrandId ? avatarUrl || brand.logo_url : brand.logo_url }))} activeBrandId={activeBrandId} related={related} audience={audienceLabel(audienceDetails, audience)} audiences={audience.map((group) => ({ group, ages: audienceDetails[group] ? `${audienceDetails[group].min}–${audienceDetails[group].max}` : '', stages: audienceDetails[group]?.stages || [], problems: audienceProblemsByGroup[group] || [] }))} onEditAudience={() => { setAudienceSetupStage(0); window.scrollTo({ top: 0, behavior: 'smooth' }); }} onRemoveAudience={(group) => toggleAudience(group)} accessToken={accessToken} onProtocolRemoved={(protocolId) => setRelated((current) => ({ ...current, protocols: current.protocols.filter((protocol) => protocol.id !== protocolId) }))} userId={userId} onOfferDeleted={(offerId) => setRelated((current) => ({ ...current, offers: current.offers.filter((offer) => offer.id !== offerId) }))} />}
       </div>
     </div>
   </div>;
 }
 
 type RelatedRow = { key: string; title: string; meta: string; image?: string | null; href: string; brandId?: string; kind?: 'profile' | 'offer'; rampStatus?: GuideValueRamp['status'] };
-export interface RelatedBrand { id: string; name: string; kind: 'personal' | 'business'; logo: string | null }
+export interface RelatedBrand { id: string; name: string; kind: 'personal' | 'business'; logo: string | null; slug?: string | null }
 
 /** One wide card of the "In your workspace" grid: picture, serif title, the detail line and a single Open. */
 function WideCard({ row, onOpen }: { row: RelatedRow; onOpen: () => void }) {
@@ -4231,7 +4246,7 @@ function ProductUploadSection({ group, userId, currency, offers, onSaved, onDele
         <div><label style={{ ...label, marginBottom: 5 }}>{index === 0 ? 'Link' : ' '}</label><input aria-label={`${group.title} link ${index + 1}`} type="url" style={input} value={row.url} onChange={(event) => onUrl(row, event.target.value)} placeholder="https://" /></div>
         <div><label style={{ ...label, marginBottom: 5 }}>{index === 0 ? 'Name' : ' '}</label><input aria-label={`${group.title} name ${index + 1}`} style={input} value={row.title} onChange={(event) => update(row.id, { title: event.target.value, touchedTitle: true })} /></div>
         {group.id === 'paid' && <div><label style={{ ...label, marginBottom: 5 }}>{index === 0 ? `Price · ${currency}` : ' '}</label><input aria-label={`${group.title} price ${index + 1}`} inputMode="decimal" style={input} value={row.price} onChange={(event) => update(row.id, { price: event.target.value.replace(/[^0-9.]/g, '') })} placeholder="29" /></div>}
-        <div><label style={{ ...label, marginBottom: 5 }}>{index === 0 ? 'Type' : ' '}</label><select aria-label={`${group.title} type ${index + 1}`} style={input} value={row.type} onChange={(event) => update(row.id, { type: event.target.value as GuideOffer['kind'], touchedType: true })}>{PRODUCT_UPLOAD_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></div>
+        <div><label style={{ ...label, marginBottom: 5 }}>{index === 0 ? 'Type' : ' '}</label><select aria-label={`${group.title} type ${index + 1}`} style={input} value={row.type} onChange={(event) => update(row.id, { type: event.target.value as GuideOffer['kind'], touchedType: true })}>{PRODUCT_UPLOAD_TYPES.filter((type) => group.id === 'paid' || type.value !== 'product' || row.type === 'product').map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></div>
         <button type="button" aria-label={`Remove row ${index + 1}`} disabled={rows.length === 1 && !row.url} onClick={() => setRows((current) => current.length === 1 ? [blank()] : current.filter((item) => item.id !== row.id))} style={{ ...btn, minHeight: 44, background: 'transparent', color: ink, padding: '0 12px' }}><Trash2 size={14} /></button>
       </div>)}
     </div>
@@ -4244,7 +4259,7 @@ function ProductUploadSection({ group, userId, currency, offers, onSaved, onDele
     <div data-build-new style={{ marginTop: 18, paddingTop: 14, borderTop: `1px dashed ${line}` }}>
       <span style={{ ...label, color: acid }}>Or build a new one</span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        {PRODUCT_UPLOAD_TYPES.map((type) => <a key={type.value} data-build-type={type.value} href={PRODUCT_BUILDER_HREF[type.value]} aria-label={`Build a new ${type.label.toLowerCase()}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 34, padding: '0 12px', border: `1px dashed ${line}`, color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', textDecoration: 'none' }}>{type.label} <ArrowRight size={12} /></a>)}
+        {PRODUCT_UPLOAD_TYPES.filter((type) => group.id === 'paid' || type.value !== 'product').map((type) => <a key={type.value} data-build-type={type.value} href={PRODUCT_BUILDER_HREF[type.value]} aria-label={`Build a new ${type.label.toLowerCase()}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 34, padding: '0 12px', border: `1px dashed ${line}`, color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', textDecoration: 'none' }}>{type.label} <ArrowRight size={12} /></a>)}
       </div>
     </div>
   </section>;
@@ -4254,7 +4269,7 @@ function ProductUploadSection({ group, userId, currency, offers, onSaved, onDele
 const valueSortedProducts = (products: GuideProduct[]): GuideProduct[] => [...products].sort((a, b) => (b.price_cents || 0) - (a.price_cents || 0) || a.title.localeCompare(b.title));
 
 export function StepRelated({ step, guardianSlug, displayName, related, audience = '', brands = [], activeBrandId = 'personal', profileStatus = null, userId, onOfferDeleted, audiences = [], onEditAudience, onRemoveAudience, accessToken, onProtocolRemoved }: { accessToken?: string; onProtocolRemoved?: (protocolId: string) => void; audiences?: Array<{ group: string; ages: string; stages: string[]; problems: string[] }>; onEditAudience?: (group: string) => void; onRemoveAudience?: (group: string) => void; userId?: string; onOfferDeleted?: (offerId: string) => void; audience?: string; profileStatus?: GuideProfile['status'] | null;  step: number; guardianSlug: string; displayName: string; related: { leads: GuideLead[]; offers: GuideOffer[]; ramps: GuideValueRamp[]; protocols: AdminProtocol[]; products?: GuideProduct[] }; brands?: RelatedBrand[]; activeBrandId?: string }) {
-  const [brandFilter, setBrandFilter] = useState<string>('all');
+  const scope = useBrandScope(); // the workspace-wide brand filter (BrandScopeBar)
   const [siteKind, setSiteKind] = useState<'all' | 'profile' | 'offer'>('all');
   const [siteMenu, setSiteMenu] = useState<string | null>(null);
   const open = (href: string) => () => { window.location.href = href; };
@@ -4264,26 +4279,25 @@ export function StepRelated({ step, guardianSlug, displayName, related, audience
   const rampRows: RelatedRow[] = related.ramps.map((ramp) => ({ key: ramp.id, title: ramp.name, meta: `${[ramp.audience, ramp.problem].filter(Boolean).join(' · ')} · ${ramp.offer_ids.length} offers · ${ramp.status}`, image: '/images/guides/offer-plate.png', href: `/guardians/${guardianSlug}/value-ramp/${ramp.slug}`, kind: 'offer', rampStatus: ramp.status }));
   // One profile site per brand (a single brand reads exactly as before).
   const brandList: RelatedBrand[] = brands.length ? brands : [{ id: 'personal', name: displayName || 'Your', kind: 'personal', logo: null }];
+  const multiBrand = brandList.length > 1;
+  const inScope = (brandId: string | null | undefined) => !multiBrand || inBrandScope(scope, brandId);
   const siteRows: RelatedRow[] = [
-    ...brandList.map((brand): RelatedRow => ({ key: `profile-${brand.id}`, brandId: brand.id, kind: 'profile', title: `${brand.name || 'Your'} profile site`, meta: `/guardians/${guardianSlug}${brandList.length > 1 ? ` · ${brand.kind === 'personal' ? 'Personal' : 'Business'} brand` : ''}`, image: brand.logo || '/images/guides/guide-plate.png', href: `/guardians/${guardianSlug}` })),
+    ...brandList.map((brand): RelatedRow => ({ key: `profile-${brand.id}`, brandId: brand.id, kind: 'profile', title: `${brand.name || 'Your'} profile site`, meta: `${brandSitePath(guardianSlug, brand)}${brandList.length > 1 ? ` · ${brand.kind === 'personal' ? 'Personal' : 'Business'} brand` : ''}`, image: brand.logo || '/images/guides/guide-plate.png', href: brandSitePath(guardianSlug, brand) })),
     ...rampRows,
   ];
   const sections: Record<number, { title: string; tab: string; rows: RelatedRow[] }> = {
     1: { title: 'Your sites', tab: 'value_ramps', rows: siteRows },
     2: { title: 'Your Protocols', tab: 'protocols', rows: related.protocols.map((protocol) => ({ key: protocol.id, title: protocol.name, meta: `${protocol.total_days || 1} days · ${protocol.is_public ? 'Published' : 'Draft'}`, image: protocol.image_url, href: '/guardians/workspace?tab=protocols' })) },
     3: { title: audiences.length ? 'Your audiences' : 'Your leads', tab: audiences.length ? 'value_ramps' : 'leads', rows: audiences.length ? audiences.map((a) => ({ key: a.group, title: a.group, meta: a.ages, href: '/guardians/workspace?step=3' })) : related.leads.map((lead) => ({ key: lead.id, title: lead.name, meta: `${lead.email} · ${lead.goal || 'No goal yet'} · ${lead.stage}`, href: '/guardians/workspace?tab=leads' })) },
-    5: { title: 'Your offers', tab: 'offer_builder', rows: related.offers.map((offer) => ({ key: offer.id, title: offer.title, meta: [APP_PLAN_KINDS.includes(offer.kind) ? 'PDF + ROUTINE³' : OTHER_FORMATS[offer.kind] || offer.kind.replaceAll('_', ' '), offer.access_model === 'free' ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid', audience, offer.status].filter(Boolean).join(' · '), image: offerImage(offer), href: '/guardians/workspace?tab=offer_builder' })) },
+    5: { title: 'Your offers', tab: 'offer_builder', rows: related.offers.filter((offer) => inScope(offer.brand_id)).map((offer) => ({ key: offer.id, title: offer.title, meta: [APP_PLAN_KINDS.includes(offer.kind) ? 'PDF + ROUTINE³' : OTHER_FORMATS[offer.kind] || offer.kind.replaceAll('_', ' '), offer.access_model === 'free' ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid', audience, offer.status].filter(Boolean).join(' · '), image: offerImage(offer), href: '/guardians/workspace?tab=offer_builder' })) },
     6: { title: 'Your sites', tab: 'value_ramps', rows: siteRows },
   };
   const section = sections[step];
   if (!section) return null;
   const siteStep = step === 1 || step === 6;
-  const filterable = siteStep && brandList.length > 1;
   const kindTabs = siteStep && section.rows.some((row) => row.kind === 'profile') && section.rows.some((row) => row.kind === 'offer');
-  const filterIds = ['all', ...[...brandList].sort((a, b) => Number(b.id === activeBrandId) - Number(a.id === activeBrandId)).map((brand) => brand.id)];
-  const byBrand = filterable && brandFilter !== 'all' ? section.rows.filter((row) => !row.brandId || row.brandId === brandFilter) : section.rows;
+  const byBrand = section.rows.filter((row) => !row.brandId || inScope(row.brandId));
   const rows = kindTabs && siteKind !== 'all' ? byBrand.filter((row) => (siteKind === 'profile') === (row.kind === 'profile')) : byBrand;
-  const chipLabel = (id: string) => id === 'all' ? 'All' : `${id === activeBrandId ? 'Current · ' : ''}${brandList.find((brand) => brand.id === id)?.name || 'Brand'}`;
   return <section aria-label={section.title} style={{ maxWidth: 1100, margin: '0 auto 80px', borderTop: `1px solid ${line}`, paddingTop: 28 }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
       <span style={{ ...label, color: acid, marginBottom: 0 }}>In your workspace · {section.title} · {rows.length}</span>
@@ -4291,9 +4305,6 @@ export function StepRelated({ step, guardianSlug, displayName, related, audience
     </div>
     {kindTabs && <div role="group" aria-label="Filter sites by type" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
       {([['all', 'All sites'], ['profile', 'Profile sites'], ['offer', 'Offer path sites']] as const).map(([id, text]) => <button key={id} type="button" aria-pressed={siteKind === id} onClick={() => setSiteKind(id)} style={{ minHeight: 30, padding: '0 12px', border: `1px solid ${siteKind === id ? ink : line}`, background: siteKind === id ? ink : 'transparent', color: siteKind === id ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{text}</button>)}
-    </div>}
-    {filterable && <div role="group" aria-label="Filter sites by brand" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-      {filterIds.map((id) => <button key={id} type="button" aria-pressed={brandFilter === id} onClick={() => setBrandFilter(id)} style={{ minHeight: 30, padding: '0 12px', border: `1px solid ${brandFilter === id ? ink : line}`, background: brandFilter === id ? ink : 'transparent', color: brandFilter === id ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{chipLabel(id)}</button>)}
     </div>}
     {step === 2 && related.protocols.length ? <ProtocolCardGrid>{related.protocols.slice(0, 8).map((protocol) => (
       <ProtocolCard key={protocol.id} kicker={[daysLabel(protocol.total_days), protocol.is_public ? 'Published' : 'Draft'].join(' · ')} tags={completeProtocolTags(protocol)}
@@ -4310,7 +4321,7 @@ export function StepRelated({ step, guardianSlug, displayName, related, audience
         plate={art ? <span aria-hidden="true" style={{ display: 'block', width: 116 * art.cellAspect, height: 116, backgroundImage: `url(${art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${art.cols * 100}% ${art.rows * 100}%`, backgroundPosition: `${art.cols === 1 ? 0 : (art.index % art.cols) * 100 / (art.cols - 1)}% ${art.rows === 1 ? 0 : Math.floor(art.index / art.cols) * 100 / (art.rows - 1)}%` }} /> : undefined}
         by={displayName} owned inert onEdit={onEditAudience ? () => onEditAudience(a.group) : undefined}
         onDelete={onRemoveAudience ? async () => { if (await confirmInPage(`Remove ${name} from the people you help?`, 'Remove')) onRemoveAudience(a.group); } : undefined} />;
-    })}</ProtocolCardGrid> : step === 5 && related.offers.length ? <ProtocolCardGrid>{related.offers.slice(0, 8).map((offer) => {
+    })}</ProtocolCardGrid> : step === 5 && related.offers.filter((offer) => inScope(offer.brand_id)).length ? <ProtocolCardGrid>{related.offers.filter((offer) => inScope(offer.brand_id)).slice(0, 8).map((offer) => {
       const free = offer.access_model === 'free';
       return <ProductCard key={offer.id} kind={offer.kind} imageUrl={offer.cover_url}
         eyebrow={[audience || 'Everyone', offer.status === 'published' ? 'Published' : 'Draft'].join(' · ')}
@@ -5596,7 +5607,7 @@ export function SiteProfileForm({ userId, profile, onProfile }: { userId: string
         : { name: saved.display_name, kind: 'personal' as const, logo_url: l.logo_url || saved.avatar_url || null, contact_email: saved.contact_email || '', whatsapp_phone: saved.whatsapp_phone || '', website_url: l.website || '',
           social_links: { instagram: l.instagram || '', facebook: l.facebook || '', tiktok: l.tiktok || '', youtube: l.youtube || '', linktree: l.linktree || '', ...brandKitLinks(personalKit) },
           language: l.language || 'English', pricing_region: l.pricing_region || 'United Kingdom', currency: l.currency || 'GBP', is_primary: !brands.some((b) => b.is_primary) };
-      await replaceGuideBrands(userId, [personal, ...brands.map(({ key, ...b }) => b)]);
+      await replaceGuideBrands(userId, [personal, ...brands.map(({ key, ...b }) => ({ ...b, id: savedBrandId(key) }))]);
       setMessage('Saved.');
     } catch (e) { setMessage(`Could not save: ${(e as Error).message || 'try again'}`); }
     finally { setBusy(null); }
@@ -5766,7 +5777,8 @@ function GuidePortalRoutes() {
   const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
   const isWorkspaceRoute = pathname === '/guardians/workspace';
   const communityRoute = pathname.match(/^\/guardians\/([^/]+)\/community\/([^/]+)$/);
-  const rawRouteSlug = pathname.match(/^\/guardians\/([^/]+)(?:\/value-ramp\/[^/]+)?$/)?.[1] || null;
+  const brandRoute = brandSlugFromPath(pathname);
+  const rawRouteSlug = brandRoute?.guardian || pathname.match(/^\/guardians\/([^/]+)(?:\/value-ramp\/[^/]+)?$/)?.[1] || null;
   const routeSlug = rawRouteSlug ? canonicalGuideSlug(rawRouteSlug) : null;
   const [profile, setProfile] = useState<GuideProfile | null>(null);
   const [checking, setChecking] = useState(true);
@@ -5780,14 +5792,14 @@ function GuidePortalRoutes() {
     setChecking(true); getGuideProfile(user.id).then(setProfile).catch(() => setProfile(null)).finally(() => setChecking(false));
   }, [user?.id]);
   if (communityRoute) return <GuardianCommunityPage guardianSlug={canonicalGuideSlug(communityRoute[1])} channelSlug={decodeURIComponent(communityRoute[2])} />;
-  if (routeSlug && !isWorkspaceRoute) return <GuardianWebsite slug={routeSlug} isSignedIn={Boolean(user)} />;
+  if (routeSlug && !isWorkspaceRoute) return <GuardianWebsite slug={routeSlug} brandSlug={brandRoute?.brand} isSignedIn={Boolean(user)} />;
   if (!isWorkspaceRoute) return <PublicGuidePage isSignedIn={Boolean(user)} />;
   if (loading || checking) return <div style={{ minHeight: '100vh', background: black, color: ink, display: 'grid', placeItems: 'center', fontFamily: sans }}>Opening Guardian workspace…</div>;
   if (!user) return <PublicGuidePage isSignedIn={false} />;
   // The step builder (Profile → Guidance → Audience → Offers → Site) is the Guardian dashboard.
   // The tool views (Library, Leads, Recipes…) open from its header via ?tab=.
   const wantsTool = new URLSearchParams(window.location.search).has('tab');
-  if (accessToken && (!profile || !wantsTool)) return <Onboarding userId={user.id} accessToken={accessToken} hasProfile={Boolean(profile)} name={user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Guardian'} email={user.email || ''} accountAvatarUrl={user.user_metadata?.avatar_url || user.user_metadata?.picture || null} onDone={(p) => { setProfile(p); window.location.assign('/guardians/workspace?tab=home'); }} />;
+  if (accessToken && (!profile || !wantsTool)) return <><BrandScopeBar userId={user.id} personalName={profile?.display_name} /><Onboarding userId={user.id} accessToken={accessToken} hasProfile={Boolean(profile)} name={user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Guardian'} email={user.email || ''} accountAvatarUrl={user.user_metadata?.avatar_url || user.user_metadata?.picture || null} onDone={(p) => { setProfile(p); window.location.assign('/guardians/workspace?tab=home'); }} /></>;
   if (!profile) return <div style={{ minHeight: '100vh', background: black, color: ink, display: 'grid', placeItems: 'center', fontFamily: sans }}>Opening Guardian setup…</div>;
-  return <Workspace profile={profile} onProfile={setProfile} />;
+  return <><BrandScopeBar userId={user.id} personalName={profile.display_name} /><Workspace profile={profile} onProfile={setProfile} /></>;
 }
