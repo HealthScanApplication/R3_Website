@@ -5,7 +5,8 @@
  */
 import { useMemo, useState } from 'react';
 import type { GuideOffer, GuideProfile } from '../../utils/guidePortal';
-import { KIND_LABEL, formatMinutes, formatOfferPrice, groupByCategory, parseOfferMeta, type TreatKind } from '../../utils/treatOffers';
+import { KIND_LABEL, formatMinutes, groupByCategory, parseOfferMeta, type TreatKind } from '../../utils/treatOffers';
+import { useDisplayMoney } from '../../utils/displayMoney';
 
 const serif = '"CanelaText", "Canela Text", Georgia, serif';
 const sans = '"EuclidCircularA", "DM Sans", "Helvetica Neue", Arial, sans-serif';
@@ -25,6 +26,7 @@ export function bookingHref(profile: Pick<GuideProfile, 'contact_email' | 'displ
 
 export function GuardianOfferShelf({ kind, profile, offers, pagePadding }: { kind: TreatKind; profile: GuideProfile; offers: GuideOffer[]; pagePadding: string }) {
   const theme = THEMES[kind];
+  const money = useDisplayMoney();
   const published = useMemo(() => offers.filter((offer) => offer.kind === kind && offer.status === 'published'), [offers, kind]);
   const groups = useMemo(() => groupByCategory(published), [published]);
   const [filter, setFilter] = useState('all');
@@ -53,7 +55,7 @@ export function GuardianOfferShelf({ kind, profile, offers, pagePadding }: { kin
                 {group.offers.map((offer) => {
                   const meta = parseOfferMeta(offer.description);
                   const href = bookingHref(profile, offer);
-                  const price = formatOfferPrice(offer.price_cents, offer.currency, offer.access_model);
+                  const price = offer.access_model === 'free' || !offer.price_cents ? 'Free' : money(offer.price_cents, offer.currency || 'AUD'); // follows the page's currency and language picker
                   return (
                     <article key={offer.id} data-offer-card={offer.kind} style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 230, padding: 20, border: `1px solid ${theme.line}`, background: theme.card }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, fontFamily: sans, fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: theme.accent }}>

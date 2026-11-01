@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { GuardianWebsite } from '../../components/guides/GuidePortal';
+import { resetRates } from '../../utils/displayMoney';
 
 const room = (label: string, prices: [number, number][], note: string | null = null) => ({ label, note, currency: 'AUD', prices: prices.map(([guests, cents]) => ({ guests, cents })) });
 const retreat = (id: string, title: string, options: unknown[] = []) => ({ id, guide_id: 'owner', title, description: 'A residential program.', location: 'Misty Mountain, Bellbrook NSW', image_url: null, booking_url: 'https://www.mmh.com.au/contact', source_url: 'https://www.mmh.com.au/our-program', source_external_id: id, status: 'published', options });
@@ -105,5 +106,46 @@ describe('rooms on the upcoming sessions', () => {
     const talk = ([...region.querySelectorAll('article')] as HTMLElement[]).find((el) => el.textContent!.includes('Spring Talk'))!;
     expect(talk.querySelector('[data-retreat-rooms]')).toBeNull();
     expect(talk.textContent).toMatch(/See booking price/);
+  });
+});
+
+describe('prices follow the region, language and currency picker', () => {
+  const RATES = { AUD: 1.6, GBP: 0.85, USD: 1.1 };
+  const pick = (currency: string, locale = 'en') => localStorage.setItem('r3-store-locale', JSON.stringify({ region: 'Europe', locale, currency }));
+  beforeEach(() => {
+    resetRates(); localStorage.clear();
+    vi.stubGlobal('fetch', vi.fn(async (input: any) => (String(input).includes('frankfurter')
+      ? ({ ok: true, status: 200, json: async () => ({ rates: RATES }) } as Response)
+      : ({ ok: true, status: 200, json: async () => [], text: async () => '[]' } as Response))));
+  });
+  afterEach(() => localStorage.clear());
+
+  it('shows a room in the picked currency, marked as converted, and updates when the picker changes', async () => {
+    pick('EUR');
+    visit();
+    const programme = await card('8 Day / 7 Night');
+    await waitFor(() => expect(programme.querySelector('[data-room-price]')!.textContent).toMatch(/≈ €2,281/)); // A$3,650 at 1.6 per euro
+    const display = screen.getByLabelText('Display currency') as HTMLSelectElement;
+    fireEvent.change(display, { target: { value: 'USD' } });
+    await waitFor(() => expect(programme.querySelector('[data-room-price]')!.textContent).toMatch(/≈ \$2,509/));
+    fireEvent.change(display, { target: { value: 'AUD' } });
+    await waitFor(() => expect(programme.querySelector('[data-room-price]')!.textContent).toMatch(/A\$3,650/)); // back to the price it is sold at
+    expect(programme.querySelector('[data-room-price]')!.textContent).not.toMatch(/≈/);
+  });
+
+  it('follows the language for the number format, and the session cards too', async () => {
+    pick('EUR', 'de');
+    visit();
+    const region = await screen.findByRole('region', { name: "Barbara O'Neill's events" });
+    await waitFor(() => expect(region.querySelector('[data-room-price]')!.textContent!.replace(/\s/g, ' ')).toMatch(/≈ 2\.281,25 €/));
+  });
+
+  it('shows the price as it is when the rates cannot be fetched', async () => {
+    pick('EUR');
+    vi.stubGlobal('fetch', vi.fn(async (input: any) => { if (String(input).includes('frankfurter')) throw new Error('offline'); return { ok: true, status: 200, json: async () => [], text: async () => '[]' } as Response; }));
+    visit();
+    const programme = await card('8 Day / 7 Night');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(programme.querySelector('[data-room-price]')!.textContent).toMatch(/A\$3,650/);
   });
 });

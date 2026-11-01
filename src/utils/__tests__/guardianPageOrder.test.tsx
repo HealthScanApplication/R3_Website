@@ -85,3 +85,41 @@ describe('saving a brand keeps what it already has', () => {
     expect(tre.social_links.section_order).toMatch(/^retreats,events,/); // the saved order, written out in full
   });
 });
+
+describe('the email sign-up switch and the brands\' page addresses in the builder', () => {
+  it('has a switch for the email sign-up at the bottom of the page, on by default, saved with the page', async () => {
+    setup();
+    const panel = await openOrder();
+    const toggle = panel.querySelector('[data-email-capture-toggle] input') as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+    fireEvent.click(toggle);
+    expect(toggle.checked).toBe(false);
+    fireEvent.click(await screen.findByRole('button', { name: /^Save/ }));
+    await waitFor(() => expect(mocks.save).toHaveBeenCalled());
+    expect(mocks.save.mock.calls[0][0].social_links.email_capture).toBe('off');
+  });
+
+  it('saves nothing special when the sign-up is left on', async () => {
+    setup();
+    await openOrder();
+    fireEvent.click(await screen.findByRole('button', { name: /^Save/ }));
+    await waitFor(() => expect(mocks.save).toHaveBeenCalled());
+    expect(mocks.save.mock.calls[0][0].social_links.email_capture).toBe('');
+  });
+
+  it('keeps a brand\'s page address on its site card after switching away from it and back', async () => {
+    const TRE = '0b1c2d3e-aaaa-bbbb-cccc-111122223333';
+    mocks.profile.mockReturnValue({ user_id: 'owner', slug: 'test-guide', display_name: 'Test Guide', status: 'approved', onboarding_step: 6, social_links: {}, avatar_url: null, contact_email: 'g@example.com' });
+    mocks.listBrands.mockReturnValue([brand('p', 'Test Guide', 'personal'), brand(TRE, 'Tre Lune', 'business', {})]);
+    window.history.replaceState({}, '', '/guardians/workspace?step=1');
+    setup();
+    await screen.findByDisplayValue('Test Guide');
+    const chip = async (text: string) => (await screen.findAllByRole('button')).find((button) => button.getAttribute('aria-pressed') !== null && button.textContent === text)!;
+    await waitFor(() => expect(screen.getAllByText('/guardians/test-guide/tre-lune').length).toBeGreaterThan(0));
+    fireEvent.click(await chip('TTre Lune')); // open the brand
+    await screen.findByDisplayValue('Tre Lune');
+    fireEvent.click(await chip('TTest Guide')); // and back to the personal one
+    await screen.findByDisplayValue('Test Guide');
+    expect(screen.getAllByText('/guardians/test-guide/tre-lune').length).toBeGreaterThan(0); // not the Guardian's own page
+  });
+});

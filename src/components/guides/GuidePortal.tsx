@@ -21,6 +21,7 @@ import { createMonoLogo, isMonoLogoUrl, logoImageStyle } from '../../utils/brand
 import { PullFromLink } from './PullFromLink';
 import { eventDay } from '../../utils/eventDates';
 import { LogoBadge } from './LogoBadge';
+import { PublicLocaleContext, useDisplayMoney } from '../../utils/displayMoney';
 import { EventsCalendar } from './EventsCalendar';
 import { guestsLabel, parseRetreatOptions, roomPrice, type RetreatRoomOption } from '../../utils/retreatRooms';
 import { eventsInRange, type DayRange } from '../../utils/eventCalendar';
@@ -1295,6 +1296,39 @@ export function OfferCheckout({ offer, upsells, profile, accent, onClose, onFres
       {message && stage !== 'done' && <p role="alert" style={{ color: '#EF4444', fontSize: 12, margin: '0 20px 16px', textAlign: 'left' }}>{message}</p>}
   </GuardianModal>;
 }
+/**
+ * The email sign-up at the bottom of a page that has no free offer to hand over (so no offer funnel): a plain Follow form.
+ * It saves the same lead the hero's Follow box does. The owner can turn it off for the page in the site builder (Order tab).
+ */
+function FollowSignup({ profile, accent, headingFont }: { profile: GuideProfile; accent: string; headingFont: string }) {
+  const [form, setForm] = useState({ email: '', consent: false });
+  const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (state === 'sending' || !form.email.trim()) return;
+    setState('sending');
+    try {
+      await submitGuardianOptIn(profile.user_id, { name: form.email.trim().split('@')[0] || 'Subscriber', email: form.email.trim(), goal: null, marketingConsent: form.consent, consentText: CONSENT_TEXT });
+      setState('done');
+    } catch { setState('error'); }
+  }
+  return <section id="follow" data-page-section="follow" aria-label={`Follow ${profile.display_name}`} style={{ background: '#11150F', color: '#F2EFE7', padding: `clamp(64px,9vw,112px) ${PAGE_X}`, borderTop: '1px solid rgba(242,239,231,.14)' }}>
+    <div style={{ maxWidth: 560, margin: '0 auto', textAlign: 'center' }}>
+      <h2 style={{ fontFamily: headingFont, fontWeight: 300, fontSize: 'clamp(34px,5vw,56px)', lineHeight: 1, margin: '0 0 10px' }}>Follow {profile.display_name}.</h2>
+      <p style={{ color: '#B8B6AF', fontSize: 14, lineHeight: 1.55, margin: '0 0 22px' }}>New guidance, events and products, straight to your inbox.</p>
+      {state === 'done' ? <p role="status" style={{ color: accent, fontSize: 15, margin: 0 }}>You’re subscribed. Thank you.</p> : <form onSubmit={submit} style={{ display: 'grid', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto' }}>
+          <label htmlFor="follow-email" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)' }}>Email address</label>
+          <input id="follow-email" type="email" required autoComplete="email" placeholder="Enter your email address" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} style={{ minHeight: 50, boxSizing: 'border-box', padding: '0 16px', border: 0, background: '#F5F5F3', color: '#11120F', fontSize: 14, minWidth: 0 }} />
+          <button type="submit" disabled={state === 'sending'} style={{ minHeight: 50, padding: '0 22px', border: 0, background: '#C7D8A3', color: '#11150F', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', cursor: state === 'sending' ? 'wait' : 'pointer' }}>{state === 'sending' ? 'Joining…' : 'Follow'}</button>
+        </div>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', justifyContent: 'center', fontSize: 11, color: '#B8B6AF', textAlign: 'left' }}><input type="checkbox" checked={form.consent} onChange={(event) => setForm((current) => ({ ...current, consent: event.target.checked }))} style={{ marginTop: 2 }} />{CONSENT_TEXT}</label>
+        {state === 'error' && <span role="alert" style={{ color: '#FFB4A8', fontSize: 12 }}>We could not sign you up just now. Please try again.</span>}
+      </form>}
+    </div>
+  </section>;
+}
+
 function GuardianFunnel({ profile, offers, ramp, accent, headingFont, reviews = [], headlineStyle = 'editorial', backdrop = null }: { backdrop?: React.ReactNode; headlineStyle?: HeadlineStyle; reviews?: GuardianReview[]; profile: GuideProfile; offers: GuideOffer[]; ramp: GuideValueRamp | null; accent: string; headingFont: string }) {
   const ordered = orderFunnelOffers(offers, ramp);
   const entry = ordered.find((offer) => offer.access_model === 'free') || null;
@@ -1337,7 +1371,8 @@ function GuardianFunnel({ profile, offers, ramp, accent, headingFont, reviews = 
   const sellsHere = (offer: GuideOffer) => stripeConfig.enabled && offer.access_model === 'paid' && offer.price_cents > 0 && !offer.booking_url;
   const openOffer = (offer: GuideOffer) => (event: React.MouseEvent) => { if (sellsHere(offer)) { event.preventDefault(); setCheckoutOffer(offer); } };
   const paidAfter = (offer: GuideOffer) => ordered.slice(ordered.indexOf(offer) + 1).filter(sellsHere);
-  const price = (offer: GuideOffer) => offer.access_model === 'free' ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Enquire';
+  const money = useDisplayMoney();
+  const price = (offer: GuideOffer) => offer.access_model === 'free' ? 'Free' : offer.price_cents ? money(offer.price_cents, offer.currency || 'GBP') : 'Enquire';
   const offerHref = (offer: GuideOffer) => offer.kind === 'community' ? `/guardians/${encodeURIComponent(profile.slug)}/community/${encodeURIComponent(communitySlug(offer.title))}` : offer.booking_url || offer.affiliate_url || '#start';
   async function optIn(e: React.FormEvent) {
     e.preventDefault();
@@ -1790,11 +1825,12 @@ function GuardianOfferCatalog({ profile, offers, ramps, reviews, accent, protoco
     listProtocolItems('', unlocked.protocol.id).then((items) => { if (live) { setProtocolItems(items); setDeliveryState('ready'); } }).catch(() => { if (live) setDeliveryState('error'); });
     return () => { live = false; };
   }, [unlocked?.protocol?.id]);
+  const money = useDisplayMoney(); // before the early return: hooks must run in the same order every render
   if (!offers.length) return null;
   const configured = (categoryOrder || '').split(',').map((value) => value.trim()).filter(Boolean);
   const categories = ['All', ...(configured.length ? configured : DEFAULT_PROTOCOL_CATEGORIES.slice(1))].filter((category, index, all) => all.indexOf(category) === index && (category === 'All' || offers.some((offer) => offerCategory(offer) === category)));
   const visibleOffers = activeCategory === 'All' ? offers : offers.filter((offer) => offerCategory(offer) === activeCategory);
-  const price = (offer: GuideOffer) => offer.access_model === 'free' ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Enquire';
+  const price = (offer: GuideOffer) => offer.access_model === 'free' ? 'Free' : offer.price_cents ? money(offer.price_cents, offer.currency || 'GBP') : 'Enquire';
   const href = (offer: GuideOffer) => {
     if (offer.kind === 'community') return `/guardians/${encodeURIComponent(profile.slug)}/community/${encodeURIComponent(communitySlug(offer.title))}`;
     if (offer.booking_url || offer.affiliate_url) return offer.booking_url || offer.affiliate_url || '#offers';
@@ -2061,8 +2097,9 @@ function RoomSelectors({ title, rooms, choice, dark = false }: { title: string; 
 /** The price line for the chosen room, or the card's own price text when it has no rooms. */
 function RoomPrice({ choice, fallback, dark = false }: { choice: ReturnType<typeof useRoomChoice>; fallback: string; dark?: boolean }) {
   const { room, price } = choice;
+  const money = useDisplayMoney();
   if (!room || !price) return <strong style={{ fontFamily: serif, fontSize: dark ? 20 : 23, fontWeight: 300 }}>{fallback}</strong>;
-  return <span data-room-price><strong style={{ fontFamily: serif, fontSize: 26, fontWeight: 300 }}>{formatMoney(price.cents / 100, room.currency)}</strong><span style={{ display: 'block', color: dark ? '#9FA897' : '#66645F', fontSize: 11 }}>{guestsLabel(price.guests)} · {room.label}</span></span>;
+  return <span data-room-price><strong style={{ fontFamily: serif, fontSize: 26, fontWeight: 300 }}>{money(price.cents, room.currency)}</strong><span style={{ display: 'block', color: dark ? '#9FA897' : '#66645F', fontSize: 11 }}>{guestsLabel(price.guests)} · {room.label}</span></span>;
 }
 
 function RetreatCard({ profile, retreat }: { profile: GuideProfile; retreat: GuideRetreat }) {
@@ -2216,6 +2253,9 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   const emailBackdrop = <MountNearViewport><HeroBackdrop heroMedia={socials.theme_background || null} backgroundIsVideo={publicBackgroundIsVideo} clips={publicClips} typeVideo={publicTypeVideo} glass={publicGlass} greyscale={publicGreyscale} /></MountNearViewport>;
   // On a brand's page the name and its descriptor sit on two lines: "Misty Mountain" over "Lifestyle Retreat".
   const heroIdentity = activeBrand ? brandTileName(activeBrand.name, (activeBrand.social_links || {}) as Record<string, string>) : null;
+  // The email sign-up at the bottom: the offer funnel when there is a free offer to hand over, else a plain Follow form. The owner can turn it off (an offer path page keeps its own).
+  const emailCaptureOn = socials.email_capture !== 'off';
+  const funnelHasEntry = orderFunnelOffers(publishedOffers, selectedRamp || null).some((offer) => offer.access_model === 'free');
   const ownerName = ownerProfile?.display_name || profile.display_name;
   const ownerLinks = (ownerProfile?.social_links || {}) as Record<string, string>;
   const brandTiles = publicBrands.map((brand) => brand.kind === 'personal'
@@ -2230,7 +2270,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
     treats: <GuardianOfferShelf kind="treat" profile={profile} offers={offers.filter((offer) => onSite(offer.brand_id))} pagePadding={PAGE_X} />,
     forum: <GuardianForumTeaser profile={profile} pagePadding={PAGE_X} />,
     retreats: <GuardianRetreats profile={profile} retreats={siteRetreats} />,
-    funnel: <>{reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}{isOwner && <ProfileSectionSkeleton sections={profileSections} />}<GuardianFunnel key={selectedRamp?.id || 'default'} backdrop={emailBackdrop} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} /></>,
+    funnel: <>{reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}{isOwner && <ProfileSectionSkeleton sections={profileSections} />}{emailCaptureOn || pathSlug ? (funnelHasEntry ? <GuardianFunnel key={selectedRamp?.id || 'default'} backdrop={emailBackdrop} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} /> : <FollowSignup profile={profile} accent={publicAccent} headingFont={publicHeadingFont} />) : null}</>,
     brands: brandTiles.length > 1 && publicBrands.some((brand) => brand.kind === 'business') ? <section aria-labelledby="guardian-brands-title" data-page-section="brands" style={{ padding: `clamp(54px,7vw,100px) ${PAGE_X}`, background: '#11120F', color: ink }}>
       <span style={{ color: publicAccent, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Official brands</span>
       <h2 id="guardian-brands-title" style={{ margin: '12px 0 28px', fontFamily: publicHeadingFont, fontWeight: 300, fontSize: 'clamp(42px,6vw,78px)', lineHeight: .95 }}>More from {ownerName}.</h2>
@@ -2243,7 +2283,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
       </article>)}</div>
     </section> : null,
   };
-  return <div className="guardian-public-site" lang={publicLanguage} dir={publicLanguage === 'ar' ? 'rtl' : 'ltr'} style={{ minHeight: '100vh', background: publicPageColor, color: '#11120F', fontFamily: publicBodyFont }}>
+  return <PublicLocaleContext.Provider value={{ currency: localePreference.currency, locale: localePreference.locale }}><div className="guardian-public-site" lang={publicLanguage} dir={publicLanguage === 'ar' ? 'rtl' : 'ltr'} style={{ minHeight: '100vh', background: publicPageColor, color: '#11120F', fontFamily: publicBodyFont }}>
     <style>{`.guardian-public-site button,.guardian-public-site input,.guardian-public-site select,.guardian-public-site textarea{font-family:${sans}}.guardian-public-site a{font-family:inherit}.guardian-public-site h1,.guardian-public-site h2,.guardian-public-site h3{font-synthesis:none}@media(max-width:760px){.guardian-header-socials{display:none!important}}`}</style>
     {publicHeaderStyle !== 'hidden' && <header style={{ position: 'fixed', inset: '0 0 auto', zIndex: 100, minHeight: 64, background: publicHeaderBackground, color: publicHeaderText, borderBottom: '1px solid rgba(17,18,15,.2)', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', alignItems: 'center', gap: 8, padding: '0 clamp(8px,4vw,84px)' }}>
       <a href="/" aria-label="R³ Guardian" style={{ color: publicHeaderText, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 12, justifySelf: 'start' }}><RoutineMark size={32} textColor="#16140F" hairline="#16140F" wordmark="R³" suffix="Guardian" />{socials.brand_name && <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.12em' }}>{socials.brand_name}</span>}</a>
@@ -2263,7 +2303,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
         {profile.display_name} shares general wellbeing guidance, not medical advice. Speak to your GP or doctor before changing medication, diet or exercise, and about any health concern. Individual results vary.
       </footer>
     </main>
-  </div>;
+  </div></PublicLocaleContext.Provider>;
 }
 
 const GET_STARTED_STEPS = ['Profile', 'Guidance', 'Audience', 'Products', 'Offer path', 'Site'] as const;
@@ -2381,6 +2421,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const [siteStyleStage, setSiteStyleStage] = useState(0);
   // The order of the sections on the page being edited (the selected brand's page): saved with that brand.
   const [sectionOrder, setSectionOrder] = useState<PageSectionKey[]>(DEFAULT_SECTION_ORDER);
+  const [emailCapture, setEmailCapture] = useState(true); // the email sign-up at the bottom of this page
   const [offerEditStage, setOfferEditStage] = useState(0);
   const [pageColor, setPageColor] = useState('#F2EFE7');
   const [accentColor, setAccentColor] = useState('#667245');
@@ -2427,6 +2468,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       if (links.theme_background_type === 'image' || links.theme_background_type === 'video') setBackgroundType(links.theme_background_type);
       if (links.theme_image_treatment === 'color' || links.theme_image_treatment === 'greyscale') setImageTreatment(links.theme_image_treatment);
       setSectionOrder(orderPageSections(links.section_order));
+      setEmailCapture(links.email_capture !== 'off');
       setHeadlineStyle(headlineStyleOf(links.theme_headline_style));
       if (links.theme_header_style === 'white' || links.theme_header_style === 'hidden') setHeaderStyle(links.theme_header_style as HeaderStyle);
       if (links.theme_page_color) setPageColor(links.theme_page_color);
@@ -2568,11 +2610,12 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       localId: activeBrandId,
       name: displayName.trim() || current?.name || 'Untitled brand',
       kind: current?.kind || 'business',
+      slug: current?.slug ?? null, // the brand's page address: lost here, every site card would fall back to the Guardian's own page
       logo_url: logoOverride ?? logoUrl,
       contact_email: contactEmail.trim(),
       whatsapp_phone: whatsappPhone.trim(),
       website_url: websiteUrl.trim(),
-      social_links: { ...(brandProfiles.find((brand) => brand.localId === activeBrandId)?.social_links || {}), instagram: instagramUrl.trim(), facebook: facebookUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), photos: JSON.stringify(sitePhotos), avatar_house_url: houseAvatarFlag(logoOverride ?? logoUrl, houses), ...brandKitLinks(brandKit), section_order: serializeSectionOrder(sectionOrder) },
+      social_links: { ...(brandProfiles.find((brand) => brand.localId === activeBrandId)?.social_links || {}), instagram: instagramUrl.trim(), facebook: facebookUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), photos: JSON.stringify(sitePhotos), avatar_house_url: houseAvatarFlag(logoOverride ?? logoUrl, houses), ...brandKitLinks(brandKit), section_order: serializeSectionOrder(sectionOrder), email_capture: emailCapture ? '' : 'off' },
       language: mainLanguage,
       pricing_region: pricingRegion,
       currency,
@@ -2587,6 +2630,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     setMainLanguage(brand.language); setPricingRegion(brand.pricing_region); setCurrency(brand.currency);
     setBrandKit(brandKitOf(brand.social_links));
     setSectionOrder(orderPageSections(brand.social_links.section_order));
+    setEmailCapture(brand.social_links.email_capture !== 'off');
     // Photos belong to the brand. Only the personal brand starts with the photo that comes with the account email.
     const brandPhotos = parsePhotos(brand.social_links.photos);
     setSitePhotos(brand.localId === 'personal' ? (brandPhotos.length ? brandPhotos : accountAvatarUrl ? [accountAvatarUrl] : []) : brandPhotos);
@@ -3069,7 +3113,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     const audienceText = audience.join(', ').toLowerCase();
     const headline = generatedHeadline;
     const bio = intro.trim() || `I help ${audienceText} with ${chosen.join(', ').toLowerCase()} through ${format.join(', ').toLowerCase()}.`;
-    return { user_id: userId, slug, display_name: displayName, headline, bio, avatar_url: avatarOverride ?? avatarUrl, contact_email: contactEmail.trim(), whatsapp_phone: whatsappPhone.trim(), social_links: { ...savedLinksRef.current, instagram: instagramUrl.trim(), facebook: facebookUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), website: websiteUrl.trim(), language: mainLanguage, pricing_region: pricingRegion, currency, site_goal: websiteGoal, booking_provider: bookingProvider, booking_url: bookingUrl.trim(), brand_name: brandName.trim() || displayName.trim(), logo_url: avatarOverride ?? logoUrl ?? '', avatar_house_url: houseAvatarFlag(avatarOverride ?? avatarUrl, houses), expertise_tags: expertiseTags.join(','), offer_videos: JSON.stringify(offerVideos), photos: JSON.stringify(sitePhotos), roles: roles.join(','), audience_details: JSON.stringify(Object.fromEntries(audience.filter((g) => audienceDetails[g]).map((g) => [g, audienceDetails[g]]))), theme_template: storyTemplate, theme_background: effectiveBackground, theme_background_type: backgroundType, theme_background_clips: clipsToLinks(backgroundClips), theme_glass: heroGlassSetting, theme_image_treatment: imageTreatment, theme_header_style: headerStyle, theme_headline_style: headlineStyle, theme_heading: 'Canela', theme_body: 'Euclid', theme_page_color: pageColor, theme_accent_color: accentColor, section_order: serializeSectionOrder(sectionOrder) }, specialties: chosen, status, onboarding_step: onboardingStep };
+    return { user_id: userId, slug, display_name: displayName, headline, bio, avatar_url: avatarOverride ?? avatarUrl, contact_email: contactEmail.trim(), whatsapp_phone: whatsappPhone.trim(), social_links: { ...savedLinksRef.current, instagram: instagramUrl.trim(), facebook: facebookUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), website: websiteUrl.trim(), language: mainLanguage, pricing_region: pricingRegion, currency, site_goal: websiteGoal, booking_provider: bookingProvider, booking_url: bookingUrl.trim(), brand_name: brandName.trim() || displayName.trim(), logo_url: avatarOverride ?? logoUrl ?? '', avatar_house_url: houseAvatarFlag(avatarOverride ?? avatarUrl, houses), expertise_tags: expertiseTags.join(','), offer_videos: JSON.stringify(offerVideos), photos: JSON.stringify(sitePhotos), roles: roles.join(','), audience_details: JSON.stringify(Object.fromEntries(audience.filter((g) => audienceDetails[g]).map((g) => [g, audienceDetails[g]]))), theme_template: storyTemplate, theme_background: effectiveBackground, theme_background_type: backgroundType, theme_background_clips: clipsToLinks(backgroundClips), theme_glass: heroGlassSetting, theme_image_treatment: imageTreatment, theme_header_style: headerStyle, theme_headline_style: headlineStyle, theme_heading: 'Canela', theme_body: 'Euclid', theme_page_color: pageColor, theme_accent_color: accentColor, section_order: serializeSectionOrder(sectionOrder), email_capture: emailCapture ? '' : 'off' }, specialties: chosen, status, onboarding_step: onboardingStep };
   };
 
   /** Save this part of the setup as a draft: the profile (photos, avatar, brand look, audience…) and, once they have loaded, the brands. Never publishes or changes approval. */
@@ -3993,6 +4037,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
                   <button type="button" aria-label={`Move ${name} down`} disabled={index === sectionOrder.length - 1} onClick={() => setSectionOrder((current) => moveSection(current, key, 1))} style={{ ...btn, minHeight: 32, width: 36, padding: 0, background: 'transparent', color: ink, opacity: index === sectionOrder.length - 1 ? .35 : 1 }}><ArrowDown size={14} /></button>
                 </li>; })}
               </ol>
+              <label data-email-capture-toggle style={{ display: 'flex', gap: 9, alignItems: 'flex-start', margin: '16px 0 0', fontSize: 12, lineHeight: 1.5, color: ink }}><input type="checkbox" checked={emailCapture} onChange={(event) => setEmailCapture(event.target.checked)} style={{ marginTop: 3 }} /><span><strong style={{ display: 'block', fontSize: 12 }}>Email sign-up at the bottom of the page</strong><span style={{ color: muted }}>Visitors can follow {displayName || 'you'} by email. Turn it off to hide it on this page.</span></span></label>
               <button type="button" onClick={() => setSectionOrder(DEFAULT_SECTION_ORDER)} disabled={serializeSectionOrder(sectionOrder) === ''} style={{ ...btn, minHeight: 34, marginTop: 10, background: 'transparent', color: ink }}>Reset order</button>
             </div>}
           </div>
