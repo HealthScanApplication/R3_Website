@@ -15,10 +15,10 @@ describe('profile sections', () => {
     const filled = Object.fromEntries(states.filter((section) => section.filled).map((section) => [section.id, section.count]));
     expect(filled).toEqual({ courses: 1, sessions: 2 });
   });
-  it('protocols, shop products, events and retreats count too', () => {
-    const states = profileSectionStates({ offers: [{ kind: 'festival' }], protocols: 3, products: 27, events: 4, retreats: 1 });
+  it('shop products, events and retreat rows count too; a festival offer is a Session (the catalog shows it there)', () => {
+    const states = profileSectionStates({ offers: [{ kind: 'festival' }], products: 27, events: 4, retreats: 1 });
     const filled = Object.fromEntries(states.filter((section) => section.filled).map((section) => [section.id, section.count]));
-    expect(filled).toEqual({ protocols: 3, shop: 27, events: 4, retreats: 2 });
+    expect(filled).toEqual({ sessions: 1, shop: 27, events: 4, retreats: 1 });
   });
   it('talks and treats come from their own offer kinds', () => {
     const filled = profileSectionStates({ offers: [{ kind: 'talk' }, { kind: 'treat' }] }).filter((section) => section.filled).map((section) => section.id);

@@ -2068,7 +2068,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   const publishedOffers = offers.filter((offer) => offer.status === 'published');
   // Every section of the page in value-ramp order. A section with something in it is a tag under the call to action; the owner also sees the empty ones.
   const isOwner = isSignedIn && user?.id === profile.user_id;
-  const profileSections = profileSectionStates({ offers: publishedOffers, protocols: guardianProtocols.length, products: shopProductCount, events: events.length, retreats: retreats.length });
+  const profileSections = profileSectionStates({ offers: publishedOffers, products: shopProductCount, events: events.length, retreats: retreats.length });
   const sectionTags: HeroSection[] = profileSections.filter((section) => section.filled || isOwner).map((section): HeroSection => section.filled ? [section.anchor, section.label, 'filled', section.category] : [`section-${section.id}`, section.label, 'empty']);
   const freeOffers = publishedOffers.filter((offer) => offer.access_model === 'free');
   const socials = profile.social_links || {};
@@ -3020,7 +3020,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   ];
   const activeStep = steps[Math.max(step, 1) - 1];
   // The preview shows the whole skeleton: a tag for every section in value-ramp order, dotted until a product of that type is added.
-  const previewHeroTags: HeroSection[] = profileSectionStates({ offers: related.offers, protocols: related.protocols.filter((protocol) => protocol.is_public).length, products: related.products.length }).map((section): HeroSection => [section.anchor === 'catalog' ? 'catalog' : section.anchor, section.label, section.filled ? 'filled' : 'empty', section.category]);
+  const previewHeroTags: HeroSection[] = profileSectionStates({ offers: related.offers, products: related.products.length }).map((section): HeroSection => [section.anchor === 'catalog' ? 'catalog' : section.anchor, section.label, section.filled ? 'filled' : 'empty', section.category]);
   const rampAudienceOptions = audience.length ? audience : ['Everyone'];
   // A specific group (e.g. Women) beats the 'Everyone' default, so the path matches the audience chip on the cards.
   const specificAudience = rampAudienceOptions.find((group) => group !== 'Everyone');
