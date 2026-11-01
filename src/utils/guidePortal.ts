@@ -1227,8 +1227,12 @@ export async function listGuideProducts(guideId: string): Promise<GuideProduct[]
 }
 
 /** Published products for a Guardian's public site. RLS also requires the Guardian to be approved. */
-export async function listPublicGuideProducts(guideId: string): Promise<GuideProduct[]> {
-  const { data, error, status } = await db().from('guide_products').select('*, guide_product_protocols(protocol_id, position)').eq('guide_id', guideId).eq('status', 'published').order('sort_order').limit(60);
+/** `brandId`: a brand's id for its own page, null for the Guardian's own page (products with no brand), undefined for all of them. Filtered in the query so a page's products are never crowded out by another brand's. */
+export async function listPublicGuideProducts(guideId: string, brandId?: string | null): Promise<GuideProduct[]> {
+  let query = db().from('guide_products').select('*, guide_product_protocols(protocol_id, position)').eq('guide_id', guideId).eq('status', 'published');
+  if (brandId === null) query = query.is('brand_id', null);
+  else if (brandId) query = query.eq('brand_id', brandId);
+  const { data, error, status } = await query.order('sort_order').limit(60);
   if (error) throw productsError(error, status);
   return (data || []).map(withProtocolIds);
 }
