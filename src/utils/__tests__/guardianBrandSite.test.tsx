@@ -106,6 +106,18 @@ describe('the public page of each brand', () => {
     await waitFor(() => expect(shopSpy).toHaveBeenCalledWith('owner', null)); // her own page: products with no brand
   });
 
+  it('shows a brand\'s flat logo white on the dark hero, and a normal photo as it is', async () => {
+    visit('/guardians/barbara-oneill/tre-lune', 'tre-lune');
+    await screen.findByRole('region', { name: "Tre Lune's treats" });
+    const logo = document.querySelector('img[src="https://x/logo-mono-1.png"]') as HTMLImageElement;
+    expect(logo.style.filter).toBe('invert(1)');
+    cleanup();
+    visit('/guardians/barbara-oneill');
+    await screen.findByRole('region', { name: "Barbara O'Neill's treats" });
+    const portrait = document.querySelector('img[src="https://x/barbara.jpg"]') as HTMLImageElement | null;
+    if (portrait) expect(portrait.style.filter).not.toBe('invert(1)');
+  });
+
   it('an address that is not one of the Guardian\'s brands is a page that is not published', async () => {
     visit('/guardians/barbara-oneill/nothing-here', 'nothing-here');
     expect(await screen.findByText('This page is not published yet.')).toBeTruthy();
