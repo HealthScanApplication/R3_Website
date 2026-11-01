@@ -2148,7 +2148,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
         </article>)}</div>
       </section>}
       <GuardianOfferCatalog profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} categoryOrder={socials.protocol_filter_order} />
-      <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} protocols={guardianProtocols} owns={onSite} localePreference={localePreference} categoryOrder={socials.product_filter_order} />
+      <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} protocols={guardianProtocols} owns={onSite} brandId={brandSlug ? activeBrand?.id : null} localePreference={localePreference} categoryOrder={socials.product_filter_order} />
       <GuardianEvents profile={profile} events={siteEvents} sourceUrl={eventSource} canEditSource={isSignedIn && user?.id === profile.user_id} onImported={setEvents} onSourceChanged={setEventSource} />
       <GuardianOfferShelf kind="talk" profile={profile} offers={offers.filter((offer) => onSite(offer.brand_id))} pagePadding={PAGE_X} />
       <GuardianOfferShelf kind="treat" profile={profile} offers={offers.filter((offer) => onSite(offer.brand_id))} pagePadding={PAGE_X} />

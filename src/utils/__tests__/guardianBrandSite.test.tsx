@@ -12,6 +12,7 @@ const BRANDS = [
   { id: 'b-tre', guide_id: 'owner', name: 'Tre Lune', kind: 'business', slug: 'tre-lune', logo_url: 'https://x/logo-mono-1.png', website_url: 'https://www.trelune.com.au/', social_links: { headline: 'Natural hormonal support', instagram: 'https://instagram.com/trelune_' }, is_primary: false },
   { id: 'b-mmh', guide_id: 'owner', name: 'Misty Mountain Lifestyle Retreat', kind: 'business', slug: 'misty-mountain', logo_url: null, website_url: 'https://www.mmh.com.au/', social_links: {}, is_primary: false },
 ];
+const shopSpy = vi.hoisted(() => vi.fn());
 const OFFERS = [treat('t1', 'Personal Treat', null), treat('t2', 'Tre Lune Treat', 'b-tre'), treat('t3', 'Misty Treat', 'b-mmh')];
 
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: null, accessToken: null, signOut: () => {}, loading: false }) }));
@@ -22,9 +23,10 @@ vi.mock('../guidePortal', async (importOriginal) => ({
   listGuideOffers: async () => OFFERS,
   listGuideValueRamps: async () => [],
   listPublicGuideBrands: async () => BRANDS,
+  listPublicGuideProducts: async (guide: string, brand?: string | null) => { shopSpy(guide, brand); return []; },
 }));
 
-beforeEach(() => { vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => [], text: async () => '[]' }) as Response)); });
+beforeEach(() => { shopSpy.mockReset(); vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => [], text: async () => '[]' }) as Response)); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const visit = (path: string, brandSlug?: string) => { window.history.replaceState({}, '', path); return render(<GuardianWebsite slug="barbara-oneill" brandSlug={brandSlug} isSignedIn={false} />); };
@@ -92,6 +94,16 @@ describe('the public page of each brand', () => {
     expect(within(section).queryByText('Personal Treat')).toBeNull();
     expect(within(section).queryByText('Misty Treat')).toBeNull();
     expect(screen.queryByRole('region', { name: "Barbara O'Neill's treats" })).toBeNull();
+  });
+
+  it('asks for each page\'s own products in the query, so another brand\'s products cannot crowd them out', async () => {
+    visit('/guardians/barbara-oneill/tre-lune', 'tre-lune');
+    await screen.findByRole('region', { name: "Tre Lune's treats" });
+    await waitFor(() => expect(shopSpy).toHaveBeenCalledWith('owner', 'b-tre'));
+    cleanup(); shopSpy.mockReset();
+    visit('/guardians/barbara-oneill');
+    await screen.findByRole('region', { name: "Barbara O'Neill's treats" });
+    await waitFor(() => expect(shopSpy).toHaveBeenCalledWith('owner', null)); // her own page: products with no brand
   });
 
   it('an address that is not one of the Guardian\'s brands is a page that is not published', async () => {
