@@ -37,6 +37,9 @@ import { buildRecipesWithAI, computeNutrition, gramsFor, searchCatalogIngredient
 import { APP_STORE_URL } from '../../config/appLinks';
 import { EventProtocolBuilder } from './EventProtocolBuilder';
 import { GuardianModal } from './GuardianModal';
+import { GuardianHeroBackdrop } from './GuardianHeroBackdrop';
+import { HOUSE_AVATARS, HOUSE_STYLE_REQUIRED, houseAvatarFlag, isHouseStyleAvatar } from '../../utils/guardianHouseStyle';
+import { HouseAvatarReview } from './HouseAvatarReview';
 import { SiteCardGrid, SitePublishBar, SiteStatusTag, type SiteCardData } from './GuardianSiteCards';
 import { sitePublishAction, siteStatus } from '../../utils/guardianSiteStatus';
 import { BrandKitFields } from './BrandKitFields';
@@ -255,13 +258,7 @@ const storyTemplates: { id: StoryTemplateId; name: string; style: string; descri
 /** A portrait is an image: the upload helper also accepts videos (for page backgrounds), which make no sense here. */
 const portraitProblem = (file: File) => (/^image\/(?:jpeg|png|webp|gif)$/.test(file.type) ? null : 'Choose a JPG, PNG, WebP or GIF image.');
 const PORTRAIT_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
-const defaultAvatars = [
-  { name: 'Guardian', image: '/images/guides/avatars/guardian.png' },
-  { name: 'Woman', image: '/images/guides/avatars/woman.png' },
-  { name: 'Man', image: '/images/guides/avatars/man.png' },
-  { name: 'Grandmother', image: '/images/guides/avatars/grandmother.png' },
-  { name: 'Grandfather', image: '/images/guides/avatars/grandfather.png' },
-];
+const defaultAvatars = HOUSE_AVATARS;
 
 const bookingProviders: { value: BookingProvider; label: string; placeholder: string }[] = [
   { value: 'ROUTINE³ Booking', label: 'R3 Booking', placeholder: 'https://routine3.com/book/yourname' },
@@ -920,8 +917,9 @@ function PublicGuidePage({ isSignedIn }: { isSignedIn: boolean }) {
       <GuardianHeader transparent isSignedIn={isSignedIn} onSignIn={() => setAuthMode('login')} onSignOut={() => signOut()} />
       {authMode && <AuthPanel key={authMode} initialMode={authMode} initialEmail={heroEmail.trim()} onModalClose={() => setAuthMode(null)} />}
       <main>
-        <section style={{ position: 'relative', minHeight: 'calc(100svh - 65px)', display: 'grid', alignItems: 'center', overflow: 'hidden', backgroundImage: 'linear-gradient(rgba(9,10,8,.22),rgba(9,10,8,.84)),url(/images/guides/templates/community-table.webp)', backgroundSize: 'cover', backgroundPosition: 'center' }}>
-          <div style={{ width: '100%', boxSizing: 'border-box', padding: 'clamp(54px,8vh,90px) clamp(20px,6vw,90px)' }}>
+        <section style={{ position: 'relative', minHeight: 'calc(100svh - 65px)', display: 'grid', alignItems: 'center', overflow: 'hidden' }}>
+          <GuardianHeroBackdrop />
+          <div style={{ position: 'relative', zIndex: 1, width: '100%', boxSizing: 'border-box', padding: 'clamp(54px,8vh,90px) clamp(20px,6vw,90px)' }}>
             <div style={{ maxWidth: 860 }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', color: acid, marginBottom: 28 }}>LEARN · BUILD · GUIDE</div>
               <h1 style={{ margin: 0, fontFamily: serif, fontWeight: 300, fontSize: 'clamp(64px,10vw,142px)', lineHeight: .84, letterSpacing: '-0.055em' }}>Become a Guardian.</h1>
@@ -2075,6 +2073,11 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const [avatarUrl, setAvatarUrl] = useState<string | null>(accountAvatarUrl || defaultAvatars[0].image);
   const navAvatarUrl = useGuardianAvatarUrl(userId, avatarUrl, logoUrl);
   const [avatarSourceUrl, setAvatarSourceUrl] = useState<string | null>(accountAvatarUrl || defaultAvatars[0].image);
+  // The last upload converted to the R³ house style; the house style is required to publish (see guardianHouseStyle).
+  // Every converted upload is its own URL, so one list covers the profile and every brand (switching brands keeps each approval).
+  const [houseAvatarUrls, setHouseAvatarUrls] = useState<string[]>([]);
+  const addHouseAvatars = (...urls: (string | null | undefined)[]) => setHouseAvatarUrls((current) => { const fresh = urls.filter((url): url is string => !!url && !current.includes(url)); return fresh.length ? [...current, ...fresh] : current; });
+  const avatarIsHouseStyle = isHouseStyleAvatar(avatarUrl, houseAvatarUrls);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [avatarConverting, setAvatarConverting] = useState(false);
   const [avatarApplying, setAvatarApplying] = useState(false);
@@ -2124,6 +2127,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       setSavedStatus(saved.status);
       if (saved.display_name) setDisplayName(saved.display_name);
       if (saved.avatar_url) { setAvatarUrl(saved.avatar_url); setAvatarSourceUrl(saved.avatar_url); }
+      addHouseAvatars(links.avatar_house_url);
       if (saved.contact_email) setContactEmail(saved.contact_email);
       if (links.theme_background) setBackgroundUrl(links.theme_background);
       if (links.theme_background_clips) setBackgroundClips(clipsFromLinks(links.theme_background_clips));
@@ -2154,6 +2158,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       setBrandsLoaded('ok');
       if (!saved.length) return;
       const drafts: BrandDraft[] = saved.map((b) => ({ localId: b.kind === 'personal' ? 'personal' : `brand-${b.id}`, name: b.name, kind: b.kind, logo_url: b.logo_url, contact_email: b.contact_email, whatsapp_phone: b.whatsapp_phone, website_url: b.website_url, social_links: b.social_links || {}, language: b.language, pricing_region: b.pricing_region, currency: b.currency as BrandDraft['currency'] }));
+      addHouseAvatars(...drafts.map((d) => d.social_links.avatar_house_url));
       setBrandProfiles((current) => [drafts.find((d) => d.localId === 'personal') || current.find((d) => d.localId === 'personal')!, ...drafts.filter((d) => d.localId !== 'personal')].filter(Boolean));
       const personal = drafts.find((d) => d.localId === 'personal');
       if (personal) setBrandKit(brandKitOf(personal.social_links));
@@ -2253,7 +2258,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const previewHeaderBackground = '#FFFFFF';
   const previewHeaderText = '#11120F';
 
-  function currentBrandDraft(logoOverride?: string): BrandDraft {
+  function currentBrandDraft(logoOverride?: string, houses: readonly string[] = houseAvatarUrls): BrandDraft {
     const current = brandProfiles.find((brand) => brand.localId === activeBrandId);
     return {
       localId: activeBrandId,
@@ -2263,7 +2268,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       contact_email: contactEmail.trim(),
       whatsapp_phone: whatsappPhone.trim(),
       website_url: websiteUrl.trim(),
-      social_links: { instagram: instagramUrl.trim(), facebook: facebookUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), photos: JSON.stringify(sitePhotos), ...brandKitLinks(brandKit) },
+      social_links: { instagram: instagramUrl.trim(), facebook: facebookUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), photos: JSON.stringify(sitePhotos), avatar_house_url: houseAvatarFlag(logoOverride ?? logoUrl, houses), ...brandKitLinks(brandKit) },
       language: mainLanguage,
       pricing_region: pricingRegion,
       currency,
@@ -2520,7 +2525,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       setAvatarSourceUrl(url);
       setAvatarPreviewUrl(null);
       setLogoUrl(url);
-      setImportMessage('Profile image uploaded.');
+      setImportMessage('Profile image uploaded. Create your R³ house style to publish it.');
     } catch (e: any) {
       setImportMessage(e.message || 'Could not upload that profile image.');
     } finally { setUploading(false); }
@@ -2550,9 +2555,9 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     setAvatarApplying(true); setAvatarError(''); setImportMessage('');
     try {
       const url = await uploadGuideImage(userId, generatedImageFile(avatarPreviewUrl));
-      setAvatarUrl(url); setLogoUrl(url); setAvatarPreviewUrl(null);
+      setAvatarUrl(url); setLogoUrl(url); addHouseAvatars(url); setAvatarPreviewUrl(null);
       // Applying it saves it: the profile and brand are updated now, so the site, the nav and the cards show the new avatar without a separate Save.
-      const saved = await saveProgress({ avatarUrl: url });
+      const saved = await saveProgress({ avatarUrl: url, houseAvatarUrl: url });
       setImportMessage(saved ? 'R³ house-style avatar applied and saved.' : 'R³ house-style avatar applied. Save your profile to keep it.');
     } catch (error) {
       setAvatarError(error instanceof Error ? error.message : 'Could not save the converted avatar.');
@@ -2695,17 +2700,18 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   }
 
   /** The Guardian's profile row as it is saved, whether they publish (status submitted, step 5) or just save a draft. */
-  const profileRow = (status: GuideProfile['status'], onboardingStep: number, slugOverride?: string | null, avatarOverride?: string) => {
+  const profileRow = (status: GuideProfile['status'], onboardingStep: number, slugOverride?: string | null, avatarOverride?: string, houses: readonly string[] = houseAvatarUrls) => {
     const slug = slugOverride || guardianSlug;
     const audienceText = audience.join(', ').toLowerCase();
     const headline = generatedHeadline;
     const bio = intro.trim() || `I help ${audienceText} with ${chosen.join(', ').toLowerCase()} through ${format.join(', ').toLowerCase()}.`;
-    return { user_id: userId, slug, display_name: displayName, headline, bio, avatar_url: avatarOverride ?? avatarUrl, contact_email: contactEmail.trim(), whatsapp_phone: whatsappPhone.trim(), social_links: { instagram: instagramUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), website: websiteUrl.trim(), language: mainLanguage, pricing_region: pricingRegion, currency, site_goal: websiteGoal, booking_provider: bookingProvider, booking_url: bookingUrl.trim(), brand_name: brandName.trim() || displayName.trim(), logo_url: avatarOverride ?? logoUrl ?? '', expertise_tags: expertiseTags.join(','), offer_videos: JSON.stringify(offerVideos), photos: JSON.stringify(sitePhotos), roles: roles.join(','), audience_details: JSON.stringify(Object.fromEntries(audience.filter((g) => audienceDetails[g]).map((g) => [g, audienceDetails[g]]))), theme_template: storyTemplate, theme_background: effectiveBackground, theme_background_type: backgroundType, theme_background_clips: clipsToLinks(backgroundClips), theme_glass: heroGlassSetting, theme_image_treatment: imageTreatment, theme_header_style: headerStyle, theme_headline_style: headlineStyle, theme_heading: 'Canela', theme_body: 'Euclid', theme_page_color: pageColor, theme_accent_color: accentColor }, specialties: chosen, status, onboarding_step: onboardingStep };
+    return { user_id: userId, slug, display_name: displayName, headline, bio, avatar_url: avatarOverride ?? avatarUrl, contact_email: contactEmail.trim(), whatsapp_phone: whatsappPhone.trim(), social_links: { instagram: instagramUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), website: websiteUrl.trim(), language: mainLanguage, pricing_region: pricingRegion, currency, site_goal: websiteGoal, booking_provider: bookingProvider, booking_url: bookingUrl.trim(), brand_name: brandName.trim() || displayName.trim(), logo_url: avatarOverride ?? logoUrl ?? '', avatar_house_url: houseAvatarFlag(avatarOverride ?? avatarUrl, houses), expertise_tags: expertiseTags.join(','), offer_videos: JSON.stringify(offerVideos), photos: JSON.stringify(sitePhotos), roles: roles.join(','), audience_details: JSON.stringify(Object.fromEntries(audience.filter((g) => audienceDetails[g]).map((g) => [g, audienceDetails[g]]))), theme_template: storyTemplate, theme_background: effectiveBackground, theme_background_type: backgroundType, theme_background_clips: clipsToLinks(backgroundClips), theme_glass: heroGlassSetting, theme_image_treatment: imageTreatment, theme_header_style: headerStyle, theme_headline_style: headlineStyle, theme_heading: 'Canela', theme_body: 'Euclid', theme_page_color: pageColor, theme_accent_color: accentColor }, specialties: chosen, status, onboarding_step: onboardingStep };
   };
 
   /** Save this part of the setup as a draft: the profile (photos, avatar, brand look, audience…) and, once they have loaded, the brands. Never publishes or changes approval. */
-  async function saveProgress(override?: { avatarUrl?: string }): Promise<boolean> {
+  async function saveProgress(override?: { avatarUrl?: string; houseAvatarUrl?: string }): Promise<boolean> {
     const freshAvatar = typeof override?.avatarUrl === 'string' ? override.avatarUrl : undefined; // state set a moment ago is not in this closure yet
+    const houses = override?.houseAvatarUrl ? [...houseAvatarUrls, override.houseAvatarUrl] : houseAvatarUrls; // likewise for a just-converted image
     setSaveState({ status: 'saving' });
     try {
       if (!displayName.trim()) throw new Error('Add the name people should call you, then save.');
@@ -2715,13 +2721,15 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       if (!savedStatus && activeBrandId !== 'personal') throw new Error('Save your personal profile first: open it from "Publishing as", then save.');
       if (writesProfile) {
         const status: GuideProfile['status'] = savedStatus === 'approved' ? 'approved' : savedStatus === 'submitted' ? 'submitted' : 'draft';
-        const saved = await saveGuideProfile(profileRow(status, Math.min(5, Math.max(savedStep, step, 1)), savedSlug, freshAvatar)); // an existing public url is kept
+        // A live (or submitted) page only takes an R³ house-style profile image; drafts can be saved with any photo.
+        if (status !== 'draft' && !isHouseStyleAvatar(freshAvatar ?? avatarUrl, houses)) throw new Error(HOUSE_STYLE_REQUIRED);
+        const saved = await saveGuideProfile(profileRow(status, Math.min(5, Math.max(savedStep, step, 1)), savedSlug, freshAvatar, houses)); // an existing public url is kept
         setSavedStatus(saved.status); setSavedStep(saved.onboarding_step || step);
         if (saved.slug) setSavedSlug(saved.slug);
       }
       // Brands are only replaced once they have loaded, so a failed load can never wipe saved business brands.
       if (brandsLoaded === 'ok') {
-        const brandsToSave = brandProfiles.map((brand) => brand.localId === activeBrandId ? currentBrandDraft(freshAvatar) : brand);
+        const brandsToSave = brandProfiles.map((brand) => brand.localId === activeBrandId ? currentBrandDraft(freshAvatar, houses) : brand);
         await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, is_primary: localId === (writesProfile && !savedStatus ? activeBrandId : savedPrimaryId) })));
       }
       setSaveState({ status: 'saved', at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
@@ -2749,6 +2757,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       if (!displayName.trim()) throw new Error('Add the name people should call you.');
       if (!isValidContactEmail(contactEmail)) throw new Error('Add a valid contact email.');
       if (!chosen.length) throw new Error('Choose at least one area you can help with.');
+      if (!avatarIsHouseStyle) throw new Error(HOUSE_STYLE_REQUIRED);
       if (brandsLoaded === 'loading') throw new Error('Your saved brands are still loading. Try again in a moment.');
       if (brandsLoaded === 'failed') throw new Error('Your saved brands could not be loaded, so publishing is paused to avoid overwriting them. Reload the page to try again.');
       const slug = guardianSlug;
@@ -3206,12 +3215,13 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       <PhotoDropzone onFile={uploadPortrait} validate={portraitProblem} onReject={setImportMessage} accept={PORTRAIT_ACCEPT} disabled={uploading}>
         {({ open, dragging }) => (
       <>
-      <HouseStyleAvatarPanel id={houseStylePanelId} save={saveState} onSave={() => saveProgress()} dragging={dragging} sourceUrl={avatarSource} currentUrl={avatarUrl} needsUpload={avatarNeedsOwnPhoto} converting={avatarConverting} applying={avatarApplying} uploading={uploading} resultUrl={avatarPreviewUrl} resultMock={avatarPreviewMock} error={avatarError} onCreate={convertAvatarToHouseStyle} onUpload={open} onApply={applyConvertedAvatar} onCancel={() => { setAvatarPreviewUrl(null); setAvatarError(''); }}>
+      <HouseStyleAvatarPanel id={houseStylePanelId} houseStyle={avatarIsHouseStyle} save={saveState} onSave={() => saveProgress()} dragging={dragging} sourceUrl={avatarSource} currentUrl={avatarUrl} needsUpload={avatarNeedsOwnPhoto} converting={avatarConverting} applying={avatarApplying} uploading={uploading} resultUrl={avatarPreviewUrl} resultMock={avatarPreviewMock} error={avatarError} onCreate={convertAvatarToHouseStyle} onUpload={open} onApply={applyConvertedAvatar} onCancel={() => { setAvatarPreviewUrl(null); setAvatarError(''); }}>
         <PhotoGrid embedded photos={sitePhotos} accountAvatarUrl={activeBrandId === 'personal' ? accountAvatarUrl || null : null} forBrand={brandProfiles.length > 1 ? displayName.trim() || 'this brand' : undefined} uploading={photosUploading} onAdd={addSitePhotos} onRemove={(index) => setSitePhotos((current) => current.filter((_, position) => position !== index))} save={saveState} onSave={() => saveProgress()} />
       </HouseStyleAvatarPanel>
       </>
         )}
       </PhotoDropzone>
+      {!avatarIsHouseStyle && <p role="note" style={{ color: '#E8B86A', fontSize: 11, lineHeight: 1.5, margin: '10px 0 0' }}>{HOUSE_STYLE_REQUIRED}</p>}
       {importMessage && <p style={{ color: /applied|ready|imported|uploaded/i.test(importMessage) ? acid : muted, fontSize: 11, lineHeight: 1.5, margin: '10px 0 0' }}>{importMessage}</p>}
       <p style={{ color: muted, fontSize: 10, lineHeight: 1.5, margin: '9px 0 0' }}>Language applies to your page and content. Pricing region sets the currency for every paid stage.</p>
       <Disclosure id="profile-contact" title="Contact" required summary={contactEmail.trim() || 'Add your email'} open={profileOpen.contact} onToggle={() => setProfileOpen((o) => ({ ...o, contact: !o.contact }))}>
@@ -4933,6 +4943,16 @@ export function SiteProfileForm({ userId, profile, onProfile }: { userId: string
   const [stage, setStage] = useState(0);
   const [open, setOpen] = useState({ contact: true, links: false, booking: false, about: false, catalog: false });
   const [stageError, setStageError] = useState('');
+  // The profile image must be in the R³ house style (see guardianHouseStyle); a new photo opens the conversion.
+  const [houseSource, setHouseSource] = useState<string | null>(null);
+  const personalIsHouseStyle = isHouseStyleAvatar(profile.avatar_url, links.avatar_house_url);
+  const latestProfile = useRef(profile);
+  latestProfile.current = profile;
+  const applyHouseAvatar = (url: string) => {
+    const current = latestProfile.current;
+    onProfile({ ...current, avatar_url: url, social_links: { ...(current.social_links || {}), avatar_house_url: url } });
+    setHouseSource(null);
+  };
   // Saving replaces every brand row, so it waits until the saved brands have loaded; a failed load blocks it.
   const [brandsLoaded, setBrandsLoaded] = useState<'loading' | 'ok' | 'failed'>('loading');
   useEffect(() => {
@@ -4973,10 +4993,15 @@ export function SiteProfileForm({ userId, profile, onProfile }: { userId: string
   const uploadImage = async (file?: File) => {
     if (!file) return;
     setBusy('upload'); setMessage('');
-    try { set.image(await uploadGuideImage(userId, file)); } catch (e) { setMessage((e as Error).message || 'Upload failed.'); } finally { setBusy(null); }
+    try {
+      const url = await uploadGuideImage(userId, file);
+      set.image(url);
+      if (!biz) setHouseSource(url);
+    } catch (e) { setMessage((e as Error).message || 'Upload failed.'); } finally { setBusy(null); }
   };
   const save = async () => {
     if (brandsLoaded !== 'ok') return; // never overwrite brands that were not loaded
+    if (!personalIsHouseStyle) { setActive('personal'); setStage(0); setMessage(HOUSE_STYLE_REQUIRED); return; }
     setBusy('save'); setMessage('');
     try {
       const saved = await saveGuideProfile(profile);
@@ -5021,12 +5046,20 @@ export function SiteProfileForm({ userId, profile, onProfile }: { userId: string
     </div>
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18 }}>
       {v.image ? <img src={v.image} alt="Profile" referrerPolicy="no-referrer" style={{ width: 36, height: 36, objectFit: 'cover', border: `1px solid ${line}` }} /> : <span aria-hidden="true" style={{ width: 36, height: 36, border: `1px solid ${line}` }} />}
-      <span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{isPersonal ? 'Profile image' : 'Brand image'} · optional</span>
+      {isPersonal
+        ? <span style={{ color: personalIsHouseStyle ? muted : '#E8B86A', fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Profile image · R³ house style {personalIsHouseStyle ? <Check size={10} style={{ verticalAlign: '-1px' }} /> : 'required'}</span>
+        : <span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Brand image · optional</span>}
       <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>
         {busy === 'upload' ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}{busy === 'upload' ? 'Uploading' : v.image ? 'Replace' : 'Upload'}
         <input type="file" aria-label={isPersonal ? 'Upload profile image' : 'Upload brand image'} accept="image/jpeg,image/png,image/webp" onChange={(e) => uploadImage(e.target.files?.[0])} style={{ display: 'none' }} />
       </label>
+      {isPersonal && profile.avatar_url && !personalIsHouseStyle && !houseSource && <button type="button" onClick={() => setHouseSource(profile.avatar_url)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 28, padding: '0 9px', border: `1px solid ${line}`, borderRadius: 2, color: ink, fontFamily: sans, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer', background: 'rgba(245,242,234,.04)' }}><Sparkles size={12} />Convert to R³ house style</button>}
     </div>
+    {isPersonal && houseSource && <HouseAvatarReview userId={userId} name={profile.display_name} source={houseSource} onApplied={applyHouseAvatar} onCancel={() => setHouseSource(null)} />}
+    {isPersonal && !personalIsHouseStyle && !houseSource && <div style={{ marginTop: 10 }}>
+      <p role="note" style={{ color: '#E8B86A', fontSize: 11, lineHeight: 1.5, margin: '0 0 8px' }}>{HOUSE_STYLE_REQUIRED}</p>
+      <div aria-label="House avatars" style={{ display: 'flex', gap: 7, overflowX: 'auto' }}>{HOUSE_AVATARS.map((avatar) => <button type="button" key={avatar.name} onClick={() => set.image(avatar.image)} style={{ flex: '0 0 72px', padding: '6px 4px', border: `1px solid ${line}`, background: 'transparent', color: ink, fontFamily: sans, fontSize: 8, fontWeight: 700, cursor: 'pointer' }}><img src={avatar.image} alt="" style={{ display: 'block', width: 44, height: 44, objectFit: 'contain', margin: '0 auto 4px', filter: 'grayscale(1) contrast(.95) brightness(.9)' }} />{avatar.name}</button>)}</div>
+    </div>}
     <p style={{ color: muted, fontSize: 10, lineHeight: 1.5, margin: '9px 0 0' }}>Language applies to your page and content. Pricing region sets the currency for every paid stage.</p>
     {isPersonal && <Disclosure id="site-catalog-filters" title="Catalog filters" summary="Choose and order the Product and Protocol tabs on your public site" open={open.catalog} onToggle={() => setOpen((x) => ({ ...x, catalog: !x.catalog }))}>
       <p style={{ color: muted, fontSize: 11, lineHeight: 1.55, margin: '18px 0 8px' }}>Visitors always get an All tab. Turn categories on or off below; their order here becomes the order on your site.</p>

@@ -491,7 +491,7 @@ function AppContent() {
   const getMainContentClasses = useCallback(
     (page: string, hasEmailBanner: boolean) => {
       const baseClasses = "min-h-screen";
-      const headerOffset = page === "home" || page === "guides" ? "" : " header-offset";
+      const headerOffset = page === "home" || page === "guides" || page === "hardware" ? "" : " header-offset";
       const bannerOffset = hasEmailBanner ? " banner-offset" : "";
       
       return `${baseClasses}${headerOffset}${bannerOffset}`;

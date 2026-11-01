@@ -12,7 +12,7 @@ vi.mock('../../hooks/useScrollHeader', () => ({ useScrollHeader: () => ({ isVisi
 import { Header } from '../../components/Header';
 
 // jsdom has no layout: give the header the widths it would measure in a browser.
-const WIDTHS: Record<string, number> = { 'ROUTINE³Beta': 149, Routines: 121, Features: 123, 'How It Works': 163, FAQ: 67, Guardians: 133, 'Sign inSubscribe': 185 };
+const WIDTHS: Record<string, number> = { 'ROUTINE³Beta': 149, Routines: 121, Features: 123, How: 72, FAQ: 67, Guardians: 133, Wearables: 118, 'Sign inSubscribe': 185 };
 let rowWidth = 0;
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
@@ -29,29 +29,29 @@ const parkedLinks = () => [...bar().children].filter((el) => (el as HTMLElement)
 const open = () => { fireEvent.keyDown(screen.getByRole('button', { name: 'Menu' }), { key: 'Enter' }); return screen.getByRole('menu'); };
 const rows = (menu: HTMLElement) => within(menu).getAllByRole('menuitem').map((el) => el.textContent!.trim());
 
-it('desktop: all five links and the account actions in the bar, no menu button', () => {
+it('desktop: all six links and the account actions in the bar, no menu button', () => {
   rowWidth = 1300;
   render(<Header />);
-  expect(shown()).toEqual(['Routines', 'Features', 'How It Works', 'FAQ', 'Guardians']);
+  expect(shown()).toEqual(['Routines', 'Features', 'How', 'FAQ', 'Guardians', 'Wearables']);
   expect(screen.queryByRole('button', { name: 'Menu' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Sign in' })).toBeTruthy();
 });
 
-it('tablet: Routines and Guardians stay in the bar, the other links are in the menu, the account actions stay', () => {
+it('tablet: Guardians and Wearables stay in the bar, the other links are in the menu, the account actions stay', () => {
   rowWidth = 705;
   render(<Header />);
-  expect(shown()).toEqual(['Routines', 'Guardians']);
-  expect(parkedLinks()).toEqual(['Features', 'How It Works', 'FAQ']);
-  expect(rows(open())).toEqual(['Features', 'How It Works', 'FAQ']);
+  expect(shown()).toEqual(['Guardians', 'Wearables']);
+  expect(parkedLinks()).toEqual(['Routines', 'Features', 'How', 'FAQ']);
+  expect(rows(open())).toEqual(['Routines', 'Features', 'How', 'FAQ']);
   expect(screen.getAllByRole('button', { name: 'Sign in' }).some((b) => (b.closest('[style*="visibility: hidden"]') as HTMLElement | null) === null)).toBe(true);
 });
 
 it('narrower tablet: the account actions join the links in the menu, with Subscribe as the one filled row', () => {
   rowWidth = 542;
   render(<Header />);
-  expect(shown()).toEqual(['Routines', 'Guardians']);
+  expect(shown()).toEqual(['Guardians', 'Wearables']);
   const menu = open();
-  expect(rows(menu)).toEqual(['Features', 'How It Works', 'FAQ', 'Sign in', 'Subscribe']);
+  expect(rows(menu)).toEqual(['Routines', 'Features', 'How', 'FAQ', 'Sign in', 'Subscribe']);
   expect(within(menu).getByRole('menuitem', { name: 'Subscribe' }).getAttribute('data-tone')).toBe('primary');
 });
 
@@ -59,7 +59,15 @@ it('phone: only the lockup and the menu button; the menu holds every link and th
   rowWidth = 318;
   render(<Header />);
   expect(shown()).toEqual([]);
-  expect(rows(open())).toEqual(['Routines', 'Features', 'How It Works', 'FAQ', 'Guardians', 'Sign in', 'Subscribe']);
+  expect(rows(open())).toEqual(['Routines', 'Features', 'How', 'FAQ', 'Guardians', 'Wearables', 'Sign in', 'Subscribe']);
+});
+
+it('Wearables is a link to /wearables, right after Guardians, in the bar and in the menu', () => {
+  rowWidth = 1300;
+  render(<Header />);
+  const links = [...bar().querySelectorAll('a, button')].map((el) => el.textContent!.trim());
+  expect(links.slice(links.indexOf('Guardians'), links.indexOf('Guardians') + 2)).toEqual(['Guardians', 'Wearables']);
+  expect(bar().querySelector('a[href="/wearables"]')!.textContent).toBe('Wearables');
 });
 
 it('a menu row works: Sign in opens the sign-in dialog and the menu closes; Guardians is a real link', () => {
@@ -84,7 +92,7 @@ it('signed in on a phone: the account links are in the menu, in place of Sign in
   authUser = { id: 'u1', email: 'guide@example.com', user_metadata: { full_name: 'Guide' } };
   rowWidth = 318;
   render(<Header />);
-  expect(rows(open())).toEqual(['Routines', 'Features', 'How It Works', 'FAQ', 'Guardians', 'Dashboard', 'Guardian workspace', 'Settings', 'Refer a friend', 'Sign out']);
+  expect(rows(open())).toEqual(['Routines', 'Features', 'How', 'FAQ', 'Guardians', 'Wearables', 'Dashboard', 'Guardian workspace', 'Settings', 'Refer a friend', 'Sign out']);
 });
 
 it('signed in on a tablet: the wide account cluster moves into the menu so more links can stay', () => {

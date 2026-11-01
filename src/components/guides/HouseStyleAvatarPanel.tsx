@@ -47,6 +47,8 @@ export interface HouseStyleAvatarPanelProps {
   onSave?: () => void;
   /** Content shown inside the card under the actions, e.g. the photo grid. */
   children?: React.ReactNode;
+  /** The profile image is already in the R³ house style, which publishing requires. */
+  houseStyle?: boolean;
 }
 
 /** One square picture with a caption; `tag` is the small badge laid over the corner (Example, Test image). */
@@ -62,14 +64,14 @@ function Shot({ src, alt, caption, tag, grey, size }: { src: string; alt: string
   );
 }
 
-export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, converting, applying, uploading, dragging, resultUrl, resultMock, error, onCreate, onUpload, onApply, onCancel, save, onSave, children }: HouseStyleAvatarPanelProps) {
+export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, converting, applying, uploading, dragging, resultUrl, resultMock, error, onCreate, onUpload, onApply, onCancel, save, onSave, children, houseStyle = false }: HouseStyleAvatarPanelProps) {
   const busy = converting || applying;
   const noteId = `${id}-note`;
   const featured = resultUrl ? sourceUrl : currentUrl || sourceUrl;
   const pairColumns = featured ? 'repeat(2,minmax(0,260px))' : 'minmax(0,280px)';
   return (
     <section id={id} aria-label="R3 house style profile image" style={{ width: '100%', boxSizing: 'border-box', marginTop: 18, padding: 20, border: `1px solid ${dragging ? ink : line}`, outline: dragging ? `2px dashed ${ink}` : 'none', background: 'rgba(245,242,234,.025)', textAlign: 'center' }}>
-      <h3 style={{ ...label, margin: '0 0 14px', textAlign: 'center' }}>Profile image · optional</h3>
+      <h3 style={{ ...label, margin: '0 0 14px', textAlign: 'center', color: houseStyle ? muted : '#E8B86A' }}>Profile image · R3 house style {houseStyle ? 'done' : 'required'}</h3>
       <div style={{ display: 'grid', gridTemplateColumns: pairColumns, gap: 16, justifyContent: 'center' }}>
         {featured && <Shot src={featured} alt={resultUrl ? 'Your original portrait' : 'Your current profile image'} caption={resultUrl ? 'Original' : 'Your photo'} />}
         {!resultUrl && featured && (

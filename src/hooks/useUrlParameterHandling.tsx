@@ -29,6 +29,10 @@ export function useUrlParameterHandling({ setCurrentPage }: UseUrlParameterHandl
         window.history.replaceState({}, document.title, path.replace(/^\/(?:guides|guide)/, '/guardians') || '/guardians');
       }
       setCurrentPage('guides');
+    } else if (path === '/wearables' || path === '/ring') {
+      // /ring was the page's first address; old links land on /wearables.
+      if (path === '/ring') window.history.replaceState({}, document.title, '/wearables' + window.location.search + window.location.hash);
+      setCurrentPage('hardware');
     }
   }, [setCurrentPage]);
 

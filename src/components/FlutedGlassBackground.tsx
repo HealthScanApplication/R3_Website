@@ -203,16 +203,21 @@ export function FlutedGlassBackground({
   videos = [],
   poster,
   style,
+  onClipStart,
 }: {
   /** Video URLs (CORS-enabled) to sample through the fluted glass, cycled in turn. */
   videos?: string[];
   /** Still image shown through the glass until a video is ready (and as a fallback). */
   poster?: string;
   style?: React.CSSProperties;
+  /** Called with a clip's index in `videos` each time that clip starts playing. */
+  onClipStart?: (index: number) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videosRef = useRef<string[]>(videos);
   videosRef.current = videos;
+  const onClipStartRef = useRef(onClipStart);
+  onClipStartRef.current = onClipStart;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -322,6 +327,7 @@ export function FlutedGlassBackground({
       video.play().catch(() => {});
     };
     video.addEventListener("ended", () => playIndex(vIdx + 1));
+    video.addEventListener("playing", () => onClipStartRef.current?.(vIdx));
     video.addEventListener("error", () => playIndex(vIdx + 1));
 
     const resize = () => {
@@ -392,10 +398,40 @@ export function FlutedGlassBackground({
       if (hasTexture) gl.drawArrays(gl.TRIANGLES, 0, 6);
       raf = requestAnimationFrame(render);
     };
-    raf = requestAnimationFrame(render);
+
+    // Run (and keep the video playing) only while near the viewport and the tab is visible.
+    let near = typeof IntersectionObserver === "undefined";
+    let running = false;
+    let pausedAt = 0;
+    const update = () => {
+      const shouldRun = near && document.visibilityState === "visible";
+      if (shouldRun === running) return;
+      running = shouldRun;
+      if (shouldRun) {
+        // shift the clock so the sweep continues where it left off
+        if (start && pausedAt) start += performance.now() - pausedAt;
+        pausedAt = 0;
+        if (started) video.play().catch(() => {});
+        raf = requestAnimationFrame(render);
+      } else {
+        cancelAnimationFrame(raf);
+        raf = 0;
+        pausedAt = performance.now();
+        try { video.pause(); } catch { /* noop */ }
+      }
+    };
+    const io = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver((entries) => {
+      near = entries.some((e) => e.isIntersecting);
+      update();
+    }, { rootMargin: "200px" });
+    io?.observe(canvas);
+    document.addEventListener("visibilitychange", update);
+    update();
 
     return () => {
       cancelAnimationFrame(raf);
+      io?.disconnect();
+      document.removeEventListener("visibilitychange", update);
       window.removeEventListener("resize", resize);
       try { video.pause(); video.removeAttribute("src"); video.load(); } catch { /* noop */ }
       gl.deleteTexture(tex);
