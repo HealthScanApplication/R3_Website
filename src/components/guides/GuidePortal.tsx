@@ -452,13 +452,14 @@ const nav: { id: Tab; label: string; Icon: typeof Users }[] = [
   { id: 'profile', label: 'Profile', Icon: FileText },
 ];
 
-// Shared Guardian nav: six builders, each revealing related destinations on hover.
+// Shared Guardian nav: seven builders, each revealing related destinations on hover.
 // Used by both the public landing header and the workspace header so the two match.
-type GuardianBuilder = { label: string; tab: Tab; Icon: typeof Users; sub: { label: string; tab: Tab }[] };
+type GuardianBuilder = { label: string; tab: Tab; /** A setup page instead of a workspace tab. */ href?: string; Icon: typeof Users; sub: { label: string; tab: Tab; href?: string }[] };
 const GUARDIAN_BUILDERS: GuardianBuilder[] = [
   { label: 'Protocol builder', tab: 'protocols', Icon: Hammer, sub: [{ label: 'All Protocols', tab: 'protocols' }, { label: 'Library', tab: 'library' }] },
   { label: 'Diet planner', tab: 'diet', Icon: Utensils, sub: [{ label: 'Diet planner', tab: 'diet' }, { label: 'Recipes', tab: 'recipes' }, { label: 'Ingredients', tab: 'ingredients' }, { label: 'Cooking techniques', tab: 'cooking' }, { label: 'Cooking equipment', tab: 'equipment' }] },
   { label: 'Fitness planner', tab: 'fitness', Icon: Dumbbell, sub: [{ label: 'Fitness planner', tab: 'fitness' }, { label: 'Fitness routines', tab: 'routines' }, { label: 'Activities', tab: 'activities' }] },
+  { label: 'Product builder', tab: 'products', href: '/guardians/workspace?step=4', Icon: ShoppingBag, sub: [{ label: 'Overview', tab: 'products', href: '/guardians/workspace?step=4' }, { label: 'Shop products', tab: 'products' }] },
   { label: 'Offer builder', tab: 'offer_builder', Icon: PencilRuler, sub: [{ label: 'Offer builder', tab: 'offer_builder' }, { label: 'Offer paths', tab: 'value_ramps' }, { label: 'Leads', tab: 'leads' }] },
   { label: 'Site builder', tab: 'profile', Icon: Blocks, sub: [{ label: 'Overview', tab: 'home' }, { label: 'Profile', tab: 'profile' }] },
   { label: 'Content builder', tab: 'content', Icon: Clapperboard, sub: [{ label: 'Content builder', tab: 'content' }] },
@@ -496,9 +497,10 @@ export function GuardianHeader({ isSignedIn, activeTab, displayName, avatarUrl, 
   const edge = isSignedIn ? ink : 'rgba(245,242,234,.4)';
   const avatarLocked = Boolean(locked) && !profileLink;
   const href = (tab: Tab) => (isSignedIn ? `/guardians/workspace?tab=${tab}` : '#guardian-apply');
-  const go = (tab: Tab) => (event: React.MouseEvent) => {
+  const go = (tab: Tab, page?: string) => (event: React.MouseEvent) => {
     if (locked) { event.preventDefault(); return; }
     if (!isSignedIn) { event.preventDefault(); onSignIn?.(); return; }
+    if (page) { event.preventDefault(); window.location.assign(page); return; } // a setup page, not a workspace tab
     if (onNavigate) { event.preventDefault(); onNavigate(tab); }
   };
   // 31px matches the ROUTINE³ logo box (RoutineMark size 31) so the logo and builder bar line up.
@@ -519,11 +521,11 @@ export function GuardianHeader({ isSignedIn, activeTab, displayName, avatarUrl, 
           {GUARDIAN_BUILDERS.map((builder, index) => {
             const active = activeTab === builder.tab || builder.sub.some((item) => item.tab === activeTab);
             return <div key={builder.label} className="g-builder" style={{ position: 'relative', borderLeft: index ? `1px solid ${edge}` : 0 }}>
-              <a href={locked ? undefined : href(builder.tab)} onClick={go(builder.tab)} aria-current={active ? 'page' : undefined} aria-disabled={locked ? true : undefined} aria-label={locked ? `${builder.label} · ${locked}` : builder.label} title={locked || undefined} style={{ ...builderLink, opacity: isSignedIn && !locked ? 1 : .5, cursor: locked ? 'not-allowed' : 'pointer', background: active ? 'rgba(199,216,163,.16)' : 'transparent' }}>
+              <a href={locked ? undefined : isSignedIn && builder.href ? builder.href : href(builder.tab)} onClick={go(builder.tab, builder.href)} aria-current={active ? 'page' : undefined} aria-disabled={locked ? true : undefined} aria-label={locked ? `${builder.label} · ${locked}` : builder.label} title={locked || undefined} style={{ ...builderLink, opacity: isSignedIn && !locked ? 1 : .5, cursor: locked ? 'not-allowed' : 'pointer', background: active ? 'rgba(199,216,163,.16)' : 'transparent' }}>
                 <builder.Icon size={14} strokeWidth={1.8} aria-hidden="true" /><span className={active ? 'g-chip-label is-on' : 'g-chip-label'} aria-hidden="true">{builder.label}</span>
               </a>
               {isSignedIn && !locked && <div className="g-builder-menu" aria-label={builder.label} style={{ position: 'absolute', top: '100%', left: 0, minWidth: 184, background: panel, border: `1px solid ${line}`, borderRadius: 2, padding: 4, boxShadow: '0 18px 36px rgba(0,0,0,.55)' }}>
-                {builder.sub.map((item) => <a key={item.label} href={href(item.tab)} onClick={go(item.tab)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 11px', color: item.tab === activeTab ? ink : muted, textDecoration: 'none', fontFamily: sans, fontSize: 11, fontWeight: 600, letterSpacing: '.03em', whiteSpace: 'nowrap', background: item.tab === activeTab ? '#1C1E19' : 'transparent' }}><ChevronRight size={12} aria-hidden="true" />{item.label}</a>)}
+                {builder.sub.map((item) => <a key={item.label} href={item.href && isSignedIn ? item.href : href(item.tab)} onClick={go(item.tab, item.href)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 11px', color: item.tab === activeTab ? ink : muted, textDecoration: 'none', fontFamily: sans, fontSize: 11, fontWeight: 600, letterSpacing: '.03em', whiteSpace: 'nowrap', background: item.tab === activeTab ? '#1C1E19' : 'transparent' }}><ChevronRight size={12} aria-hidden="true" />{item.label}</a>)}
               </div>}
             </div>;
           })}
