@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { profileLogoCandidates } from './profile-logos.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { Hono } from 'npm:hono'
 import { cors } from 'npm:hono/cors'
@@ -442,6 +443,7 @@ async function fetchPublicProfile(raw: string) {
     bio: decodeProfileText(String(description || '')).slice(0, 700),
     avatarUrl: images[0] || null,
     images: images.map((imageUrl) => ({ url: imageUrl, sourceUrl: url.toString(), kind: 'avatar' })),
+    logos: profileLogoCandidates(html, url).map((logoUrl) => ({ url: logoUrl, sourceUrl: url.toString(), kind: 'logo' })),
     relatedProfiles,
     topics,
   }
@@ -468,6 +470,7 @@ app.post('/make-server-ed0fe4c2/guides/import-profile', async (c) => {
         avatarUrl: profiles.map((p) => p.avatarUrl).find(Boolean) || null,
         sources: profiles.map((p) => ({ url: p.sourceUrl, site: p.site })),
         images: profiles.flatMap((p) => p.images).filter((image, index, all) => all.findIndex((candidate) => candidate.url === image.url) === index),
+        logos: profiles.flatMap((p) => p.logos).filter((logo, index, all) => all.findIndex((candidate) => candidate.url === logo.url) === index),
         relatedProfiles: profiles.flatMap((p) => p.relatedProfiles).filter((link, index, all) => all.findIndex((candidate) => candidate.url === link.url) === index),
         topics: Array.from(new Set(profiles.flatMap((p) => p.topics))),
       },

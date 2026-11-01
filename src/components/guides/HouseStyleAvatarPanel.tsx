@@ -9,6 +9,7 @@
 import { Loader2, Sparkles, Upload } from 'lucide-react';
 import { SaveButton, type SaveState } from './SaveButton';
 import { IMAGE_REQUIREMENTS } from '../../utils/imageValidation';
+import { logoImageStyle } from '../../utils/brandLogo';
 
 const ink = '#F5F2EA', muted = '#B8B6AF', line = 'rgba(245,242,234,0.24)', black = '#090A08', panel = '#11120F', acid = '#C7D8A3';
 const sans = '"EuclidCircularA", "DM Sans", "Helvetica Neue", Arial, sans-serif';
@@ -52,6 +53,10 @@ export interface HouseStyleAvatarPanelProps {
   photosSlot?: React.ReactNode;
   /** The profile image is already in the R³ house style, which publishing requires. */
   houseStyle?: boolean;
+  /** A company: its house style is the logo as one flat black shape on transparent (white on dark), made from a logo rather than a portrait. */
+  logoMode?: boolean;
+  /** The "pull in from a link" row, shown above the footer. */
+  linkSlot?: React.ReactNode;
 }
 
 /** One square picture with a caption; `tag` is the small badge laid over the corner (Example, Test image). */
@@ -67,18 +72,34 @@ function Shot({ src, alt, caption, tag, grey, size }: { src: string; alt: string
   );
 }
 
-export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, converting, applying, uploading, dragging, resultUrl, resultMock, error, onCreate, onUpload, onApply, onCancel, save, onSave, children, photosSlot, houseStyle = false }: HouseStyleAvatarPanelProps) {
+/** The company logo as the pages show it: white on a dark surface, and as it is (black) on a light one. */
+function LogoTiles({ url, converting }: { url?: string | null; converting: boolean }) {
+  const tile = (background: string, onDark: boolean) => (
+    <span style={{ position: 'relative', aspectRatio: '1', display: 'grid', placeItems: 'center', background, border: `1px solid ${line}`, minWidth: 0 }}>
+      {url && !converting ? <img src={url} alt={onDark ? 'Your logo on a dark page' : 'Your logo on a light page'} referrerPolicy="no-referrer" style={{ width: '78%', height: '78%', objectFit: 'contain', ...logoImageStyle(url, onDark) }} /> : <span style={{ color: muted, fontSize: 11, padding: 10 }}>{converting ? 'Making your logo…' : 'Your logo appears here'}</span>}
+    </span>
+  );
+  return (
+    <figure data-logo-tiles style={{ margin: 0, minWidth: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>{tile(panel, true)}{tile('#F2EFE7', false)}</div>
+      <figcaption style={{ ...label, marginTop: 8, textAlign: 'center' }}>Your logo · on dark and on light</figcaption>
+    </figure>
+  );
+}
+
+export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, converting, applying, uploading, dragging, resultUrl, resultMock, error, onCreate, onUpload, onApply, onCancel, save, onSave, children, photosSlot, houseStyle = false, logoMode = false, linkSlot }: HouseStyleAvatarPanelProps) {
   const busy = converting || applying;
   const noteId = `${id}-note`;
   const featured = resultUrl ? sourceUrl : currentUrl || sourceUrl;
   const pairColumns = featured || photosSlot ? 'repeat(2,minmax(0,260px))' : 'minmax(0,280px)';
   return (
     <section id={id} aria-label="R3 house style profile image" style={{ width: '100%', boxSizing: 'border-box', marginTop: 18, padding: 20, border: `1px solid ${dragging ? ink : line}`, outline: dragging ? `2px dashed ${ink}` : 'none', background: 'rgba(245,242,234,.025)', textAlign: 'center' }}>
-      <h3 style={{ ...label, margin: '0 0 14px', textAlign: 'center', color: houseStyle ? muted : '#E8B86A' }}>Profile image · R3 house style {houseStyle ? 'done' : 'required'}</h3>
+      <h3 style={{ ...label, margin: '0 0 14px', textAlign: 'center', color: houseStyle ? muted : '#E8B86A' }}>{logoMode ? 'Logo · black on transparent' : 'Profile image · R3 house style'} {houseStyle ? 'done' : 'required'}</h3>
       <div style={{ display: 'grid', gridTemplateColumns: pairColumns, gap: 16, justifyContent: 'center' }}>
         {photosSlot || (featured && <Shot src={featured} alt={resultUrl ? 'Your original portrait' : 'Your current profile image'} caption={resultUrl ? 'Original' : 'Your photo'} />)}
-        {!resultUrl && photosSlot && houseStyle && currentUrl && <Shot src={currentUrl} alt="Your portrait in the R3 house style" caption="R3 house style" tag="On your profile" />}
-        {!resultUrl && (featured || photosSlot) && !(photosSlot && houseStyle && currentUrl) && (
+        {logoMode && <LogoTiles url={currentUrl} converting={converting} />}
+        {!logoMode && !resultUrl && photosSlot && houseStyle && currentUrl && <Shot src={currentUrl} alt="Your portrait in the R3 house style" caption="R3 house style" tag="On your profile" />}
+        {!logoMode && !resultUrl && (featured || photosSlot) && !(photosSlot && houseStyle && currentUrl) && (
           <figure style={{ margin: 0, minWidth: 0 }}>
             <div aria-label="Your R3 house style will appear here" style={{ aspectRatio: '1', display: 'grid', placeItems: 'center', padding: 16, boxSizing: 'border-box', border: `1px dashed ${line}`, background: panel, color: muted, fontSize: 12, lineHeight: 1.5 }}>
               {converting ? 'Illustrating your portrait…' : 'Your R3 house style appears here'}
@@ -86,14 +107,14 @@ export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, 
             <figcaption style={{ ...label, marginTop: 8, textAlign: 'center' }}>R3 house style</figcaption>
           </figure>
         )}
-        {resultUrl && <Shot src={resultUrl} alt={resultMock ? 'Placeholder test image standing in for your R3 house style portrait' : 'Your portrait in the R3 house style'} caption="R3 house style" tag={resultMock ? 'Test image' : undefined} grey={resultMock} />}
+        {!logoMode && resultUrl && <Shot src={resultUrl} alt={resultMock ? 'Placeholder test image standing in for your R3 house style portrait' : 'Your portrait in the R3 house style'} caption="R3 house style" tag={resultMock ? 'Test image' : undefined} grey={resultMock} />}
       </div>
       {resultUrl && resultMock && (
         <p id={noteId} style={{ color: muted, fontSize: 12, lineHeight: 1.6, margin: '14px auto 0', maxWidth: 480 }}>
           Live image generation is currently in test mode. This is a placeholder, so it cannot be saved as your avatar yet.
         </p>
       )}
-      {resultUrl ? (
+      {resultUrl && !logoMode ? (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 16 }}>
           <button type="button" onClick={onApply} disabled={applying || resultMock} aria-describedby={resultMock ? noteId : undefined} style={{ ...primary, opacity: resultMock ? 0.45 : 1, cursor: applying ? 'wait' : resultMock ? 'not-allowed' : 'pointer' }}>{applying ? 'Adding…' : 'Add to profile'}</button>
           <button type="button" onClick={onCreate} disabled={busy} style={{ ...secondary, cursor: converting ? 'wait' : 'pointer' }}>{converting ? 'Creating…' : 'Try again'}</button>
@@ -102,16 +123,17 @@ export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, 
       ) : (
         <div data-image-actions style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 8, maxWidth: 480, margin: '16px auto 0' }}>
           <button type="button" onClick={onCreate} disabled={busy || needsUpload} aria-busy={converting} style={{ ...primary, justifyContent: 'center', opacity: needsUpload ? 0.45 : 1, cursor: converting ? 'wait' : needsUpload ? 'not-allowed' : 'pointer' }}>
-            {converting ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}{converting ? 'Creating your portrait…' : 'Create my R3 house style'}
+            {converting ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}{converting ? (logoMode ? 'Making your logo…' : 'Creating your portrait…') : logoMode ? 'Make logo black on transparent' : 'Create my R3 house style'}
           </button>
-          <button type="button" onClick={onUpload} disabled={uploading} aria-label={featured ? 'Replace profile image' : 'Upload profile image'} style={{ ...secondary, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, cursor: uploading ? 'wait' : 'pointer' }}>
-            {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}{uploading ? 'Uploading' : featured ? 'Replace photo' : 'Upload photo'}
+          <button type="button" onClick={onUpload} disabled={uploading} aria-label={logoMode ? 'Upload logo' : featured ? 'Replace profile image' : 'Upload profile image'} style={{ ...secondary, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, cursor: uploading ? 'wait' : 'pointer' }}>
+            {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}{uploading ? 'Uploading' : logoMode ? (houseStyle ? 'Replace logo' : 'Upload logo') : featured ? 'Replace photo' : 'Upload photo'}
           </button>
         </div>
       )}
+      {linkSlot}
       <div data-image-footer style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 16, paddingTop: 14, borderTop: `1px solid ${line}`, textAlign: 'left' }}>
         <p style={{ color: muted, fontSize: 11, lineHeight: 1.5, margin: 0, flex: '1 1 240px' }}>
-          {dragging ? 'Drop to upload' : needsUpload ? 'This is a stock image. Upload your own photo to create your house style.' : `${IMAGE_REQUIREMENTS}. Drag a photo anywhere on this card to replace it.`}
+          {dragging ? 'Drop to upload' : needsUpload ? (logoMode ? 'Upload your logo, or pull it in from your website below.' : 'This is a stock image. Upload your own photo to create your house style.') : `${IMAGE_REQUIREMENTS}. ${logoMode ? 'A flat logo on a plain or transparent background works best. ' : ''}Drag a photo anywhere on this card to replace it.`}
         </p>
         {save && onSave && <SaveButton state={save} onSave={onSave} label="Save" />}
       </div>
