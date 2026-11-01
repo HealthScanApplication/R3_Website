@@ -151,7 +151,7 @@ export async function deleteGuideEvent(guideId: string, eventId: string): Promis
   if (error) throw error;
 }
 
-export type GuideRetreat = { id: string; guide_id: string; brand_id?: string | null; title: string; description: string | null; location: string | null; image_url: string | null; booking_url: string | null; source_url: string; source_external_id: string; status: string; duration_days?: number | null; price_from_cents?: number | null; currency?: string | null; price_label?: string | null };
+export type GuideRetreat = { id: string; guide_id: string; brand_id?: string | null; /** Room choices with a price per guest count (see retreatRooms); empty for a retreat with one price. */ options?: unknown; title: string; description: string | null; location: string | null; image_url: string | null; booking_url: string | null; source_url: string; source_external_id: string; status: string; duration_days?: number | null; price_from_cents?: number | null; currency?: string | null; price_label?: string | null };
 export async function listGuideRetreats(guideId: string): Promise<GuideRetreat[]> {
   const { data, error } = await db().from('guide_retreats').select('*').eq('guide_id', guideId).eq('status', 'published').order('title');
   if (error) throw error;

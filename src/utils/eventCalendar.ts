@@ -39,13 +39,17 @@ export function eventDays(event: CalendarEvent): string[] {
   return days;
 }
 
-/** For each day with something on, how many events start there and how many are simply under way. */
-export function dayMarks(events: CalendarEvent[]): Map<string, { starts: number; ongoing: number }> {
-  const marks = new Map<string, { starts: number; ongoing: number }>();
+export interface DayMark { starts: number; ongoing: number; /** For events of more than one day: which day of the event this is, and how many days it has. */ days: { n: number; of: number }[] }
+
+/** For each day with something on: how many events start there, how many are simply under way, and each multi-day event's day number. */
+export function dayMarks(events: CalendarEvent[]): Map<string, DayMark> {
+  const marks = new Map<string, DayMark>();
   for (const event of events) {
-    eventDays(event).forEach((key, index) => {
-      const mark = marks.get(key) || { starts: 0, ongoing: 0 };
+    const days = eventDays(event);
+    days.forEach((key, index) => {
+      const mark = marks.get(key) || { starts: 0, ongoing: 0, days: [] };
       if (index === 0) mark.starts += 1; else mark.ongoing += 1;
+      if (days.length > 1) mark.days.push({ n: index + 1, of: days.length });
       marks.set(key, mark);
     });
   }

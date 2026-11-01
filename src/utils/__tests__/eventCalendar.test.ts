@@ -35,10 +35,24 @@ describe('eventDays', () => {
 describe('dayMarks', () => {
   it('counts where events start and where they are simply under way', () => {
     const marks = dayMarks([ev('a', SYDNEY_SUNDAY, '2026-11-03T13:00:00.000Z'), ev('b', '2026-11-01T14:00:00.000Z', null)]);
-    expect(marks.get('2026-11-01')).toEqual({ starts: 1, ongoing: 0 });
-    expect(marks.get('2026-11-02')).toEqual({ starts: 1, ongoing: 1 }); // b starts 2 Nov (Sydney) while a is under way
-    expect(marks.get('2026-11-04')).toEqual({ starts: 0, ongoing: 1 });
+    expect(marks.get('2026-11-01')).toMatchObject({ starts: 1, ongoing: 0 });
+    expect(marks.get('2026-11-02')).toMatchObject({ starts: 1, ongoing: 1 }); // b starts 2 Nov (Sydney) while a is under way
+    expect(marks.get('2026-11-04')).toMatchObject({ starts: 0, ongoing: 1 });
     expect(marks.get('2026-11-20')).toBeUndefined();
+  });
+});
+
+describe('day numbers within an event', () => {
+  it('numbers each day of a multi-day event, and leaves a one-day event unnumbered', () => {
+    const week = ev('w', SYDNEY_SUNDAY, '2026-11-07T13:00:00.000Z'); // 1 to 8 Nov, eight days
+    const marks = dayMarks([week, ev('one', '2026-11-04T13:00:00.000Z', null)]);
+    expect(marks.get('2026-11-01')!.days).toEqual([{ n: 1, of: 8 }]);
+    expect(marks.get('2026-11-08')!.days).toEqual([{ n: 8, of: 8 }]);
+    expect(marks.get('2026-11-05')!.days).toEqual([{ n: 5, of: 8 }]); // the single-day event on the 5th adds none
+  });
+  it('lists the day number of each overlapping event', () => {
+    const marks = dayMarks([ev('a', SYDNEY_SUNDAY, '2026-11-07T13:00:00.000Z'), ev('b', '2026-11-04T13:00:00.000Z', '2026-11-18T13:00:00.000Z')]);
+    expect(marks.get('2026-11-07')!.days).toEqual([{ n: 7, of: 8 }, { n: 3, of: 15 }]);
   });
 });
 

@@ -51,6 +51,21 @@ describe('events calendar', () => {
     expect(day(root, '2099-03-13').getAttribute('aria-label')).toMatch(/no events/);
   });
 
+  it('numbers each day of a multi-day event inside the calendar, and leaves one-day events unnumbered', async () => {
+    visit();
+    const root = await section();
+    expect(day(root, '2099-03-05').querySelector('[data-day-label]')!.textContent).toBe('Day 1'); // the retreat starts; the one-day workshop adds no number
+    expect(day(root, '2099-03-09').querySelector('[data-day-label]')!.textContent).toBe('Day 5');
+    expect(day(root, '2099-03-12').querySelector('[data-day-label]')!.textContent).toBe('Day 8');
+    expect(day(root, '2099-03-12').getAttribute('aria-label')).toMatch(/day 8 of 8/);
+    expect(day(root, '2099-03-13').querySelector('[data-day-label]')).toBeNull();
+    cleanup();
+    EVENTS = [event('x', 'One', SYD(5), SYD(9)), event('y', 'Two', SYD(7), SYD(12))];
+    visit();
+    const again = await section();
+    expect(day(again, '2099-03-08').querySelector('[data-day-label]')!.textContent).toBe('D4 · D2'); // overlapping events: each one's day number
+  });
+
   it('choosing a day shows only the cards that fit, a second day makes a range, and Clear brings everything back', async () => {
     visit();
     const root = await section();
