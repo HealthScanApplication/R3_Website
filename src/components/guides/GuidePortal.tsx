@@ -186,11 +186,6 @@ const pricingRegionCodes: Record<string, string> = {
   'New Zealand': 'NZ', Switzerland: 'CH', Japan: 'JP', India: 'IN', 'United Arab Emirates': 'AE',
   'South Africa': 'ZA', Brazil: 'BR', Mexico: 'MX', Sweden: 'SE', Norway: 'NO', Denmark: 'DK', 'Czech Republic': 'CZ',
 };
-const pricingRegionFlags: Record<string, string> = {
-  'United Kingdom': '🇬🇧', Eurozone: '🇪🇺', 'United States': '🇺🇸', Poland: '🇵🇱', Canada: '🇨🇦', Australia: '🇦🇺',
-  'New Zealand': '🇳🇿', Switzerland: '🇨🇭', Japan: '🇯🇵', India: '🇮🇳', 'United Arab Emirates': '🇦🇪',
-  'South Africa': '🇿🇦', Brazil: '🇧🇷', Mexico: '🇲🇽', Sweden: '🇸🇪', Norway: '🇳🇴', Denmark: '🇩🇰', 'Czech Republic': '🇨🇿',
-};
 const regionByCountryCode: Record<string, string> = { GB: 'United Kingdom', US: 'United States', PL: 'Poland', CA: 'Canada', AU: 'Australia', NZ: 'New Zealand', CH: 'Switzerland', JP: 'Japan', IN: 'India', AE: 'United Arab Emirates', ZA: 'South Africa', BR: 'Brazil', MX: 'Mexico', SE: 'Sweden', NO: 'Norway', DK: 'Denmark', CZ: 'Czech Republic' };
 const euroCountryCodes = ['AT','BE','HR','CY','EE','FI','FR','DE','GR','IE','IT','LV','LT','LU','MT','NL','PT','SK','SI','ES'];
 function pricingRegionForCountry(countryCode: string) {
@@ -1959,12 +1954,12 @@ function GuardianSiteHeader({ brandName, path, right }: { brandName?: string; pa
 
 function PublicLocaleBar({ value, onChange }: { value: GuardianLocalePreference; onChange: (value: GuardianLocalePreference) => void }) {
   const field: React.CSSProperties = { border: 0, background: 'transparent', color: '#16140F', fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 10, lineHeight: 1, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', outline: 0, cursor: 'pointer', padding: 0 };
-  return <div aria-label="Location, language and currency" title="Location, language and currency" style={{ maxWidth: '100%', display: 'flex', alignItems: 'center', gap: 2, height: 32, padding: '0 8px', boxSizing: 'border-box', border: '1px solid #16140F', borderRadius: 2, background: '#FFF', color: '#16140F', fontFamily: '"Archivo", "Inter", sans-serif' }}>
-    <select aria-label="Store region" title={value.region} value={value.region} onChange={(event) => { const option = pricingRegions.find((item) => item.region === event.target.value) || pricingRegions[0]; onChange({ ...value, region: option.region, currency: option.currency }); }} style={{ ...field, width: 62 }}>{pricingRegions.map((option) => <option key={option.region} value={option.region}>{pricingRegionFlags[option.region] || '🌐'} {pricingRegionCodes[option.region] || option.region}</option>)}</select>
+  return <div className="r3-compact r3-lockup" aria-label="Location, language and currency" title="Location, language and currency" style={{ maxWidth: '100%', display: 'flex', alignItems: 'center', gap: 6, height: 32, padding: '0 10px', boxSizing: 'border-box', border: '1px solid #16140F', borderRadius: 2, background: '#FFF', color: '#16140F', fontFamily: '"Archivo", "Inter", sans-serif' }}>
+    <select aria-label="Store region" title={value.region} value={value.region} onChange={(event) => { const option = pricingRegions.find((item) => item.region === event.target.value) || pricingRegions[0]; onChange({ ...value, region: option.region, currency: option.currency }); }} style={{ ...field, width: 'auto', minWidth: 40 }}>{pricingRegions.map((option) => <option key={option.region} value={option.region}>{pricingRegionCodes[option.region] || option.region}</option>)}</select>
     <span aria-hidden="true" style={{ color: 'rgba(17,18,15,.3)' }}>·</span>
-    <select aria-label="Page language" title={languageOptions.find((option) => option.code === value.locale)?.name} value={value.locale} onChange={(event) => onChange({ ...value, locale: event.target.value })} style={{ ...field, width: 48 }}>{languageOptions.map((option) => <option key={option.code} value={option.code}>{option.code === 'en' ? 'ENG' : option.code.toUpperCase()}</option>)}</select>
+    <select aria-label="Page language" title={languageOptions.find((option) => option.code === value.locale)?.name} value={value.locale} onChange={(event) => onChange({ ...value, locale: event.target.value })} style={{ ...field, width: 'auto', minWidth: 36 }}>{languageOptions.map((option) => <option key={option.code} value={option.code}>{option.code === 'en' ? 'ENG' : option.code.toUpperCase()}</option>)}</select>
     <span aria-hidden="true" style={{ color: 'rgba(17,18,15,.3)' }}>·</span>
-    <select aria-label="Display currency" value={value.currency} onChange={(event) => onChange({ ...value, currency: event.target.value })} style={{ ...field, width: 50 }}>{publicCurrencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select>
+    <select aria-label="Display currency" value={value.currency} onChange={(event) => onChange({ ...value, currency: event.target.value })} style={{ ...field, width: 'auto', minWidth: 38 }}>{publicCurrencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select>
   </div>;
 }
 
