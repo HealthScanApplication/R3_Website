@@ -90,7 +90,7 @@ describe('events calendar', () => {
     expect(day(again, '2099-03-08').querySelector('[data-day-label]')!.textContent).toBe('D4 · D2'); // overlapping events: each one's day number
   });
 
-  it('choosing a day shows only the cards that fit, a second day makes a range, and Clear brings everything back', async () => {
+  it('choosing a day shows only the cards on that day, another day switches to it, and Clear brings everything back', async () => {
     visit();
     const root = await section();
     expect(root.querySelectorAll('article').length).toBe(3);
@@ -98,9 +98,9 @@ describe('events calendar', () => {
     expect(root.querySelectorAll('article').length).toBe(1);
     expect(root.querySelector('article')!.textContent).toMatch(/Lifestyle Retreat/);
     expect(root.querySelector('[data-events-count]')!.textContent).toMatch(/1 of 3 events fit your dates/);
-    fireEvent.click(day(root, '2099-03-05')); // 5 to 9 Mar: all of March's events
-    expect(root.querySelectorAll('article').length).toBe(2);
-    expect(day(root, '2099-03-07').getAttribute('aria-pressed')).toBe('true'); // the range is highlighted
+    fireEvent.click(day(root, '2099-03-05')); // another day switches to that day alone
+    expect(day(root, '2099-03-05').getAttribute('aria-pressed')).toBe('true');
+    expect(day(root, '2099-03-09').getAttribute('aria-pressed')).not.toBe('true');
     fireEvent.click(within(root).getByRole('button', { name: 'Clear dates' }));
     expect(root.querySelectorAll('article').length).toBe(3);
     expect(root.querySelector('[data-calendar-range]')).toBeNull();
