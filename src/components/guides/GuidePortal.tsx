@@ -2293,6 +2293,13 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const [offerPlanStage, setOfferPlanStage] = useState(0);
   // Paid offers are built one at a time: the next appears when the Guardian asks for it (progressive disclosure under Step 3).
   const [paidStepsOpen, setPaidStepsOpen] = useState(1);
+  // Build a product (setup step 04): any offer type saved as a draft, ready to drop into the offer path in step 05.
+  const [buildKind, setBuildKind] = useState<UpsellKind | null>(null);
+  const [buildFilter, setBuildFilter] = useState<'all' | UpsellKind>('all');
+  const [buildTitle, setBuildTitle] = useState('');
+  const [buildPrice, setBuildPrice] = useState('');
+  const [buildBusy, setBuildBusy] = useState(false);
+  const [buildNote, setBuildNote] = useState('');
   const [showProtocolInfo, setShowProtocolInfo] = useState(false);
   const [summaryView, setSummaryView] = useState<'offers' | 'sites' | null>(null);
   const [inventoryMenu, setInventoryMenu] = useState<string | null>(null);
@@ -3429,6 +3436,48 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       </>}
 
       {step === 4 && <div data-products-step>
+        <section data-build-product aria-label="Build a product" style={{ border: `1px solid ${line}`, background: panel, padding: 16, marginBottom: 22 }}>
+          <span style={{ display: 'block', color: acid, fontFamily: sans, fontSize: 10, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>Build a product</span>
+          <h2 style={{ fontFamily: serif, fontSize: 'clamp(34px,5vw,54px)', fontWeight: 300, lineHeight: 1, letterSpacing: '-.03em', margin: '8px 0 6px', color: ink }}>Build your products.</h2>
+          <p style={{ color: muted, fontSize: 12, lineHeight: 1.5, margin: '0 0 14px' }}>Choose a type, name it and price it. It is saved as a draft you can drop into your offers in the next step.</p>
+          <div role="group" aria-label="Filter product types" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+            {[['all', 'All'], ...upsellSuggestions.map((type) => [type.kind, PRODUCT_TYPE_CHIPS[type.kind] || type.label])].map(([id, text]) => <button key={id} type="button" aria-pressed={buildFilter === id} onClick={() => setBuildFilter(id as 'all' | UpsellKind)} style={{ minHeight: 34, padding: '0 14px', border: `1px solid ${buildFilter === id ? ink : line}`, background: buildFilter === id ? ink : 'transparent', color: buildFilter === id ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{text}</button>)}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,290px),1fr))', gap: 18 }}>
+            {upsellSuggestions.filter((type) => buildFilter === 'all' || buildFilter === type.kind).map((type) => <button key={type.kind} type="button" data-product-type={type.kind} aria-pressed={buildKind === type.kind} onClick={() => { setBuildKind(type.kind); setBuildTitle(type.label); setBuildPrice(upsellDrafts[type.kind]?.price || ''); setBuildNote(''); }} style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 360, padding: 24, textAlign: 'left', border: `1px dashed ${buildKind === type.kind ? acid : 'rgba(245,242,234,.4)'}`, backgroundColor: buildKind === type.kind ? '#20251B' : 'transparent', backgroundImage: 'radial-gradient(rgba(245,242,234,.12) 1px, transparent 1px)', backgroundSize: '14px 14px', color: ink, fontFamily: sans, cursor: 'pointer' }}>
+              <span style={{ color: acid, fontSize: 9, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>{PRODUCT_TYPE_CHIPS[type.kind] || type.value}</span>
+              <strong style={{ fontFamily: serif, fontSize: 'clamp(28px,3vw,38px)', fontWeight: 300, lineHeight: 1.04, letterSpacing: '-.02em' }}>Build a {type.label.toLowerCase()}?</strong>
+              <span style={{ color: muted, fontSize: 12, lineHeight: 1.5 }}>{type.why}</span>
+              <span aria-hidden="true" style={{ width: 56, height: 56, marginTop: 'auto', backgroundImage: `url(${type.art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${type.art.cols * 100}% ${type.art.rows * 100}%`, backgroundPosition: `${type.art.cols === 1 ? 0 : (type.art.index % type.art.cols) * 100 / (type.art.cols - 1)}% ${type.art.rows === 1 ? 0 : Math.floor(type.art.index / type.art.cols) * 100 / (type.art.rows - 1)}%`, filter: 'grayscale(1) contrast(.94)' }} />
+              <span style={{ alignSelf: 'stretch', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 46, background: ink, color: black, fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Build a {(PRODUCT_TYPE_CHIPS[type.kind] || type.label).toLowerCase()} <ArrowRight size={14} /></span>
+            </button>)}
+          </div>
+          {buildKind && <div data-build-form style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr) auto', gap: 8, alignItems: 'end', marginTop: 12 }}>
+            <div><label style={{ ...label, marginBottom: 5 }}>Product name</label><input aria-label="Product name" style={input} value={buildTitle} onChange={(event) => setBuildTitle(event.target.value)} /></div>
+            <div><label style={{ ...label, marginBottom: 5 }}>Price · {currency}</label><input aria-label="Product price" style={input} inputMode="decimal" value={buildPrice} onChange={(event) => setBuildPrice(event.target.value.replace(/[^0-9.]/g, ''))} placeholder="0 for free" /></div>
+            <button type="button" disabled={buildBusy || !buildTitle.trim()} onClick={async () => {
+              const suggestion = upsellSuggestions.find((item) => item.kind === buildKind);
+              const priceCents = Math.round(Number(buildPrice || 0) * 100);
+              setBuildBusy(true); setError(''); setBuildNote('');
+              try {
+                const created = await createGuideOffer(userId, { kind: buildKind, title: buildTitle.trim(), description: suggestion?.why || null, price_cents: priceCents, affiliate_url: null, access_model: priceCents > 0 ? 'paid' : 'free', file_path: null, booking_url: null, status: 'draft', currency });
+                setRelated((current) => ({ ...current, offers: [...current.offers, created] }));
+                setBuildNote(`Saved “${created.title}”. Use it in your offers in the next step.`);
+                setBuildKind(null); setBuildTitle(''); setBuildPrice('');
+              } catch (e: any) { setError(e?.message || 'The product could not be saved.'); }
+              finally { setBuildBusy(false); }
+            }} style={{ ...btn, minHeight: 44 }}>{buildBusy ? 'Saving' : 'Save product'}</button>
+          </div>}
+          {buildNote && <p role="status" style={{ color: acid, fontSize: 12, margin: '10px 0 0' }}>{buildNote}</p>}
+        </section>
+        {related.offers.length > 0 && <section data-built-products aria-label="Products you have built" style={{ marginBottom: 22 }}>
+          <span style={{ ...label, color: acid }}>Products you have built · {related.offers.length} · by value</span>
+          <ProtocolCardGrid>{[...related.offers].sort((a, b) => (b.price_cents || 0) - (a.price_cents || 0)).map((offer) => <ProductCard key={offer.id} kind={offer.kind} imageUrl={offer.cover_url}
+            eyebrow={[offer.status === 'published' ? 'Published' : 'Draft', offer.access_model === 'free' ? 'Free' : 'Paid'].join(' · ')} title={customerFacingOfferTitle(offer.title)} copy={(offer.description || '').split(' Delivery:')[0].slice(0, 120) || undefined}
+            price={offer.access_model === 'free' ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid'} name={displayName || 'You'} owned visibility={offer.status === 'published' ? 'public' : 'private'}
+            onEdit={() => { window.location.href = '/guardians/workspace?tab=offer_builder'; }}
+            onDelete={async () => { if (!window.confirm(`Delete ${offer.title}?`)) return; await deleteGuideOffer(userId, offer.id); setRelated((current) => ({ ...current, offers: current.offers.filter((item) => item.id !== offer.id) })); }} />)}</ProtocolCardGrid>
+        </section>}
         <p style={{ color: muted, fontSize: 12, lineHeight: 1.6, margin: '0 0 16px' }}>Everything you recommend or sell, highest value first. Your offers can point to these, and visitors see the visible ones on your site.</p>
         {related.products.length
           ? <ProtocolCardGrid>{valueSortedProducts(related.products).map((product, index) => <ProtocolCard key={product.id} badge={product.price_cents ? formatMoney(product.price_cents / 100, product.currency || 'GBP') : undefined} kicker={`#${String(index + 1).padStart(2, '0')} by value`} title={product.title} imageUrl={product.image_url} copy={clipCopy(product.description || '')} by={displayName} cta="Manage products" onClick={() => { window.location.href = '/guardians/workspace?tab=products'; }} owned />)}</ProtocolCardGrid>
@@ -3494,6 +3543,10 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
             </div>
             {useCaseReady && <><span data-offer-step="2" style={{ display: 'block', color: ink, fontFamily: sans, fontSize: 10, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>Step 2 · Arrange your offers</span><label style={{ ...label, color: ink }}>Your offers <span style={{ color: acid }}>· value rises at every step</span></label>
             <p style={{ color: muted, fontSize: 9, lineHeight: 1.5, margin: '-1px 0 12px' }}>Add or remove steps in one continuous customer journey.</p>
+            {(() => { const usable = related.offers.filter((offer) => offer.access_model === 'paid' && upsellSuggestions.some((item) => item.kind === offer.kind) && !selectedUpsells.includes(offer.kind as UpsellKind)); return usable.length > 0 && <div data-use-built-products style={{ border: `1px solid ${line}`, padding: 10, margin: '0 0 12px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+              <span style={{ ...label, marginBottom: 0, color: acid }}>From your products</span>
+              {usable.sort((a, b) => (b.price_cents || 0) - (a.price_cents || 0)).map((offer) => <button key={offer.id} type="button" onClick={() => { const kind = offer.kind as UpsellKind; setSelectedUpsells((current) => current.includes(kind) ? current : [...current, kind]); setOfferAccess((current) => ({ ...current, [kind]: 'paid' })); setUpsellDrafts((current) => ({ ...current, [kind]: { ...current[kind], title: offer.title, price: String((offer.price_cents || 0) / 100) } })); }} style={{ minHeight: 30, padding: '0 11px', border: `1px solid ${acid}`, background: 'transparent', color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.06em', cursor: 'pointer' }}>+ {offer.title} · {formatMoney((offer.price_cents || 0) / 100, offer.currency || 'GBP')}</button>)}
+            </div>; })()}
             <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'stretch', gap: 0, minWidth: 'max-content' }}>
                 {leadMagnetCluster()}
@@ -3931,6 +3984,9 @@ function WideCard({ row, onOpen }: { row: RelatedRow; onOpen: () => void }) {
 }
 
 /** Below the fold of each setup step: the Guardian's existing items for that stage, as wide cards two to a row. */
+/** Short names for the product types, used on the filter chips and card eyebrows. */
+const PRODUCT_TYPE_CHIPS: Record<string, string> = { ebook: 'Guide', recipe_book: 'Recipes', routine: 'Protocol', routine_guidance: 'Protocol + call', festival: 'Retreat', group_call: 'Coaching', one_to_one_call: '1:1 call', in_person: 'In person' };
+
 /** Products by value: the dearest first, unpriced ones last. */
 const valueSortedProducts = (products: GuideProduct[]): GuideProduct[] => [...products].sort((a, b) => (b.price_cents || 0) - (a.price_cents || 0) || a.title.localeCompare(b.title));
 
