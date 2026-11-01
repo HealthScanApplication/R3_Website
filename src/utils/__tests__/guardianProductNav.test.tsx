@@ -25,4 +25,21 @@ describe('Product builder in the top nav', () => {
     fireEvent.click(screen.getAllByRole('link', { name: 'Product builder' })[0]);
     expect(onSignIn).toHaveBeenCalled();
   });
+  it('signed in, it goes to the page instead of switching workspace tabs', () => {
+    const assign = vi.fn();
+    const original = window.location;
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...original, assign } });
+    try {
+      const onNavigate = vi.fn();
+      header({ onNavigate });
+      expect(fireEvent.click(screen.getAllByRole('link', { name: 'Product builder' })[0])).toBe(false);
+      expect(assign).toHaveBeenCalledWith('/guardians/workspace?step=4');
+      expect(onNavigate).not.toHaveBeenCalled();
+    } finally { Object.defineProperty(window, 'location', { configurable: true, value: original }); }
+  });
+  it('on the Products tab only Shop products is highlighted, not the Overview page link', () => {
+    header({ activeTab: 'products' });
+    const style = (name: string) => (screen.getAllByRole('link', { name })[0] as HTMLElement).style.color;
+    expect(style('Overview')).not.toBe(style('Shop products'));
+  });
 });
