@@ -13,7 +13,7 @@ const longDay = (key: string) => new Date(`${key}T00:00:00Z`).toLocaleDateString
 const shortDay = (key: string) => new Date(`${key}T00:00:00Z`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' });
 const monthName = (view: { year: number; month: number }) => new Date(Date.UTC(view.year, view.month - 1, 1)).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
-export function EventsCalendar({ events, range, onChange, ink = '#F2EFE7', surface = '#11150F', line = 'rgba(242,239,231,.55)' }: { events: CalendarEvent[]; range: DayRange | null; onChange: (range: DayRange | null) => void; ink?: string; surface?: string; line?: string }) {
+export function EventsCalendar({ events, range, onChange, ink = '#F2EFE7', surface = '#11150F', accent = '#C7D8A3', line = 'rgba(242,239,231,.55)' }: { events: CalendarEvent[]; range: DayRange | null; onChange: (range: DayRange | null) => void; ink?: string; surface?: string; accent?: string; line?: string }) {
   const marks = useMemo(() => dayMarks(events), [events]);
   const bounds = useMemo(() => monthBounds(events), [events]);
   const eventsKey = useMemo(() => events.map((event) => `${event.id}:${event.start_at}:${event.end_at || ''}`).join('|'), [events]);
@@ -25,7 +25,7 @@ export function EventsCalendar({ events, range, onChange, ink = '#F2EFE7', surfa
   if (!bounds) return null;
   const index = (month: { year: number; month: number }) => month.year * 12 + month.month;
   const canPrev = index(view) > index(bounds.first), canNext = index(view) < index(bounds.last);
-  const cells = monthCells(view.year, view.month);
+  const cells = monthCells(view.year, view.month); // days of the neighbouring months fill the first and last weeks and look like any other day
   const inRange = (key: string) => !!range && key >= range.from && key <= range.to;
   const nav: React.CSSProperties = { width: 28, height: 28, display: 'grid', placeItems: 'center', border: `1px solid ${line}`, background: 'transparent', color: ink, cursor: 'pointer' };
   /** "Day 3" for one event; "D1 · D3" when several overlap (the cell is small). */
@@ -45,17 +45,17 @@ export function EventsCalendar({ events, range, onChange, ink = '#F2EFE7', surfa
           const chosen = inRange(cell.key);
           const filled = !!mark?.starts;
           const label = mark ? dayLabel(mark.days) : '';
-          return <button key={cell.key} type="button" data-day={cell.key} data-has-event={count ? 'true' : undefined} aria-pressed={chosen} disabled={!cell.inMonth}
+          return <button key={cell.key} type="button" data-day={cell.key} data-has-event={count ? 'true' : undefined} aria-pressed={chosen}
             aria-label={`${longDay(cell.key)}${count ? `, ${count} ${count === 1 ? 'event' : 'events'}${mark!.days.length ? `, ${mark!.days.map((day) => `day ${day.n} of ${day.of}`).join(' and ')}` : ''}` : ', no events'}`}
             onClick={() => onChange(pickDay(range, cell.key))}
-            style={{ position: 'relative', minHeight: 38, border: 0, padding: '3px 0 11px', background: filled ? ink : surface, color: filled ? surface : ink, fontFamily: sans, fontSize: 11, fontWeight: filled ? 800 : 500, lineHeight: 1.2, cursor: cell.inMonth ? 'pointer' : 'default', opacity: cell.inMonth ? 1 : .22, boxShadow: chosen ? (filled ? `inset 0 0 0 2px ${surface}, inset 0 0 0 4px ${ink}` : `inset 0 0 0 2px ${ink}`) : 'none' }}>
+            style={{ position: 'relative', minHeight: 38, border: 0, padding: '3px 0 11px', background: filled ? accent : surface, color: filled ? '#11150F' : ink, fontFamily: sans, fontSize: 11, fontWeight: filled ? 800 : 500, lineHeight: 1.2, cursor: 'pointer', boxShadow: chosen ? (filled ? `inset 0 0 0 2px ${surface}, inset 0 0 0 4px ${ink}` : `inset 0 0 0 2px ${ink}`) : 'none' }}>
             {cell.day}
             {label ? <span data-day-label aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, bottom: 2, fontSize: 7, fontWeight: 700, letterSpacing: '.02em', whiteSpace: 'nowrap', opacity: .85 }}>{label}</span> : null}
           </button>;
         })}
       </div>
       <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 9, color: 'rgba(242,239,231,.7)', flexWrap: 'wrap' }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><i aria-hidden="true" style={{ width: 9, height: 9, background: ink, display: 'inline-block' }} />Event starts</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><i aria-hidden="true" style={{ width: 9, height: 9, background: accent, display: 'inline-block' }} />Event starts</span>
         <span style={{ marginLeft: 'auto' }}>Choose a day, or two for a range</span>
       </div>
       {range && <p data-calendar-range role="status" style={{ margin: '8px 0 0', fontSize: 11 }}>{range.from === range.to ? shortDay(range.from) : `${shortDay(range.from)} – ${shortDay(range.to)}`} · <button type="button" onClick={() => onChange(null)} style={{ border: 0, background: 'transparent', color: ink, padding: 0, font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>Clear dates</button></p>}
