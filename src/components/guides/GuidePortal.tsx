@@ -5230,7 +5230,7 @@ function Row({ title, meta, action, onClick, image, onDelete }: { title: string;
 
 // Scopes Guardian styling; globals.css exempts `.guardian-ui button` from the forced 16px button size.
 export function GuidePortal() {
-  return <div className="guardian-ui"><style>{`.guardian-builders-bar::-webkit-scrollbar{display:none}.g-split{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:20px;align-items:start}.g-split>.g-sticky{position:sticky;top:16px}@media (max-width: 960px){.g-split{grid-template-columns:minmax(0,1fr)}.g-split>.g-sticky{position:static}}
+  return <div className="guardian-ui"><style>{`.guardian-builders-bar::-webkit-scrollbar{display:none}.g-split{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:20px;align-items:start}.g-split>.g-sticky{position:sticky;top:16px}@media (max-width: 960px){.g-split{display:flex;flex-direction:column;gap:14px}.g-split>.g-sticky{order:-1;position:static}.g-split>.g-sticky{position:static}}
     @media (max-width:900px){.g-community-layout{grid-template-columns:minmax(0,1fr)!important}}
     /* The app shell sets overflow-x:hidden on body and (inline, App.tsx) on #main-content, which makes
        them scroll containers and stops the sticky header. clip keeps sideways overflow hidden without that;
