@@ -5122,6 +5122,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
   const [publicProtocols, setPublicProtocols] = useState<AdminProtocol[]>([]);
   const [publicProtocolsLoading, setPublicProtocolsLoading] = useState(false);
   const [publicProtocolsError, setPublicProtocolsError] = useState('');
+  const [publicTheme, setPublicTheme] = useState<string>('all');
   const [combining, setCombining] = useState(false);
   const [valueRamps, setValueRamps] = useState<GuideValueRamp[]>([]);
   const [routineOwners, setRoutineOwners] = useState<Map<string, RoutineOwner>>(new Map());
@@ -5334,7 +5335,22 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
             </div>
             {publicProtocolsError && <p role="alert" style={{ color: '#E8B86A', fontSize: 12 }}>{publicProtocolsError}</p>}
             {!publicProtocolsLoading && !publicProtocolsError && publicProtocols.length === 0 && <p style={{ color: muted, fontSize: 12 }}>No public protocols are available yet.</p>}
-            {publicProtocols.length > 0 && <ProtocolCardGrid>{publicProtocols.map((protocol) => <ProtocolCard key={protocol.id} imageUrl={protocol.image_url} kicker={[protocolWhen(protocol.category), daysLabel(protocol.total_days), 'Public'].filter(Boolean).join(' · ')} tags={completeProtocolTags(protocol)} title={protocol.name.replace(/^R3 Protocol\s*>\s*/i, '')} copy={clipCopy(protocol.description)} by={protocol.creator || 'ROUTINE³'} corner={<ProtocolOutputTags />} footerCorner={<RoutineCardQr protocolId={protocol.id} href={`${window.location.origin}/protocol/${encodeURIComponent(protocol.id)}`} />} visibility="public" cta="View public protocol" href={`/protocol/${encodeURIComponent(protocol.id)}`} />)}</ProtocolCardGrid>}
+            {publicProtocols.length > 0 && (() => {
+              const themeOf = (protocol: AdminProtocol) => protocolTheme(protocol as any);
+              const counts = new Map<string, number>();
+              for (const protocol of publicProtocols) counts.set(themeOf(protocol), (counts.get(themeOf(protocol)) || 0) + 1);
+              const themes = PROTOCOL_THEMES.filter((theme) => counts.has(theme)) as readonly string[];
+              const shown = themes.filter((theme) => publicTheme === 'all' || publicTheme === theme);
+              return <>
+                <div role="group" aria-label="Filter public protocols by type" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 18 }}>
+                  {[['all', 'All', publicProtocols.length] as const, ...themes.map((theme) => [theme, theme, counts.get(theme) || 0] as const)].map(([id, text, count]) => <button key={id} type="button" aria-pressed={publicTheme === id} onClick={() => setPublicTheme(id)} style={{ minHeight: 34, padding: '0 14px', border: `1px solid ${publicTheme === id ? ink : line}`, background: publicTheme === id ? ink : 'transparent', color: publicTheme === id ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{text} · {count}</button>)}
+                </div>
+                {shown.map((theme) => <section key={theme} data-protocol-theme={theme} aria-label={`${theme} protocols`} style={{ marginTop: 26 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12 }}><h3 style={{ fontFamily: serif, fontSize: 'clamp(24px,3vw,32px)', fontWeight: 300, letterSpacing: '-.02em', margin: 0, color: ink }}>{theme}</h3><span style={{ color: muted, fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase' }}>{counts.get(theme)} {counts.get(theme) === 1 ? 'Protocol' : 'Protocols'}</span></div>
+                  <ProtocolCardGrid>{publicProtocols.filter((protocol) => themeOf(protocol) === theme).map((protocol) => <ProtocolCard key={protocol.id} imageUrl={protocol.image_url} kicker={[protocolWhen(protocol.category), daysLabel(protocol.total_days), 'Public'].filter(Boolean).join(' · ')} tags={completeProtocolTags(protocol)} title={protocol.name.replace(/^R3 Protocol\s*>\s*/i, '')} copy={clipCopy(protocol.description)} by={protocol.creator || 'ROUTINE³'} corner={<ProtocolOutputTags />} footerCorner={<RoutineCardQr protocolId={protocol.id} href={`${window.location.origin}/protocol/${encodeURIComponent(protocol.id)}`} />} visibility="public" cta="View public protocol" href={`/protocol/${encodeURIComponent(protocol.id)}`} />)}</ProtocolCardGrid>
+                </section>)}
+              </>;
+            })()}
           </section>}
         </div></>}
         {tab === 'content' && <><ContentBuilder profile={profile} offers={offers} protocols={protocols} recipes={recipes} /><SocialPublisher profile={profile} /></>}
