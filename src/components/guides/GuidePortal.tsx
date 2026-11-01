@@ -3277,7 +3277,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           onPreview={(site) => { setInventoryMenu(null); setSummaryView(null); setStep(5); window.setTimeout(() => document.getElementById(site.previewId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} />
       </div>}
     </section>}
-    {!summaryView && <form onSubmit={submit} style={{ maxWidth: step === 5 ? 1440 : 1100 /* step 05 shows two side-by-side previews */, margin: '52px auto', minHeight: 'calc(100vh - 220px)' }}>
+    {!summaryView && <form onSubmit={submit} style={{ maxWidth: step === 5 ? 1440 : 1100 /* step 05 shows two side-by-side previews */, margin: '52px auto 36px' /* no min-height: the workspace list under each step peeks into the first screen */ }}>
       <div style={{ display: 'block' }}>
         <aside style={{ display: 'none' }}>
           <div style={{ ...label, color: acid }}>Step {step} · {activeStep.label}</div>
