@@ -10,11 +10,11 @@ const PROFILE = { user_id: 'owner', slug: 'barbara-oneill', display_name: "Barba
 const BRANDS = [
   { id: 'b-personal', guide_id: 'owner', name: "Barbara O'Neill", kind: 'personal', slug: null, logo_url: null, website_url: '', social_links: {}, is_primary: true },
   { id: 'b-tre', guide_id: 'owner', name: 'Tre Lune', kind: 'business', slug: 'tre-lune', logo_url: 'https://x/logo-mono-1.png', website_url: 'https://www.trelune.com.au/', social_links: { headline: 'Natural hormonal support', instagram: 'https://instagram.com/trelune_' }, is_primary: false },
-  { id: 'b-mmh', guide_id: 'owner', name: 'Misty Mountain Lifestyle Retreat', kind: 'business', slug: 'misty-mountain', logo_url: null, website_url: 'https://www.mmh.com.au/', social_links: {}, is_primary: false },
+  { id: 'b-mmh', guide_id: 'owner', name: 'Misty Mountain Lifestyle Retreat', kind: 'business', slug: 'misty-mountain', logo_url: null, website_url: 'https://www.mmh.com.au/', social_links: { section_order: 'treats,events' }, is_primary: false },
 ];
 const shopSpy = vi.hoisted(() => vi.fn());
 const event = (id: string, title: string, brand_id: string | null) => ({ id, guide_id: 'owner', title, description: null, start_at: '2099-03-28T00:00:00.000Z', end_at: null, timezone: 'Australia/Sydney', venue: null, location: 'Bellbrook NSW', format: 'in_person', image_url: null, info_url: null, source_url: 'manual', source_name: null, source_external_id: id, status: 'published', brand_id });
-const EVENTS = [event('e1', 'Personal Talk', null), event('e2', 'Tre Lune Workshop', 'b-tre')];
+const EVENTS = [event('e1', 'Personal Talk', null), event('e2', 'Tre Lune Workshop', 'b-tre'), event('e3', 'Misty Weekend', 'b-mmh')];
 const OFFERS = [treat('t1', 'Personal Treat', null), treat('t2', 'Tre Lune Treat', 'b-tre'), treat('t3', 'Misty Treat', 'b-mmh')];
 
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: null, accessToken: null, signOut: () => {}, loading: false }) }));
@@ -149,10 +149,26 @@ describe('the public page of each brand', () => {
     expect(after(screen.getByRole('region', { name: "Barbara O'Neill's treats" }), brands)).toBe(true); // below the page's content
     expect(brands.nextElementSibling).toBe(document.querySelector('footer')); // the last thing before the footer, so below the subscription
     const tiles = [...brands.querySelectorAll('[data-brand-tile]')] as HTMLElement[];
-    expect(tiles.length).toBe(2); // Tre Lune and Misty Mountain
+    expect(tiles.length).toBe(3); // Barbara first, then her brands
+    expect(tiles[0].textContent).toMatch(/Barbara O'Neill/);
+    const r3 = tiles.map((tile) => (tile.querySelector('[data-r3-icon]') as HTMLAnchorElement).getAttribute('href'));
+    expect(r3).toEqual(['/guardians/barbara-oneill', '/guardians/barbara-oneill/tre-lune', '/guardians/barbara-oneill/misty-mountain']); // each tile opens that brand's R³ Guardian page
+    expect((tiles[0].querySelector('[data-r3-icon]') as HTMLElement).getAttribute('aria-current')).toBe('page'); // you are on Barbara's page
     for (const tile of tiles) { expect(tile.style.background).toMatch(/rgb\(255, 255, 255\)|#FFFFFF/i); expect(tile.style.color).toMatch(/rgb\(17, 18, 15\)|#11120F/i); }
     const logo = brands.querySelector('img[src="https://x/logo-mono-1.png"]') as HTMLImageElement;
     expect(logo.style.filter).toBe(''); // black logo on the white tile, not inverted
+  });
+
+  it('shows the sections in the order the brand chose: treats before events on Misty Mountain, events before treats elsewhere', async () => {
+    visit('/guardians/barbara-oneill/misty-mountain', 'misty-mountain');
+    const treats = await screen.findByRole('region', { name: "Misty Mountain Lifestyle Retreat's treats" });
+    const events = await screen.findByRole('region', { name: "Misty Mountain Lifestyle Retreat's events" });
+    expect(!!(treats.compareDocumentPosition(events) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    cleanup();
+    visit('/guardians/barbara-oneill/tre-lune', 'tre-lune');
+    const treLuneTreats = await screen.findByRole('region', { name: "Tre Lune's treats" });
+    const treLuneEvents = await screen.findByRole('region', { name: "Tre Lune's events" });
+    expect(!!(treLuneEvents.compareDocumentPosition(treLuneTreats) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true); // the default
   });
 
   it('an address that is not one of the Guardian\'s brands is a page that is not published', async () => {
