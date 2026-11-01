@@ -54,7 +54,7 @@ import { removeGreenBackground } from '../../utils/chromaKey';
 import { YouTubeClipBackground } from './YouTubeClipBackground';
 import { ProduceVideoBackdrop } from './ProduceVideoBackdrop';
 import { HeroGlassOverlay, heroGlassOn } from './HeroGlassOverlay';
-import { GUARDIAN_SCENES, guardianTypeClipUrl } from '../../utils/guardianTypeClip';
+import { GUARDIAN_SCENES, guardianTypeClipUrl, isSceneBackground } from '../../utils/guardianTypeClip';
 import { openSiteBuilder } from '../../utils/guardianSiteRoute';
 import { countryForPlace, mapQueryFor } from '../../utils/placeCountry';
 import { YouTubeClipFields } from './YouTubeClipFields';
@@ -1569,7 +1569,7 @@ export function ownBackground(url?: string | null): string | null {
 }
 
 /** Brings the live hero preview into view after a background pick, when the layout has stacked it below the picker. */
-const showSitePreview = () => { try { const el = document.getElementById('profile-site-preview'); const r = el?.getBoundingClientRect(); if (el && r && (r.top > window.innerHeight * 0.6 || r.bottom < 0)) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch { /* the preview is a convenience */ } };
+const showSitePreview = () => { try { const el = document.getElementById('profile-site-preview'); const r = el?.getBoundingClientRect(); if (el && r && (r.top > window.innerHeight * 0.6 || r.bottom < 0)) el.scrollIntoView({ block: 'start', behavior: prefersReducedMotionNow() ? 'auto' : 'smooth' }); } catch { /* the preview is a convenience */ } };
 
 const prefersReducedMotionNow = () => { try { return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
 
@@ -1604,7 +1604,7 @@ function HeroBackdrop({ heroMedia: chosenMedia, backgroundIsVideo = false, clips
       : <ProduceVideoBackdrop greyscale={greyscale} />)}
     {clips.length > 0 && <YouTubeClipBackground clips={clips} greyscale={greyscale} />}
     {!clips.length && heroMedia && !backgroundIsVideo && <img src={heroMedia} alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />}
-    {!clips.length && heroMedia && backgroundIsVideo && <video src={heroMedia} autoPlay muted loop playsInline aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />}
+    {!clips.length && heroMedia && backgroundIsVideo && <TypeVideo key={heroMedia} src={heroMedia} greyscale={greyscale} />}
     {glass && <HeroGlassOverlay />}
   </>;
 }
@@ -2053,7 +2053,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   const heroSourceOfferId = (onOfferPath ? pathOffer?.id : undefined) || freeOffers[0]?.id || null;
   // The email section at the end of the page has the hero's background and glass behind it too, when the Guardian has a video clip or the glass on.
   const publicClips = clipsFromLinks(socials.theme_background_clips);
-  const publicGlass = heroGlassOn(socials.theme_glass, publicClips.length > 0 || !!publicTypeVideo);
+  const publicGlass = heroGlassOn(socials.theme_glass, publicClips.length > 0 || !!publicTypeVideo || isSceneBackground(socials.theme_background));
   const emailBackdrop = <MountNearViewport><HeroBackdrop heroMedia={socials.theme_background || null} backgroundIsVideo={publicBackgroundIsVideo} clips={publicClips} typeVideo={publicTypeVideo} glass={publicGlass} greyscale={publicGreyscale} /></MountNearViewport>;
   return <div className="guardian-public-site" lang={publicLanguage} dir={publicLanguage === 'ar' ? 'rtl' : 'ltr'} style={{ minHeight: '100vh', background: publicPageColor, color: '#11120F', fontFamily: publicBodyFont }}>
     <style>{`.guardian-public-site button,.guardian-public-site input,.guardian-public-site select,.guardian-public-site textarea{font-family:${sans}}.guardian-public-site a{font-family:inherit}.guardian-public-site h1,.guardian-public-site h2,.guardian-public-site h3{font-synthesis:none}@media(max-width:760px){.guardian-header-socials{display:none!important}}`}</style>
@@ -2136,6 +2136,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const { signOut } = useAuth();
   const [mainLanguage, setMainLanguage] = useState(defaultLanguage());
   const [contactEmail, setContactEmail] = useState(email);
+  const savedLinksRef = useRef<Record<string, string>>({}); // what is already stored, so a save keeps keys this form does not edit (catalog order, locale…)
   const [whatsappPhone, setWhatsappPhone] = useState('');
   const [instagramUrl, setInstagramUrl] = useState('');
   const [facebookUrl, setFacebookUrl] = useState('');
@@ -2227,6 +2228,16 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       if (saved.display_name) setDisplayName(saved.display_name);
       if (saved.avatar_url) { setAvatarUrl(saved.avatar_url); setAvatarSourceUrl(saved.avatar_url); }
       addHouseAvatars(links.avatar_house_url);
+      savedLinksRef.current = links as Record<string, string>;
+      if (saved.whatsapp_phone) setWhatsappPhone(saved.whatsapp_phone);
+      if (links.instagram) setInstagramUrl(links.instagram);
+      if (links.facebook) setFacebookUrl(links.facebook);
+      if (links.tiktok) setTiktokUrl(links.tiktok);
+      if (links.youtube) setYoutubeUrl(links.youtube);
+      if (links.linktree) setLinktreeUrl(links.linktree);
+      if (links.website) setWebsiteUrl(links.website);
+      if (links.booking_url) setBookingUrl(links.booking_url);
+      if (links.booking_provider) setBookingProvider(links.booking_provider as BookingProvider);
       if (saved.contact_email) setContactEmail(saved.contact_email);
       if (links.theme_background) setBackgroundUrl(links.theme_background);
       if (links.theme_background_clips) setBackgroundClips(clipsFromLinks(links.theme_background_clips));
@@ -2812,7 +2823,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     const audienceText = audience.join(', ').toLowerCase();
     const headline = generatedHeadline;
     const bio = intro.trim() || `I help ${audienceText} with ${chosen.join(', ').toLowerCase()} through ${format.join(', ').toLowerCase()}.`;
-    return { user_id: userId, slug, display_name: displayName, headline, bio, avatar_url: avatarOverride ?? avatarUrl, contact_email: contactEmail.trim(), whatsapp_phone: whatsappPhone.trim(), social_links: { instagram: instagramUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), website: websiteUrl.trim(), language: mainLanguage, pricing_region: pricingRegion, currency, site_goal: websiteGoal, booking_provider: bookingProvider, booking_url: bookingUrl.trim(), brand_name: brandName.trim() || displayName.trim(), logo_url: avatarOverride ?? logoUrl ?? '', avatar_house_url: houseAvatarFlag(avatarOverride ?? avatarUrl, houses), expertise_tags: expertiseTags.join(','), offer_videos: JSON.stringify(offerVideos), photos: JSON.stringify(sitePhotos), roles: roles.join(','), audience_details: JSON.stringify(Object.fromEntries(audience.filter((g) => audienceDetails[g]).map((g) => [g, audienceDetails[g]]))), theme_template: storyTemplate, theme_background: effectiveBackground, theme_background_type: backgroundType, theme_background_clips: clipsToLinks(backgroundClips), theme_glass: heroGlassSetting, theme_image_treatment: imageTreatment, theme_header_style: headerStyle, theme_headline_style: headlineStyle, theme_heading: 'Canela', theme_body: 'Euclid', theme_page_color: pageColor, theme_accent_color: accentColor }, specialties: chosen, status, onboarding_step: onboardingStep };
+    return { user_id: userId, slug, display_name: displayName, headline, bio, avatar_url: avatarOverride ?? avatarUrl, contact_email: contactEmail.trim(), whatsapp_phone: whatsappPhone.trim(), social_links: { ...savedLinksRef.current, instagram: instagramUrl.trim(), facebook: facebookUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), website: websiteUrl.trim(), language: mainLanguage, pricing_region: pricingRegion, currency, site_goal: websiteGoal, booking_provider: bookingProvider, booking_url: bookingUrl.trim(), brand_name: brandName.trim() || displayName.trim(), logo_url: avatarOverride ?? logoUrl ?? '', avatar_house_url: houseAvatarFlag(avatarOverride ?? avatarUrl, houses), expertise_tags: expertiseTags.join(','), offer_videos: JSON.stringify(offerVideos), photos: JSON.stringify(sitePhotos), roles: roles.join(','), audience_details: JSON.stringify(Object.fromEntries(audience.filter((g) => audienceDetails[g]).map((g) => [g, audienceDetails[g]]))), theme_template: storyTemplate, theme_background: effectiveBackground, theme_background_type: backgroundType, theme_background_clips: clipsToLinks(backgroundClips), theme_glass: heroGlassSetting, theme_image_treatment: imageTreatment, theme_header_style: headerStyle, theme_headline_style: headlineStyle, theme_heading: 'Canela', theme_body: 'Euclid', theme_page_color: pageColor, theme_accent_color: accentColor }, specialties: chosen, status, onboarding_step: onboardingStep };
   };
 
   /** Save this part of the setup as a draft: the profile (photos, avatar, brand look, audience…) and, once they have loaded, the brands. Never publishes or changes approval. */
@@ -3601,6 +3612,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       </>}
 
       {step === 6 && <>
+        <SiteProfileSection userId={userId} />
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginBottom: 14 }}><span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Preview on</span><DeviceToggle value={previewDevice} onChange={setPreviewDevice} /></div>
         <FunnelStage number="01" eyebrow="Site 01 · Your profile" title={`${displayName || 'Your'}${displayName ? '’s' : ''} story.`} copy="Your profile site: who you are, and every published offer path.">
           <SitePublishBar site="Profile site" status={profileSiteState} action={sitePublish} busy={busy} error={error} liveHref={`/guardians/${guardianSlug}`} />
@@ -3667,7 +3679,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
             <label style={{ ...label, color: ink }}>Use your own background</label>
             <label style={{ ...btn, height: 40, background: 'transparent', color: ink, fontSize: 8, marginBottom: 14 }}>{uploadingBackground ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}{backgroundUrl ? 'Replace background' : 'Upload photo, GIF or video'}<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" onChange={(event) => uploadBackground(event.target.files?.[0])} style={{ display: 'none' }} /></label>
             <YouTubeClipFields clips={backgroundClips} onChange={setBackgroundClips} />
-            <label style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 14, color: ink, fontSize: 12, cursor: 'pointer' }}><input type="checkbox" checked={heroGlassOn(heroGlassSetting, backgroundClips.length > 0)} onChange={(event) => setHeroGlassSetting(event.target.checked ? 'on' : 'off')} aria-label="Glass and vignette over the background" />Glass and vignette over the background <span style={{ color: muted }}>· refracted glass ribs across the middle, soft dark edges</span></label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 14, color: ink, fontSize: 12, cursor: 'pointer' }}><input type="checkbox" checked={heroGlassOn(heroGlassSetting, backgroundClips.length > 0 || isSceneBackground(backgroundUrl))} onChange={(event) => setHeroGlassSetting(event.target.checked ? 'on' : 'off')} aria-label="Glass and vignette over the background" />Glass and vignette over the background <span style={{ color: muted }}>· refracted glass ribs across the middle, soft dark edges</span></label>
             <label style={label}>Search ingredient and activity media <span style={{ color: acid }}>· videos first</span></label>
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 7, marginBottom: 10 }}><input style={input} value={backgroundSearch} onChange={(event) => setBackgroundSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void searchBackgroundCatalog(); } }} placeholder="e.g. lavender, walking, yoga" /><button type="button" onClick={() => void searchBackgroundCatalog()} disabled={searchingBackground || backgroundSearch.trim().length < 2} style={{ ...btn, minWidth: 88 }}>{searchingBackground ? 'Searching…' : 'Search'}</button></div>
             {backgroundMedia.length > 0 && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 7, maxHeight: 300, overflowY: 'auto', marginBottom: 14 }}>{backgroundMedia.map((media) => { const active = backgroundUrl === media.url; return <button type="button" key={media.id} onClick={() => { setBackgroundUrl(media.url); setBackgroundType(media.kind); }} aria-pressed={active} style={{ position: 'relative', minWidth: 0, padding: 0, border: `1px solid ${active ? acid : line}`, background: '#0D0E0C', color: ink, cursor: 'pointer', textAlign: 'left', overflow: 'hidden' }}>{media.kind === 'video' ? <video src={media.url} muted loop autoPlay playsInline preload="metadata" style={{ display: 'block', width: '100%', aspectRatio: '4 / 3', objectFit: 'cover' }} /> : <img src={media.url} alt="" loading="lazy" style={{ display: 'block', width: '100%', aspectRatio: '4 / 3', objectFit: 'cover' }} />}<span style={{ display: 'block', padding: '7px 8px', fontSize: 7.5, lineHeight: 1.3 }}><strong style={{ display: 'block', color: media.kind === 'video' ? acid : ink, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 3 }}>{media.kind} · {media.source}</strong>{media.name}</span>{active && <span style={{ position: 'absolute', top: 6, right: 6, width: 20, height: 20, display: 'grid', placeItems: 'center', background: acid, color: black }}><Check size={12} /></span>}</button>; })}</div>}
@@ -3699,7 +3711,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           </div>
           <div id="profile-site-preview" className="g-sticky" style={{ scrollMarginTop: 20 }}><span style={{ ...label, display: 'block', color: acid, marginBottom: 7 }}>Profile site preview <span style={{ color: muted }}>· shows every published offer path</span></span><PreviewFrame device={previewDevice}><div style={{ flex: '1 0 auto', background: pageColor, fontFamily: sans }}>
             {headerStyle !== 'hidden' && <GuardianSiteHeader brandName={brandName.trim()} path={`routine3.com/${displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-') || 'your-name'}`} />}
-            <GuardianSiteHero audience={audienceLabel(audienceDetails, audience)} reviewSummary={reviewStats(guardianReviews)} headlineStyle={headlineStyle} name={displayName} avatarUrl={avatarUrl} specialties={chosen} headline={generatedHeadline} tags={expertiseTags} bio={intro || `A practical ${chosen.slice(0, 2).join(' and ').toLowerCase() || 'guidance'} path shaped for ${audience.join(' and ').toLowerCase()}.`} accent={accentColor} headingFont={serif} background={effectiveBackground} backgroundIsVideo={backgroundType === 'video'} clips={backgroundClips} typeVideo={typeBackground} glass={heroGlassOn(heroGlassSetting, backgroundClips.length > 0 || !!typeBackground)} greyscale={imageTreatment === 'greyscale'}
+            <GuardianSiteHero audience={audienceLabel(audienceDetails, audience)} reviewSummary={reviewStats(guardianReviews)} headlineStyle={headlineStyle} name={displayName} avatarUrl={avatarUrl} specialties={chosen} headline={generatedHeadline} tags={expertiseTags} bio={intro || `A practical ${chosen.slice(0, 2).join(' and ').toLowerCase() || 'guidance'} path shaped for ${audience.join(' and ').toLowerCase()}.`} accent={accentColor} headingFont={serif} background={effectiveBackground} backgroundIsVideo={backgroundType === 'video'} clips={backgroundClips} typeVideo={typeBackground} glass={heroGlassOn(heroGlassSetting, backgroundClips.length > 0 || !!typeBackground || isSceneBackground(backgroundUrl))} greyscale={imageTreatment === 'greyscale'}
               cards={[{ key: 'first', eyebrow: rampTargetProblem, title: customerFacingOfferTitle(leadMagnetTitle || suggestedFreeOffer.title), copy: freeAudienceValue, kind: freeOfferType, price: 'Free', imageUrl: effectiveBackground, onClick: () => document.getElementById('value-ramp-funnel-preview')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }]} />
             <GuardianOfferCatalog profile={{ user_id: userId, slug: displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-') || 'your-name', display_name: displayName || 'Your name', headline: generatedHeadline, bio: intro, avatar_url: avatarUrl, contact_email: contactEmail, whatsapp_phone: whatsappPhone, social_links: { audience_details: JSON.stringify(Object.fromEntries(audience.filter((group) => audienceDetails[group]).map((group) => [group, audienceDetails[group]]))) }, specialties: chosen, status: savedStatus || 'draft', commission_percent: 0, onboarding_step: 5 }} offers={related.offers.filter((offer) => offer.status === 'published')} ramps={related.ramps.filter((ramp) => ramp.status === 'published')} reviews={guardianReviews} accent={accentColor} protocols={related.protocols} />
             <GuardianShop guideId={userId} guardianSlug={displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-') || 'your-name'} guardianName={displayName || 'Your name'} pagePadding={PAGE_X} protocols={related.protocols} localePreference={{ region: pricingRegion, locale: languageOptions.find((option) => option.name === mainLanguage)?.code || 'en', currency }} />
@@ -5092,6 +5104,17 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
  * brand edits the profile; a business brand edits its own guide_brands row. Save writes the profile and all brands.
  */
 type SiteBrand = Omit<GuideBrand, 'id' | 'guide_id'> & { key: string };
+/** The profile, brand and catalog-filter fields (Site builder) inside Build your site: the same form, loaded for the signed-in Guardian. */
+function SiteProfileSection({ userId }: { userId: string }) {
+  const [profile, setProfile] = useState<GuideProfile | null>(null);
+  useEffect(() => { getGuideProfile(userId).then(setProfile).catch(() => {}); }, [userId]);
+  if (!profile) return null;
+  return <details data-site-profile-section style={{ border: `1px solid ${line}`, background: panel, marginBottom: 18 }}>
+    <summary style={{ cursor: 'pointer', padding: '14px 16px', color: ink, fontFamily: sans, fontSize: 11, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Profile, brand and catalog filters <span style={{ color: muted, fontWeight: 500, letterSpacing: '.04em', textTransform: 'none' }}>· name, contact, links, booking, tab order</span></summary>
+    <div style={{ padding: '0 16px 16px' }}><SiteProfileForm userId={userId} profile={profile} onProfile={setProfile} /></div>
+  </details>;
+}
+
 export function SiteProfileForm({ userId, profile, onProfile }: { userId: string; profile: GuideProfile; onProfile: (p: GuideProfile) => void }) {
   const { accessToken } = useAuth();
   const links = profile.social_links || {};

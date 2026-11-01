@@ -43,3 +43,6 @@ export const GUARDIAN_SCENES: ReadonlyArray<{ id: string; label: string; video: 
     const video = SCENES_WITH_CLIP.has(id);
     return { id, label: titleCase(id === 'wellness-herbalist' ? 'wellness' : id), video, image: `/images/guides/scenes/${id}.jpg`, url: video ? `/videos/guardians/scenes/${id}.mp4` : `/images/guides/scenes/${id}.jpg` };
   });
+
+/** A background the Guardian picked from the scene picker (a scene clip or still), as opposed to their own upload. */
+export const isSceneBackground = (url?: string | null): boolean => !!url && (url.startsWith('/videos/guardians/scenes/') || url.startsWith('/images/guides/scenes/'));

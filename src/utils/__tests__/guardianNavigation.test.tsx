@@ -6,7 +6,7 @@ import { Workspace, GuardianWebsite, GuardianHeader } from '../../components/gui
 import { useGuardianPage } from '../../components/guides/useGuardianPage';
 import { openSiteBuilder } from '../guardianSiteRoute';
 
-vi.mock('../guardianSiteRoute', () => ({ SITE_BUILDER_HREF: '/guardians/workspace?step=5', openSiteBuilder: vi.fn() }));
+vi.mock('../guardianSiteRoute', () => ({ SITE_BUILDER_HREF: '/guardians/workspace?step=6', openSiteBuilder: vi.fn() }));
 
 // Each test renders the whole workspace or public page; on a busy machine that outruns the 5s default.
 vi.setConfig({ testTimeout: 30000 });
