@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { GuardianWebsite } from '../../components/guides/GuidePortal';
+import { resetRates } from '../displayMoney';
 import { brandSitePath, brandSiteProfile, brandSlugFromPath, savedBrandId, savedBrandMoves, siteOwns } from '../brandSite';
 
 const treat = (id: string, title: string, brand_id: string | null) => ({ id, guide_id: 'owner', kind: 'treat', title, description: 'Massage · 60 min\nA treat.', cover_url: null, price_cents: 13000, currency: 'AUD', affiliate_url: null, access_model: 'paid', file_path: null, booking_url: null, status: 'published', brand_id });
@@ -10,9 +11,10 @@ const PROFILE = { user_id: 'owner', slug: 'barbara-oneill', display_name: "Barba
 const BRANDS = [
   { id: 'b-personal', guide_id: 'owner', name: "Barbara O'Neill", kind: 'personal', slug: null, logo_url: null, website_url: '', social_links: {}, is_primary: true },
   { id: 'b-tre', guide_id: 'owner', name: 'Tre Lune', kind: 'business', slug: 'tre-lune', logo_url: 'https://x/logo-mono-1.png', website_url: 'https://www.trelune.com.au/', social_links: { headline: 'Natural hormonal support', about_short: 'Natural products', instagram: 'https://instagram.com/trelune_' }, is_primary: false },
-  { id: 'b-mmh', guide_id: 'owner', name: 'Misty Mountain Lifestyle Retreat', kind: 'business', slug: 'misty-mountain', logo_url: null, website_url: 'https://www.mmh.com.au/', social_links: { section_order: 'treats,events', name_suffix: 'Lifestyle Retreat' }, is_primary: false },
+  { id: 'b-mmh', guide_id: 'owner', name: 'Misty Mountain Lifestyle Retreat', kind: 'business', slug: 'misty-mountain', logo_url: null, website_url: 'https://www.mmh.com.au/', social_links: { section_order: 'treats,events', name_suffix: 'Lifestyle Retreat', email_capture: 'off' }, is_primary: false },
 ];
 const shopSpy = vi.hoisted(() => vi.fn());
+const optInSpy = vi.hoisted(() => vi.fn());
 const event = (id: string, title: string, brand_id: string | null) => ({ id, guide_id: 'owner', title, description: null, start_at: '2099-03-28T00:00:00.000Z', end_at: null, timezone: 'Australia/Sydney', venue: null, location: 'Bellbrook NSW', format: 'in_person', image_url: null, info_url: null, source_url: 'manual', source_name: null, source_external_id: id, status: 'published', brand_id });
 const EVENTS = [event('e1', 'Personal Talk', null), event('e2', 'Tre Lune Workshop', 'b-tre'), event('e3', 'Misty Weekend', 'b-mmh')];
 const OFFERS = [treat('t1', 'Personal Treat', null), treat('t2', 'Tre Lune Treat', 'b-tre'), treat('t3', 'Misty Treat', 'b-mmh')];
@@ -26,10 +28,11 @@ vi.mock('../guidePortal', async (importOriginal) => ({
   listGuideValueRamps: async () => [],
   listGuideEvents: async () => EVENTS,
   listPublicGuideBrands: async () => BRANDS,
+  submitGuardianOptIn: async (...args: unknown[]) => { optInSpy(...args); },
   listPublicGuideProducts: async (guide: string, brand?: string | null) => { shopSpy(guide, brand); return []; },
 }));
 
-beforeEach(() => { shopSpy.mockReset(); vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => [], text: async () => '[]' }) as Response)); });
+beforeEach(() => { optInSpy.mockReset(); shopSpy.mockReset(); vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => [], text: async () => '[]' }) as Response)); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const visit = (path: string, brandSlug?: string) => { window.history.replaceState({}, '', path); return render(<GuardianWebsite slug="barbara-oneill" brandSlug={brandSlug} isSignedIn={false} />); };
@@ -199,6 +202,36 @@ describe('the public page of each brand', () => {
     visit('/guardians/barbara-oneill');
     const barbara = await hero();
     expect(barbara.nextElementSibling!.textContent).toBe('Wellness'); // her own page is unchanged
+  });
+
+  it('shows treat prices in the picked currency, marked as converted', async () => {
+    resetRates();
+    localStorage.setItem('r3-store-locale', JSON.stringify({ region: 'Europe', locale: 'en', currency: 'EUR' }));
+    vi.stubGlobal('fetch', vi.fn(async (input: any) => (String(input).includes('frankfurter') ? ({ ok: true, status: 200, json: async () => ({ rates: { AUD: 1.6 } }) } as Response) : ({ ok: true, status: 200, json: async () => [], text: async () => '[]' } as Response))));
+    visit('/guardians/barbara-oneill');
+    const section = await screen.findByRole('region', { name: "Barbara O'Neill's treats" });
+    await waitFor(() => expect(section.querySelector('[data-offer-price]')!.textContent).toBe('≈ €81.25')); // A$130 at 1.6 per euro
+    localStorage.clear();
+  });
+
+  it('puts an email sign-up at the bottom of a page with no free offer, and saves the lead', async () => {
+    visit('/guardians/barbara-oneill/tre-lune', 'tre-lune');
+    const follow = await screen.findByRole('region', { name: 'Follow Tre Lune' });
+    expect(follow.compareDocumentPosition(document.querySelector('footer')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // above the footer
+    fireEvent.change(within(follow).getByLabelText('Email address'), { target: { value: 'ana@example.com' } });
+    fireEvent.click(within(follow).getByRole('checkbox'));
+    fireEvent.click(within(follow).getByRole('button', { name: 'Follow' }));
+    await within(follow).findByText(/You’re subscribed/);
+    expect(optInSpy).toHaveBeenCalledWith('owner', expect.objectContaining({ email: 'ana@example.com', marketingConsent: true, name: 'ana' }));
+  });
+
+  it('shows the sign-up on Barbara\'s own page too, and not on a page whose owner turned it off', async () => {
+    visit('/guardians/barbara-oneill');
+    expect(await screen.findByRole('region', { name: "Follow Barbara O'Neill" })).toBeTruthy();
+    cleanup();
+    visit('/guardians/barbara-oneill/misty-mountain', 'misty-mountain');
+    await screen.findByRole('region', { name: "Misty Mountain Lifestyle Retreat's treats" });
+    expect(document.querySelector('#follow')).toBeNull(); // Misty Mountain's setting: email_capture off
   });
 
   it('an address that is not one of the Guardian\'s brands is a page that is not published', async () => {
