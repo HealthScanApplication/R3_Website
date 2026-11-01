@@ -11,11 +11,12 @@ export const PERSONAL_BRAND = 'personal';
 /** A brand draft's local id is `brand-<uuid>`; the data uses the bare uuid. */
 export const brandIdOf = (id: string): string => id.replace(/^brand-/, '');
 
-/** Whether something belonging to `itemBrandId` (null: the personal page) shows under the chosen scope. */
-export function inBrandScope(scope: string, itemBrandId: string | null | undefined): boolean {
+/** Whether something belonging to `item` (a brand id, or an item with `brand_id` / `brand_ids`; none: the personal page) shows under the chosen scope. */
+export function inBrandScope(scope: string, item: string | null | undefined | { brand_id?: string | null; brand_ids?: string[] | null }): boolean {
   if (!scope || scope === ALL_BRANDS) return true;
-  if (scope === PERSONAL_BRAND) return !itemBrandId || itemBrandId === PERSONAL_BRAND;
-  return !!itemBrandId && brandIdOf(itemBrandId) === brandIdOf(scope);
+  const ids = item && typeof item === 'object' ? [item.brand_id, ...(item.brand_ids || [])].filter((id): id is string => !!id) : item ? [item] : [];
+  if (scope === PERSONAL_BRAND) return !ids.length || ids.includes(PERSONAL_BRAND);
+  return ids.some((id) => brandIdOf(id) === brandIdOf(scope));
 }
 
 export function readBrandScope(): string {

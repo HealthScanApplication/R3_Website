@@ -1,4 +1,4 @@
-import { Fragment, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Fragment, createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight, ArrowUp, ArrowDown, ChevronRight, FileText, HeartPulse, LogOut,
   Mail, Package, Plus, Salad, Sparkles, Users, Globe2, Loader2,
@@ -28,7 +28,7 @@ import { guestsLabel, parseRetreatOptions, roomPrice, type RetreatRoomOption } f
 import { eventsInRange, type DayRange } from '../../utils/eventCalendar';
 import { DEFAULT_SECTION_ORDER, PAGE_SECTIONS, moveSection, orderPageSections, serializeSectionOrder, type PageSectionKey } from '../../utils/pageSections';
 import { BrandScopeBar, useBrandScope } from './BrandScopeBar';
-import { brandSiteProfile, brandSitePath, brandSlugFromPath, savedBrandId, savedBrandMoves, siteOwns } from '../../utils/brandSite';
+import { brandSiteProfile, brandSitePath, brandSlugFromPath, cardByline, savedBrandId, savedBrandMoves, siteOwns } from '../../utils/brandSite';
 import { inBrandScope } from '../../utils/brandScope';
 import { GuardianAvatar, useGuardianAvatarUrl } from './GuardianAvatar';
 import { ProtocolChildrenPanel } from './ProtocolChildrenPanel';
@@ -64,6 +64,7 @@ import { HouseStyleAvatarPanel } from './HouseStyleAvatarPanel';
 import { GuardianOfferShelf } from './GuardianOfferShelf';
 import { TreatsTalksManager } from './TreatsTalksManager';
 import { GuardianForumTeaser } from './GuardianForumTeaser';
+import { ItemBrands } from './ItemBrands';
 import { forumNeedsMembership, threadForumMessages } from '../../utils/guardianForum';
 import { isTreatKind } from '../../utils/treatOffers';
 import { removeGreenBackground } from '../../utils/chromaKey';
@@ -1749,7 +1750,15 @@ function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, a
 
 const offerProtocolKey = (value: string) => value.toLowerCase().replace(/\br3\b|\bprotocol\b/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 
+/** The brands a public page knows, so each card can be credited to its brand (name and logo, bottom left). */
+const CardBrandsContext = createContext<{ brands: GuideBrand[]; activeId: string | null } | null>(null);
+function useCardByline(item: { brand_id?: string | null; brand_ids?: string[] | null }, profile: GuideProfile) {
+  const known = useContext(CardBrandsContext);
+  return cardByline(item, known?.brands || [], known?.activeId, { name: profile.display_name, avatarUrl: profile.avatar_url });
+}
+
 function FreeOfferFlipCard({ profile, offer, protocol, reviews, accent, upsellRamp, onUnlocked }: { profile: GuideProfile; offer: GuideOffer; protocol?: AdminProtocol; reviews: GuardianReview[]; accent: string; upsellRamp?: GuideValueRamp; onUnlocked: (offer: GuideOffer, protocol: AdminProtocol | undefined, email: string) => void }) {
+  const byline = useCardByline(offer, profile);
   const [flipped, setFlipped] = useState(false);
   const [email, setEmail] = useState('');
   const [state, setState] = useState<'idle' | 'sending' | 'error'>('idle');
@@ -1772,7 +1781,7 @@ function FreeOfferFlipCard({ profile, offer, protocol, reviews, accent, upsellRa
   return <div style={{ minHeight: 520, perspective: 1200 }}>
     <div style={{ position: 'relative', minHeight: 520, transformStyle: 'preserve-3d', transition: 'transform 650ms cubic-bezier(.16,1,.3,1)', transform: flipped ? 'rotateY(180deg)' : 'rotateY(0)' }}>
       <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden' }}>
-        <ProductCard {...reviewStats(reviews)} audience={audienceLabel(profile.social_links?.audience_details)} imageUrl={offer.cover_url} kind={offer.kind} eyebrow="Free offer" title={customerFacingOfferTitle(offer.title)} copy={offer.description || 'Open this offer to see what is included.'} price="Free" name={profile.display_name} avatarUrl={profile.avatar_url} accent={accent} cta="Get free access" onClick={() => setFlipped(true)} cardQr={protocol ? <RoutineCardQr protocolId={protocol.id} guardianSlug={profile.slug} href={`${window.location.origin}/protocol/${encodeURIComponent(protocol.id)}`} size={58} /> : undefined} />
+        <ProductCard {...reviewStats(reviews)} audience={audienceLabel(profile.social_links?.audience_details)} imageUrl={offer.cover_url} kind={offer.kind} eyebrow="Free offer" title={customerFacingOfferTitle(offer.title)} copy={offer.description || 'Open this offer to see what is included.'} price="Free" name={byline.name} avatarUrl={byline.avatarUrl} accent={accent} cta="Get free access" onClick={() => setFlipped(true)} cardQr={protocol ? <RoutineCardQr protocolId={protocol.id} guardianSlug={profile.slug} href={`${window.location.origin}/protocol/${encodeURIComponent(protocol.id)}`} size={58} /> : undefined} />
       </div>
       <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', transform: 'rotateY(180deg)', boxSizing: 'border-box', minHeight: 520, padding: 26, border: '1px solid rgba(242,239,231,.34)', borderRadius: 6, background: '#F2EFE7', color: '#11120F', display: 'flex', flexDirection: 'column', fontFamily: APP.font }}>
         <button type="button" onClick={() => setFlipped(false)} aria-label={`Back to ${customerFacingOfferTitle(offer.title)}`} style={{ alignSelf: 'flex-end', border: 0, background: 'transparent', color: '#66645F', fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer' }}>Back</button>
@@ -1811,6 +1820,8 @@ function ProfileSectionSkeleton({ sections }: { sections: ProfileSectionState[] 
 }
 
 function GuardianOfferCatalog({ profile, offers, ramps, reviews, accent, protocols, categoryOrder }: { profile: GuideProfile; offers: GuideOffer[]; ramps: GuideValueRamp[]; reviews: GuardianReview[]; accent: string; protocols: AdminProtocol[]; categoryOrder?: string }) {
+  const knownBrands = useContext(CardBrandsContext);
+  const bylineOf = (item: GuideOffer) => cardByline(item, knownBrands?.brands || [], knownBrands?.activeId, { name: profile.display_name, avatarUrl: profile.avatar_url });
   const [activeCategory, setActiveCategory] = useState('All');
   useEffect(() => {
     const open = (event: Event) => { const category = (event as CustomEvent<string>).detail; if (category) setActiveCategory(category); };
@@ -1855,7 +1866,7 @@ function GuardianOfferCatalog({ profile, offers, ramps, reviews, accent, protoco
           const upsellRamp = ramps.find((ramp) => { const index = ramp.offer_ids.indexOf(offer.id); return index >= 0 && ramp.offer_ids.slice(index + 1).some((id) => offers.some((candidate) => candidate.id === id && candidate.access_model === 'paid')); });
           return offer.access_model === 'free' && offer.kind !== 'community'
             ? <FreeOfferFlipCard key={offer.id} profile={profile} offer={offer} protocol={protocol} reviews={reviews} accent={accent} upsellRamp={upsellRamp} onUnlocked={(nextOffer, nextProtocol, email) => { setUnlocked({ offer: nextOffer, protocol: nextProtocol, email }); window.setTimeout(() => document.getElementById('unlocked-protocol')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0); }} />
-            : <ProductCard key={offer.id} {...reviewStats(reviews)} audience={audienceLabel(profile.social_links?.audience_details)} imageUrl={offer.cover_url} kind={offer.kind} eyebrow="Published offer" title={customerFacingOfferTitle(offer.title)} copy={offer.description || 'Open this offer to see what is included.'} price={price(offer)} name={profile.display_name} avatarUrl={profile.avatar_url} accent={accent} cta={offer.kind === 'community' ? 'Join community' : 'View offer'} href={href(offer)} cardQr={protocol ? <RoutineCardQr protocolId={protocol.id} guardianSlug={profile.slug} href={`${window.location.origin}/protocol/${encodeURIComponent(protocol.id)}`} size={58} /> : undefined} />;
+            : <ProductCard key={offer.id} {...reviewStats(reviews)} audience={audienceLabel(profile.social_links?.audience_details)} imageUrl={offer.cover_url} kind={offer.kind} eyebrow="Published offer" title={customerFacingOfferTitle(offer.title)} copy={offer.description || 'Open this offer to see what is included.'} price={price(offer)} name={bylineOf(offer).name} avatarUrl={bylineOf(offer).avatarUrl} accent={accent} cta={offer.kind === 'community' ? 'Join community' : 'View offer'} href={href(offer)} cardQr={protocol ? <RoutineCardQr protocolId={protocol.id} guardianSlug={profile.slug} href={`${window.location.origin}/protocol/${encodeURIComponent(protocol.id)}`} size={58} /> : undefined} />;
         })}
       </div>
       {unlocked && <section id="unlocked-protocol" style={{ scrollMarginTop: 84, marginTop: 34, padding: 'clamp(20px,4vw,38px)', border: '1px solid rgba(17,18,15,.22)', background: '#F2EFE7', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,320px),1fr))', gap: 'clamp(24px,5vw,64px)', alignItems: 'start' }}>
@@ -2184,7 +2195,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   // A brand's page (/guardians/<guardian>/<brand>) is the Guardian's page with the brand's own name, logo, links and content.
   const activeBrand = brandSlug ? publicBrands.find((brand) => (brand.slug || '').toLowerCase() === brandSlug.toLowerCase()) : undefined;
   const personalBrandId = publicBrands.find((brand) => brand.kind === 'personal')?.id;
-  const onSite = (brandId: string | null | undefined) => siteOwns(activeBrand?.id, personalBrandId, brandId);
+  const onSite = (item: { brand_id?: string | null; brand_ids?: string[] | null }) => siteOwns(activeBrand?.id, personalBrandId, item);
   const profile = brandSiteProfile(ownerProfile, activeBrand);
   const [eventSource, setEventSource] = useState('');
   const [localePreference, setLocalePreference] = useState<GuardianLocalePreference>(() => {
@@ -2237,13 +2248,13 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   const selectedRamp = pathSlug ? publishedRamps.find(ramp => encodeURIComponent(ramp.slug) === pathSlug) : publishedRamps[0];
   if (!profile || (pathSlug && !selectedRamp) || (brandSlug && !activeBrand)) return <div style={{ minHeight: '100vh', background: black, color: ink, display: 'grid', placeItems: 'center', padding: 24, fontFamily: sans, textAlign: 'center' }}><div><Brand /><h1 style={{ fontFamily: serif, fontSize: 48, fontWeight: 300, margin: '48px 0 12px' }}>This page is not published yet.</h1><a href="/guardians" style={{ color: acid }}>Return to Guardians</a></div></div>;
   // A value-ramp page (/value-ramp/<slug>) shows the offers that path names, whichever brand they belong to.
-  const publishedOffers = offers.filter((offer) => offer.status === 'published' && (pathSlug || onSite(offer.brand_id)));
+  const publishedOffers = offers.filter((offer) => offer.status === 'published' && (pathSlug || onSite(offer)));
   // Every section of the page in value-ramp order. A section with something in it is a tag under the call to action; the owner also sees the empty ones.
   const isOwner = isSignedIn && user?.id === profile.user_id;
-  const siteEvents = events.filter((event) => onSite(event.brand_id));
+  const siteEvents = events.filter((event) => onSite(event));
   // The main page also offers the company retreats (Misty Mountain); a brand's own page shows only its own.
-  const siteRetreats = activeBrand ? retreats.filter((retreat) => onSite(retreat.brand_id)) : retreats;
-  const profileSections = profileSectionStates({ offers: publishedOffers, products: shopProducts.filter((product) => onSite(product.brand_id)).length, events: siteEvents.length, retreats: siteRetreats.length });
+  const siteRetreats = activeBrand ? retreats.filter((retreat) => onSite(retreat)) : retreats;
+  const profileSections = profileSectionStates({ offers: publishedOffers, products: shopProducts.filter((product) => onSite(product)).length, events: siteEvents.length, retreats: siteRetreats.length });
   const sectionTags: HeroSection[] = profileSections.filter((section) => section.filled || isOwner).map((section): HeroSection => section.filled ? [section.anchor, section.label, 'filled', section.category] : [`section-${section.id}`, section.label, 'empty']);
   const freeOffers = publishedOffers.filter((offer) => offer.access_model === 'free');
   const socials = profile.social_links || {};
@@ -2283,10 +2294,10 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   // Which sections will show (a section with no records is hidden), then the tone each takes so dark and light alternate down the page.
   const brandsShown = publicBrands.length > 1 && publicBrands.some((brand) => brand.kind === 'business');
   const upcomingHere = siteEvents.filter((event) => new Date(event.end_at || event.start_at).getTime() >= Date.now() - 86400000);
-  const ofKind = (kind: string) => offers.filter((offer) => offer.kind === kind && offer.status === 'published' && onSite(offer.brand_id)).length > 0;
+  const ofKind = (kind: string) => offers.filter((offer) => offer.kind === kind && offer.status === 'published' && onSite(offer)).length > 0;
   const shownSections = new Set<PageSectionKey>();
   if (publishedOffers.length) shownSections.add('offers');
-  if (shopProducts.some((product) => product.status === 'published' && onSite(product.brand_id))) shownSections.add('shop');
+  if (shopProducts.some((product) => product.status === 'published' && onSite(product))) shownSections.add('shop');
   if (upcomingHere.length || (isSignedIn && user?.id === profile.user_id)) shownSections.add('events');
   if (ofKind('talk')) shownSections.add('talks');
   if (ofKind('treat')) shownSections.add('treats');
@@ -2304,8 +2315,8 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
     offers: <GuardianOfferCatalog profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} categoryOrder={socials.protocol_filter_order} />,
     shop: <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} protocols={guardianProtocols} owns={onSite} brandId={brandSlug ? activeBrand?.id : null} logoUrl={profile.avatar_url} localePreference={localePreference} categoryOrder={socials.product_filter_order} />,
     events: <GuardianEvents retreats={siteRetreats} profile={profile} events={siteEvents} sourceUrl={eventSource} canEditSource={isSignedIn && user?.id === profile.user_id} onImported={setEvents} onSourceChanged={setEventSource} />,
-    talks: <GuardianOfferShelf kind="talk" profile={profile} offers={offers.filter((offer) => onSite(offer.brand_id))} pagePadding={PAGE_X} />,
-    treats: <GuardianOfferShelf kind="treat" profile={profile} offers={offers.filter((offer) => onSite(offer.brand_id))} pagePadding={PAGE_X} />,
+    talks: <GuardianOfferShelf kind="talk" profile={profile} offers={offers.filter((offer) => onSite(offer))} pagePadding={PAGE_X} />,
+    treats: <GuardianOfferShelf kind="treat" profile={profile} offers={offers.filter((offer) => onSite(offer))} pagePadding={PAGE_X} />,
     forum: <GuardianForumTeaser profile={profile} pagePadding={PAGE_X} />,
     retreats: <GuardianRetreats profile={profile} retreats={siteRetreats} events={siteEvents} />,
     funnel: <>{reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}{isOwner && <ProfileSectionSkeleton sections={profileSections} />}{emailCaptureOn || pathSlug ? (funnelHasEntry ? <GuardianFunnel key={selectedRamp?.id || 'default'} backdrop={emailBackdrop} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} /> : <FollowSignup profile={profile} accent={publicAccent} headingFont={publicHeadingFont} tone={tones.funnel || 'dark'} />) : null}</>,
@@ -2321,7 +2332,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
       </article>)}</div>
     </section> : null,
   };
-  return <PublicLocaleContext.Provider value={{ currency: localePreference.currency, locale: localePreference.locale }}><div className="guardian-public-site" lang={publicLanguage} dir={publicLanguage === 'ar' ? 'rtl' : 'ltr'} style={{ minHeight: '100vh', background: publicPageColor, color: '#11120F', fontFamily: publicBodyFont }}>
+  return <PublicLocaleContext.Provider value={{ currency: localePreference.currency, locale: localePreference.locale }}><CardBrandsContext.Provider value={{ brands: publicBrands, activeId: activeBrand?.id || null }}><div className="guardian-public-site" lang={publicLanguage} dir={publicLanguage === 'ar' ? 'rtl' : 'ltr'} style={{ minHeight: '100vh', background: publicPageColor, color: '#11120F', fontFamily: publicBodyFont }}>
     <style>{`.guardian-public-site button,.guardian-public-site input,.guardian-public-site select,.guardian-public-site textarea{font-family:${sans}}.guardian-public-site a{font-family:inherit}.guardian-public-site h1,.guardian-public-site h2,.guardian-public-site h3{font-synthesis:none}@media(max-width:760px){.guardian-header-socials{display:none!important}}`}</style>
     {publicHeaderStyle !== 'hidden' && <header style={{ position: 'fixed', inset: '0 0 auto', zIndex: 100, minHeight: 64, background: publicHeaderBackground, color: publicHeaderText, borderBottom: '1px solid rgba(17,18,15,.2)', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', alignItems: 'center', gap: 8, padding: '0 clamp(8px,4vw,84px)' }}>
       <a href="/" aria-label="R³ Guardian" style={{ color: publicHeaderText, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 12, justifySelf: 'start' }}><RoutineMark size={32} textColor="#16140F" hairline="#16140F" wordmark="R³" suffix="Guardian" />{socials.brand_name && <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.12em' }}>{socials.brand_name}</span>}</a>
@@ -2341,7 +2352,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
         {profile.display_name} shares general wellbeing guidance, not medical advice. Speak to your GP or doctor before changing medication, diet or exercise, and about any health concern. Individual results vary.
       </footer>
     </main>
-  </div></PublicLocaleContext.Provider>;
+  </div></CardBrandsContext.Provider></PublicLocaleContext.Provider>;
 }
 
 const GET_STARTED_STEPS = ['Profile', 'Guidance', 'Audience', 'Products', 'Offer path', 'Site'] as const;
@@ -2558,7 +2569,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const [paidStepsOpen, setPaidStepsOpen] = useState(1);
   const [productTab, setProductTab] = useState<'free' | 'paid'>('free');
   const brandScope = useBrandScope();
-  const shopProducts = related.products.filter((product) => brandProfiles.length < 2 || inBrandScope(brandScope, product.brand_id));
+  const shopProducts = related.products.filter((product) => brandProfiles.length < 2 || inBrandScope(brandScope, product));
   /** The shop's physical products as cards, lowest price first (they sit in the Physical product section of Paid products). */
   const renderShopCards = (products: GuideProduct[]) => <ProtocolCardGrid>{[...products].sort((a, b) => (a.price_cents || 0) - (b.price_cents || 0) || a.title.localeCompare(b.title)).map((product, index) => <ProtocolCard key={product.id} badge={product.price_cents ? formatMoney(product.price_cents / 100, product.currency || 'GBP') : undefined} kicker={`#${String(index + 1).padStart(2, '0')} low to high`} title={product.title} imageUrl={product.image_url} copy={clipCopy(product.description || '')} by={displayName} cta="Manage products" onClick={() => { window.location.href = '/guardians/workspace?tab=products'; }} owned />)}</ProtocolCardGrid>;
   const [showProtocolInfo, setShowProtocolInfo] = useState(false);
@@ -4519,7 +4530,7 @@ export function StepRelated({ step, guardianSlug, displayName, related, audience
   // One profile site per brand (a single brand reads exactly as before).
   const brandList: RelatedBrand[] = brands.length ? brands : [{ id: 'personal', name: displayName || 'Your', kind: 'personal', logo: null }];
   const multiBrand = brandList.length > 1;
-  const inScope = (brandId: string | null | undefined) => !multiBrand || inBrandScope(scope, brandId);
+  const inScope = (item: Parameters<typeof inBrandScope>[1]) => !multiBrand || inBrandScope(scope, item);
   const siteRows: RelatedRow[] = [
     ...brandList.map((brand): RelatedRow => ({ key: `profile-${brand.id}`, brandId: brand.id, kind: 'profile', title: `${brand.name || 'Your'} profile site`, meta: `${brandSitePath(guardianSlug, brand)}${brandList.length > 1 ? ` · ${brand.kind === 'personal' ? 'Personal' : 'Business'} brand` : ''}`, image: brand.logo || '/images/guides/guide-plate.png', href: brandSitePath(guardianSlug, brand) })),
     ...rampRows,
@@ -4528,7 +4539,7 @@ export function StepRelated({ step, guardianSlug, displayName, related, audience
     1: { title: 'Your sites', tab: 'value_ramps', rows: siteRows },
     2: { title: 'Your Protocols', tab: 'protocols', rows: related.protocols.map((protocol) => ({ key: protocol.id, title: protocol.name, meta: `${protocol.total_days || 1} days · ${protocol.is_public ? 'Published' : 'Draft'}`, image: protocol.image_url, href: '/guardians/workspace?tab=protocols' })) },
     3: { title: audiences.length ? 'Your audiences' : 'Your leads', tab: audiences.length ? 'value_ramps' : 'leads', rows: audiences.length ? audiences.map((a) => ({ key: a.group, title: a.group, meta: a.ages, href: '/guardians/workspace?step=3' })) : related.leads.map((lead) => ({ key: lead.id, title: lead.name, meta: `${lead.email} · ${lead.goal || 'No goal yet'} · ${lead.stage}`, href: '/guardians/workspace?tab=leads' })) },
-    5: { title: 'Your offers', tab: 'offer_builder', rows: related.offers.filter((offer) => inScope(offer.brand_id)).map((offer) => ({ key: offer.id, title: offer.title, meta: [APP_PLAN_KINDS.includes(offer.kind) ? 'PDF + ROUTINE³' : OTHER_FORMATS[offer.kind] || offer.kind.replaceAll('_', ' '), offer.access_model === 'free' ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid', audience, offer.status].filter(Boolean).join(' · '), image: offerImage(offer), href: '/guardians/workspace?tab=offer_builder' })) },
+    5: { title: 'Your offers', tab: 'offer_builder', rows: related.offers.filter((offer) => inScope(offer)).map((offer) => ({ key: offer.id, title: offer.title, meta: [APP_PLAN_KINDS.includes(offer.kind) ? 'PDF + ROUTINE³' : OTHER_FORMATS[offer.kind] || offer.kind.replaceAll('_', ' '), offer.access_model === 'free' ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid', audience, offer.status].filter(Boolean).join(' · '), image: offerImage(offer), href: '/guardians/workspace?tab=offer_builder' })) },
     6: { title: 'Your sites', tab: 'value_ramps', rows: siteRows },
   };
   const section = sections[step];
@@ -4560,7 +4571,7 @@ export function StepRelated({ step, guardianSlug, displayName, related, audience
         plate={art ? <span aria-hidden="true" style={{ display: 'block', width: 116 * art.cellAspect, height: 116, backgroundImage: `url(${art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${art.cols * 100}% ${art.rows * 100}%`, backgroundPosition: `${art.cols === 1 ? 0 : (art.index % art.cols) * 100 / (art.cols - 1)}% ${art.rows === 1 ? 0 : Math.floor(art.index / art.cols) * 100 / (art.rows - 1)}%` }} /> : undefined}
         by={displayName} owned inert onEdit={onEditAudience ? () => onEditAudience(a.group) : undefined}
         onDelete={onRemoveAudience ? async () => { if (await confirmInPage(`Remove ${name} from the people you help?`, 'Remove')) onRemoveAudience(a.group); } : undefined} />;
-    })}</ProtocolCardGrid> : step === 5 && related.offers.filter((offer) => inScope(offer.brand_id)).length ? <ProtocolCardGrid>{related.offers.filter((offer) => inScope(offer.brand_id)).slice(0, 8).map((offer) => {
+    })}</ProtocolCardGrid> : step === 5 && related.offers.filter((offer) => inScope(offer)).length ? <ProtocolCardGrid>{related.offers.filter((offer) => inScope(offer)).slice(0, 8).map((offer) => {
       const free = offer.access_model === 'free';
       return <ProductCard key={offer.id} kind={offer.kind} imageUrl={offer.cover_url}
         eyebrow={[audience || 'Everyone', offer.status === 'published' ? 'Published' : 'Draft'].join(' · ')}
@@ -4999,7 +5010,7 @@ function OfferBuilder({ profile, protocols, offers, recipes = [], librarySources
     {(['free', 'flexible', 'paid'] as const).map((access) => <section key={access} style={{ marginTop: 22 }}><div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, borderBottom: `1px solid ${line}`, paddingBottom: 10 }}><h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 30, margin: 0 }}>{access === 'free' ? 'Free offers' : access === 'paid' ? 'Paid offers' : 'Free or paid'}</h2><span style={{ color: muted, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.1em' }}>{offerBuilderTypes.filter((item) => item.access === access).length} types</span></div><div style={typeView === 'cards' ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 12, marginTop: 12 } : { marginTop: 2 }}>{offerBuilderTypes.filter((item) => item.access === access).map(renderOfferType)}</div></section>)}
     {message && <p style={{ color: acid, fontSize: 11, marginTop: 16 }}>{message}</p>}
     <section style={{ borderTop: `1px solid ${line}`, marginTop: 38, paddingTop: 24 }}><h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 32, margin: 0 }}>R3 outputs</h2><p style={{ color: muted, fontSize: 12 }}>Every R3 Protocol can be edited against the full Routine database, exported as a PDF and delivered through web or iOS.</p><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><a href={APP_STORE_URL} target="_blank" rel="noreferrer" style={{ ...btn, textDecoration: 'none' }}>Open iOS app <ArrowRight size={13} /></a><button type="button" onClick={onOpenProtocols} style={{ ...btn, background: 'transparent', color: ink }}>Manage {protocols.length} Protocols</button><span style={{ ...btn, background: 'transparent', color: muted, cursor: 'default' }}><Download size={13} /> PDF export inside builder</span></div></section>
-    {offers.length > 0 && <section style={{ marginTop: 34 }}><div style={label}>Created offers · {offers.length}</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18, marginTop: 12 }}>{offers.map((offer) => { const free = offer.access_model === 'free'; const linkedRoutineId = offerRoutines[offer.id]; return <div key={offer.id}><ProductCard kind={offer.kind} imageUrl={offer.cover_url || (offer.kind === 'recipe_book' ? recipes.find((r) => r.image_url && r.offer_ids?.includes(offer.id))?.image_url : null)} eyebrow={[audienceLabel(profile.social_links?.audience_details) || 'Everyone', offer.status === 'published' ? 'Published' : 'Draft'].join(' · ')} title={customerFacingOfferTitle(offer.title)} copy={(offer.description || '').split(' Delivery:')[0].slice(0, 120) || undefined} price={free ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid'} name={profile.display_name} avatarUrl={profile.avatar_url} accent={acid} cta={profile.slug ? 'View on your site' : 'View offer'} href={profile.slug ? `/guardians/${encodeURIComponent(profile.slug)}#offers` : undefined} owned visibility={offer.status === "published" ? "public" : "private"} cardQr={linkedRoutineId ? <RoutineCardQr protocolId={linkedRoutineId} guardianSlug={profile.slug} /> : undefined} onDelete={async () => { if (!(await confirmInPage(`Delete ${offer.title}?`))) return; await deleteGuideOffer(profile.user_id, offer.id); onDeleted(offer.id); }} /><OfferCoverControls offer={offer} title={customerFacingOfferTitle(offer.title)} guideId={profile.user_id} onUpdated={onUpdated} onOpenContentBuilder={onOpenContent} />{offer.kind === "community" ? <CommunityChannelSetup offer={offer} profile={profile} /> : offer.kind === 'course' ? <CourseBuilder offer={offer} profile={profile} protocols={protocols} onOfferUpdated={onUpdated} /> : <OfferRoutineLink offer={offer} protocols={protocols} guideId={profile.user_id} guardianSlug={profile.slug} linkedProtocolId={linkedRoutineId} onChange={(offerId, protocolId) => setOfferRoutines((current) => { const next = { ...current }; if (protocolId) next[offerId] = protocolId; else delete next[offerId]; return next; })} />}</div>; })}</div></section>}
+    {offers.length > 0 && <section style={{ marginTop: 34 }}><div style={label}>Created offers · {offers.length}</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18, marginTop: 12 }}>{offers.map((offer) => { const free = offer.access_model === 'free'; const linkedRoutineId = offerRoutines[offer.id]; return <div key={offer.id}><ProductCard kind={offer.kind} imageUrl={offer.cover_url || (offer.kind === 'recipe_book' ? recipes.find((r) => r.image_url && r.offer_ids?.includes(offer.id))?.image_url : null)} eyebrow={[audienceLabel(profile.social_links?.audience_details) || 'Everyone', offer.status === 'published' ? 'Published' : 'Draft'].join(' · ')} title={customerFacingOfferTitle(offer.title)} copy={(offer.description || '').split(' Delivery:')[0].slice(0, 120) || undefined} price={free ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid'} name={profile.display_name} avatarUrl={profile.avatar_url} accent={acid} cta={profile.slug ? 'View on your site' : 'View offer'} href={profile.slug ? `/guardians/${encodeURIComponent(profile.slug)}#offers` : undefined} owned visibility={offer.status === "published" ? "public" : "private"} cardQr={linkedRoutineId ? <RoutineCardQr protocolId={linkedRoutineId} guardianSlug={profile.slug} /> : undefined} onDelete={async () => { if (!(await confirmInPage(`Delete ${offer.title}?`))) return; await deleteGuideOffer(profile.user_id, offer.id); onDeleted(offer.id); }} /><OfferCoverControls offer={offer} title={customerFacingOfferTitle(offer.title)} guideId={profile.user_id} onUpdated={onUpdated} onOpenContentBuilder={onOpenContent} /><ItemBrands guideId={profile.user_id} table="guide_offers" item={offer} onSaved={(brands) => onUpdated({ ...offer, ...brands })} />{offer.kind === "community" ? <CommunityChannelSetup offer={offer} profile={profile} /> : offer.kind === 'course' ? <CourseBuilder offer={offer} profile={profile} protocols={protocols} onOfferUpdated={onUpdated} /> : <OfferRoutineLink offer={offer} protocols={protocols} guideId={profile.user_id} guardianSlug={profile.slug} linkedProtocolId={linkedRoutineId} onChange={(offerId, protocolId) => setOfferRoutines((current) => { const next = { ...current }; if (protocolId) next[offerId] = protocolId; else delete next[offerId]; return next; })} />}</div>; })}</div></section>}
   </>;
 }
 
