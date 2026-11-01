@@ -49,6 +49,14 @@ describe('netlify.toml', () => {
     expect(blocks[images]).not.toMatch(/force\s*=\s*true/);
   });
 
+  it('serves the clips under /videos as files too, not the app shell', () => {
+    const videos = find('/videos/*');
+    expect(videos).toBeGreaterThan(-1);
+    expect(find('/*')).toBeGreaterThan(videos);
+    expect(blocks[videos]).toMatch(/to\s*=\s*"\/videos\/:splat"/);
+    expect(blocks[videos]).not.toMatch(/force\s*=\s*true/);
+  });
+
   it('lets browsers keep /images for a day and refresh in the background, not revalidate every file on every visit', () => {
     expect(toml).toMatch(/for\s*=\s*"\/images\/\*"[\s\S]*?Cache-Control\s*=\s*"public, max-age=86400, stale-while-revalidate=604800"/);
   });

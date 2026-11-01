@@ -181,6 +181,12 @@
   to = "/images/:splat"
   status = 200
 
+# Clips in public/videos (the /wearables hero and use-case cards, the /guardians hero): same reason as /images/*.
+[[redirects]]
+  from = "/videos/*"
+  to = "/videos/:splat"
+  status = 200
+
 [[redirects]]
   from = "/"
   to = "/index.html"
