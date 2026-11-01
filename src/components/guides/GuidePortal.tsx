@@ -28,7 +28,7 @@ import { guestsLabel, parseRetreatOptions, roomPrice, type RetreatRoomOption } f
 import { eventsInRange, type DayRange } from '../../utils/eventCalendar';
 import { DEFAULT_SECTION_ORDER, PAGE_SECTIONS, moveSection, orderPageSections, serializeSectionOrder, type PageSectionKey } from '../../utils/pageSections';
 import { BrandScopeBar, useBrandScope } from './BrandScopeBar';
-import { brandSiteProfile, brandSitePath, brandSlugFromPath, cardByline, savedBrandId, savedBrandMoves, siteOwns } from '../../utils/brandSite';
+import { brandSiteProfile, brandSitePath, brandSlugFromPath, cardByline, protocolOnSite, savedBrandId, savedBrandMoves, siteOwns } from '../../utils/brandSite';
 import { inBrandScope } from '../../utils/brandScope';
 import { GuardianAvatar, useGuardianAvatarUrl } from './GuardianAvatar';
 import { ProtocolChildrenPanel } from './ProtocolChildrenPanel';
@@ -90,7 +90,7 @@ import {
   recoverUpsellPayment, createGuideLead, createGuideOffer, createGuideRecipe, createGuideValueRamp, getGuideProfile, getGuideProfileBySlug, canonicalGuideSlug,
   importGuideProfile, listGuideLeads, listGuideOffers, listGuideProducts, listGuideRecipes, listGuideValueRamps, listRoutineOwners, upsertGuideOffer, upsertGuideValueRamp, listPublicGuideProfiles, saveGuideProfile, listGuardianReviews, listGuardianReviewRequests, createGuardianReviewRequest, submitGuardianReview, setGuardianReviewStatus, createOfferPayment, confirmOfferPayment, buyUpsellOneClick, getFreeOfferDownload, requestGuardianReview, decideGuardianSite, listAllGuideProfiles, listGuardianSuggestions, setGuardianSuggestionStatus, listPublicGuardianOffers, listReviewSummaries, type AdminGuideProfile, type GuardianSuggestionRow, type GuardianReview, type GuardianReviewRequest, submitGuardianSuggestion, submitGuardianOptIn,
   createGuideLibraryFolder, createGuideLibraryItem, deleteGuideLibraryItem, getGuideFileDownloadUrl,
-  listGuideLibraryFolders, listGuideLibraryItems, replaceGuideBrands, listGuideBrands, listPublicGuideBrands, updateGuideRecipe, saveGuideRecipeDraft, listPersonalProtocolPeople, uploadGuideFile, uploadGuideImage, uploadGuideLibraryAudio,
+  listGuideLibraryFolders, listGuideLibraryItems, listProtocolBrands, setProtocolBrands as saveProtocolBrands, replaceGuideBrands, listGuideBrands, listPublicGuideBrands, updateGuideRecipe, saveGuideRecipeDraft, listPersonalProtocolPeople, uploadGuideFile, uploadGuideImage, uploadGuideLibraryAudio,
   updateGuideLead, deleteGuideLead, updateGuideValueRamp, deleteGuideValueRamp, deleteGuideRecipe, deleteGuideOffer,
   updateGuideLibraryFolder, deleteGuideLibraryFolder, updateGuideLibraryItem,
   getOfferCommunityChannel, saveOfferCommunityChannel, getCommunityChannelByRoute, joinGuideCommunity, isGuideCommunityMember, listGuideCommunityMessages, postGuideCommunityMessage,
@@ -1757,6 +1757,40 @@ function useCardByline(item: { brand_id?: string | null; brand_ids?: string[] | 
   return cardByline(item, known?.brands || [], known?.activeId, { name: profile.display_name, avatarUrl: profile.avatar_url });
 }
 
+/** The "Protocols" section of a public page: the routines selected for this page (the same records appear on every page that lists them). */
+function GuardianProtocols({ protocols, profile, pagePadding, tone, accent, headingFont, linkToOffers }: { protocols: AdminProtocol[]; profile: GuideProfile; pagePadding: string; tone: 'light' | 'dark'; accent: string; headingFont: string; linkToOffers: boolean }) {
+  const known = useContext(CardBrandsContext);
+  if (!protocols.length) return null;
+  const light = tone === 'light';
+  const byline = cardByline({ brand_id: known?.activeId }, known?.brands || [], known?.activeId, { name: profile.display_name, avatarUrl: profile.avatar_url });
+  return <section id="protocols" aria-labelledby="guardian-protocols-title" data-page-section="protocols" data-tone={tone} style={{ padding: `clamp(54px,7vw,100px) ${pagePadding}`, background: light ? '#E7E1D5' : '#11120F', color: light ? '#11120F' : '#F2EFE7' }}>
+    <div style={{ maxWidth: 1240, margin: '0 auto' }}>
+      <span style={{ color: light ? '#667245' : accent, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Routines · {protocols.length}</span>
+      <h2 id="guardian-protocols-title" style={{ margin: '12px 0 28px', fontFamily: headingFont, fontWeight: 300, fontSize: 'clamp(42px,6vw,78px)', lineHeight: .98 }}>Protocols.</h2>
+      <ProtocolCardGrid min={290}>{protocols.map((protocol) => <ProtocolCard key={protocol.id} kicker={daysLabel(protocol.total_days)} tags={completeProtocolTags(protocol)} title={protocol.name.replace(/^(R3 Protocol\s*>\s*|Barbara O'Neill\s*•\s*)/i, '')} imageUrl={protocol.image_url} copy={clipCopy(protocol.description)} by={byline.name} byAvatar={byline.avatarUrl ? <img src={byline.avatarUrl} alt="" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover', marginRight: 6, verticalAlign: 'middle' }} /> : undefined} corner={<ProtocolOutputTags />} cta="Get this routine" href={linkToOffers ? '#offers' : undefined} inert={!linkToOffers} />)}</ProtocolCardGrid>
+    </div>
+  </section>;
+}
+
+/** Workspace: choose which of your pages (Barbara O'Neill, Misty Mountain, Tre Lune…) each published protocol appears on. */
+function ProtocolPages({ guideId, protocols }: { guideId: string; protocols: AdminProtocol[] }) {
+  const [links, setLinks] = useState<Record<string, string[]>>({});
+  useEffect(() => { let live = true; listProtocolBrands(guideId).then((map) => { if (live) setLinks(map); }).catch(() => {}); return () => { live = false; }; }, [guideId]);
+  const published = protocols.filter((protocol) => protocol.is_public && protocol.is_active !== false);
+  if (!published.length) return null;
+  return <section aria-labelledby="protocol-pages-title" data-protocol-pages style={{ marginTop: 40, paddingTop: 30, borderTop: '1px solid rgba(245,242,234,.24)' }}>
+    <div id="protocol-pages-title" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#C7D8A3' }}>Protocols on your pages</div>
+    <p style={{ color: '#B8B6AF', fontSize: 12, margin: '6px 0 14px' }}>Tick every page a published protocol shows on. It is the same protocol on each page.</p>
+    <div style={{ display: 'grid', gap: 12 }}>{published.map((protocol) => {
+      const ids = links[protocol.id] || [];
+      return <div key={protocol.id} style={{ borderTop: '1px solid rgba(245,242,234,.14)', paddingTop: 10 }}>
+        <div style={{ fontSize: 14 }}>{protocol.name.replace(/^R3 Protocol\s*>\s*/i, '')}</div>
+        <ItemBrands guideId={guideId} item={{ id: protocol.id, brand_id: ids[0] || null, brand_ids: ids.slice(1) }} save={(brands) => { const next = [brands.brand_id, ...brands.brand_ids].filter((id): id is string => !!id); return saveProtocolBrands(guideId, protocol.id, next).then(() => setLinks((current) => ({ ...current, [protocol.id]: next }))); }} />
+      </div>;
+    })}</div>
+  </section>;
+}
+
 function FreeOfferFlipCard({ profile, offer, protocol, reviews, accent, upsellRamp, onUnlocked }: { profile: GuideProfile; offer: GuideOffer; protocol?: AdminProtocol; reviews: GuardianReview[]; accent: string; upsellRamp?: GuideValueRamp; onUnlocked: (offer: GuideOffer, protocol: AdminProtocol | undefined, email: string) => void }) {
   const byline = useCardByline(offer, profile);
   const [flipped, setFlipped] = useState(false);
@@ -2192,6 +2226,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   const [retreats, setRetreats] = useState<GuideRetreat[]>([]);
   const [shopProducts, setShopProducts] = useState<GuideProduct[]>([]);
   const [publicBrands, setPublicBrands] = useState<GuideBrand[]>([]);
+  const [protocolBrands, setProtocolBrands] = useState<Record<string, string[]>>({});
   // A brand's page (/guardians/<guardian>/<brand>) is the Guardian's page with the brand's own name, logo, links and content.
   const activeBrand = brandSlug ? publicBrands.find((brand) => (brand.slug || '').toLowerCase() === brandSlug.toLowerCase()) : undefined;
   const personalBrandId = publicBrands.find((brand) => brand.kind === 'personal')?.id;
@@ -2236,6 +2271,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
       setValueRamps(found ? await listGuideValueRamps(found.user_id).catch(() => []) : []);
       setReviews(found ? await listGuardianReviews(found.user_id).catch(() => []) : []);
       setGuardianProtocols(found ? (await listPublicProtocols('').catch(() => [])).filter((protocol) => protocol.user_id === found.user_id) : []);
+      setProtocolBrands(found ? await listProtocolBrands(found.user_id).catch(() => ({})) : {});
       setEvents(found ? await listGuideEvents(found.user_id).catch(() => []) : []);
       setRetreats(found ? await listGuideRetreats(found.user_id).catch(() => []) : []);
       setShopProducts(found ? await listGuideProducts(found.user_id).catch(() => []) : []);
@@ -2253,6 +2289,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   const isOwner = isSignedIn && user?.id === profile.user_id;
   const siteEvents = events.filter((event) => onSite(event));
   // The main page also offers the company retreats (Misty Mountain); a brand's own page shows only its own.
+  const siteProtocols = guardianProtocols.filter((protocol) => protocol.is_active !== false && protocolOnSite(activeBrand?.id, personalBrandId, protocolBrands[protocol.id]));
   const siteRetreats = activeBrand ? retreats.filter((retreat) => onSite(retreat)) : retreats;
   const profileSections = profileSectionStates({ offers: publishedOffers, products: shopProducts.filter((product) => onSite(product)).length, events: siteEvents.length, retreats: siteRetreats.length });
   const sectionTags: HeroSection[] = profileSections.filter((section) => section.filled || isOwner).map((section): HeroSection => section.filled ? [section.anchor, section.label, 'filled', section.category] : [`section-${section.id}`, section.label, 'empty']);
@@ -2302,6 +2339,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   if (ofKind('talk')) shownSections.add('talks');
   if (ofKind('treat')) shownSections.add('treats');
   if (siteRetreats.length) shownSections.add('retreats');
+  if (siteProtocols.length) shownSections.add('protocols');
   if (emailCaptureOn || pathSlug) shownSections.add('funnel');
   if (brandsShown) shownSections.add('brands');
   const tones = sectionTones(orderPageSections(socials.section_order), shownSections, funnelHasEntry ? { funnel: emailBackdrop ? 'dark' : 'light' } : {});
@@ -2317,6 +2355,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
     events: <GuardianEvents retreats={siteRetreats} profile={profile} events={siteEvents} sourceUrl={eventSource} canEditSource={isSignedIn && user?.id === profile.user_id} onImported={setEvents} onSourceChanged={setEventSource} />,
     talks: <GuardianOfferShelf kind="talk" profile={profile} offers={offers.filter((offer) => onSite(offer))} pagePadding={PAGE_X} />,
     treats: <GuardianOfferShelf kind="treat" profile={profile} offers={offers.filter((offer) => onSite(offer))} pagePadding={PAGE_X} />,
+    protocols: <GuardianProtocols protocols={siteProtocols} profile={profile} pagePadding={PAGE_X} tone={tones.protocols || 'light'} accent={publicAccent} headingFont={publicHeadingFont} linkToOffers={publishedOffers.length > 0} />,
     forum: <GuardianForumTeaser profile={profile} pagePadding={PAGE_X} />,
     retreats: <GuardianRetreats profile={profile} retreats={siteRetreats} events={siteEvents} />,
     funnel: <>{reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}{isOwner && <ProfileSectionSkeleton sections={profileSections} />}{emailCaptureOn || pathSlug ? (funnelHasEntry ? <GuardianFunnel key={selectedRamp?.id || 'default'} backdrop={emailBackdrop} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} /> : <FollowSignup profile={profile} accent={publicAccent} headingFont={publicHeadingFont} tone={tones.funnel || 'dark'} />) : null}</>,
@@ -5698,6 +5737,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
                   return child ? <div key={x.id} style={{ marginLeft: 40, paddingLeft: 16, borderLeft: `1px solid ${line}` }}>{row}</div> : row; })}
             </>;
           })() : <Empty image={guidePlates.protocols} title="No Protocol drafts yet" copy="Build against the full Routine database with timings, quantities, linked records and PDF export." />)}
+          {tab === 'protocols' && user && <ProtocolPages guideId={user.id} protocols={protocols} />}
           {tab === 'protocols' && <section aria-labelledby="public-protocols-title" style={{ marginTop: 56, paddingTop: 34, borderTop: `1px solid ${line}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
               <div><div id="public-protocols-title" style={{ ...label, color: acid, margin: 0 }}>All public protocols</div><p style={{ color: muted, fontSize: 12, margin: '6px 0 0' }}>{publicProtocolsLoading ? 'Loading the public library…' : `${publicProtocols.length} active public Protocol${publicProtocols.length === 1 ? '' : 's'} from ROUTINE³ and its Guardians.`}</p></div>

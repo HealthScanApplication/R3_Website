@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
-import { brandSelection, cardByline, itemBrandIds, itemBrandSelection, siteOwns } from '../brandSite';
+import { brandSelection, cardByline, itemBrandIds, itemBrandSelection, protocolOnSite, siteOwns } from '../brandSite';
 import { inBrandScope } from '../brandScope';
 
 const PERSONAL = 'p', MMH = 'm', TL = 't';
@@ -10,6 +10,17 @@ const brands = [
   { id: MMH, name: 'Misty Mountain', kind: 'business' as const, logo_url: 'mmh.png' },
   { id: TL, name: 'Tre Lune', kind: 'business' as const, logo_url: 'tl.png' },
 ];
+
+describe('protocols on brand pages', () => {
+  it('a protocol with no links is on the personal page only; links put it on each listed page', () => {
+    expect(protocolOnSite(null, PERSONAL, undefined)).toBe(true);
+    expect(protocolOnSite(MMH, PERSONAL, undefined)).toBe(false);
+    expect(protocolOnSite(MMH, PERSONAL, [MMH, PERSONAL])).toBe(true);
+    expect(protocolOnSite(null, PERSONAL, [MMH, PERSONAL])).toBe(true);
+    expect(protocolOnSite(null, PERSONAL, [TL])).toBe(false);
+    expect(protocolOnSite(TL, PERSONAL, [TL])).toBe(true);
+  });
+});
 
 describe('items on more than one brand', () => {
   it('lists the primary brand first and drops repeats', () => {
