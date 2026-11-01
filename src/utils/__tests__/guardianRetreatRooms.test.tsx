@@ -149,3 +149,49 @@ describe('prices follow the region, language and currency picker', () => {
     expect(programme.querySelector('[data-room-price]')!.textContent).toMatch(/A\$3,650/);
   });
 });
+
+describe('dates dropdown on a retreat programme', () => {
+  afterEach(() => localStorage.clear());
+  const programme = '8 Day / 7 Night Lifestyle Program';
+  beforeEach(() => {
+    localStorage.setItem('r3-store-locale', JSON.stringify({ region: 'United Kingdom', locale: 'en-GB', currency: 'AUD' })); // day-month order, and no conversion
+    EVENTS = [
+      session('old', programme, '2020-03-01T13:00:00.000Z', '2020-03-08T13:00:00.000Z'), // already over
+      session('b', programme, '2100-01-14T13:00:00.000Z', '2100-01-21T13:00:00.000Z'),
+      session('a', programme, '2099-03-04T13:00:00.000Z', '2099-03-11T13:00:00.000Z'),
+      session('talk', 'Spring Talk', '2099-04-01T13:00:00.000Z', '2099-04-01T13:00:00.000Z'),
+    ];
+  });
+
+  it('lists the programme\'s coming sessions, soonest first and grouped by year, and not the ones already over', async () => {
+    visit();
+    const programmeCard = await card(programme);
+    const dates = within(programmeCard).getByLabelText(/Dates for/) as HTMLSelectElement;
+    expect([...dates.options].map((option) => option.text)).toEqual(['5 Mar – 12 Mar 2099', '15 Jan – 22 Jan 2100']);
+    expect([...dates.querySelectorAll('optgroup')].map((group) => group.label)).toEqual(['2099', '2100']);
+    expect(dates.selectedIndex).toBe(0);
+  });
+
+  it('shows the chosen dates beside the price', async () => {
+    visit();
+    const programmeCard = await card(programme);
+    expect(programmeCard.querySelector('[data-room-price]')!.textContent).toMatch(/Lodge Room · 5 Mar – 12 Mar 2099/);
+    fireEvent.change(within(programmeCard).getByLabelText(/Dates for/), { target: { value: '1' } });
+    expect(programmeCard.querySelector('[data-room-price]')!.textContent).toMatch(/Lodge Room · 15 Jan – 22 Jan 2100/);
+    fireEvent.change(within(programmeCard).getByLabelText(/Guests for/), { target: { value: '2' } }); // the room choice is independent
+    expect(programmeCard.querySelector('[data-room-price]')!.textContent).toMatch(/2 people · Lodge Room · 15 Jan/);
+  });
+
+  it('reads the dates in the page\'s chosen language', async () => {
+    localStorage.setItem('r3-store-locale', JSON.stringify({ region: 'Germany', locale: 'de', currency: 'AUD' }));
+    visit();
+    const programmeCard = await card(programme);
+    expect([...(within(programmeCard).getByLabelText(/Dates for/) as HTMLSelectElement).options][0].text).toMatch(/5\. März – 12\. März 2099/);
+  });
+
+  it('has no dates dropdown for a retreat with no sessions', async () => {
+    visit();
+    const plain = await card('Day Retreat');
+    expect(plain.querySelector('[data-retreat-dates]')).toBeNull();
+  });
+});
