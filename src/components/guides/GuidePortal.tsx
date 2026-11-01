@@ -16,6 +16,7 @@ import type { GuideProduct } from '../../utils/guidePortal';
 import { PROTOCOL_THEMES, completeProtocolTags, daysLabel, protocolTags, protocolTheme, protocolWhen } from '../../utils/protocolTags';
 import { defaultAvatarKeyFor } from '../../utils/memberAvatar';
 import { PhotoDropzone } from '../PhotoDropzone';
+import { IMAGE_ACCEPT, describeRejections, quickImageProblem, validateImageFile, validateImageFiles } from '../../utils/imageValidation';
 import { GuardianAvatar, useGuardianAvatarUrl } from './GuardianAvatar';
 import { ProtocolChildrenPanel } from './ProtocolChildrenPanel';
 import { customizeProtocolRecipe } from '../../utils/protocolCopies';
@@ -258,8 +259,8 @@ const storyTemplates: { id: StoryTemplateId; name: string; style: string; descri
 ];
 
 /** A portrait is an image: the upload helper also accepts videos (for page backgrounds), which make no sense here. */
-const portraitProblem = (file: File) => (/^image\/(?:jpeg|png|webp|gif)$/.test(file.type) ? null : 'Choose a JPG, PNG, WebP or GIF image.');
-const PORTRAIT_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
+const portraitProblem = (file: File) => quickImageProblem(file);
+const PORTRAIT_ACCEPT = IMAGE_ACCEPT;
 const defaultAvatars = HOUSE_AVATARS;
 
 const bookingProviders: { value: BookingProvider; label: string; placeholder: string }[] = [
@@ -2640,8 +2641,10 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
 
   async function uploadPortrait(file?: File) {
     if (!file) return;
-    setUploading(true); setImportMessage('');
+    setUploading(true); setImportMessage(''); setAvatarError('');
     try {
+      const check = await validateImageFile(file);
+      if (!check.ok) { setAvatarError(check.message); return; }
       const url = await uploadGuideImage(userId, file);
       setAvatarUrl(url);
       setAvatarSourceUrl(url);
@@ -2863,13 +2866,14 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     if (!files?.length) return;
     const room = PHOTO_SLOTS - sitePhotos.length;
     const chosenFiles = Array.from(files).slice(0, Math.max(0, room));
-    const problem = chosenFiles.map(portraitProblem).find(Boolean);
-    if (problem) { setImportMessage(problem); return; }
-    setPhotosUploading(true); setImportMessage('');
+    setPhotosUploading(true); setImportMessage(''); setAvatarError('');
     try {
-      const uploaded = await Promise.all(chosenFiles.map((file) => uploadGuideImage(userId, file)));
+      const { accepted, rejected } = await validateImageFiles(chosenFiles);
+      if (rejected.length) setAvatarError(describeRejections(rejected, chosenFiles.length));
+      if (!accepted.length) return;
+      const uploaded = await Promise.all(accepted.map((file) => uploadGuideImage(userId, file)));
       setSitePhotos((current) => [...current, ...uploaded].slice(0, PHOTO_SLOTS));
-    } catch (e: any) { setImportMessage(e?.message || 'Could not upload that photo.'); }
+    } catch (e: any) { setAvatarError(e?.message || 'Could not upload that photo.'); }
     finally { setPhotosUploading(false); }
   }
 
@@ -3351,7 +3355,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         <div><label style={label}>Pricing region</label><select style={input} value={pricingRegion} onChange={(event) => { const option = pricingRegions.find((item) => item.region === event.target.value); if (option) { setPricingRegion(option.region); setCurrency(option.currency); } }}>{pricingRegions.map((option) => <option key={option.region} value={option.region}>{option.label}</option>)}</select></div>
       </div>
       {/* Profile image: one compact row, like the brand line above. */}
-      <PhotoDropzone onFile={uploadPortrait} validate={portraitProblem} onReject={setImportMessage} accept={PORTRAIT_ACCEPT} disabled={uploading}>
+      <PhotoDropzone onFile={uploadPortrait} validate={portraitProblem} onReject={setAvatarError} accept={PORTRAIT_ACCEPT} disabled={uploading}>
         {({ open, dragging }) => (
       <>
       <HouseStyleAvatarPanel id={houseStylePanelId} houseStyle={avatarIsHouseStyle} save={saveState} onSave={() => saveProgress()} dragging={dragging} sourceUrl={avatarSource} currentUrl={avatarUrl} needsUpload={avatarNeedsOwnPhoto} converting={avatarConverting} applying={avatarApplying} uploading={uploading} resultUrl={avatarPreviewUrl} resultMock={avatarPreviewMock} error={avatarError} onCreate={convertAvatarToHouseStyle} onUpload={open} onApply={applyConvertedAvatar} onCancel={() => { setAvatarPreviewUrl(null); setAvatarError(''); }} photosSlot={<PhotoGrid layout="quad" photos={sitePhotos} accountAvatarUrl={activeBrandId === 'personal' ? accountAvatarUrl || null : null} forBrand={brandProfiles.length > 1 ? displayName.trim() || 'this brand' : undefined} uploading={photosUploading} onAdd={addSitePhotos} onRemove={(index) => setSitePhotos((current) => current.filter((_, position) => position !== index))} save={saveState} onSave={() => saveProgress()} />} />

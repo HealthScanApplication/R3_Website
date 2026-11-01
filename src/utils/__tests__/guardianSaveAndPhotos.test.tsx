@@ -31,6 +31,9 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const setup = (name = 'Test Guide', avatar: string | null = ACCOUNT_AVATAR) => render(<Onboarding userId="owner" accessToken="t" name={name} email="guide@example.com" accountAvatarUrl={avatar} onDone={() => {}} />);
 const photos = () => screen.getByRole('figure', { name: 'Your photos' });
+const panel = () => screen.getByRole('region', { name: 'R3 house style profile image' });
+/** A file whose first bytes are a real PNG signature, which is what the image validator checks (the decode is skipped in jsdom). */
+const png = (name: string) => new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])], name, { type: 'image/png' });
 
 describe('photo grid', () => {
   it('sits at the top of the profile image card as a two-by-two block beside the house style, above the actions and the collapsed style reference', async () => {
@@ -70,12 +73,12 @@ describe('photo grid', () => {
     await screen.findByDisplayValue('Test Guide');
     const grid = photos();
     for (const n of [1, 2, 3, 4]) expect(within(grid).getByLabelText(`Add photo ${n}`)).toBeTruthy();
-    const file = new File(['x'], 'me.png', { type: 'image/png' });
+    const file = png('me.png');
     fireEvent.change(within(grid).getByLabelText('Add photo 1'), { target: { files: [file] } });
     await waitFor(() => expect(within(photos()).getByAltText('Photo 1')).toBeTruthy());
     expect(mocks.upload).toHaveBeenCalledTimes(1);
     expect(within(photos()).getByText(/Add at least 2/)).toBeTruthy();
-    fireEvent.change(within(photos()).getByLabelText('Add photo 2'), { target: { files: [new File(['y'], 'work.png', { type: 'image/png' })] } });
+    fireEvent.change(within(photos()).getByLabelText('Add photo 2'), { target: { files: [png('work.png')] } });
     await waitFor(() => expect(within(photos()).getByText(/2 of 4/)).toBeTruthy());
     fireEvent.click(within(photos()).getByRole('button', { name: 'Remove photo 2' }));
     await waitFor(() => expect(within(photos()).getByText(/Add at least 2/)).toBeTruthy());
@@ -90,19 +93,51 @@ describe('photo grid', () => {
   });
 });
 
-describe('save on every part of the flow', () => {
-  it('has a Save on the profile image, on the photos and under the step', async () => {
+describe('image validator on the profile image card', () => {
+  it('rejects a file that is named like a photo but is not one, and shows why inside the card without uploading', async () => {
+    setup('Test Guide', null);
+    await screen.findByDisplayValue('Test Guide');
+    const fake = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, 0, 0, 0, 0])], 'cv.png', { type: 'image/png' });
+    fireEvent.change(within(photos()).getByLabelText('Add photo 1'), { target: { files: [fake] } });
+    expect((await within(panel()).findByRole('alert')).textContent).toBe('Choose a JPG, PNG, WebP or GIF image.');
+    expect(mocks.upload).not.toHaveBeenCalled();
+  });
+
+  it('keeps the good photos from a mixed pick and names the one it refused', async () => {
+    setup('Test Guide', null);
+    await screen.findByDisplayValue('Test Guide');
+    const fake = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0, 0, 0, 0, 0, 0, 0, 0])], 'cv.png', { type: 'image/png' });
+    fireEvent.change(within(photos()).getByLabelText('Add photo 1'), { target: { files: [png('me.png'), fake] } });
+    await waitFor(() => expect(within(photos()).getByAltText('Photo 1')).toBeTruthy());
+    expect(mocks.upload).toHaveBeenCalledTimes(1);
+    expect(within(panel()).getByRole('alert').textContent).toMatch(/^cv\.png: Choose a JPG/);
+  });
+
+  it('lays the actions out as one pair of buttons, one Save and one line of requirements', async () => {
     setup();
     await screen.findByDisplayValue('Test Guide');
-    expect(within(screen.getByRole('region', { name: 'R3 house style profile image' })).getByRole('button', { name: 'Save profile image' })).toBeTruthy();
-    expect(within(photos()).getByRole('button', { name: 'Save photos' })).toBeTruthy();
+    const card = panel();
+    const actions = card.querySelector('[data-image-actions]')!;
+    expect(Array.from(actions.querySelectorAll('button')).map((button) => button.textContent)).toEqual(['Create my R3 house style', 'Replace photo']);
+    expect(within(card).getAllByRole('button', { name: 'Save' })).toHaveLength(1);
+    expect(card.querySelector('[data-image-footer]')!.textContent).toMatch(/at least 600 px.*8 MB/);
+    expect(card.textContent).not.toMatch(/Save photos|Save profile image|or drag a photo here/);
+  });
+});
+
+describe('save on every part of the flow', () => {
+  it('has one Save on the profile image card (covering the photos) and one under the step', async () => {
+    setup();
+    await screen.findByDisplayValue('Test Guide');
+    expect(within(panel()).getByRole('button', { name: 'Save' })).toBeTruthy();
+    expect(within(panel()).getByRole('button', { name: 'Save' })).toBeTruthy();
     expect(within(screen.getByLabelText('Save this step')).getByRole('button', { name: 'Save progress' })).toBeTruthy();
   });
 
   it('saves a draft with the photos and the step, never publishing, and says when it saved', async () => {
     setup();
     await screen.findByDisplayValue('Test Guide');
-    fireEvent.click(within(photos()).getByRole('button', { name: 'Save photos' }));
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(mocks.save).toHaveBeenCalledTimes(1));
     const row = mocks.save.mock.calls[0][0];
     expect(row.user_id).toBe('owner');
@@ -111,7 +146,7 @@ describe('save on every part of the flow', () => {
     expect(JSON.parse(row.social_links.photos)).toEqual([ACCOUNT_AVATAR]);
     expect(row.display_name).toBe('Test Guide');
     await waitFor(() => expect(mocks.brands).toHaveBeenCalledTimes(1));
-    expect((await within(photos()).findByRole('status')).textContent).toMatch(/^Saved/);
+    expect((await within(panel()).findByRole('status')).textContent).toMatch(/^Saved/);
   });
 
   it('saves from the step bar with the same result, and keeps what was published', async () => {
@@ -125,8 +160,8 @@ describe('save on every part of the flow', () => {
   it('will not save without a name, and says why', async () => {
     setup('', ACCOUNT_AVATAR);
     await screen.findByRole('figure', { name: 'Your photos' });
-    fireEvent.click(within(photos()).getByRole('button', { name: 'Save photos' }));
-    expect((await within(photos()).findByRole('alert')).textContent).toMatch(/Add the name people should call you/);
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Save' }));
+    expect((await within(panel()).findByRole('alert')).textContent).toMatch(/Add the name people should call you/);
     expect(mocks.save).not.toHaveBeenCalled();
   });
 
@@ -134,8 +169,8 @@ describe('save on every part of the flow', () => {
     mocks.save.mockRejectedValue(new Error('Network down'));
     setup();
     await screen.findByDisplayValue('Test Guide');
-    fireEvent.click(within(photos()).getByRole('button', { name: 'Save photos' }));
-    expect((await within(photos()).findByRole('alert')).textContent).toBe('Network down');
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Save' }));
+    expect((await within(panel()).findByRole('alert')).textContent).toBe('Network down');
   });
 });
 
@@ -143,7 +178,7 @@ const LIVE_PROFILE = { user_id: 'owner', slug: 'test-guide', display_name: 'Test
 const addBrand = async () => { fireEvent.click(await screen.findByRole('button', { name: /add brand/i })); await screen.findByDisplayValue('New brand'); };
 // The "Publishing as" chips read as an initial plus the name ("TTest Guide"); the sites filter has a chip with the bare name too.
 const openBrand = (name: string) => fireEvent.click(screen.getAllByRole('button').find((button) => button.textContent === `${name[0]}${name}`)!);
-const pickFile = (cell: string, name: string) => fireEvent.change(within(photos()).getByLabelText(cell), { target: { files: [new File(['x'], name, { type: 'image/png' })] } });
+const pickFile = (cell: string, name: string) => fireEvent.change(within(photos()).getByLabelText(cell), { target: { files: [png(name)] } });
 
 describe('photos belong to the selected brand', () => {
   it('a new business brand starts with an empty grid: no account photo, and it says whose photos they are', async () => {
@@ -180,7 +215,7 @@ describe('a draft save cannot change who they publish as', () => {
     setup('Renamed Guide', null); // no account photo: the profile keeps a house avatar, which a live page requires
     await waitFor(() => expect(screen.getByDisplayValue('Renamed Guide')).toBeTruthy());
     await new Promise((resolve) => setTimeout(resolve, 20));
-    fireEvent.click(within(photos()).getByRole('button', { name: 'Save photos' }));
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(mocks.save).toHaveBeenCalledTimes(1));
     const row = mocks.save.mock.calls[0][0];
     expect(row.slug).toBe('test-guide'); // not renamed to "renamed-guide"
@@ -192,7 +227,7 @@ describe('a draft save cannot change who they publish as', () => {
     setup('Test Guide'); // the account photo is a plain photo
     await waitFor(() => expect(screen.getByDisplayValue('Test Guide')).toBeTruthy());
     await new Promise((resolve) => setTimeout(resolve, 20));
-    fireEvent.click(within(photos()).getByRole('button', { name: 'Save photos' }));
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Save' }));
     expect((await screen.findAllByText(/must be in the R³ house style/)).length).toBeGreaterThan(0);
     expect(mocks.save).not.toHaveBeenCalled();
   });
@@ -203,7 +238,7 @@ describe('a draft save cannot change who they publish as', () => {
     await screen.findByDisplayValue('Test Guide');
     await new Promise((resolve) => setTimeout(resolve, 20));
     await addBrand();
-    fireEvent.click(within(photos()).getByRole('button', { name: 'Save photos' }));
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(mocks.brands).toHaveBeenCalledTimes(1));
     expect(mocks.save).not.toHaveBeenCalled(); // no rename, no new slug, no photos written over the profile
     const brands = mocks.brands.mock.calls[0][1] as Array<{ name: string; kind: string; is_primary: boolean; social_links: Record<string, string> }>;
@@ -216,8 +251,8 @@ describe('a draft save cannot change who they publish as', () => {
     setup();
     await screen.findByDisplayValue('Test Guide');
     await addBrand();
-    fireEvent.click(within(photos()).getByRole('button', { name: 'Save photos' }));
-    expect((await within(photos()).findByRole('alert')).textContent).toMatch(/Save your personal profile first/);
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Save' }));
+    expect((await within(panel()).findByRole('alert')).textContent).toMatch(/Save your personal profile first/);
     expect(mocks.save).not.toHaveBeenCalled();
     expect(mocks.brands).not.toHaveBeenCalled();
   });

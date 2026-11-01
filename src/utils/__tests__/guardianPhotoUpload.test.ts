@@ -13,7 +13,12 @@ describe('photo upload wiring (a click and a drop must both work, in the Guardia
     expect(portal).not.toMatch(/<input type="file"[^>]*uploadPortrait/);
   });
   it('a portrait must be an image: the shared upload helper also takes videos, which a portrait cannot be', () => {
-    expect(portal).toMatch(/portraitProblem = \(file: File\) => \(\/\^image\\\/\(\?:jpeg\|png\|webp\|gif\)\$\/\.test\(file\.type\)/);
+    expect(portal).toMatch(/portraitProblem = \(file: File\) => quickImageProblem\(file\)/);
+    expect(portal).toContain('const PORTRAIT_ACCEPT = IMAGE_ACCEPT');
+  });
+  it('a portrait and every added photo go through the image validator before they are uploaded', () => {
+    expect(portal).toMatch(/validateImageFile\(file\)[\s\S]{0,200}uploadGuideImage\(userId, file\)/);
+    expect(portal).toMatch(/validateImageFiles\(chosenFiles\)[\s\S]{0,400}uploadGuideImage\(userId, file\)/);
   });
   it('the Profile page no longer calls server routes that are not in the deployed function', () => {
     expect(profile).not.toMatch(/update-user-profile|upload-profile-picture|remove-profile-picture/);
