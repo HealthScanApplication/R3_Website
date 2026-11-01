@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Onboarding } from '../../components/guides/GuidePortal';
 
-const mocks = vi.hoisted(() => ({ save: vi.fn(), brands: vi.fn(), upload: vi.fn(), profile: vi.fn() }));
+const mocks = vi.hoisted(() => ({ save: vi.fn(), brands: vi.fn(), upload: vi.fn(), profile: vi.fn(), imported: vi.fn(), mono: vi.fn() }));
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'owner', app_metadata: {} }, accessToken: null, signOut: () => {} }) }));
 vi.mock('../supabase/client', async (importOriginal) => ({ ...await importOriginal<any>(), getSupabaseClient: () => ({ functions: { invoke: vi.fn() } }) }));
 vi.mock('../guidePortal', async (importOriginal) => ({
@@ -14,13 +14,16 @@ vi.mock('../guidePortal', async (importOriginal) => ({
   saveGuideProfile: mocks.save,
   replaceGuideBrands: mocks.brands,
   uploadGuideImage: mocks.upload,
+  importGuideProfile: mocks.imported,
 }));
+// jsdom has no canvas, so the logo shape is faked; the real work is covered in brandLogo.test.ts.
+vi.mock('../brandLogo', async (importOriginal) => ({ ...await importOriginal<any>(), createMonoLogo: mocks.mono }));
 
 const ACCOUNT_AVATAR = 'https://lh3.example/account-photo.jpg';
 const UPLOADED = 'https://cdn.example/guide-assets/owner/photo-2.webp';
 
 beforeEach(() => {
-  mocks.save.mockReset(); mocks.brands.mockReset(); mocks.upload.mockReset(); mocks.profile.mockReset(); mocks.profile.mockReturnValue(null);
+  mocks.save.mockReset(); mocks.brands.mockReset(); mocks.upload.mockReset(); mocks.profile.mockReset(); mocks.profile.mockReturnValue(null); mocks.imported.mockReset(); mocks.mono.mockReset(); mocks.mono.mockResolvedValue(new Blob(['x'], { type: 'image/png' }));
   mocks.save.mockImplementation(async (row: any) => ({ ...row, status: row.status, onboarding_step: row.onboarding_step }));
   mocks.brands.mockResolvedValue(undefined);
   mocks.upload.mockResolvedValue(UPLOADED);
@@ -122,6 +125,93 @@ describe('image validator on the profile image card', () => {
     expect(within(card).getAllByRole('button', { name: 'Save' })).toHaveLength(1);
     expect(card.querySelector('[data-image-footer]')!.textContent).toMatch(/at least 600 px.*8 MB/);
     expect(card.textContent).not.toMatch(/Save photos|Save profile image|or drag a photo here/);
+  });
+});
+
+const IMPORTED = (extra: object = {}) => ({ name: 'Brand', headline: '', bio: '', avatarUrl: null, sources: [], images: [], logos: [], relatedProfiles: [], topics: [], ...extra });
+const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+const serveImage = (url: string) => vi.stubGlobal('fetch', vi.fn(async (input: any) => (String(input) === url
+  ? ({ ok: true, status: 200, blob: async () => new Blob([PNG_BYTES], { type: 'image/png' }) } as Response)
+  : ({ ok: true, status: 200, json: async () => [], text: async () => '[]' } as Response))));
+const pullIn = async (label: string, link: string) => {
+  fireEvent.change(within(panel()).getByLabelText(label), { target: { value: link } });
+  fireEvent.click(within(panel()).getByRole('button', { name: 'Pull in' }));
+};
+
+describe('pull in from a link', () => {
+  it('finds the images on a page and adds the one they choose to their photos', async () => {
+    setup('Test Guide', null);
+    await screen.findByDisplayValue('Test Guide');
+    mocks.imported.mockResolvedValue(IMPORTED({ images: [{ url: 'https://site.example/me.jpg', sourceUrl: 'https://site.example', kind: 'avatar' }] }));
+    serveImage('https://site.example/me.jpg');
+    await pullIn('Pull in a photo from a link', 'site.example');
+    expect(mocks.imported).toHaveBeenCalledWith(['https://site.example'], 't'); // the missing https:// is added
+    const found = await within(panel()).findByRole('list', { name: 'Images found' });
+    fireEvent.click(within(found).getByRole('button', { name: 'Add to photos' }));
+    await waitFor(() => expect(within(photos()).getByAltText('Photo 1')).toBeTruthy());
+    expect(mocks.upload).toHaveBeenCalledTimes(1);
+  });
+
+  it('says what to do when the site does not let its pictures be copied', async () => {
+    setup('Test Guide', null);
+    await screen.findByDisplayValue('Test Guide');
+    mocks.imported.mockResolvedValue(IMPORTED({ images: [{ url: 'https://site.example/me.jpg', sourceUrl: 'https://site.example', kind: 'avatar' }] }));
+    vi.stubGlobal('fetch', vi.fn(async (input: any) => { if (String(input) === 'https://site.example/me.jpg') throw new TypeError('Failed to fetch'); return { ok: true, status: 200, json: async () => [], text: async () => '[]' } as Response; }));
+    await pullIn('Pull in a photo from a link', 'https://site.example');
+    fireEvent.click(await within(panel()).findByRole('button', { name: 'Add to photos' }));
+    expect((await within(panel()).findByText(/does not let us copy its images/))).toBeTruthy();
+    expect(mocks.upload).not.toHaveBeenCalled();
+  });
+
+  it('reports a link with nothing on it', async () => {
+    setup('Test Guide', null);
+    await screen.findByDisplayValue('Test Guide');
+    mocks.imported.mockResolvedValue(IMPORTED());
+    await pullIn('Pull in a photo from a link', 'https://empty.example');
+    expect(await within(panel()).findByText(/No images were found/)).toBeTruthy();
+  });
+});
+
+describe('a company brand uses a black-on-transparent logo instead of a portrait', () => {
+  it('shows the logo version of the card: its own heading, actions and no portrait house style', async () => {
+    setup();
+    await screen.findByDisplayValue('Test Guide');
+    await addBrand();
+    const card = panel();
+    expect(within(card).getByText(/Logo · black on transparent required/)).toBeTruthy();
+    expect(Array.from(card.querySelector('[data-image-actions]')!.querySelectorAll('button')).map((b) => b.textContent)).toEqual(['Make logo black on transparent', 'Upload logo']);
+    expect(within(card).queryByText(/Create my R3 house style/)).toBeNull();
+    expect(within(card).getByLabelText('Pull in your logo from your website')).toBeTruthy();
+    expect(card.querySelector('[data-logo-tiles]')).not.toBeNull();
+  });
+
+  it('pulls the logo from their website, makes it black on transparent, counts it as done and shows it white on the dark card', async () => {
+    mocks.upload.mockResolvedValue('https://cdn.example/guide-assets/owner/logo-mono-1730000000000.png');
+    setup();
+    await screen.findByDisplayValue('Test Guide');
+    await addBrand();
+    mocks.imported.mockResolvedValue(IMPORTED({ logos: [{ url: 'https://brand.example/logo.png', sourceUrl: 'https://brand.example', kind: 'logo' }] }));
+    serveImage('https://brand.example/logo.png');
+    await pullIn('Pull in your logo from your website', 'https://brand.example');
+    fireEvent.click(await within(panel()).findByRole('button', { name: 'Use as logo' }));
+    await waitFor(() => expect(within(panel()).getByText(/Logo · black on transparent done/)).toBeTruthy());
+    expect(mocks.mono).toHaveBeenCalledTimes(1);
+    expect(mocks.upload.mock.calls[0][2]).toBe('logo-mono'); // named so the page knows to invert it
+    const dark = within(panel()).getByAltText('Your logo on a dark page') as HTMLImageElement;
+    expect(dark.style.filter).toBe('invert(1)');
+    expect((within(panel()).getByAltText('Your logo on a light page') as HTMLImageElement).style.filter).toBe('');
+  });
+
+  it('turns an uploaded logo file straight into the black-on-transparent version, accepting a small one', async () => {
+    mocks.upload.mockResolvedValue('https://cdn.example/guide-assets/owner/logo-mono-1730000000001.png');
+    setup();
+    await screen.findByDisplayValue('Test Guide');
+    await addBrand();
+    const input = document.querySelector('[data-testid="photo-input"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [png('logo.png')] } });
+    await waitFor(() => expect(within(panel()).getByText(/Logo · black on transparent done/)).toBeTruthy());
+    expect(mocks.mono).toHaveBeenCalledTimes(1);
+    expect(mocks.upload).toHaveBeenCalledTimes(1); // only the finished logo is stored, not the raw file too
   });
 });
 

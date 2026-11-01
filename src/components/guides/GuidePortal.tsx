@@ -17,6 +17,8 @@ import { PROTOCOL_THEMES, completeProtocolTags, daysLabel, protocolTags, protoco
 import { defaultAvatarKeyFor } from '../../utils/memberAvatar';
 import { PhotoDropzone } from '../PhotoDropzone';
 import { IMAGE_ACCEPT, describeRejections, quickImageProblem, validateImageFile, validateImageFiles } from '../../utils/imageValidation';
+import { createMonoLogo, isMonoLogoUrl, logoImageStyle } from '../../utils/brandLogo';
+import { PullFromLink } from './PullFromLink';
 import { GuardianAvatar, useGuardianAvatarUrl } from './GuardianAvatar';
 import { ProtocolChildrenPanel } from './ProtocolChildrenPanel';
 import { customizeProtocolRecipe } from '../../utils/protocolCopies';
@@ -261,6 +263,17 @@ const storyTemplates: { id: StoryTemplateId; name: string; style: string; descri
 /** A portrait is an image: the upload helper also accepts videos (for page backgrounds), which make no sense here. */
 const portraitProblem = (file: File) => quickImageProblem(file);
 const PORTRAIT_ACCEPT = IMAGE_ACCEPT;
+
+/** Copies a picture found on another site into a File. Most sites allow it for their public images; when one does not, the person is told what to do instead. */
+async function copyRemoteImage(url: string): Promise<File> {
+  const refused = 'That site does not let us copy its images. Download the picture and use Upload instead.';
+  let response: Response;
+  try { response = await fetch(url, { mode: 'cors', referrerPolicy: 'no-referrer' }); } catch { throw new Error(refused); }
+  if (!response.ok) throw new Error(refused);
+  const blob = await response.blob();
+  if (!blob.size || !/^image\//.test(blob.type)) throw new Error('That link is not a picture we can use.');
+  return new File([blob], url.split('/').pop()?.split('?')[0] || 'image', { type: blob.type });
+}
 const defaultAvatars = HOUSE_AVATARS;
 
 const bookingProviders: { value: BookingProvider; label: string; placeholder: string }[] = [
@@ -2086,7 +2099,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
         <span style={{ color: publicAccent, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Official brands</span>
         <h2 id="guardian-brands-title" style={{ margin: '12px 0 28px', fontFamily: publicHeadingFont, fontWeight: 300, fontSize: 'clamp(42px,6vw,78px)', lineHeight: .95 }}>More from {profile.display_name}.</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 14 }}>{publicBrands.filter((brand) => brand.kind === 'business').map((brand) => <article key={brand.id || brand.name} style={{ border: '1px solid rgba(245,242,234,.26)', padding: 22, display: 'grid', gap: 18 }}>
-          <span style={{ display: 'flex', gap: 12, alignItems: 'center' }}>{brand.logo_url ? <img src={brand.logo_url} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: '50%' }} /> : <span style={{ width: 48, height: 48, border: '1px solid rgba(245,242,234,.26)', borderRadius: '50%', display: 'grid', placeItems: 'center', fontFamily: publicHeadingFont, fontSize: 20 }}>{brand.name.charAt(0)}</span>}<strong style={{ fontSize: 18 }}>{brand.name}</strong></span>
+          <span style={{ display: 'flex', gap: 12, alignItems: 'center' }}>{brand.logo_url ? <img src={brand.logo_url} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: '50%', ...logoImageStyle(brand.logo_url) }} /> : <span style={{ width: 48, height: 48, border: '1px solid rgba(245,242,234,.26)', borderRadius: '50%', display: 'grid', placeItems: 'center', fontFamily: publicHeadingFont, fontSize: 20 }}>{brand.name.charAt(0)}</span>}<strong style={{ fontSize: 18 }}>{brand.name}</strong></span>
           <span style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>{brand.website_url && <a href={brand.website_url} target="_blank" rel="noopener noreferrer" style={{ color: ink, display: 'inline-flex', alignItems: 'center', gap: 6 }}>Website <ExternalLink size={13} /></a>}{brand.social_links.instagram && <a href={brand.social_links.instagram} aria-label={`${brand.name} on Instagram`} style={{ color: ink }}><Instagram size={17} /></a>}{brand.social_links.facebook && <a href={brand.social_links.facebook} aria-label={`${brand.name} on Facebook`} style={{ color: ink }}><Facebook size={17} /></a>}{brand.social_links.tiktok && <a href={brand.social_links.tiktok} aria-label={`${brand.name} on TikTok`} style={{ color: ink }}><AtSign size={17} /></a>}</span>
         </article>)}</div>
       </section>}
@@ -2190,7 +2203,14 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   // Every converted upload is its own URL, so one list covers the profile and every brand (switching brands keeps each approval).
   const [houseAvatarUrls, setHouseAvatarUrls] = useState<string[]>([]);
   const addHouseAvatars = (...urls: (string | null | undefined)[]) => setHouseAvatarUrls((current) => { const fresh = urls.filter((url): url is string => !!url && !current.includes(url)); return fresh.length ? [...current, ...fresh] : current; });
-  const avatarIsHouseStyle = isHouseStyleAvatar(avatarUrl, houseAvatarUrls);
+  // A company's "house style" is its logo as one flat black shape on transparent (shown white on dark pages).
+  const activeIsBusiness = brandProfiles.find((brand) => brand.localId === activeBrandId)?.kind === 'business';
+  const avatarIsHouseStyle = isHouseStyleAvatar(avatarUrl, houseAvatarUrls) || (activeIsBusiness && isMonoLogoUrl(avatarUrl));
+  const [pullLink, setPullLink] = useState('');
+  const [pulling, setPulling] = useState(false);
+  const [pulled, setPulled] = useState<{ url: string; label?: string }[]>([]);
+  const [pullMessage, setPullMessage] = useState('');
+  const [pullBusy, setPullBusy] = useState<string | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [avatarConverting, setAvatarConverting] = useState(false);
   const [avatarApplying, setAvatarApplying] = useState(false);
@@ -2652,8 +2672,9 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     if (!file) return;
     setUploading(true); setImportMessage(''); setAvatarError('');
     try {
-      const check = await validateImageFile(file);
+      const check = await validateImageFile(file, activeIsBusiness ? { minShortSide: 100, maxAspect: 8 } : {});
       if (!check.ok) { setAvatarError(check.message); return; }
+      if (activeIsBusiness) { await makeLogoFrom(file); return; }
       const url = await uploadGuideImage(userId, file);
       setAvatarUrl(url);
       setAvatarSourceUrl(url);
@@ -2697,6 +2718,60 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       setAvatarError(error instanceof Error ? error.message : 'Could not save the converted avatar.');
     } finally { setAvatarApplying(false); }
   }
+
+  /** A company's logo: one flat black shape on transparent, saved as the brand's image (pages show it white on dark). */
+  async function makeLogoFrom(source: Blob) {
+    const png = await createMonoLogo(source);
+    const url = await uploadGuideImage(userId, new File([png], 'logo.png', { type: 'image/png' }), 'logo-mono');
+    setAvatarUrl(url); setAvatarSourceUrl(url); setAvatarPreviewUrl(null); setLogoUrl(url);
+    const saved = await saveProgress({ avatarUrl: url });
+    setImportMessage(saved ? 'Logo made black on transparent and saved. Dark pages show it in white.' : 'Logo made black on transparent. Save to keep it.');
+  }
+
+  async function createLogoFromCurrent() {
+    if (!avatarSource || avatarNeedsOwnPhoto) { setAvatarError('Upload your logo first, or pull it in from your website.'); return; }
+    setAvatarConverting(true); setAvatarError('');
+    try { await makeLogoFrom(await copyRemoteImage(avatarSource)); }
+    catch (error) { setAvatarError(error instanceof Error ? error.message : 'Could not make that logo.'); }
+    finally { setAvatarConverting(false); }
+  }
+
+  async function pullFromLink() {
+    let raw = pullLink.trim();
+    if (!raw) return;
+    if (!/^https?:\/\//i.test(raw)) raw = `https://${raw}`;
+    try { new URL(raw); } catch { setPullMessage('Enter a full web address, like https://yourwebsite.com.'); return; }
+    setPulling(true); setPullMessage(''); setPulled([]);
+    try {
+      const imported = await importGuideProfile([raw], accessToken);
+      const logos = (imported.logos || []).map((item) => item.url), images = imported.images.map((item) => item.url);
+      const urls = Array.from(new Set(activeIsBusiness ? [...logos, ...images] : [...images, ...logos])).slice(0, 8);
+      if (!urls.length) setPullMessage('No images were found on that page. Try your website address, or upload one instead.');
+      else { setPulled(urls.map((url) => ({ url }))); setPullMessage(activeIsBusiness ? 'Choose your logo.' : 'Choose the photos to add.'); }
+    } catch (error) {
+      setPullMessage(error instanceof Error ? error.message : 'Could not read that link.');
+    } finally { setPulling(false); }
+  }
+
+  async function usePulledImage(url: string) {
+    setPullBusy(url); setPullMessage('');
+    try {
+      const file = await copyRemoteImage(url);
+      if (activeIsBusiness) { await makeLogoFrom(file); setPulled([]); return; }
+      if (sitePhotos.length >= PHOTO_SLOTS) throw new Error(`You already have ${PHOTO_SLOTS} photos. Remove one first.`);
+      const check = await validateImageFile(file);
+      if (!check.ok) throw new Error(check.message);
+      const uploaded = await uploadGuideImage(userId, file);
+      setSitePhotos((current) => [...current, uploaded].slice(0, PHOTO_SLOTS));
+      if (avatarNeedsOwnPhoto) { setAvatarUrl(uploaded); setAvatarSourceUrl(uploaded); setLogoUrl(uploaded); setAvatarPreviewUrl(null); }
+      setPulled((current) => current.filter((item) => item.url !== url));
+      setPullMessage('Added to your photos.');
+    } catch (error) {
+      setPullMessage(error instanceof Error ? error.message : 'Could not add that image.');
+    } finally { setPullBusy(null); }
+  }
+
+  useEffect(() => { setPulled([]); setPullMessage(''); }, [activeBrandId]);
 
   async function uploadBackground(file?: File) {
     if (!file) return;
@@ -3355,7 +3430,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       <div aria-label="Publishing brand" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '0 0 16px', marginBottom: 20, borderBottom: `1px solid ${line}` }}>
         <span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', marginRight: 4 }}>Publishing as</span>
         {brandProfiles.map((brand) => { const active = brand.localId === activeBrandId; const visibleName = (active ? displayName : brand.name) || 'Untitled brand'; const visibleLogo = active ? logoUrl : brand.logo_url; return <button type="button" key={brand.localId} onClick={() => selectBrand(brand.localId)} aria-pressed={active} title={brand.kind === 'personal' ? 'Personal brand' : 'Business brand'} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 30, padding: '0 10px 0 4px', border: `1px solid ${active ? ink : line}`, borderRadius: 2, background: active ? 'rgba(245,242,234,.08)' : 'transparent', color: active ? ink : muted, fontFamily: sans, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-          <span style={{ position: 'relative', width: 20, height: 20, display: 'grid', placeItems: 'center', overflow: 'hidden', border: `1px solid ${line}`, fontFamily: serif, fontSize: 11 }}>{visibleName.trim().charAt(0)}{visibleLogo && <img src={visibleLogo} alt="" onError={(event) => { event.currentTarget.style.display = 'none'; }} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}</span>
+          <span style={{ position: 'relative', width: 20, height: 20, display: 'grid', placeItems: 'center', overflow: 'hidden', border: `1px solid ${line}`, fontFamily: serif, fontSize: 11 }}>{visibleName.trim().charAt(0)}{visibleLogo && <img src={visibleLogo} alt="" onError={(event) => { event.currentTarget.style.display = 'none'; }} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', ...logoImageStyle(visibleLogo) }} />}</span>
           {visibleName}
         </button>; })}
         <button type="button" onClick={addBrand} style={{ border: 0, background: 'transparent', color: muted, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', padding: '0 6px' }}><Plus size={12} /> Add brand</button>
@@ -3370,7 +3445,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       <PhotoDropzone onFile={uploadPortrait} validate={portraitProblem} onReject={setAvatarError} accept={PORTRAIT_ACCEPT} disabled={uploading}>
         {({ open, dragging }) => (
       <>
-      <HouseStyleAvatarPanel id={houseStylePanelId} houseStyle={avatarIsHouseStyle} save={saveState} onSave={() => saveProgress()} dragging={dragging} sourceUrl={avatarSource} currentUrl={avatarUrl} needsUpload={avatarNeedsOwnPhoto} converting={avatarConverting} applying={avatarApplying} uploading={uploading} resultUrl={avatarPreviewUrl} resultMock={avatarPreviewMock} error={avatarError} onCreate={convertAvatarToHouseStyle} onUpload={open} onApply={applyConvertedAvatar} onCancel={() => { setAvatarPreviewUrl(null); setAvatarError(''); }} photosSlot={<PhotoGrid layout="quad" photos={sitePhotos} accountAvatarUrl={activeBrandId === 'personal' ? accountAvatarUrl || null : null} forBrand={brandProfiles.length > 1 ? displayName.trim() || 'this brand' : undefined} uploading={photosUploading} onAdd={addSitePhotos} onRemove={(index) => setSitePhotos((current) => current.filter((_, position) => position !== index))} save={saveState} onSave={() => saveProgress()} />} />
+      <HouseStyleAvatarPanel id={houseStylePanelId} houseStyle={avatarIsHouseStyle} save={saveState} onSave={() => saveProgress()} dragging={dragging} sourceUrl={avatarSource} currentUrl={avatarUrl} needsUpload={avatarNeedsOwnPhoto} converting={avatarConverting} applying={avatarApplying} uploading={uploading} resultUrl={avatarPreviewUrl} resultMock={avatarPreviewMock} error={avatarError} onCreate={activeIsBusiness ? createLogoFromCurrent : convertAvatarToHouseStyle} logoMode={activeIsBusiness} linkSlot={<PullFromLink label={activeIsBusiness ? 'Pull in your logo from your website' : 'Pull in a photo from a link'} value={pullLink} onChange={setPullLink} onPull={pullFromLink} pulling={pulling} candidates={pulled} useLabel={activeIsBusiness ? 'Use as logo' : 'Add to photos'} onUse={usePulledImage} busyUrl={pullBusy} message={pullMessage} />} onUpload={open} onApply={applyConvertedAvatar} onCancel={() => { setAvatarPreviewUrl(null); setAvatarError(''); }} photosSlot={<PhotoGrid layout="quad" photos={sitePhotos} accountAvatarUrl={activeBrandId === 'personal' ? accountAvatarUrl || null : null} forBrand={brandProfiles.length > 1 ? displayName.trim() || 'this brand' : undefined} uploading={photosUploading} onAdd={addSitePhotos} onRemove={(index) => setSitePhotos((current) => current.filter((_, position) => position !== index))} save={saveState} onSave={() => saveProgress()} />} />
       </>
         )}
       </PhotoDropzone>

@@ -369,6 +369,8 @@ export interface ImportedGuideProfile {
   avatarUrl: string | null;
   sources: { url: string; site: string }[];
   images: { url: string; sourceUrl: string; kind: 'avatar' | 'page' }[];
+  /** Logo candidates found on the page, best first (the importer added these later, so an older one may not send them). */
+  logos?: { url: string; sourceUrl: string; kind: 'logo' }[];
   relatedProfiles: { url: string; label: string; platform: string }[];
   topics: string[];
 }
