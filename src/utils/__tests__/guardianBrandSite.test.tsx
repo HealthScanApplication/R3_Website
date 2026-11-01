@@ -13,6 +13,8 @@ const BRANDS = [
   { id: 'b-mmh', guide_id: 'owner', name: 'Misty Mountain Lifestyle Retreat', kind: 'business', slug: 'misty-mountain', logo_url: null, website_url: 'https://www.mmh.com.au/', social_links: {}, is_primary: false },
 ];
 const shopSpy = vi.hoisted(() => vi.fn());
+const event = (id: string, title: string, brand_id: string | null) => ({ id, guide_id: 'owner', title, description: null, start_at: '2099-03-28T00:00:00.000Z', end_at: null, timezone: 'Australia/Sydney', venue: null, location: 'Bellbrook NSW', format: 'in_person', image_url: null, info_url: null, source_url: 'manual', source_name: null, source_external_id: id, status: 'published', brand_id });
+const EVENTS = [event('e1', 'Personal Talk', null), event('e2', 'Tre Lune Workshop', 'b-tre')];
 const OFFERS = [treat('t1', 'Personal Treat', null), treat('t2', 'Tre Lune Treat', 'b-tre'), treat('t3', 'Misty Treat', 'b-mmh')];
 
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: null, accessToken: null, signOut: () => {}, loading: false }) }));
@@ -22,6 +24,7 @@ vi.mock('../guidePortal', async (importOriginal) => ({
   getGuideProfileBySlug: async () => PROFILE,
   listGuideOffers: async () => OFFERS,
   listGuideValueRamps: async () => [],
+  listGuideEvents: async () => EVENTS,
   listPublicGuideBrands: async () => BRANDS,
   listPublicGuideProducts: async (guide: string, brand?: string | null) => { shopSpy(guide, brand); return []; },
 }));
@@ -116,6 +119,25 @@ describe('the public page of each brand', () => {
     await screen.findByRole('region', { name: "Barbara O'Neill's treats" });
     const portrait = document.querySelector('img[src="https://x/barbara.jpg"]') as HTMLImageElement | null;
     if (portrait) expect(portrait.style.filter).not.toBe('invert(1)');
+  });
+
+  it('puts a brand\'s logo across the edge of the event map, white, on the card\'s own dark background', async () => {
+    visit('/guardians/barbara-oneill/tre-lune', 'tre-lune');
+    const section = await screen.findByRole('region', { name: "Tre Lune's events" });
+    const card = await within(section).findByText('Tre Lune Workshop').then((el) => el.closest('article') as HTMLElement);
+    const header = card.querySelector('[data-destination-header]') as HTMLElement;
+    const badge = card.querySelector('[data-destination-badge]') as HTMLElement;
+    expect(header.contains(badge)).toBe(false); // it sits across the edge of the map, not on it
+    expect(badge.style.bottom).toBe('-34px');
+    expect(badge.style.background).toMatch(/rgb\(23, 27, 20\)|#171B14/i); // the card's own background
+    expect((badge.querySelector('img') as HTMLImageElement).style.filter).toBe('invert(1)'); // white logo
+    expect(within(section).queryByText('Personal Talk')).toBeNull(); // only this brand's events
+  });
+
+  it('gives visitors no Refresh events button', async () => {
+    visit('/guardians/barbara-oneill');
+    const section = await screen.findByRole('region', { name: "Barbara O'Neill's events" });
+    expect(within(section).queryByRole('button', { name: /refresh events/i })).toBeNull();
   });
 
   it('an address that is not one of the Guardian\'s brands is a page that is not published', async () => {
