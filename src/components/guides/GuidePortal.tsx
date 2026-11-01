@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Fragment, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight, ArrowUp, ArrowDown, ChevronRight, FileText, HeartPulse, LogOut,
   Mail, Package, Plus, Salad, Sparkles, Users, Globe2, Loader2,
@@ -19,7 +19,7 @@ import { PhotoDropzone } from '../PhotoDropzone';
 import { IMAGE_ACCEPT, describeRejections, quickImageProblem, validateImageFile, validateImageFiles } from '../../utils/imageValidation';
 import { createMonoLogo, isMonoLogoUrl, logoImageStyle } from '../../utils/brandLogo';
 import { PullFromLink } from './PullFromLink';
-import { eventDay } from '../../utils/eventDates';
+import { eventDay, eventRangeLabel, eventYear } from '../../utils/eventDates';
 import { LogoBadge } from './LogoBadge';
 import { PublicLocaleContext, useDisplayMoney } from '../../utils/displayMoney';
 import { EventsCalendar } from './EventsCalendar';
@@ -2095,33 +2095,54 @@ function RoomSelectors({ title, rooms, choice, dark = false }: { title: string; 
 }
 
 /** The price line for the chosen room, or the card's own price text when it has no rooms. */
-function RoomPrice({ choice, fallback, dark = false }: { choice: ReturnType<typeof useRoomChoice>; fallback: string; dark?: boolean }) {
+function RoomPrice({ choice, fallback, dark = false, dates }: { choice: ReturnType<typeof useRoomChoice>; fallback: string; dark?: boolean; dates?: string }) {
   const { room, price } = choice;
   const money = useDisplayMoney();
   if (!room || !price) return <strong style={{ fontFamily: serif, fontSize: dark ? 20 : 23, fontWeight: 300 }}>{fallback}</strong>;
-  return <span data-room-price><strong style={{ fontFamily: serif, fontSize: 26, fontWeight: 300 }}>{money(price.cents, room.currency)}</strong><span style={{ display: 'block', color: dark ? '#9FA897' : '#66645F', fontSize: 11 }}>{guestsLabel(price.guests)} · {room.label}</span></span>;
+  return <span data-room-price><strong style={{ fontFamily: serif, fontSize: 26, fontWeight: 300 }}>{money(price.cents, room.currency)}</strong><span style={{ display: 'block', color: dark ? '#9FA897' : '#66645F', fontSize: 11 }}>{guestsLabel(price.guests)} · {room.label}{dates ? ` · ${dates}` : ''}</span></span>;
 }
 
-function RetreatCard({ profile, retreat }: { profile: GuideProfile; retreat: GuideRetreat }) {
+/** The dates of a programme's coming sessions as one dropdown, grouped by year. */
+function DatesSelect({ title, sessions, index, onChange }: { title: string; sessions: GuideEvent[]; index: number; onChange: (index: number) => void }) {
+  const locale = useContext(PublicLocaleContext)?.locale; // dates read in the page's chosen language
+  if (!sessions.length) return null;
+  const years = Array.from(new Set(sessions.map((session) => eventYear(session, locale))));
+  return <label data-retreat-dates style={{ display: 'grid', gap: 5, marginTop: 10 }}>
+    <span style={{ color: '#66645F', fontSize: 9, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Dates</span>
+    <select aria-label={`Dates for ${title}`} value={index} onChange={(event) => onChange(Number(event.target.value))} style={{ width: '100%', minHeight: 42, boxSizing: 'border-box', padding: '0 10px', border: '1px solid rgba(17,18,15,.3)', background: '#FFF', color: '#11120F', fontFamily: sans, fontSize: 13 }}>
+      {years.map((year) => <optgroup key={year} label={year}>{sessions.map((session, position) => eventYear(session, locale) === year ? <option key={session.id} value={position}>{eventRangeLabel(session, locale)}</option> : null)}</optgroup>)}
+    </select>
+  </label>;
+}
+
+function RetreatCard({ profile, retreat, sessions = [] }: { profile: GuideProfile; retreat: GuideRetreat; sessions?: GuideEvent[] }) {
   const rooms = parseRetreatOptions(retreat.options);
   const choice = useRoomChoice(rooms);
+  const locale = useContext(PublicLocaleContext)?.locale;
+  const [sessionIndex, setSessionIndex] = useState(0);
+  const session = sessions[Math.min(sessionIndex, sessions.length - 1)];
   return <article data-retreat-card style={{ border: '1px solid rgba(17,18,15,.2)', background: '#F2EFE7', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
     <DestinationHeader profile={profile} place={retreat.location || 'Misty Mountain, Australia'} lines={[retreat.location, retreat.title]} kind="retreat" />
     <div style={{ padding: 24, display: 'flex', flex: 1, flexDirection: 'column' }}><span style={{ color: '#667245', fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>{[retreat.duration_days && `${retreat.duration_days} days`, retreat.location || 'Retreat'].filter(Boolean).join(' · ')}</span><h3 style={{ fontFamily: serif, fontSize: 36, fontWeight: 300, lineHeight: 1.05, margin: '10px 0' }}>{retreat.title}</h3><p style={{ color: '#66645F', fontSize: 14, lineHeight: 1.55 }}>{retreat.description}</p>
       <RoomSelectors title={retreat.title} rooms={rooms} choice={choice} />
-      <div style={{ marginTop: choice.room ? 16 : 'auto', paddingTop: 18, borderTop: '1px solid rgba(17,18,15,.18)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-        <RoomPrice choice={choice} fallback={retreat.price_label || 'See package price'} />
+      <DatesSelect title={retreat.title} sessions={sessions} index={Math.min(sessionIndex, sessions.length - 1)} onChange={setSessionIndex} />
+      <div style={{ marginTop: choice.room || sessions.length ? 16 : 'auto', paddingTop: 18, borderTop: '1px solid rgba(17,18,15,.18)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+        <RoomPrice choice={choice} fallback={retreat.price_label || 'See package price'} dates={session ? eventRangeLabel(session, locale) : undefined} />
         <a href={retreat.booking_url || retreat.source_url} target="_blank" rel="noreferrer" style={publicCommerceCardCta}>Book <ArrowRight size={13} /></a></div></div>
   </article>;
 }
 
-function GuardianRetreats({ profile, retreats }: { profile: GuideProfile; retreats: GuideRetreat[] }) {
+function GuardianRetreats({ profile, retreats, events = [] }: { profile: GuideProfile; retreats: GuideRetreat[]; events?: GuideEvent[] }) {
   if (!retreats.length) return null;
+  // A programme and its sessions share a name; only sessions still to come are offered, soonest first.
+  const sessionsOf = (retreat: GuideRetreat) => events
+    .filter((event) => event.title.trim().toLowerCase() === retreat.title.trim().toLowerCase() && new Date(event.end_at || event.start_at).getTime() >= Date.now() - 86400000)
+    .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
   return <section id="retreats" aria-label={`${profile.display_name}'s retreats`} style={{ background: '#E7E1D5', color: '#11120F', padding: `clamp(72px,10vw,132px) ${PAGE_X}` }}>
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
       <span style={{ color: '#667245', fontSize: 11, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>Stay and learn · {retreats.length}</span>
       <h2 style={{ fontFamily: serif, fontSize: 'clamp(46px,7vw,82px)', fontWeight: 300, lineHeight: .96, letterSpacing: '-.04em', margin: '12px 0 34px' }}>Retreats.</h2>
-      <div className="g-retreats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 18 }}><style>{`@media (max-width:760px){.g-retreats-grid{grid-template-columns:minmax(0,1fr)!important}}`}</style>{retreats.map((retreat) => <RetreatCard key={retreat.id} profile={profile} retreat={retreat} />)}</div>
+      <div className="g-retreats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 18 }}><style>{`@media (max-width:760px){.g-retreats-grid{grid-template-columns:minmax(0,1fr)!important}}`}</style>{retreats.map((retreat) => <RetreatCard key={retreat.id} profile={profile} retreat={retreat} sessions={sessionsOf(retreat)} />)}</div>
     </div>
   </section>;
 }
@@ -2269,7 +2290,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
     talks: <GuardianOfferShelf kind="talk" profile={profile} offers={offers.filter((offer) => onSite(offer.brand_id))} pagePadding={PAGE_X} />,
     treats: <GuardianOfferShelf kind="treat" profile={profile} offers={offers.filter((offer) => onSite(offer.brand_id))} pagePadding={PAGE_X} />,
     forum: <GuardianForumTeaser profile={profile} pagePadding={PAGE_X} />,
-    retreats: <GuardianRetreats profile={profile} retreats={siteRetreats} />,
+    retreats: <GuardianRetreats profile={profile} retreats={siteRetreats} events={siteEvents} />,
     funnel: <>{reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}{isOwner && <ProfileSectionSkeleton sections={profileSections} />}{emailCaptureOn || pathSlug ? (funnelHasEntry ? <GuardianFunnel key={selectedRamp?.id || 'default'} backdrop={emailBackdrop} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} /> : <FollowSignup profile={profile} accent={publicAccent} headingFont={publicHeadingFont} />) : null}</>,
     brands: brandTiles.length > 1 && publicBrands.some((brand) => brand.kind === 'business') ? <section aria-labelledby="guardian-brands-title" data-page-section="brands" style={{ padding: `clamp(54px,7vw,100px) ${PAGE_X}`, background: '#11120F', color: ink }}>
       <span style={{ color: publicAccent, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Official brands</span>
