@@ -3,6 +3,7 @@
 // Guardian's discount code travel in the cart permalink (docs/guardian-shopify-commerce.md).
 import React, { useEffect, useMemo, useState } from 'react';
 import { Check, Copy, Download, ExternalLink, Grid2X2, List, Loader2, Pencil, Plus, ShoppingBag, Smartphone, Trash2, X } from 'lucide-react';
+import { CoverImageActions } from './CoverImageActions';
 import { deleteGuideProduct, listGuideProducts, listPublicGuideProducts, saveGuideProduct, type GuideProduct } from '../../utils/guidePortal';
 import {
   attributionSlug, buildCartPermalink, buildProductBuyUrl, effectiveCommissionPercent, formatProductPrice, importShopifyProduct, normalizeDiscountCode, parsePriceToCents, parseShopifyProductUrl, regionalProduct, regionalProductOrNull,
@@ -109,7 +110,7 @@ export function productsErrorMessage(error: { code?: string; message?: string } 
   return message || 'Could not save this product.';
 }
 
-export function GuardianProducts({ guideId, guardianSlug, commissionPercent, protocols, defaultCurrency = 'USD' }: { guideId: string; guardianSlug: string; commissionPercent: number; protocols: { id: string; name: string }[]; defaultCurrency?: string }) {
+export function GuardianProducts({ guideId, guardianSlug, commissionPercent, protocols, defaultCurrency = 'USD', onOpenContentBuilder }: { guideId: string; guardianSlug: string; commissionPercent: number; protocols: { id: string; name: string }[]; defaultCurrency?: string; onOpenContentBuilder?: () => void }) {
   const [products, setProducts] = useState<GuideProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<ProductForm | null>(null);
@@ -225,6 +226,7 @@ export function GuardianProducts({ guideId, guardianSlug, commissionPercent, pro
             <div><label style={label} htmlFor="product-discount">Your discount code</label><input id="product-discount" style={input} value={form.discount_code} onChange={(event) => update({ discount_code: event.target.value })} placeholder="ROUTINE10" /></div>
           </div>
           <label style={label} htmlFor="product-image">Image link</label><input id="product-image" type="url" style={input} value={form.image_url} onChange={(event) => update({ image_url: event.target.value })} placeholder="https://cdn.shopify.com/…" />
+          <CoverImageActions userId={guideId} title={form.title} description={form.description} kind="product" imageUrl={form.image_url || null} onChange={(url) => update({ image_url: url || '' })} onOpenContentBuilder={onOpenContentBuilder} hint="Upload a picture, or replace it with an AI drawing in your house style. It is kept when you press Save product." />
           <label style={label} htmlFor="product-description">Short description</label><textarea id="product-description" style={{ ...input, height: 84, paddingTop: 10, resize: 'vertical' }} value={form.description} maxLength={600} onChange={(event) => update({ description: event.target.value })} placeholder="Why you recommend it, in a sentence or two." />
         </div>
         <div style={{ paddingTop: 30 }}>{form.image_url ? <img src={form.image_url} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', border: `1px solid ${line}`, background: '#fff' }} /> : <div style={{ width: '100%', aspectRatio: '1', border: `1px dashed ${line}`, display: 'grid', placeItems: 'center', color: muted }}><ShoppingBag size={28} strokeWidth={1.2} /></div>}</div>

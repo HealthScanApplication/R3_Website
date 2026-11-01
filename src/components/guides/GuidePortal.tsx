@@ -15,12 +15,14 @@ import { ProtocolRemovalDialog, type ProtocolRemoval } from './ProtocolRemoval';
 import { PROTOCOL_THEMES, completeProtocolTags, daysLabel, protocolTags, protocolTheme, protocolWhen } from '../../utils/protocolTags';
 import { defaultAvatarKeyFor } from '../../utils/memberAvatar';
 import { PhotoDropzone } from '../PhotoDropzone';
+import { GuardianAvatar, useGuardianAvatarUrl } from './GuardianAvatar';
 import { ProtocolChildrenPanel } from './ProtocolChildrenPanel';
 import { customizeProtocolRecipe } from '../../utils/protocolCopies';
 import { ContentBuilder } from './ContentBuilder';
 import { SocialPublisher } from './SocialPublisher';
 import { RoutineCardQr, RoutineShareLink } from './RoutineShareLink';
 import { OfferRoutineLink } from './OfferRoutineLink';
+import { OfferCoverControls } from './OfferCoverControls';
 import { CourseBuilder } from './CourseBuilder';
 import { listOfferRoutines } from '../../utils/routineShare';
 import { useGuardianPage } from './useGuardianPage';
@@ -36,10 +38,25 @@ import { APP_STORE_URL } from '../../config/appLinks';
 import { EventProtocolBuilder } from './EventProtocolBuilder';
 import { GuardianModal } from './GuardianModal';
 import { GuardianHeroBackdrop } from './GuardianHeroBackdrop';
-import { BrandKitFields } from './BrandKitFields';
-import { AGE_RANGES, LIFE_STAGES } from '../../utils/audienceTaxonomy';
 import { HOUSE_AVATARS, HOUSE_STYLE_REQUIRED, houseAvatarFlag, isHouseStyleAvatar } from '../../utils/guardianHouseStyle';
 import { HouseAvatarReview } from './HouseAvatarReview';
+import { SiteCardGrid, SitePublishBar, SiteStatusTag, type SiteCardData } from './GuardianSiteCards';
+import { sitePublishAction, siteStatus } from '../../utils/guardianSiteStatus';
+import { BrandKitFields } from './BrandKitFields';
+import { AGE_RANGES, LIFE_STAGES } from '../../utils/audienceTaxonomy';
+import { convertGuardianAvatar, generatedImageFile } from '../../utils/guardianImages';
+import { HouseStyleAvatarPanel } from './HouseStyleAvatarPanel';
+import { GuardianOfferShelf } from './GuardianOfferShelf';
+import { TreatsTalksManager } from './TreatsTalksManager';
+import { isTreatKind } from '../../utils/treatOffers';
+import { removeGreenBackground } from '../../utils/chromaKey';
+import { YouTubeClipBackground } from './YouTubeClipBackground';
+import { HeroGlassOverlay, heroGlassOn } from './HeroGlassOverlay';
+import { countryForPlace, mapQueryFor } from '../../utils/placeCountry';
+import { YouTubeClipFields } from './YouTubeClipFields';
+import { clipsFromLinks, clipsToLinks, type YtClip } from '../../utils/youtubeClip';
+import { PhotoGrid, PHOTO_SLOTS } from './PhotoGrid';
+import { IDLE_SAVE, SaveButton, type SaveState } from './SaveButton';
 import { brandKitLinks, brandKitOf, defaultBrandKit, type BrandKit } from '../../utils/brandKit';
 import { GuardianProducts, GuardianShop, type GuardianLocalePreference } from './GuardianProducts';
 import { ActivitiesLibrary } from './ActivitiesLibrary';
@@ -113,7 +130,8 @@ function ExpertiseTags({ tags, color = '#667245', compact = false }: { tags: str
 
 type Tab = 'home' | 'profile' | 'events' | 'library' | 'leads' | 'community' | 'value_ramps' | 'offer_builder' | 'products' | 'recipes' | 'diet' | 'diet_protocols' | 'fitness' | 'activities' | 'cooking' | 'equipment' | 'ingredients' | 'routines' | 'hygiene' | 'hygiene_protocols' | 'hygiene_activities' | 'beauty' | 'beauty_protocols' | 'beauty_activities' | 'wellness' | 'wellness_protocols' | 'wellness_activities' | 'longevity' | 'longevity_protocols' | 'detox' | 'detox_protocols' | 'content' | 'protocols' | 'admin';
 const WORKSPACE_TABS: readonly Tab[] = ['home', 'profile', 'events', 'library', 'leads', 'community', 'value_ramps', 'offer_builder', 'products', 'recipes', 'diet', 'diet_protocols', 'fitness', 'activities', 'cooking', 'equipment', 'ingredients', 'routines', 'hygiene', 'hygiene_protocols', 'hygiene_activities', 'beauty', 'beauty_protocols', 'beauty_activities', 'wellness', 'wellness_protocols', 'wellness_activities', 'longevity', 'longevity_protocols', 'detox', 'detox_protocols', 'content', 'protocols', 'admin'];
-const SETUP_STEPS = [1, 2, 3, 4, 5] as const;
+// 0 is the Get started page a new Guardian meets first; 1–5 are the setup steps (Profile … Site).
+const SETUP_STEPS = [0, 1, 2, 3, 4, 5] as const;
 const SETUP_STAGE_ICONS = [FileText, HeartPulse, Users, Package, Blocks, Clapperboard] as const;
 function SetupStageIcon({ stage, size = 15 }: { stage: number; size?: number }) {
   const Icon = SETUP_STAGE_ICONS[Math.max(0, Math.min(SETUP_STAGE_ICONS.length - 1, stage - 1))];
@@ -125,6 +143,10 @@ type DeliveryFormat = 'Downloadable PDF' | 'Interactive Protocol' | 'PDF + Inter
 type BookingProvider = 'ROUTINE³ Booking' | 'Cal.com' | 'Google appointment schedule' | 'Calendly' | 'Other';
 type StoryTemplateId = 'editorial' | 'ritual' | 'human' | 'clinical' | 'kitchen' | 'night' | 'coastal' | 'movement' | 'collage' | 'herbal' | 'future' | 'community';
 type CurrencyCode = 'GBP' | 'EUR' | 'USD' | 'PLN' | 'CAD' | 'AUD' | 'NZD' | 'CHF' | 'JPY' | 'INR' | 'AED' | 'ZAR' | 'BRL' | 'MXN' | 'SEK' | 'NOK' | 'DKK' | 'CZK';
+/** The photo urls saved on a brand (social_links.photos is a JSON array), keeping only real https urls. */
+const parsePhotos = (value?: string): string[] => { try { const list = JSON.parse(String(value || '[]')); return Array.isArray(list) ? list.filter((url): url is string => typeof url === 'string' && /^https?:\/\//.test(url)).slice(0, PHOTO_SLOTS) : []; } catch { return []; } };
+type UseCasePart = 'audience' | 'population' | 'age' | 'stage' | 'problem';
+const USE_CASE_ORDER: UseCasePart[] = ['audience', 'population', 'age', 'stage', 'problem'];
 type BrandDraft = Omit<GuideBrand, 'id' | 'guide_id' | 'is_primary'> & { localId: string };
 type GuardianOfferGoal = 'basic' | 'audience' | 'sell';
 type HeaderStyle = 'white' | 'hidden';
@@ -209,7 +231,7 @@ function CustomerValueStars({ score, compact = false, mutedState = false }: { sc
 }
 function R3CreatorBenefitArt({ index, size = 58 }: { index: number; size?: number }) {
   const width = size * (2172 / 7 / 724);
-  return <span aria-hidden="true" style={{ display: 'block', width, height: size, flex: `0 0 ${width}px`, backgroundImage: 'url(/images/guides/r3-creator-benefits-v1.png)', backgroundRepeat: 'no-repeat', backgroundSize: '700% 100%', backgroundPosition: `${index * 100 / 6}% 50%`, filter: 'grayscale(1) contrast(1.04)' }} />;
+  return <span aria-hidden="true" style={{ display: 'block', width, height: size, flex: `0 0 ${width}px`, backgroundImage: 'url(/images/guides/r3-creator-benefits-v1.webp)', backgroundRepeat: 'no-repeat', backgroundSize: '700% 100%', backgroundPosition: `${index * 100 / 6}% 50%`, filter: 'grayscale(1) contrast(1.04)' }} />;
 }
 function readableText(background: string) {
   const value = background.replace('#', '');
@@ -451,12 +473,19 @@ export const GUARDIAN_BUILDERS_ORDER = GUARDIAN_BUILDERS.map((b) => b.label);
  * its translucent-over-hero look; `onNavigate` switches tabs in-app (workspace) instead of
  * following the href. When signed out, every link opens the sign-in modal via `onSignIn`.
  */
-export function GuardianHeader({ isSignedIn, activeTab, displayName, transparent, extra, locked, onNavigate, onSignIn, onSignOut }: {
+export function GuardianHeader({ isSignedIn, activeTab, displayName, avatarUrl, profileLink, transparent, extra, locked, onNavigate, onSignIn, onSignOut }: {
   isSignedIn: boolean;
   /** Why the builders can't open yet (e.g. setup not saved): links stay visible but don't navigate. */
   locked?: string;
   activeTab?: Tab;
   displayName?: string;
+  /** The Guardian's picture, shown beside the name (profile photo, else the first brand's logo). Transparent images are fine. */
+  avatarUrl?: string | null;
+  /**
+   * Where the picture leads when this page has its own profile step (the setup's 01 Profile) rather than the workspace's Site
+   * builder tab. It works even while the builders are locked: the profile is the one place a new Guardian can always go.
+   */
+  profileLink?: { href: string; onOpen: () => void };
   transparent?: boolean;
   /** Page-specific controls shown before the account, e.g. the setup dashboard's Offers / Sites toggles. */
   extra?: React.ReactNode;
@@ -465,6 +494,7 @@ export function GuardianHeader({ isSignedIn, activeTab, displayName, transparent
   onSignOut?: () => void;
 }) {
   const edge = isSignedIn ? ink : 'rgba(245,242,234,.4)';
+  const avatarLocked = Boolean(locked) && !profileLink;
   const href = (tab: Tab) => (isSignedIn ? `/guardians/workspace?tab=${tab}` : '#guardian-apply');
   const go = (tab: Tab) => (event: React.MouseEvent) => {
     if (locked) { event.preventDefault(); return; }
@@ -498,6 +528,9 @@ export function GuardianHeader({ isSignedIn, activeTab, displayName, transparent
         <div className="g-header-account" style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 'none' }}>
           {extra}
           {isSignedIn ? <>
+            {(avatarUrl || displayName) && <a href={avatarLocked ? undefined : profileLink?.href ?? href('profile')} onClick={profileLink ? (event) => { event.preventDefault(); profileLink.onOpen(); } : go('profile')} aria-label={avatarLocked ? `Your profile · ${locked}` : 'Your profile'} aria-disabled={avatarLocked ? true : undefined} title={avatarLocked ? locked : 'Your profile'} style={{ display: 'inline-flex', borderRadius: '50%', cursor: avatarLocked ? 'default' : 'pointer', flexShrink: 0 }}>
+              <GuardianAvatar url={avatarUrl} name={displayName} line={line} />
+            </a>}
             {displayName && <span className="g-header-name" title={displayName} style={{ color: muted, fontSize: 11, whiteSpace: 'nowrap' }}>{displayName}</span>}
             <button type="button" onClick={onSignOut} title="Sign out" aria-label="Sign out" style={{ border: `1px solid ${line}`, background: 'transparent', color: ink, width: 31, height: 31, flexShrink: 0, boxSizing: 'border-box', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><LogOut size={13} /></button>
           </> : <button type="button" onClick={onSignIn} style={{ ...builderLink, height: 31, border: `1px solid ${ink}`, borderRadius: 2, padding: '0 16px', background: 'transparent' }}>Sign in</button>}
@@ -572,8 +605,10 @@ const audienceArt = atlas('/images/guides/tags/audience.webp', 4, 2, ['Everyone'
 (audienceArt as Record<string, TagArt>).Teenagers = audienceArt.Children;
 const supportArt = atlas('/images/guides/tags/support-v3.webp', 3, 2, ['ROUTINE³ (physical + digital)', 'Recipes', 'Group call', '1:1 online', 'In person', 'Event']);
 const offerArt: Record<string, TagArt> = atlas('/images/guides/tags/offers-v2.webp', 4, 3, ['Starter guide', 'Recipe pack', 'ROUTINE³', '1:1 call', 'Group call', 'Journey', 'Event', 'eBook', 'Recipe book', 'Team program', 'Upload', 'Paid'], .75);
-const offerTypeArt = atlas('/images/guides/tags/offer-types-v3.png', 4, 2, ['routine', 'ebook', 'recipe_book', 'routine_guidance', 'festival', 'group_call', 'one_to_one_call', 'in_person']);
+const offerTypeArt = atlas('/images/guides/tags/offer-types-v3.webp', 4, 2, ['routine', 'ebook', 'recipe_book', 'routine_guidance', 'festival', 'group_call', 'one_to_one_call', 'in_person']);
 (offerTypeArt as Record<string, TagArt>).community = offerTypeArt.group_call;
+(offerTypeArt as Record<string, TagArt>).treat = offerTypeArt.in_person;
+(offerTypeArt as Record<string, TagArt>).talk = offerTypeArt.group_call;
 const freeOfferArt: Record<FreeOfferKind, TagArt> = {
   ebook: offerArt.eBook,
   one_to_one_call: offerArt['1:1 call'],
@@ -587,7 +622,7 @@ const freeOfferImages: Record<FreeOfferKind, string> = {
   one_to_one_call: '/images/guides/generated/lead-private-call-v2.webp',
   group_call: '/images/guides/generated/lead-community-call-v2.webp',
   recipe_book: '/images/guides/generated/lead-recipes-v2.webp',
-  routine: '/images/guides/generated/r3-protocol-card.png',
+  routine: '/images/guides/generated/r3-protocol-card.webp',
   in_person: '/images/guides/delivery/in-person.png',
 };
 const deliveryCardArt: Record<DeliveryFormat, TagArt> = {
@@ -1352,7 +1387,7 @@ const isProtocolKind = (kind?: string) => kind === 'routine' || kind === 'routin
 // Every offer gets a format tag: app-delivered plans are PDF + ROUTINE³, others name their format.
 const APP_PLAN_KINDS = ['routine', 'routine_guidance', 'program', 'journey', 'team_program', 'lead_magnet'];
 const boxTag: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 5, height: 22, padding: '0 8px', border: '1px solid rgba(255,255,255,.78)', borderRadius: 3, background: 'rgba(24,28,25,.2)', WebkitBackdropFilter: 'blur(12px) saturate(1.35)', backdropFilter: 'blur(12px) saturate(1.35)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.16),0 3px 12px rgba(0,0,0,.12)', textShadow: '0 1px 3px rgba(0,0,0,.8)', fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', boxSizing: 'border-box', color: '#FFF', textTransform: 'uppercase', whiteSpace: 'nowrap' };
-const OTHER_FORMATS: Record<string, string> = { lead: 'Lead', ebook: 'Printed PDF', recipe_book: 'Printed PDF', one_to_one_call: '1:1 call', group_call: 'Group call', community: 'Digital community', course: 'Course', in_person: 'In person', festival: 'Event', product: 'Product' };
+const OTHER_FORMATS: Record<string, string> = { treat: 'Treat', talk: 'Talk', lead: 'Lead', ebook: 'Printed PDF', recipe_book: 'Printed PDF', one_to_one_call: '1:1 call', group_call: 'Group call', community: 'Digital community', course: 'Course', in_person: 'In person', festival: 'Event', product: 'Product' };
 function OfferFormatTag({ kind }: { kind?: string }) {
   if (!kind || APP_PLAN_KINDS.includes(kind)) return <ProtocolFormatTag />;
   const name = OTHER_FORMATS[kind] || 'Online';
@@ -1375,7 +1410,7 @@ function audienceLabel(details?: Record<string, AudienceDetail> | string | null,
 function AppOfferImage({ kind, size = 96, align = 'center' }: { kind?: string; size?: number; align?: 'center' | 'left' }) {
   const m = align === 'left' ? '0' : '0 auto';
   const art = productArt(kind);
-  if (kind === 'routine' || kind === 'routine_guidance' || !art) return <img src="/images/guides/generated/r3-protocol-card.png" alt="" style={{ width: size, height: size, objectFit: 'contain', display: 'block', margin: m }} />;
+  if (kind === 'routine' || kind === 'routine_guidance' || !art) return <img src="/images/guides/generated/r3-protocol-card.webp" alt="" style={{ width: size, height: size, objectFit: 'contain', display: 'block', margin: m }} />;
   return <span aria-hidden="true" style={{ display: 'block', margin: m, width: size * art.cellAspect, height: size, backgroundImage: `url(${art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${art.cols * 100}% ${art.rows * 100}%`, backgroundPosition: `${(art.index % art.cols) * 100 / Math.max(1, art.cols - 1)}% ${Math.floor(art.index / art.cols) * 100 / Math.max(1, art.rows - 1)}%`, filter: 'grayscale(1) contrast(.95) invert(.88)' }} />;
 }
 // Tilt + cursor glow for any card: writes CSS variables on the element (no re-render), so it is cheap on big cards.
@@ -1493,7 +1528,10 @@ function ReviewsPanel({ userId, slug }: { userId: string; slug: string }) {
     {reviews.length > 0 && <div style={{ display: 'grid', gap: 6, marginTop: 14 }}><span style={label}>Received</span>{reviews.map((r) => <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, borderTop: `1px solid ${line}`, paddingTop: 8, fontSize: 11, opacity: r.status === 'hidden' ? .5 : 1 }}><span style={{ color: acid }}>{'★'.repeat(r.rating)}</span><span style={{ flex: 1, color: ink }}>{r.body} <span style={{ color: muted }}>· {r.reviewer_name}</span></span><button type="button" onClick={() => toggle(r)} style={small}>{r.status === 'published' ? 'Hide' : 'Show'}</button></div>)}</div>}
   </section>;
 }
-function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, accent, headingFont, background, backgroundIsVideo = false, greyscale = false, cards, headlineStyle = 'editorial', guideId, sourceOfferId }: { audience?: string; reviewSummary?: { rating?: number; reviewCount?: number }; headlineStyle?: HeadlineStyle; name: string; avatarUrl?: string | null; specialties: string[]; headline: string; tags: string[]; bio: string; accent: string; headingFont: string; background?: string | null; backgroundIsVideo?: boolean; greyscale?: boolean; cards: SiteHeroCard[]; guideId?: string; sourceOfferId?: string | null }) {
+/** The section links under the hero's sign-up. Treats and Talks join them when the Guardian has published some. */
+const HERO_SECTIONS: Array<[string, string]> = [['catalog', 'Routines'], ['shop', 'Products'], ['events', 'Events'], ['retreats', 'Retreats']];
+
+function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, accent, headingFont, background, backgroundIsVideo = false, clips = [], glass = false, sections = HERO_SECTIONS, greyscale = false, cards, headlineStyle = 'editorial', guideId, sourceOfferId }: { audience?: string; reviewSummary?: { rating?: number; reviewCount?: number }; headlineStyle?: HeadlineStyle; name: string; avatarUrl?: string | null; specialties: string[]; headline: string; tags: string[]; bio: string; accent: string; headingFont: string; background?: string | null; backgroundIsVideo?: boolean; clips?: YtClip[]; glass?: boolean; sections?: Array<[string, string]>; greyscale?: boolean; cards: SiteHeroCard[]; guideId?: string; sourceOfferId?: string | null }) {
   const [email, setEmail] = useState('');
   const [captureState, setCaptureState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
   const heroMedia = background || cards.find((card) => card.imageUrl)?.imageUrl || null;
@@ -1514,8 +1552,10 @@ function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, a
     window.history.replaceState(null, '', `#${id}`);
   };
   return <section style={{ position: 'relative', overflow: 'clip', minHeight: 'calc(100svh - 64px)', display: 'grid', alignItems: 'center', background: '#151A12', color: '#FFF' }}>
-    {heroMedia && !backgroundIsVideo && <img src={heroMedia} alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />}
-    {heroMedia && backgroundIsVideo && <video src={heroMedia} autoPlay muted loop playsInline aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />}
+    {clips.length > 0 && <YouTubeClipBackground clips={clips} greyscale={greyscale} />}
+    {glass && <HeroGlassOverlay />}
+    {!clips.length && heroMedia && !backgroundIsVideo && <img src={heroMedia} alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />}
+    {!clips.length && heroMedia && backgroundIsVideo && <video src={heroMedia} autoPlay muted loop playsInline aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />}
     <span aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,rgba(8,10,7,.88) 0%,rgba(8,10,7,.62) 48%,rgba(8,10,7,.18) 100%),linear-gradient(0deg,rgba(8,10,7,.72),transparent 55%)' }} />
     <div style={{ position: 'relative', zIndex: 2, width: '100%', maxWidth: 1240, margin: '0 auto', boxSizing: 'border-box', padding: 'clamp(76px,10vh,120px) clamp(24px,6vw,84px)', display: 'grid', gridTemplateColumns: 'minmax(0,720px)', alignItems: 'center' }}>
       <div>
@@ -1529,11 +1569,11 @@ function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, a
         <form onSubmit={capture} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', width: '100%', maxWidth: 590, marginTop: 28, fontFamily: APP.font }}>
           <label htmlFor="guardian-hero-email" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)' }}>Email address</label>
           <span style={{ minWidth: 0, minHeight: 54, display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px', boxSizing: 'border-box', border: '1px solid rgba(255,255,255,.94)', borderRight: 0, background: 'rgba(255,255,255,.95)', color: '#11120F' }}><Mail size={18} /><input id="guardian-hero-email" required type="email" autoComplete="email" value={email} onChange={(event) => { setEmail(event.target.value); if (captureState === 'error') setCaptureState('idle'); }} placeholder="Enter your email address" style={{ width: '100%', minWidth: 0, border: 0, outline: 0, background: 'transparent', color: '#11120F', font: 'inherit' }} /></span>
-          <button type="submit" disabled={captureState === 'sending' || captureState === 'done'} style={{ minHeight: 54, padding: '0 clamp(14px,2vw,22px)', border: '1px solid #D6E7A8', background: '#D6E7A8', color: '#11120F', fontFamily: APP.font, fontSize: 11, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: captureState === 'sending' || captureState === 'done' ? 'default' : 'pointer', opacity: captureState === 'sending' ? .7 : 1 }}>{captureState === 'done' ? 'You’re subscribed' : captureState === 'sending' ? 'Joining…' : 'Follow by email'}</button>
+          <button type="submit" disabled={captureState === 'sending' || captureState === 'done'} style={{ minHeight: 54, padding: '0 clamp(14px,2vw,22px)', border: '1px solid #D6E7A8', background: '#D6E7A8', color: '#11120F', fontFamily: APP.font, fontSize: 11, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: captureState === 'sending' || captureState === 'done' ? 'default' : 'pointer', opacity: captureState === 'sending' ? .7 : 1 }}>{captureState === 'done' ? 'You’re subscribed' : captureState === 'sending' ? 'Joining…' : 'Follow'}</button>
         </form>
         {captureState === 'error' && <span role="alert" style={{ display: 'block', color: '#FFD0C8', fontFamily: APP.font, fontSize: 12, marginTop: 8 }}>We could not add your email. Please try again.</span>}
         <nav aria-label={`${name} profile sections`} style={{ display: 'flex', gap: 0, flexWrap: 'wrap', marginTop: 14, fontFamily: APP.font }}>
-          {[['catalog','Routines'],['shop','Products'],['events','Events'],['retreats','Retreats']].map(([id, text]) => <a key={id} href={`#${id}`} onClick={goTo(id)} style={{ minHeight: 44, padding: '0 16px', background: 'rgba(8,10,7,.24)', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)', color: '#FFF', border: '1px solid rgba(255,255,255,.72)', marginLeft: -1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{text}</a>)}
+          {sections.map(([id, text]) => <a key={id} href={`#${id}`} onClick={goTo(id)} style={{ minHeight: 44, padding: '0 16px', background: 'rgba(8,10,7,.24)', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)', color: '#FFF', border: '1px solid rgba(255,255,255,.72)', marginLeft: -1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{text}</a>)}
         </nav>
       </div>
     </div>
@@ -1709,15 +1749,24 @@ function WorkspaceEvents({ guideId }: { guideId: string }) {
   </>;
 }
 
-function DestinationHeader({ profile, place, kind }: { profile: GuideProfile; place: string; kind: 'event' | 'retreat' }) {
-  const mapHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`;
-  return <div style={{ position: 'relative', height: 210, overflow: 'hidden', background: kind === 'retreat' ? '#D7D0C2' : '#263024' }}>
-    <div aria-hidden="true" style={{ position: 'absolute', inset: -30, opacity: .82, backgroundImage: `radial-gradient(circle at 18% 25%,transparent 0 34px,rgba(245,242,234,.22) 35px 36px,transparent 37px),radial-gradient(circle at 72% 65%,transparent 0 58px,rgba(245,242,234,.17) 59px 60px,transparent 61px),linear-gradient(31deg,transparent 47%,rgba(245,242,234,.18) 48% 49%,transparent 50%),linear-gradient(126deg,transparent 44%,rgba(245,242,234,.12) 45% 46%,transparent 47%)`, backgroundSize: '220px 180px,300px 240px,120px 120px,170px 170px', transform: 'rotate(-5deg) scale(1.12)' }} />
-    <a href={mapHref} target="_blank" rel="noreferrer" aria-label={`Open ${place} in maps`} style={{ position: 'absolute', inset: 0, color: '#F5F2EA', textDecoration: 'none' }}>
-      <span style={{ position: 'absolute', left: 18, top: 18, maxWidth: '68%', padding: '8px 10px', border: '1px solid rgba(245,242,234,.42)', background: 'rgba(17,18,15,.52)', backdropFilter: 'blur(10px)', fontSize: 9, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>⌖ {place}</span>
-      <span aria-hidden="true" style={{ position: 'absolute', left: '38%', top: '52%', width: 16, height: 16, margin: -8, borderRadius: '50%', background: '#C7D8A3', boxShadow: '0 0 0 7px rgba(199,216,163,.2)' }} />
+/**
+ * The top of an event or retreat card: a real map of the place with its country's flag in the tag. `lines` are every piece of the
+ * place we have (location, venue, title), because the venue alone often has no city or country; the map is asked for all of it.
+ */
+function DestinationHeader({ profile, place, lines = [place], kind, virtual = false }: { profile: GuideProfile; place: string; lines?: Array<string | null | undefined>; kind: 'event' | 'retreat'; virtual?: boolean }) {
+  const query = mapQueryFor(...lines) || place;
+  const online = virtual || /^online$/i.test(place.trim()) || /to be announced/i.test(place); // nothing to put on a map
+  const country = online ? null : countryForPlace(...lines);
+  const mapHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  return <div data-destination-header style={{ position: 'relative', height: 210, overflow: 'hidden', background: kind === 'retreat' ? '#D7D0C2' : '#263024' }}>
+    {!online && <iframe data-place-map src={`https://maps.google.com/maps?q=${encodeURIComponent(query)}&z=12&output=embed`} title={`Map of ${query}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" tabIndex={-1} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, filter: 'saturate(.85) contrast(1.02)' }} />}
+    <a href={mapHref} target="_blank" rel="noreferrer" aria-label={`Open ${query} in maps`} style={{ position: 'absolute', inset: 0, color: '#F5F2EA', textDecoration: 'none' }}>
+      <span data-place-tag style={{ position: 'absolute', left: 18, top: 18, maxWidth: '68%', display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: '1px solid rgba(245,242,234,.42)', background: 'rgba(17,18,15,.72)', backdropFilter: 'blur(10px)', fontSize: 9, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>
+        {country && <span role="img" aria-label={country.name} title={country.name} data-place-flag style={{ fontSize: 15, lineHeight: 1, letterSpacing: 0 }}>{country.flag}</span>}
+        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{place}</span>
+      </span>
     </a>
-    <span style={{ position: 'absolute', right: 18, bottom: 16, display: 'flex', alignItems: 'end', gap: 9 }}><span style={{ padding: '6px 8px', color: '#F5F2EA', background: 'rgba(17,18,15,.52)', backdropFilter: 'blur(10px)', fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{profile.display_name}</span>{profile.avatar_url ? <img src={profile.avatar_url} alt="" style={{ width: 68, height: 68, borderRadius: '50%', objectFit: 'cover', border: '3px solid #F5F2EA', boxShadow: '0 8px 22px rgba(0,0,0,.28)' }} /> : <span style={{ width: 68, height: 68, borderRadius: '50%', display: 'grid', placeItems: 'center', background: '#F5F2EA', color: '#11120F', fontFamily: serif, fontSize: 26 }}>{profile.display_name.charAt(0)}</span>}</span>
+    <span style={{ position: 'absolute', right: 18, bottom: 16, display: 'flex', alignItems: 'end', gap: 9, pointerEvents: 'none' }}><span style={{ padding: '6px 8px', color: '#F5F2EA', background: 'rgba(17,18,15,.52)', backdropFilter: 'blur(10px)', fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{profile.display_name}</span>{profile.avatar_url ? <img src={profile.avatar_url} alt="" style={{ width: 68, height: 68, borderRadius: '50%', objectFit: 'cover', border: '3px solid #F5F2EA', boxShadow: '0 8px 22px rgba(0,0,0,.28)' }} /> : <span style={{ width: 68, height: 68, borderRadius: '50%', display: 'grid', placeItems: 'center', background: '#F5F2EA', color: '#11120F', fontFamily: serif, fontSize: 26 }}>{profile.display_name.charAt(0)}</span>}</span>
   </div>;
 }
 
@@ -1748,7 +1797,7 @@ function EventCommerceCard({ profile, event }: { profile: GuideProfile; event: G
   const href = event.info_url || (event.source_url !== 'manual' ? event.source_url : '');
   const place = event.location || event.venue || (event.format === 'virtual' ? 'Online' : 'Location to be announced');
   return <article style={{ minHeight: 520, border: '1px solid rgba(242,239,231,.28)', display: 'flex', flexDirection: 'column', background: '#171B14', overflow: 'hidden' }}>
-    <DestinationHeader profile={profile} place={place} kind="event" />
+    <DestinationHeader profile={profile} place={place} lines={[event.location, event.venue, event.title]} kind="event" virtual={event.format === 'virtual'} />
     <div style={{ padding: 22, display: 'flex', flex: 1, flexDirection: 'column' }}><div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><span style={{ color: '#C7D8A3', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span><span style={{ border: '1px solid rgba(199,216,163,.5)', borderRadius: 999, color: '#C7D8A3', padding: '4px 7px', fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{eventFormatLabel(event.format)}</span></div><h3 style={{ fontFamily: serif, fontSize: 31, fontWeight: 300, lineHeight: 1.05, margin: '11px 0 9px' }}>{event.title}</h3><p style={{ color: '#B8B6AF', fontSize: 13, lineHeight: 1.5, margin: '0 0 8px' }}>{event.venue || place}</p>{event.description && <p style={{ color: '#9FA897', fontSize: 12, lineHeight: 1.5, margin: '0 0 20px' }}>{clipCopy(event.description, 145)}</p>}<div style={{ marginTop: 'auto', paddingTop: 18, borderTop: '1px solid rgba(242,239,231,.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}><strong style={{ fontFamily: serif, fontSize: 20, fontWeight: 300 }}>{event.price_label || 'See booking price'}</strong>{href && <a href={href} target="_blank" rel="noreferrer" style={publicCommerceCardCta}>Book <ArrowRight size={13} /></a>}</div></div>
   </article>;
 }
@@ -1795,7 +1844,7 @@ function GuardianRetreats({ profile, retreats }: { profile: GuideProfile; retrea
       <span style={{ color: '#667245', fontSize: 11, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>Stay and learn · {retreats.length}</span>
       <h2 style={{ fontFamily: serif, fontSize: 'clamp(46px,7vw,82px)', fontWeight: 300, lineHeight: .96, letterSpacing: '-.04em', margin: '12px 0 34px' }}>Retreats.</h2>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,360px),1fr))', gap: 18 }}>{retreats.map((retreat) => <article key={retreat.id} style={{ border: '1px solid rgba(17,18,15,.2)', background: '#F2EFE7', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <DestinationHeader profile={profile} place={retreat.location || 'Misty Mountain, Australia'} kind="retreat" />
+        <DestinationHeader profile={profile} place={retreat.location || 'Misty Mountain, Australia'} lines={[retreat.location, retreat.title]} kind="retreat" />
         <div style={{ padding: 24, display: 'flex', flex: 1, flexDirection: 'column' }}><span style={{ color: '#667245', fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>{[retreat.duration_days && `${retreat.duration_days} days`, retreat.location || 'Retreat'].filter(Boolean).join(' · ')}</span><h3 style={{ fontFamily: serif, fontSize: 36, fontWeight: 300, lineHeight: 1.05, margin: '10px 0' }}>{retreat.title}</h3><p style={{ color: '#66645F', fontSize: 14, lineHeight: 1.55 }}>{retreat.description}</p><div style={{ marginTop: 'auto', paddingTop: 18, borderTop: '1px solid rgba(17,18,15,.18)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}><strong style={{ fontFamily: serif, fontSize: 23, fontWeight: 300 }}>{retreat.price_label || 'See package price'}</strong><a href={retreat.booking_url || retreat.source_url} target="_blank" rel="noreferrer" style={publicCommerceCardCta}>Book <ArrowRight size={13} /></a></div></div>
       </article>)}</div>
     </div>
@@ -1843,8 +1892,9 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   const updateLocalePreference = (next: GuardianLocalePreference) => { setLocalePreference(next); try { localStorage.setItem('r3-store-locale', JSON.stringify(next)); } catch { /* storage may be disabled */ } };
   useEffect(() => {
     try { if (localStorage.getItem('r3-store-locale')) return; } catch { /* continue with best-effort detection */ }
-    if (user && !profile) return;
-    if (user?.id === profile?.user_id) {
+    // Wait for the profile. Without this a signed-out visitor (no user, no profile yet) matched `undefined === undefined` and read social_links of null.
+    if (!profile) return;
+    if (user?.id === profile.user_id) {
       const region = pricingRegions.find((option) => option.region === profile.social_links?.pricing_region);
       const locale = languageOptions.find((option) => option.name === profile.social_links?.language)?.code || 'en';
       if (region) setLocalePreference({ region: region.region, locale, currency: profile.social_links?.currency || region.currency });
@@ -1896,6 +1946,16 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   const publicHeaderBackground = '#FFFFFF';
   const publicHeaderText = '#11120F';
   const publicExpertiseTags = parseExpertiseTags(socials.expertise_tags);
+  // An offer path ("Better sleep") is its own page. Its hero speaks about that path (the offer, who it is for, the problem),
+  // not about the Guardian in general, and its card is that path's offer; the profile site keeps the Guardian's own hero.
+  const onOfferPath = !!(pathSlug && selectedRamp);
+  const pathOffer = onOfferPath ? publishedOffers.find((offer) => offer.id === selectedRamp!.offer_ids[0]) : undefined;
+  const heroAudience = onOfferPath ? selectedRamp!.audience : audienceLabel(profile.social_links?.audience_details);
+  const heroHeadline = onOfferPath ? customerFacingOfferTitle(pathOffer?.title || selectedRamp!.name) : profile.headline || profile.display_name;
+  const heroBio = onOfferPath ? pathOffer?.description || [selectedRamp!.audience, selectedRamp!.problem].filter(Boolean).join(' · ') : profile.bio;
+  const heroSpecialties = onOfferPath ? [selectedRamp!.problem].filter(Boolean) : profile.specialties;
+  const heroTags = onOfferPath ? [selectedRamp!.audience, selectedRamp!.problem].filter(Boolean) : publicExpertiseTags;
+  const heroSourceOfferId = (onOfferPath ? pathOffer?.id : undefined) || freeOffers[0]?.id || null;
   return <div className="guardian-public-site" lang={publicLanguage} dir={publicLanguage === 'ar' ? 'rtl' : 'ltr'} style={{ minHeight: '100vh', background: publicPageColor, color: '#11120F', fontFamily: publicBodyFont }}>
     <style>{`.guardian-public-site button,.guardian-public-site input,.guardian-public-site select,.guardian-public-site textarea{font-family:${sans}}.guardian-public-site a{font-family:inherit}.guardian-public-site h1,.guardian-public-site h2,.guardian-public-site h3{font-synthesis:none}@media(max-width:760px){.guardian-header-socials{display:none!important}}`}</style>
     {publicHeaderStyle !== 'hidden' && <header style={{ position: 'fixed', inset: '0 0 auto', zIndex: 100, minHeight: 64, background: publicHeaderBackground, color: publicHeaderText, borderBottom: '1px solid rgba(17,18,15,.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '0 clamp(8px,4vw,84px)' }}>
@@ -1908,9 +1968,9 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
     </header>}
     <main style={{ paddingTop: publicHeaderStyle === 'hidden' ? 0 : 64 }}>
       {/* Shared with the builder preview, so what Guardians build is what they publish. */}
-      <GuardianSiteHero audience={audienceLabel(profile.social_links?.audience_details)} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={profile.display_name} avatarUrl={profile.avatar_url} specialties={profile.specialties} headline={profile.headline || profile.display_name} tags={publicExpertiseTags} bio={profile.bio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} greyscale={publicGreyscale}
-        guideId={profile.user_id} sourceOfferId={freeOffers[0]?.id || null}
-        cards={publishedRamps.length ? publishedRamps.slice(0, 1).map((ramp) => { const offer = publishedOffers.find((item) => item.id === ramp.offer_ids[0]); return { key: ramp.id, offerTitle: offer?.title || ramp.name, eyebrow: ramp.problem || undefined, title: customerFacingOfferTitle(offer?.title || ramp.name), copy: offer?.description || '', kind: offer?.kind, price: offer?.access_model === 'free' ? 'Free' : undefined, imageUrl: offer?.cover_url, href: pathSlug === encodeURIComponent(ramp.slug) ? '#offers' : `/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}` }; }) : freeOffers.slice(0, 1).map((offer) => ({ key: offer.id, offerTitle: offer.title, eyebrow: profile.specialties.slice(0, 2).join(' · '), title: customerFacingOfferTitle(offer.title), copy: offer.description || '', kind: offer.kind, price: 'Free', imageUrl: offer.cover_url, href: '#start' }))} />
+      <GuardianSiteHero audience={heroAudience} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={profile.display_name} avatarUrl={profile.avatar_url} specialties={heroSpecialties} headline={heroHeadline} tags={heroTags} bio={heroBio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} clips={clipsFromLinks(socials.theme_background_clips)} glass={heroGlassOn(socials.theme_glass, clipsFromLinks(socials.theme_background_clips).length > 0)} sections={[...HERO_SECTIONS.slice(0, 3), ...(publishedOffers.some((offer) => offer.kind === 'talk') ? [['talks', 'Talks'] as [string, string]] : []), ...(publishedOffers.some((offer) => offer.kind === 'treat') ? [['treats', 'Treats'] as [string, string]] : []), HERO_SECTIONS[3]]} greyscale={publicGreyscale}
+        guideId={profile.user_id} sourceOfferId={heroSourceOfferId}
+        cards={publishedRamps.length ? (onOfferPath ? [selectedRamp!] : publishedRamps).slice(0, 1).map((ramp) => { const offer = publishedOffers.find((item) => item.id === ramp.offer_ids[0]); return { key: ramp.id, offerTitle: offer?.title || ramp.name, eyebrow: ramp.problem || undefined, title: customerFacingOfferTitle(offer?.title || ramp.name), copy: offer?.description || '', kind: offer?.kind, price: offer?.access_model === 'free' ? 'Free' : undefined, imageUrl: offer?.cover_url, href: pathSlug === encodeURIComponent(ramp.slug) ? '#offers' : `/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}` }; }) : freeOffers.slice(0, 1).map((offer) => ({ key: offer.id, offerTitle: offer.title, eyebrow: profile.specialties.slice(0, 2).join(' · '), title: customerFacingOfferTitle(offer.title), copy: offer.description || '', kind: offer.kind, price: 'Free', imageUrl: offer.cover_url, href: '#start' }))} />
       {publicBrands.filter((brand) => brand.kind === 'business').length > 0 && <section aria-labelledby="guardian-brands-title" style={{ padding: `clamp(54px,7vw,100px) ${PAGE_X}`, background: '#11120F', color: ink }}>
         <span style={{ color: publicAccent, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Official brands</span>
         <h2 id="guardian-brands-title" style={{ margin: '12px 0 28px', fontFamily: publicHeadingFont, fontWeight: 300, fontSize: 'clamp(42px,6vw,78px)', lineHeight: .95 }}>More from {profile.display_name}.</h2>
@@ -1922,6 +1982,8 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
       <GuardianOfferCatalog profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} categoryOrder={socials.protocol_filter_order} />
       <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} protocols={guardianProtocols} localePreference={localePreference} categoryOrder={socials.product_filter_order} />
       <GuardianEvents profile={profile} events={events} sourceUrl={eventSource} canEditSource={isSignedIn && user?.id === profile.user_id} onImported={setEvents} onSourceChanged={setEventSource} />
+      <GuardianOfferShelf kind="talk" profile={profile} offers={offers} pagePadding={PAGE_X} />
+      <GuardianOfferShelf kind="treat" profile={profile} offers={offers} pagePadding={PAGE_X} />
       <GuardianRetreats profile={profile} retreats={retreats} />
       {reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}
       <GuardianFunnel key={selectedRamp?.id || 'default'} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} />
@@ -1932,8 +1994,45 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   </div>;
 }
 
+const GET_STARTED_STEPS = ['Profile', 'Guidance', 'Audience', 'Offers', 'Site'] as const;
+
+/**
+ * What a new Guardian meets before the profile step: what the role is, in three plain promises, and the five steps ahead.
+ * It claims nothing about payments or earnings (payments are not live yet) and says only what the builders do today.
+ */
+export function GuardianGetStarted({ onStart }: { onStart: () => void }) {
+  const promises = [
+    { Icon: BookOpen, title: 'Share what you know', copy: 'Turn your experience into routines, recipes and guides. They live on your own Guardian page and in the ROUTINE³ app, where people follow them day by day.' },
+    { Icon: CalendarDays, title: 'Book clients', copy: 'Offer calls and sessions from the same page. People book through your own booking link or ROUTINE³ Booking, and everyone who reaches out is kept together as your leads.' },
+    { Icon: HeartHandshake, title: 'Help people keep going', copy: 'A routine only works when it is followed. Guide the people you work with, adjust as you learn what helps them, and keep them on track.' },
+  ];
+  return <main aria-labelledby="guardian-get-started" style={{ maxWidth: 1100, margin: '0 auto', padding: 'clamp(40px,7vw,88px) 0 40px' }}>
+    <span style={{ ...label, color: acid }}>Become a Guardian</span>
+    <h1 id="guardian-get-started" style={{ margin: '10px 0 0', maxWidth: 820, fontFamily: serif, fontWeight: 300, fontSize: 'clamp(38px,6vw,68px)', lineHeight: 1.04 }}>Share what you know. Help people live it.</h1>
+    <p style={{ maxWidth: 640, margin: '22px 0 0', color: muted, fontSize: 16, lineHeight: 1.65 }}>A Guardian is someone with real experience, in food, movement, sleep, skin or mindset, who turns it into routines other people can follow, and is there to help them along the way.</p>
+    <ul aria-label="What a Guardian does" style={{ listStyle: 'none', margin: 'clamp(30px,5vw,52px) 0 0', padding: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,260px),1fr))', gap: 1, background: line, border: `1px solid ${line}` }}>
+      {promises.map(({ Icon, title, copy }) => <li key={title} style={{ background: panel, padding: 'clamp(20px,3vw,30px)' }}>
+        <Icon size={22} strokeWidth={1.5} color={acid} aria-hidden="true" />
+        <h2 style={{ margin: '18px 0 0', fontFamily: serif, fontWeight: 300, fontSize: 26, lineHeight: 1.15 }}>{title}</h2>
+        <p style={{ margin: '10px 0 0', color: muted, fontSize: 14, lineHeight: 1.65 }}>{copy}</p>
+      </li>)}
+    </ul>
+    <section aria-label="The five steps" style={{ marginTop: 'clamp(30px,5vw,52px)' }}>
+      <span style={label}>Five short steps</span>
+      <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexWrap: 'wrap', gap: '10px 28px' }}>
+        {GET_STARTED_STEPS.map((name, index) => <li key={name} style={{ display: 'flex', alignItems: 'baseline', gap: 9, fontFamily: sans, fontSize: 12, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}><span style={{ color: acid }}>0{index + 1}</span>{name}</li>)}
+      </ol>
+    </section>
+    <div style={{ marginTop: 'clamp(30px,5vw,48px)', display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+      <button type="button" onClick={onStart} style={{ ...btn, minWidth: 260 }}>Start with your profile <ArrowRight size={14} /></button>
+      <span style={{ color: muted, fontSize: 12, lineHeight: 1.5 }}>Nothing is public until your page has been reviewed.</span>
+    </div>
+  </main>;
+}
+
 export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl, hasProfile = false, onDone }: { userId: string; accessToken: string; name: string; email: string; accountAvatarUrl?: string | null; hasProfile?: boolean; onDone: (p: GuideProfile) => void }) {
-  const [step, setStep] = useGuardianPage<number>('step', SETUP_STEPS, 1);
+  // A new Guardian opens on Get started (0); someone with a profile already is here to edit it, so they open on Profile.
+  const [step, setStep] = useGuardianPage<number>('step', SETUP_STEPS, hasProfile ? 1 : 0);
   const [displayName, setDisplayName] = useState(name);
   const { signOut } = useAuth();
   const [mainLanguage, setMainLanguage] = useState(defaultLanguage());
@@ -1972,12 +2071,24 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const [format, setFormat] = useState<string[]>(['Protocol (Physical + Interactive)']);
   const [intro, setIntro] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(accountAvatarUrl || defaultAvatars[0].image);
+  const navAvatarUrl = useGuardianAvatarUrl(userId, avatarUrl, logoUrl);
   const [avatarSourceUrl, setAvatarSourceUrl] = useState<string | null>(accountAvatarUrl || defaultAvatars[0].image);
-  // The photo being converted to the R³ house style (opens the review), and the last converted upload.
-  const [houseSource, setHouseSource] = useState<string | null>(null);
+  // The last upload converted to the R³ house style; the house style is required to publish (see guardianHouseStyle).
   const [houseAvatarUrl, setHouseAvatarUrl] = useState<string | null>(null);
   const avatarIsHouseStyle = isHouseStyleAvatar(avatarUrl, houseAvatarUrl);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [avatarConverting, setAvatarConverting] = useState(false);
+  const [avatarApplying, setAvatarApplying] = useState(false);
+  const [avatarPreviewMock, setAvatarPreviewMock] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
+  const houseStylePanelId = useId();
+  // A new source portrait (upload or stock pick) makes the last house-style error stale.
+  useEffect(() => { setAvatarError(''); }, [avatarSourceUrl]);
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null);
+  // Up to two YouTube clips (a link, a start and an end) that play as the hero background in place of an image or uploaded video.
+  const [backgroundClips, setBackgroundClips] = useState<YtClip[]>([]);
+  // Refracted glass and a vignette over the hero background: on by default for a video clip, 'off' to switch it off, 'on' to force it.
+  const [heroGlassSetting, setHeroGlassSetting] = useState<'on' | 'off' | ''>('');
   const [backgroundType, setBackgroundType] = useState<'image' | 'video'>('image');
   const [uploadingBackground, setUploadingBackground] = useState(false);
   const [backgroundSearch, setBackgroundSearch] = useState('');
@@ -2017,6 +2128,8 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       if (links.avatar_house_url) setHouseAvatarUrl(links.avatar_house_url);
       if (saved.contact_email) setContactEmail(saved.contact_email);
       if (links.theme_background) setBackgroundUrl(links.theme_background);
+      if (links.theme_background_clips) setBackgroundClips(clipsFromLinks(links.theme_background_clips));
+      if (links.theme_glass === 'on' || links.theme_glass === 'off') setHeroGlassSetting(links.theme_glass);
       if (links.theme_background_type === 'image' || links.theme_background_type === 'video') setBackgroundType(links.theme_background_type);
       if (links.theme_image_treatment === 'color' || links.theme_image_treatment === 'greyscale') setImageTreatment(links.theme_image_treatment);
       setHeadlineStyle(headlineStyleOf(links.theme_headline_style));
@@ -2027,6 +2140,9 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       if (links.logo_url) setLogoUrl(links.logo_url);
       if (links.expertise_tags) setExpertiseTags(parseExpertiseTags(links.expertise_tags));
       if (links.offer_videos) { try { setOfferVideos(JSON.parse(String(links.offer_videos))); } catch { /* ignore bad JSON */ } }
+      if (links.photos) { const list = parsePhotos(links.photos); if (list.length) setSitePhotos(list); }
+      if (typeof saved.onboarding_step === 'number') setSavedStep(saved.onboarding_step);
+      if (saved.slug) setSavedSlug(saved.slug);
       if (links.roles) setRoles(String(links.roles).split(',').filter(Boolean));
     }).catch(() => {});
   }, [userId]);
@@ -2043,6 +2159,10 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       setBrandProfiles((current) => [drafts.find((d) => d.localId === 'personal') || current.find((d) => d.localId === 'personal')!, ...drafts.filter((d) => d.localId !== 'personal')].filter(Boolean));
       const personal = drafts.find((d) => d.localId === 'personal');
       if (personal) setBrandKit(brandKitOf(personal.social_links));
+      const primary = saved.find((b) => b.is_primary);
+      if (primary) setSavedPrimaryId(primary.kind === 'personal' ? 'personal' : `brand-${primary.id}`);
+      const personalPhotos = parsePhotos(personal?.social_links.photos);
+      if (personalPhotos.length) setSitePhotos(personalPhotos);
     }).catch(() => setBrandsLoaded('failed'));
   }, [userId]);
   // Existing items shown under each step ("In your workspace").
@@ -2113,25 +2233,39 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     in_person: { title: 'In-person session', price: '349', url: '', delivery: ['In person'], audienceValue: 'Experience tailored hands-on support and individual attention.', nextStep: 'booking', billingModel: 'pack_10' },
     festival: { title: 'Three-day in-person retreat', price: '1500', url: '', delivery: ['Event'], audienceValue: 'Spend three focused days at a country hotel with in-person coaching, practical sessions, accommodation and a personal plan to take home.', nextStep: 'booking', billingModel: 'one_time' },
   });
-  const [routineGender, setRoutineGender] = useState('Women');
-  const [routineAge, setRoutineAge] = useState('Adults 45–64');
-  const [routineLifeStage, setRoutineLifeStage] = useState('Menopause');
+  const [routineGender, setRoutineGender] = useState('Everyone');
+  const [routineAge, setRoutineAge] = useState('All ages');
+  const [routineLifeStage, setRoutineLifeStage] = useState('Not specified');
+  // The use case is built step by step: audience → sex / population → age → health / life stage → problem → solution. Nothing is
+  // preselected, each choice reveals the next, and "Add this use case" then reveals the lead magnet and the offers.
+  const [useCasePicked, setUseCasePicked] = useState<Record<UseCasePart, boolean>>({ audience: false, population: false, age: false, stage: false, problem: false });
+  const [useCaseAdded, setUseCaseAdded] = useState(false);
+  const [showLeadMagnetPicker, setShowLeadMagnetPicker] = useState(false);
+  // Photos for their page: the first cell is the account photo that comes with their email; the rest they add (2 to 4 in all).
+  const [sitePhotos, setSitePhotos] = useState<string[]>(accountAvatarUrl ? [accountAvatarUrl] : []);
+  const [photosUploading, setPhotosUploading] = useState(false);
+  // Every part of the setup can be saved as a draft without publishing. One shared state keeps the "Saved 14:32" line the same everywhere.
+  const [saveState, setSaveState] = useState<SaveState>(IDLE_SAVE);
+  const [savedStep, setSavedStep] = useState(1);
+  // The saved public url and which brand the profile row currently mirrors (the one they publish as). A draft save never changes either.
+  const [savedSlug, setSavedSlug] = useState<string | null>(null);
+  const [savedPrimaryId, setSavedPrimaryId] = useState('personal');
   const activeStoryTemplate = storyTemplates.find((template) => template.id === storyTemplate) || storyTemplates[0];
   const effectiveBackground = backgroundUrl || activeStoryTemplate.image;
   const previewHeaderBackground = '#FFFFFF';
   const previewHeaderText = '#11120F';
 
-  function currentBrandDraft(): BrandDraft {
+  function currentBrandDraft(logoOverride?: string): BrandDraft {
     const current = brandProfiles.find((brand) => brand.localId === activeBrandId);
     return {
       localId: activeBrandId,
       name: displayName.trim() || current?.name || 'Untitled brand',
       kind: current?.kind || 'business',
-      logo_url: logoUrl,
+      logo_url: logoOverride ?? logoUrl,
       contact_email: contactEmail.trim(),
       whatsapp_phone: whatsappPhone.trim(),
       website_url: websiteUrl.trim(),
-      social_links: { instagram: instagramUrl.trim(), facebook: facebookUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), ...brandKitLinks(brandKit) },
+      social_links: { instagram: instagramUrl.trim(), facebook: facebookUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), photos: JSON.stringify(sitePhotos), ...brandKitLinks(brandKit) },
       language: mainLanguage,
       pricing_region: pricingRegion,
       currency,
@@ -2145,6 +2279,9 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     setYoutubeUrl(brand.social_links.youtube || ''); setLinktreeUrl(brand.social_links.linktree || '');
     setMainLanguage(brand.language); setPricingRegion(brand.pricing_region); setCurrency(brand.currency);
     setBrandKit(brandKitOf(brand.social_links));
+    // Photos belong to the brand. Only the personal brand starts with the photo that comes with the account email.
+    const brandPhotos = parsePhotos(brand.social_links.photos);
+    setSitePhotos(brand.localId === 'personal' ? (brandPhotos.length ? brandPhotos : accountAvatarUrl ? [accountAvatarUrl] : []) : brandPhotos);
   }
 
   function selectBrand(localId: string) {
@@ -2384,17 +2521,43 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       setAvatarUrl(url);
       setAvatarSourceUrl(url);
       setLogoUrl(url);
-      // The house style is required, so a new photo goes straight to conversion.
-      setHouseSource(url);
-      setImportMessage('Profile image uploaded. Converting it to the R³ house style.');
+      setImportMessage('Profile image uploaded. Create your R³ house style to publish it.');
     } catch (e: any) {
       setImportMessage(e.message || 'Could not upload that profile image.');
     } finally { setUploading(false); }
   }
 
-  function applyHouseAvatar(url: string) {
-    setAvatarUrl(url); setLogoUrl(url); setHouseAvatarUrl(url); setHouseSource(null);
-    setImportMessage('R³ house-style avatar applied.');
+  // The house style converts the Guardian's own portrait. A stock avatar (or any local path the function cannot fetch) has nothing of theirs to convert.
+  const avatarSource = avatarSourceUrl || avatarUrl;
+  const avatarNeedsOwnPhoto = !avatarSource || defaultAvatars.some((avatar) => avatar.image === avatarSource) || !/^(https:\/\/|data:image\/)/.test(avatarSource);
+
+  async function convertAvatarToHouseStyle() {
+    if (!avatarSource || avatarNeedsOwnPhoto) { setAvatarError('Upload your own photo first, then create your R3 house style.'); return; }
+    setAvatarConverting(true); setAvatarError('');
+    try {
+      const result = await convertGuardianAvatar(avatarSource, displayName || 'Guardian');
+      setAvatarPreviewMock(!!result.mock);
+      // The model paints a flat green background; it becomes real transparency here, before the preview and before it is saved.
+      setAvatarPreviewUrl(result.mock ? result.image : await removeGreenBackground(result.image));
+    } catch (error) {
+      setAvatarError(error instanceof Error ? error.message : 'Could not convert that portrait.');
+    } finally { setAvatarConverting(false); }
+  }
+
+  async function applyConvertedAvatar() {
+    if (!avatarPreviewUrl) return;
+    // Test mode returns a placeholder SVG; uploadGuideImage only accepts JPG, PNG, WebP, GIF, MP4 and WebM.
+    if (avatarPreviewMock) { setAvatarError('Live image generation is currently in test mode, so this placeholder cannot be saved as your avatar.'); return; }
+    setAvatarApplying(true); setAvatarError(''); setImportMessage('');
+    try {
+      const url = await uploadGuideImage(userId, generatedImageFile(avatarPreviewUrl));
+      setAvatarUrl(url); setLogoUrl(url); setHouseAvatarUrl(url); setAvatarPreviewUrl(null);
+      // Applying it saves it: the profile and brand are updated now, so the site, the nav and the cards show the new avatar without a separate Save.
+      const saved = await saveProgress({ avatarUrl: url, houseAvatarUrl: url });
+      setImportMessage(saved ? 'R³ house-style avatar applied and saved.' : 'R³ house-style avatar applied. Save your profile to keep it.');
+    } catch (error) {
+      setAvatarError(error instanceof Error ? error.message : 'Could not save the converted avatar.');
+    } finally { setAvatarApplying(false); }
   }
 
   async function uploadBackground(file?: File) {
@@ -2532,6 +2695,58 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     setUpsellDrafts((current) => ({ ...current, [kind]: { ...current[kind], ...patch } }));
   }
 
+  /** The Guardian's profile row as it is saved, whether they publish (status submitted, step 5) or just save a draft. */
+  const profileRow = (status: GuideProfile['status'], onboardingStep: number, slugOverride?: string | null, avatarOverride?: string, houseOverride?: string) => {
+    const slug = slugOverride || guardianSlug;
+    const audienceText = audience.join(', ').toLowerCase();
+    const headline = generatedHeadline;
+    const bio = intro.trim() || `I help ${audienceText} with ${chosen.join(', ').toLowerCase()} through ${format.join(', ').toLowerCase()}.`;
+    return { user_id: userId, slug, display_name: displayName, headline, bio, avatar_url: avatarOverride ?? avatarUrl, contact_email: contactEmail.trim(), whatsapp_phone: whatsappPhone.trim(), social_links: { instagram: instagramUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), website: websiteUrl.trim(), language: mainLanguage, pricing_region: pricingRegion, currency, site_goal: websiteGoal, booking_provider: bookingProvider, booking_url: bookingUrl.trim(), brand_name: brandName.trim() || displayName.trim(), logo_url: avatarOverride ?? logoUrl ?? '', avatar_house_url: houseAvatarFlag(avatarOverride ?? avatarUrl, houseOverride ?? houseAvatarUrl), expertise_tags: expertiseTags.join(','), offer_videos: JSON.stringify(offerVideos), photos: JSON.stringify(sitePhotos), roles: roles.join(','), audience_details: JSON.stringify(Object.fromEntries(audience.filter((g) => audienceDetails[g]).map((g) => [g, audienceDetails[g]]))), theme_template: storyTemplate, theme_background: effectiveBackground, theme_background_type: backgroundType, theme_background_clips: clipsToLinks(backgroundClips), theme_glass: heroGlassSetting, theme_image_treatment: imageTreatment, theme_header_style: headerStyle, theme_headline_style: headlineStyle, theme_heading: 'Canela', theme_body: 'Euclid', theme_page_color: pageColor, theme_accent_color: accentColor }, specialties: chosen, status, onboarding_step: onboardingStep };
+  };
+
+  /** Save this part of the setup as a draft: the profile (photos, avatar, brand look, audience…) and, once they have loaded, the brands. Never publishes or changes approval. */
+  async function saveProgress(override?: { avatarUrl?: string; houseAvatarUrl?: string }): Promise<boolean> {
+    const freshAvatar = typeof override?.avatarUrl === 'string' ? override.avatarUrl : undefined; // state set a moment ago is not in this closure yet
+    const freshHouse = override?.houseAvatarUrl;
+    setSaveState({ status: 'saving' });
+    try {
+      if (!displayName.trim()) throw new Error('Add the name people should call you, then save.');
+      // The profile row mirrors the brand they publish as. Saving while another brand is open must not rename it, change its
+      // public url, or make that brand the primary, so a draft save only writes the profile row from the primary brand.
+      const writesProfile = activeBrandId === savedPrimaryId || !savedStatus;
+      if (!savedStatus && activeBrandId !== 'personal') throw new Error('Save your personal profile first: open it from "Publishing as", then save.');
+      if (writesProfile) {
+        const status: GuideProfile['status'] = savedStatus === 'approved' ? 'approved' : savedStatus === 'submitted' ? 'submitted' : 'draft';
+        // A live (or submitted) page only takes an R³ house-style profile image; drafts can be saved with any photo.
+        if (status !== 'draft' && !isHouseStyleAvatar(freshAvatar ?? avatarUrl, freshHouse ?? houseAvatarUrl)) throw new Error(HOUSE_STYLE_REQUIRED);
+        const saved = await saveGuideProfile(profileRow(status, Math.min(5, Math.max(savedStep, step, 1)), savedSlug, freshAvatar, freshHouse)); // an existing public url is kept
+        setSavedStatus(saved.status); setSavedStep(saved.onboarding_step || step);
+        if (saved.slug) setSavedSlug(saved.slug);
+      }
+      // Brands are only replaced once they have loaded, so a failed load can never wipe saved business brands.
+      if (brandsLoaded === 'ok') {
+        const brandsToSave = brandProfiles.map((brand) => brand.localId === activeBrandId ? currentBrandDraft(freshAvatar) : brand);
+        await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, is_primary: localId === (writesProfile && !savedStatus ? activeBrandId : savedPrimaryId) })));
+      }
+      setSaveState({ status: 'saved', at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+      return true;
+    } catch (e) { setSaveState({ status: 'error', message: (e as Error).message || 'Could not save.' }); return false; }
+  }
+
+  async function addSitePhotos(files: FileList | null) {
+    if (!files?.length) return;
+    const room = PHOTO_SLOTS - sitePhotos.length;
+    const chosenFiles = Array.from(files).slice(0, Math.max(0, room));
+    const problem = chosenFiles.map(portraitProblem).find(Boolean);
+    if (problem) { setImportMessage(problem); return; }
+    setPhotosUploading(true); setImportMessage('');
+    try {
+      const uploaded = await Promise.all(chosenFiles.map((file) => uploadGuideImage(userId, file)));
+      setSitePhotos((current) => [...current, ...uploaded].slice(0, PHOTO_SLOTS));
+    } catch (e: any) { setImportMessage(e?.message || 'Could not upload that photo.'); }
+    finally { setPhotosUploading(false); }
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setError('');
     try {
@@ -2545,7 +2760,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       const audienceText = audience.join(', ').toLowerCase();
       const headline = generatedHeadline;
       const bio = intro.trim() || `I help ${audienceText} with ${chosen.join(', ').toLowerCase()} through ${format.join(', ').toLowerCase()}.`;
-      const profile = await saveGuideProfile({ user_id: userId, slug, display_name: displayName, headline, bio, avatar_url: avatarUrl, contact_email: contactEmail.trim(), whatsapp_phone: whatsappPhone.trim(), social_links: { instagram: instagramUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), website: websiteUrl.trim(), language: mainLanguage, pricing_region: pricingRegion, currency, site_goal: websiteGoal, booking_provider: bookingProvider, booking_url: bookingUrl.trim(), brand_name: brandName.trim() || displayName.trim(), logo_url: logoUrl || '', avatar_house_url: houseAvatarFlag(avatarUrl, houseAvatarUrl), expertise_tags: expertiseTags.join(','), offer_videos: JSON.stringify(offerVideos), roles: roles.join(','), audience_details: JSON.stringify(Object.fromEntries(audience.filter((g) => audienceDetails[g]).map((g) => [g, audienceDetails[g]]))), theme_template: storyTemplate, theme_background: effectiveBackground, theme_background_type: backgroundType, theme_image_treatment: imageTreatment, theme_header_style: headerStyle, theme_headline_style: headlineStyle, theme_heading: 'Canela', theme_body: 'Euclid', theme_page_color: pageColor, theme_accent_color: accentColor }, specialties: chosen, status: savedStatus === 'approved' ? 'approved' : 'submitted', onboarding_step: 5 });
+      const profile = await saveGuideProfile(profileRow(savedStatus === 'approved' ? 'approved' : 'submitted', 5));
       const selectedBrand = currentBrandDraft();
       const brandsToSave = brandProfiles.map((brand) => brand.localId === activeBrandId ? selectedBrand : brand);
       await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, is_primary: localId === activeBrandId })));
@@ -2610,7 +2825,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     { n: 4, label: 'Offers', title: 'Build your offers.', copy: 'Plan the journey, then build every free and paid offer it contains.', image: '/images/guides/offer-plate.png' },
     { n: 5, label: 'Site', title: 'Build your site.', copy: 'Preview the customer journey, then publish.', image: '/images/guides/guide-plate.png' },
   ];
-  const activeStep = steps[step - 1];
+  const activeStep = steps[Math.max(step, 1) - 1];
   const rampAudienceOptions = audience.length ? audience : ['Everyone'];
   // A specific group (e.g. Women) beats the 'Everyone' default, so the path matches the audience chip on the cards.
   const specificAudience = rampAudienceOptions.find((group) => group !== 'Everyone');
@@ -2624,6 +2839,22 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const routineNameAudience = routineGender === 'Everyone' ? rampTargetAudience.toLowerCase() : routineGender.toLowerCase();
   const routineTitlePrefix = '';
   const suggestedRoutineName = `${routineTitlePrefix}7-day ${routineNameLifeStage}${routineNameTopic} challenge for ${routineNameAudience}`;
+  // A Guardian who already has offers or offer paths has a use case: show it all. Everyone else starts blank and is led through it.
+  const hasExistingOffers = related.offers.length > 0 || related.ramps.length > 0;
+  const picked = (part: UseCasePart) => hasExistingOffers || useCasePicked[part];
+  const useCaseReady = hasExistingOffers || useCaseAdded;
+  // Choosing (or changing) a part clears every later part and un-adds the use case, so the steps always read left to right.
+  const pickUseCase = (part: UseCasePart) => {
+    setUseCasePicked((current) => { const next = { ...current }; const from = USE_CASE_ORDER.indexOf(part); USE_CASE_ORDER.forEach((key, index) => { next[key] = index <= from; }); return next; });
+    setUseCaseAdded(false);
+  };
+  // The entry offer is chosen for them (the recommended one for this use case); there is no picker. Stage 0 only ever existed to choose it.
+  useEffect(() => {
+    if (step !== 4 || offerPlanStage !== 2 || !useCaseReady || freeOfferSetupStage !== 0) return;
+    const kind = suggestedFreeOffer.kind;
+    setFreeOfferType(kind); setFreeDelivery(kind === 'routine' ? ['Downloadable PDF', 'Interactive Protocol'] : [suggestedDelivery(kind)]); setFreeAudienceValue(freeValueSuggestions[kind]); setLeadMagnetTitle(suggestedFreeOffer.title); setFreeOfferSetupStage(1);
+  }, [step, offerPlanStage, useCaseReady, freeOfferSetupStage, suggestedFreeOffer.kind, suggestedFreeOffer.title]);
+  const addUseCase = () => { if (freeOfferType === 'routine') setLeadMagnetTitle(suggestedRoutineName); setUseCaseAdded(true); };
   const leadMagnetIdeas = [
     `${routineTitlePrefix}3-day ${routineNameTopic} reset for ${routineNameAudience}`,
     `${routineTitlePrefix}5-day ${routineNameLifeStage}${routineNameTopic} starter plan`,
@@ -2647,6 +2878,10 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const guardianSlug = displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || userId.slice(0, 8);
   const valueRampSlug = (leadMagnetTitle || suggestedRoutineName).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'value-ramp';
   const publishedSitePath = `/guardians/${guardianSlug}/value-ramp/${valueRampSlug}`;
+  // One state for both sites: a single save publishes the profile site and the offer path, and an admin makes them live.
+  const profileSiteState = siteStatus(savedStatus);
+  const funnelSiteState = siteStatus(savedStatus, related.ramps.find((ramp) => ramp.slug === valueRampSlug)?.status ?? 'draft');
+  const sitePublish = sitePublishAction(savedStatus);
   useEffect(() => {
     if (rampAudience !== rampTargetAudience) setRampAudience(rampTargetAudience);
     if (rampProblem !== rampTargetProblem) setRampProblem(rampTargetProblem);
@@ -2777,7 +3012,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           <span style={{ position: 'absolute', zIndex: 2, top: 16, left: 16, width: 30, height: 30, border: `1px solid ${acid}`, borderRadius: '50%', display: 'grid', placeItems: 'center', color: acid, fontSize: 8, fontWeight: 700 }}>01</span>
           <span style={{ position: 'absolute', zIndex: 2, top: 16, right: 16, background: ink, color: black, padding: '10px 14px', fontSize: 9, fontWeight: 800, letterSpacing: '.05em', textTransform: 'uppercase' }}>Lead magnet · Free</span>
           <div style={{ flex: '1 1 auto', padding: '68px clamp(22px,4vw,48px) 28px', display: 'grid', gridTemplateColumns: 'minmax(150px,220px) minmax(0,1fr)', gap: 'clamp(22px,4vw,46px)', alignItems: 'center' }}>
-            <img src="/images/guides/generated/r3-protocol-card.png" alt="Printed Protocol and interactive ROUTINE³ app" style={{ display: 'block', width: '100%', maxWidth: 220, aspectRatio: '1', objectFit: 'contain' }} />
+            <img src="/images/guides/generated/r3-protocol-card.webp" alt="Printed Protocol and interactive ROUTINE³ app" style={{ display: 'block', width: '100%', maxWidth: 220, aspectRatio: '1', objectFit: 'contain' }} />
             <span><span style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 14 }}>{avatarUrl ? <img src={avatarUrl} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', border: `1px solid ${line}` }} /> : <span style={{ width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center', border: `1px solid ${line}`, fontFamily: serif }}>{(displayName || 'G')[0]}</span>}<span style={{ color: muted, fontSize: 9, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>By {displayName || 'your Guardian'}</span></span><strong style={{ display: 'block', fontSize: 'clamp(21px,3vw,32px)', lineHeight: 1.16 }}>{onboardingProtocol.name || leadMagnetTitle}</strong><span style={{ display: 'block', marginTop: 11, color: muted, fontSize: 11, lineHeight: 1.55 }}>{freeAudienceValue}</span><span style={{ display: 'block', marginTop: 14 }}><CustomerValueStars score={5} compact /></span></span>
           </div>
           <div style={{ borderTop: `1px solid ${line}`, minHeight: 58, padding: '0 22px', background: 'rgba(245,242,234,.025)', display: 'flex', alignItems: 'center' }}><strong style={{ color: acid, fontSize: 9, letterSpacing: '.09em', textTransform: 'uppercase' }}>R3 Protocol · Step 01</strong></div>
@@ -2802,7 +3037,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const leadMagnetCard = () => (() => { const art = freeOfferArt[freeOfferType]; return <div className="guardian-card" style={{ width: 320, flex: '0 0 320px', border: `1px solid ${acid}`, background: '#20251B', overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column' }}>
                   <span style={{ position: 'absolute', zIndex: 2, top: 10, left: 10, padding: '4px 7px', background: ink, color: black, fontSize: 9, fontWeight: 800, letterSpacing: '.06em' }}>#01</span>
                   <span style={{ position: 'absolute', zIndex: 2, top: 10, right: 10, background: ink, color: black, padding: '8px 12px', fontSize: 9, fontWeight: 700, textTransform: 'uppercase' }}>Lead magnet · Free</span>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gridTemplateRows: '128px 1px auto', alignItems: 'stretch' }}>{freeOfferType === 'routine' ? <img src="/images/guides/generated/r3-protocol-card.png" alt="Printed Protocol and interactive ROUTINE³ app" style={{ display: 'block', width: 84, height: 84, objectFit: 'contain', alignSelf: 'end', justifySelf: 'center', marginBottom: 10 }} /> : <span aria-hidden="true" style={{ display: 'block', alignSelf: 'end', justifySelf: 'center', marginBottom: 10, width: 76 * art.cellAspect, height: 76, backgroundImage: `url(${art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${art.cols * 100}% ${art.rows * 100}%`, backgroundPosition: `${(art.index % art.cols) * 100 / Math.max(1, art.cols - 1)}% ${Math.floor(art.index / art.cols) * 100 / Math.max(1, art.rows - 1)}%`, filter: 'grayscale(1) contrast(.92)' }} />}<span aria-hidden="true" style={{ background: line }} /><span style={{ padding: '14px 14px 16px', minWidth: 0 }}><span style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>{avatarUrl ? <img src={avatarUrl} alt="" style={{ width: 25, height: 25, borderRadius: '50%', objectFit: 'cover', border: `1px solid ${line}` }} /> : <span style={{ width: 25, height: 25, borderRadius: '50%', display: 'grid', placeItems: 'center', border: `1px solid ${line}`, fontFamily: serif }}>{(displayName || 'G')[0]}</span>}<span style={{ color: muted, fontSize: 8, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>By {displayName || 'your Guardian'}</span></span><strong style={{ display: 'block', fontSize: 15, lineHeight: 1.25 }}>{customerFacingOfferTitle(leadMagnetTitle) || 'Lead magnet'}</strong><span style={{ display: 'block', marginTop: 8, color: muted, fontSize: 10, lineHeight: 1.5 }}>{freeAudienceValue}</span><span style={{ display: 'block', marginTop: 10 }}><CustomerValueStars score={offerValueScores[freeOfferType]} compact /></span></span></div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gridTemplateRows: '128px 1px auto', alignItems: 'stretch' }}>{freeOfferType === 'routine' ? <img src="/images/guides/generated/r3-protocol-card.webp" alt="Printed Protocol and interactive ROUTINE³ app" style={{ display: 'block', width: 84, height: 84, objectFit: 'contain', alignSelf: 'end', justifySelf: 'center', marginBottom: 10 }} /> : <span aria-hidden="true" style={{ display: 'block', alignSelf: 'end', justifySelf: 'center', marginBottom: 10, width: 76 * art.cellAspect, height: 76, backgroundImage: `url(${art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${art.cols * 100}% ${art.rows * 100}%`, backgroundPosition: `${(art.index % art.cols) * 100 / Math.max(1, art.cols - 1)}% ${Math.floor(art.index / art.cols) * 100 / Math.max(1, art.rows - 1)}%`, filter: 'grayscale(1) contrast(.92)' }} />}<span aria-hidden="true" style={{ background: line }} /><span style={{ padding: '14px 14px 16px', minWidth: 0 }}><span style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>{avatarUrl ? <img src={avatarUrl} alt="" style={{ width: 25, height: 25, borderRadius: '50%', objectFit: 'cover', border: `1px solid ${line}` }} /> : <span style={{ width: 25, height: 25, borderRadius: '50%', display: 'grid', placeItems: 'center', border: `1px solid ${line}`, fontFamily: serif }}>{(displayName || 'G')[0]}</span>}<span style={{ color: muted, fontSize: 8, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>By {displayName || 'your Guardian'}</span></span><strong style={{ display: 'block', fontSize: 15, lineHeight: 1.25 }}>{customerFacingOfferTitle(leadMagnetTitle) || 'Lead magnet'}</strong><span style={{ display: 'block', marginTop: 8, color: muted, fontSize: 10, lineHeight: 1.5 }}>{freeAudienceValue}</span><span style={{ display: 'block', marginTop: 10 }}><CustomerValueStars score={offerValueScores[freeOfferType]} compact /></span></span></div>
                   {/* Same boxes as the paid steps, read-only: a lead magnet is always free. */}
                   <div aria-label="Lead magnet access and price" style={{ borderTop: `1px solid ${line}`, marginTop: 'auto', padding: 10, background: 'rgba(245,242,234,.025)', display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
                     {[['Access', 'Free'], ['Payment', 'None']].map(([name, value]) => <div key={name}><span style={{ ...label, display: 'block', marginBottom: 5 }}>{name}</span><span style={{ ...input, ...compactControl, background: black, display: 'flex', alignItems: 'center', color: muted }}>{value}</span></div>)}
@@ -2810,6 +3045,23 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
                     {offerVideoField('free')}<span style={{ ...btn, ...compactControl, width: '100%', minHeight: 40, gridColumn: '1 / -1', boxSizing: 'border-box', background: 'transparent', color: acid, borderColor: line, cursor: 'default' }}>Lead magnet · Step 01</span>
                   </div>
                 </div>; })();
+  // The lead magnet, with a dashed "Add another" beside it. Once there are two they sit together and join into the upsell.
+  const extraLeadMagnets = selectedLeadMagnets.filter((kind) => kind !== freeOfferType);
+  const leadMagnetOptions = freeOfferTypes.filter((offer) => offer.value !== freeOfferType && !selectedLeadMagnets.includes(offer.value));
+  const leadMagnetCluster = () => <div role="group" aria-label="Lead magnets" style={{ display: 'flex', alignItems: 'stretch', gap: 12, flex: '0 0 auto' }}>
+    {leadMagnetCard()}
+    {extraLeadMagnets.map((kind) => { const type = freeOfferTypes.find((offer) => offer.value === kind); return <div key={kind} style={{ width: 260, flex: '0 0 260px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <FreeOfferCard eyebrow="LEAD MAGNET · FREE · #2" title={type?.label || kind} copy={type?.copy || ''} active art={freeOfferArt[kind]} onClick={() => {}} />
+      <button type="button" onClick={() => setSelectedLeadMagnets((current) => current.filter((item) => item !== kind))} aria-label={`Remove ${type?.label || kind}`} style={{ ...btn, minHeight: 36, height: 36, background: 'transparent', color: ink, fontSize: 9 }}>Remove</button>
+    </div>; })}
+    {extraLeadMagnets.length < 1 && <div style={{ width: 200, flex: '0 0 200px', border: `1px dashed ${line}`, display: 'flex', flexDirection: 'column' }}>
+      <button type="button" onClick={() => setShowLeadMagnetPicker((current) => !current)} aria-expanded={showLeadMagnetPicker} aria-label="Add another lead magnet" style={{ flex: '1 1 auto', minHeight: 190, border: 0, background: 'transparent', color: ink, fontFamily: sans, cursor: 'pointer', display: 'grid', placeItems: 'center', textAlign: 'center', padding: 14 }}>
+        <span><span style={{ display: 'block', fontSize: 26, fontWeight: 300, marginBottom: 6 }}>+</span><strong style={{ display: 'block', fontSize: 13, letterSpacing: '.04em' }}>Add another</strong><span style={{ display: 'block', color: muted, fontSize: 10, lineHeight: 1.4, marginTop: 4 }}>A second free way in. Both lead into your upsell.</span></span>
+      </button>
+      {showLeadMagnetPicker && <div style={{ display: 'grid', gap: 6, padding: '0 10px 10px' }}>{leadMagnetOptions.map((offer) => <button key={offer.value} type="button" onClick={() => { setSelectedLeadMagnets((current) => current.includes(offer.value) ? current : [...current, offer.value]); setShowLeadMagnetPicker(false); }} style={{ ...btn, minHeight: 36, height: 'auto', padding: '8px 10px', background: 'transparent', color: ink, fontSize: 10, textAlign: 'left' }}>{offer.label}</button>)}</div>}
+    </div>}
+    {extraLeadMagnets.length >= 1 && <span role="img" aria-label="Both lead magnets join into your upsell" title="Both lead magnets join into your upsell" style={{ width: 26, flex: '0 0 26px', alignSelf: 'stretch', margin: '44px 0', borderTop: `1px solid ${acid}`, borderRight: `1px solid ${acid}`, borderBottom: `1px solid ${acid}` }} />}
+  </div>;
   const paidOfferCard = (offer: (typeof offerCards)[number]) => {
                 const art = offerTypeArt[offer.kind];
                 const access = offerAccess[offer.kind];
@@ -2832,13 +3084,22 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
                   </div>
                 </div>;
   };
+  // The picture in the header opens step 01. It works while the builders are still locked: this setup is where a new Guardian can go.
+  const profileLink = { href: '/guardians/workspace?step=1', onOpen: () => { setError(''); setSummaryView(null); setProfileStage(0); setStep(1); } };
+  const setupLock = hasProfile ? undefined : 'finish setup to open the builders';
+  if (step === 0) return <div style={{ minHeight: '100vh', background: black, color: ink, padding: '30px clamp(20px,6vw,90px)', fontFamily: sans }}>
+    <div style={{ position: 'sticky', top: 0, zIndex: 50, margin: '-30px calc(-1 * clamp(20px,6vw,90px)) 0', maxWidth: 'none' }}>
+      <GuardianHeader isSignedIn displayName={displayName} avatarUrl={navAvatarUrl} profileLink={profileLink} locked={setupLock} onSignOut={() => signOut()} />
+    </div>
+    <GuardianGetStarted onStart={() => setStep(1)} />
+  </div>;
   return <div onPointerMove={tiltCard} onPointerOut={resetTilt} style={{ minHeight: '100vh', background: black, color: ink, padding: '30px clamp(20px,6vw,90px)', fontFamily: sans }}>
     <style>{`@keyframes guardian-orbit{to{transform:rotate(360deg)}}.guardian-image-loader{animation:guardian-orbit 1.8s linear infinite}.guardian-card{--card-rotate-x:0deg;--card-rotate-y:0deg;transition:transform 160ms ease,border-color 180ms ease,box-shadow 180ms ease,background-color 180ms ease;transform-origin:center;transform-style:preserve-3d;will-change:transform;text-align:left}.guardian-card>span[aria-hidden="true"],.guardian-card [role="img"]{margin-left:0!important;margin-right:0!important}.guardian-card img{transition:filter 180ms ease;filter:grayscale(1) contrast(.92)!important}.guardian-card:hover{transform:perspective(700px) translateY(-5px) rotateX(var(--card-rotate-x)) rotateY(var(--card-rotate-y));box-shadow:0 16px 30px rgba(0,0,0,.3)}.guardian-card:not([aria-pressed="true"]):not([aria-disabled="true"]):hover{border-color:#A56B48!important;background-color:#171811!important}.guardian-card:hover img{filter:grayscale(0) contrast(1.02) saturate(1.08)!important}.guardian-card[aria-disabled="true"]:hover{transform:none;box-shadow:none}.guardian-card:focus-visible{outline:2px solid #C7D8A3;outline-offset:3px}@media(prefers-reduced-motion:reduce){.guardian-card,.guardian-image-loader{transition:none;animation:none}.guardian-card:hover{transform:none!important}}`}</style>
     {/* Same shared header as the landing and tool pages; negative margins cancel this page's padding so it spans full width. */}
     {/* maxWidth none: the site CSS caps every element at 100% under 768px, which would undo the full bleed. */}
     <div style={{ position: 'sticky', top: 0, zIndex: 50, margin: '-30px calc(-1 * clamp(20px,6vw,90px)) 0', maxWidth: 'none' }}>
       {/* Until a profile is saved every ?tab= URL re-renders this setup, so builder links would just reload it and drop unsaved answers. */}
-      <GuardianHeader isSignedIn displayName={displayName} locked={hasProfile ? undefined : 'finish setup to open the builders'} onSignOut={() => signOut()} extra={<>
+      <GuardianHeader isSignedIn displayName={displayName} avatarUrl={navAvatarUrl} profileLink={profileLink} locked={setupLock} onSignOut={() => signOut()} extra={<>
         <button type="button" onClick={() => setSummaryView('offers')} style={{ padding: 0, border: 0, borderBottom: summaryView === 'offers' ? `1px solid ${ink}` : '1px solid transparent', background: 'transparent', color: summaryView === 'offers' ? ink : muted, cursor: 'pointer', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Offers <span style={{ color: acid }}>{builtOfferCount}/{totalOfferCount}</span></button>
         <button type="button" onClick={() => setSummaryView('sites')} style={{ padding: 0, border: 0, borderBottom: summaryView === 'sites' ? `1px solid ${ink}` : '1px solid transparent', background: 'transparent', color: summaryView === 'sites' ? ink : muted, cursor: 'pointer', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Sites <span style={{ color: acid }}>2</span></button>
         <span aria-hidden="true" style={{ width: 1, height: 14, background: line }} />
@@ -2898,20 +3159,16 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       })}</div>
       <ContentStudio creator={displayName} avatar={avatarUrl} audience={audience.map(describeAudience).join(' · ') || rampTargetAudience} problem={rampTargetProblem} siteUrl={publishedSitePath}
         offers={[{ title: customerFacingOfferTitle(leadMagnetTitle || suggestedRoutineName), free: true, description: freeAudienceValue }, ...orderedUpsells.map((kind) => ({ title: upsellDrafts[kind].title, free: offerAccess[kind] !== 'paid', price: formatMoney(upsellDrafts[kind].price, currency), description: upsellDrafts[kind].audienceValue }))]} />
-      </div> : <div style={{ padding: 22, display: 'grid', gap: 10 }}>
-        {[
-          { key: 'profile-site', type: 'Profile site', title: `${displayName || 'Guardian'} profile`, path: `/guardians/${guardianSlug}`, previewId: 'profile-site-preview' },
-          { key: 'funnel-site', type: 'Offer funnel', title: leadMagnetTitle || 'Offer site', path: publishedSitePath, previewId: 'value-ramp-funnel-preview' },
-        ].map((site) => <div key={site.key} style={{ position: 'relative', border: `1px solid ${line}`, minHeight: 92, padding: 14, display: 'grid', gridTemplateColumns: '82px minmax(0,1fr) auto auto', gap: 16, alignItems: 'center' }}>
-          <img src={effectiveBackground} alt="" style={{ width: 82, height: 62, objectFit: 'cover', filter: 'grayscale(1)' }} />
-          <span><span style={{ display: 'block', color: acid, fontSize: 7, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 5 }}>{site.type}</span><strong style={{ display: 'block', color: ink, fontSize: 13 }}>{site.title}</strong><code style={{ display: 'block', color: muted, fontSize: 9, marginTop: 6 }}>{site.path}</code></span>
-          <span style={{ color: '#D49A74', fontSize: 8, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Draft</span>
-          <button type="button" aria-label={`Actions for ${site.title}`} aria-expanded={inventoryMenu === site.key} onClick={() => setInventoryMenu((current) => current === site.key ? null : site.key)} style={{ width: 38, height: 38, border: `1px solid ${line}`, background: 'transparent', color: ink, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><MoreHorizontal size={19} /></button>
-          {inventoryMenu === site.key && <div role="menu" style={{ position: 'absolute', zIndex: 8, right: 14, top: 64, width: 158, border: `1px solid ${line}`, background: black, boxShadow: '0 14px 28px rgba(0,0,0,.42)', padding: 4 }}>
-            <button type="button" role="menuitem" onClick={() => { setInventoryMenu(null); setSummaryView(null); setStep(5); setSiteStyleStage(site.key === 'profile-site' ? 0 : 2); }} style={{ width: '100%', border: 0, background: 'transparent', color: ink, padding: '10px 12px', textAlign: 'left', fontFamily: sans, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
-            <button type="button" role="menuitem" onClick={() => { setInventoryMenu(null); setSummaryView(null); setStep(5); window.setTimeout(() => document.getElementById(site.previewId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} style={{ width: '100%', border: 0, borderTop: `1px solid ${line}`, background: 'transparent', color: ink, padding: '10px 12px', textAlign: 'left', fontFamily: sans, fontWeight: 700, cursor: 'pointer' }}>Preview and test</button>
-          </div>}
-        </div>)}
+      </div> : <div style={{ padding: 22 }}>
+        <SiteCardGrid
+          openMenu={inventoryMenu}
+          onOpenMenu={setInventoryMenu}
+          sites={[
+            { key: 'profile-site', type: 'Profile site', title: `${displayName || 'Guardian'} profile`, path: `/guardians/${guardianSlug}`, status: profileSiteState, heroKicker: displayName || undefined, heroLine: generatedHeadline, avatarUrl: avatarUrl || null, previewId: 'profile-site-preview' },
+            { key: 'funnel-site', type: 'Offer funnel', title: leadMagnetTitle || 'Offer site', path: publishedSitePath, status: funnelSiteState, heroKicker: displayName || undefined, heroLine: customerFacingOfferTitle(leadMagnetTitle || suggestedFreeOffer.title), avatarUrl: avatarUrl || null, previewId: 'value-ramp-funnel-preview' },
+          ].map((site): SiteCardData => ({ ...site, backgroundUrl: effectiveBackground, backgroundIsVideo: backgroundType === 'video', greyscale: imageTreatment === 'greyscale' }))}
+          onEdit={(site) => { setInventoryMenu(null); setSummaryView(null); setStep(5); setSiteStyleStage(site.key === 'profile-site' ? 0 : 2); }}
+          onPreview={(site) => { setInventoryMenu(null); setSummaryView(null); setStep(5); window.setTimeout(() => document.getElementById(site.previewId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} />
       </div>}
     </section>}
     {!summaryView && <form onSubmit={submit} style={{ maxWidth: step === 5 ? 1440 : 1100 /* step 05 shows two side-by-side previews */, margin: '52px auto', minHeight: 'calc(100vh - 220px)' }}>
@@ -2953,21 +3210,14 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       {/* Profile image: one compact row, like the brand line above. */}
       <PhotoDropzone onFile={uploadPortrait} validate={portraitProblem} onReject={setImportMessage} accept={PORTRAIT_ACCEPT} disabled={uploading}>
         {({ open, dragging }) => (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18, padding: dragging ? 6 : 0, outline: dragging ? `2px dashed ${ink}` : 'none' }}>
-        {avatarUrl ? <img src={avatarUrl} alt="Profile" referrerPolicy="no-referrer" style={{ width: 36, height: 36, objectFit: 'cover', border: `1px solid ${line}` }} /> : <span aria-hidden="true" style={{ width: 36, height: 36, display: 'grid', placeItems: 'center', border: `1px solid ${line}`, color: muted, fontFamily: serif, fontSize: 16 }}>{displayName.trim().charAt(0) || 'B'}</span>}
-        <span style={{ color: avatarIsHouseStyle ? muted : '#E8B86A', fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Profile image · R³ house style {avatarIsHouseStyle ? <Check size={10} style={{ verticalAlign: '-1px' }} /> : 'required'}</span>
-        <button type="button" onClick={open} disabled={uploading} aria-label={avatarUrl ? 'Replace profile image' : 'Upload profile image'} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer', background: 'transparent', border: 0, padding: 0 }}>
-          {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}{uploading ? 'Uploading' : avatarUrl ? 'Replace' : 'Upload'}
-        </button>
-        {avatarUrl && !avatarIsHouseStyle && !houseSource && <button type="button" onClick={() => setHouseSource(avatarSourceUrl || avatarUrl)} aria-label="Convert profile image to R3 house style" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 28, padding: '0 9px', border: `1px solid ${line}`, borderRadius: 2, color: ink, fontFamily: sans, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer', background: 'rgba(245,242,234,.04)' }}>
-          <Sparkles size={12} />Convert to R³ house style
-        </button>}
-        <span style={{ color: muted, fontSize: 9 }}>{dragging ? 'Drop to upload' : 'or drag a photo here'}</span>
-      </div>
+      <>
+      <HouseStyleAvatarPanel id={houseStylePanelId} houseStyle={avatarIsHouseStyle} save={saveState} onSave={() => saveProgress()} dragging={dragging} sourceUrl={avatarSource} currentUrl={avatarUrl} needsUpload={avatarNeedsOwnPhoto} converting={avatarConverting} applying={avatarApplying} uploading={uploading} resultUrl={avatarPreviewUrl} resultMock={avatarPreviewMock} error={avatarError} onCreate={convertAvatarToHouseStyle} onUpload={open} onApply={applyConvertedAvatar} onCancel={() => { setAvatarPreviewUrl(null); setAvatarError(''); }}>
+        <PhotoGrid embedded photos={sitePhotos} accountAvatarUrl={activeBrandId === 'personal' ? accountAvatarUrl || null : null} forBrand={brandProfiles.length > 1 ? displayName.trim() || 'this brand' : undefined} uploading={photosUploading} onAdd={addSitePhotos} onRemove={(index) => setSitePhotos((current) => current.filter((_, position) => position !== index))} save={saveState} onSave={() => saveProgress()} />
+      </HouseStyleAvatarPanel>
+      </>
         )}
       </PhotoDropzone>
-      {houseSource && <HouseAvatarReview userId={userId} name={displayName} source={houseSource} onApplied={applyHouseAvatar} onCancel={() => setHouseSource(null)} />}
-      {!avatarIsHouseStyle && !houseSource && <p role="note" style={{ color: '#E8B86A', fontSize: 11, lineHeight: 1.5, margin: '10px 0 0' }}>{HOUSE_STYLE_REQUIRED}</p>}
+      {!avatarIsHouseStyle && <p role="note" style={{ color: '#E8B86A', fontSize: 11, lineHeight: 1.5, margin: '10px 0 0' }}>{HOUSE_STYLE_REQUIRED}</p>}
       {importMessage && <p style={{ color: /applied|ready|imported|uploaded/i.test(importMessage) ? acid : muted, fontSize: 11, lineHeight: 1.5, margin: '10px 0 0' }}>{importMessage}</p>}
       <p style={{ color: muted, fontSize: 10, lineHeight: 1.5, margin: '9px 0 0' }}>Language applies to your page and content. Pricing region sets the currency for every paid stage.</p>
       <Disclosure id="profile-contact" title="Contact" required summary={contactEmail.trim() || 'Add your email'} open={profileOpen.contact} onToggle={() => setProfileOpen((o) => ({ ...o, contact: !o.contact }))}>
@@ -3081,25 +3331,24 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
             <div style={{ border: `1px solid ${line}`, background: panel, padding: 14, marginBottom: 16 }}>
               <label style={{ ...label, color: acid }}>Create these offers for</label>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(165px,1fr))', gap: 9 }}>
-                <div><label style={{ ...label, marginBottom: 5 }}>Audience</label><select value={rampTargetAudience} onChange={(event) => { const nextAudience = event.target.value; setRampAudience(nextAudience); setRampProblem((audienceProblemsByGroup[nextAudience] || [])[0] || ''); }} style={{ ...input, paddingRight: 38 }}>{rampAudienceOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
-                <div><label style={{ ...label, marginBottom: 5 }}>Sex / population</label><select value={routineGender} onChange={(event) => { const nextPopulation = event.target.value; setRoutineGender(nextPopulation); setRoutineAge((targetAgeRanges[nextPopulation] || targetAgeRanges.Everyone)[0]); setRoutineLifeStage((targetLifeStages[nextPopulation] || targetLifeStages.Everyone)[0]); }} style={{ ...input, paddingRight: 38 }}>{Object.keys(targetAgeRanges).map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
-                <div><label style={{ ...label, marginBottom: 5 }}>Age range</label><select value={routineAge} onChange={(event) => setRoutineAge(event.target.value)} style={{ ...input, paddingRight: 38 }}>{routineAgeOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
-                <div><label style={{ ...label, marginBottom: 5 }}>Health / life stage</label><select value={routineLifeStage} onChange={(event) => setRoutineLifeStage(event.target.value)} style={{ ...input, paddingRight: 38 }}>{routineLifeStageOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
-                <div><label style={{ ...label, marginBottom: 5 }}>Problem</label><select value={rampTargetProblem} onChange={(event) => setRampProblem(event.target.value)} style={{ ...input, paddingRight: 38 }}>{rampProblemOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
+                <div><label style={{ ...label, marginBottom: 5 }}>Audience</label><select aria-label="Audience" value={picked('audience') ? rampTargetAudience : ''} onChange={(event) => { const nextAudience = event.target.value; pickUseCase('audience'); setRampAudience(nextAudience); setRampProblem((audienceProblemsByGroup[nextAudience] || [])[0] || ''); }} style={{ ...input, paddingRight: 38 }}>{!picked('audience') && <option value="" disabled>Choose an audience</option>}{rampAudienceOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
+                {picked('audience') && <div><label style={{ ...label, marginBottom: 5 }}>Sex / population</label><select aria-label="Sex / population" value={picked('population') ? routineGender : ''} onChange={(event) => { const nextPopulation = event.target.value; pickUseCase('population'); setRoutineGender(nextPopulation); setRoutineAge((targetAgeRanges[nextPopulation] || targetAgeRanges.Everyone)[0]); setRoutineLifeStage((targetLifeStages[nextPopulation] || targetLifeStages.Everyone)[0]); }} style={{ ...input, paddingRight: 38 }}>{!picked('population') && <option value="" disabled>Choose who it is for</option>}{Object.keys(targetAgeRanges).map((item) => <option key={item} value={item}>{item}</option>)}</select></div>}
+                {picked('population') && <div><label style={{ ...label, marginBottom: 5 }}>Age range</label><select aria-label="Age range" value={picked('age') ? routineAge : ''} onChange={(event) => { pickUseCase('age'); setRoutineAge(event.target.value); }} style={{ ...input, paddingRight: 38 }}>{!picked('age') && <option value="" disabled>Choose an age range</option>}{routineAgeOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>}
+                {picked('age') && <div><label style={{ ...label, marginBottom: 5 }}>Health / life stage</label><select aria-label="Health / life stage" value={picked('stage') ? routineLifeStage : ''} onChange={(event) => { pickUseCase('stage'); setRoutineLifeStage(event.target.value); }} style={{ ...input, paddingRight: 38 }}>{!picked('stage') && <option value="" disabled>Choose a life stage</option>}{routineLifeStageOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>}
+                {picked('stage') && <div><label style={{ ...label, marginBottom: 5 }}>Problem</label><select aria-label="Problem" value={picked('problem') ? rampTargetProblem : ''} onChange={(event) => { pickUseCase('problem'); setRampProblem(event.target.value); }} style={{ ...input, paddingRight: 38 }}>{!picked('problem') && <option value="" disabled>Choose a problem</option>}{rampProblemOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>}
               </div>
-              <div style={{ marginTop: 12, borderLeft: `2px solid ${acid}`, padding: '3px 0 3px 10px' }}>
-                <label htmlFor="value-ramp-name" style={{ display: 'block', color: muted, fontSize: 8, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 6 }}>Lead magnet name <span style={{ color: acid }}>· choose an idea or type your own</span></label>
-                <input id="value-ramp-name" list="lead-magnet-ideas" value={leadMagnetTitle} onChange={(event) => setLeadMagnetTitle(event.target.value)} onBlur={() => { if (freeOfferType === 'routine' && leadMagnetTitle.trim() && !leadMagnetTitle.trim().startsWith(routineTitlePrefix)) setLeadMagnetTitle(`${routineTitlePrefix}${leadMagnetTitle.trim()}`); }} placeholder={suggestedRoutineName} style={{ ...input, height: 42, minHeight: 42, fontSize: 12 }} />
-                <datalist id="lead-magnet-ideas">{leadMagnetIdeas.map((idea) => <option key={idea} value={idea} />)}</datalist>
-                <span style={{ display: 'block', color: muted, fontSize: 8, lineHeight: 1.4, marginTop: 6 }}>Suggested: {suggestedRoutineName}</span>
-                <details style={{ marginTop: 10 }}><summary style={{ color: acid, fontSize: 8, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>Browse {leadMagnetIdeas.length} lead magnet ideas</summary><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(250px,1fr))', gap: 6, marginTop: 9 }}>{leadMagnetIdeas.map((idea) => <button type="button" key={idea} onClick={() => setLeadMagnetTitle(idea)} aria-pressed={leadMagnetTitle === idea} style={{ minHeight: 48, border: `1px solid ${leadMagnetTitle === idea ? acid : line}`, background: leadMagnetTitle === idea ? 'rgba(199,216,163,.1)' : 'transparent', color: ink, padding: '8px 10px', fontFamily: sans, fontSize: 9, lineHeight: 1.35, textAlign: 'left', cursor: 'pointer' }}>{idea}</button>)}</div></details>
-              </div>
+              {picked('problem') && !useCaseReady && <div aria-label="Solution for this use case" style={{ marginTop: 14, borderLeft: `2px solid ${acid}`, padding: '3px 0 3px 12px', display: 'grid', gap: 8 }}>
+                <span style={{ ...label, color: acid, marginBottom: 0 }}>Solution</span>
+                <strong style={{ fontFamily: serif, fontSize: 22, fontWeight: 300, lineHeight: 1.2 }}>{suggestedRoutineName}</strong>
+                <span style={{ color: muted, fontSize: 11, lineHeight: 1.5 }}>A free starter for {routineNameAudience}{routineLifeStage !== 'Not specified' ? ` in ${routineLifeStage.toLowerCase()}` : ''} with {rampTargetProblem.toLowerCase()}. Add this use case and we will suggest the lead magnet and build the offers around it.</span>
+                <button type="button" onClick={addUseCase} style={{ ...btn, justifySelf: 'start' }}>Add this use case</button>
+              </div>}
             </div>
-            <label style={{ ...label, color: ink }}>Your offers <span style={{ color: acid }}>· value rises at every step</span></label>
+            {useCaseReady && <><label style={{ ...label, color: ink }}>Your offers <span style={{ color: acid }}>· value rises at every step</span></label>
             <p style={{ color: muted, fontSize: 9, lineHeight: 1.5, margin: '-1px 0 12px' }}>Add or remove steps in one continuous customer journey.</p>
             <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'stretch', gap: 0, minWidth: 'max-content' }}>
-                {leadMagnetCard()}
+                {leadMagnetCluster()}
                 {offerCards.filter((offer) => selectedUpsells.includes(offer.kind)).map((offer) => <Fragment key={offer.kind}><span aria-hidden="true" style={{ width: 34, flex: '0 0 34px', alignSelf: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: acid }}><ArrowRight size={22} strokeWidth={1.4} /></span>{paidOfferCard(offer)}</Fragment>)}
                 {offerCards.some((offer) => !selectedUpsells.includes(offer.kind)) && <Fragment><span aria-hidden="true" style={{ width: 34, flex: '0 0 34px', alignSelf: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: line }}><ArrowRight size={22} strokeWidth={1.4} /></span><div style={{ width: 320, flex: '0 0 320px', border: `1px dashed ${muted}`, background: 'transparent', display: 'flex', flexDirection: 'column' }}>
                   <button type="button" onClick={() => setShowAddOfferOptions((current) => !current)} aria-expanded={showAddOfferOptions} style={{ minHeight: 190, flex: '1 1 auto', border: 0, background: 'transparent', color: ink, fontFamily: sans, cursor: 'pointer', display: 'grid', placeItems: 'center', textAlign: 'center', padding: '38px 20px 24px' }}><span><span style={{ width: 48, height: 48, margin: '0 auto 14px', border: `1px solid ${ink}`, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 25, fontWeight: 300 }}>+</span><strong style={{ display: 'block', fontSize: 16 }}>Add next offer</strong><span style={{ display: 'block', color: muted, fontSize: 10, marginTop: 7 }}>{offerCards.filter((offer) => !selectedUpsells.includes(offer.kind)).length} options available</span></span></button>
@@ -3107,31 +3356,12 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
                   <div style={{ borderTop: `1px solid ${line}`, minHeight: 50, marginTop: 'auto', padding: 10, background: 'rgba(245,242,234,.025)', display: 'flex', alignItems: 'center' }}><strong style={{ color: muted, fontSize: 9, letterSpacing: '.08em', textTransform: 'uppercase' }}>Next value step</strong></div>
                 </div></Fragment>}
               </div>
-            </div>
+            </div></>}
           </div>}
         </div>
-        {offerPlanStage === 2 && <>
-        <section style={{ border: `1px solid ${line}`, background: panel, marginBottom: 30 }}>
-          <div style={{ padding: '16px 18px', borderBottom: `1px solid ${line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}><span><span style={{ ...label, color: acid, marginBottom: 4 }}>Offer build queue</span><strong style={{ color: ink, fontFamily: serif, fontSize: 25, fontWeight: 400 }}>{builtOfferCount} of {totalOfferCount} built</strong></span><span style={{ color: muted, fontSize: 9 }}>Finish each offer before publishing the offer site.</span></div>
-          <div style={{ overflowX: 'auto' }}><div role="table" aria-label="Offers to build" style={{ minWidth: 760 }}>
-            <div role="row" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) 120px 120px 120px 105px 130px', borderBottom: `1px solid ${line}`, padding: '9px 14px', color: muted, fontSize: 7, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{['Offer','Type','Access','Payment','Price','Status'].map((heading) => <span role="columnheader" key={heading}>{heading}</span>)}</div>
-            <div role="row" style={{ width: '100%', display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) 120px 120px 120px 105px 130px', alignItems: 'center', borderBottom: `1px solid ${line}`, padding: '13px 14px', boxSizing: 'border-box', color: ink, fontFamily: sans, textAlign: 'left' }}><strong role="cell" style={{ fontSize: 11 }}>{leadMagnetTitle || 'Entry offer'}</strong><span role="cell" style={{ color: muted, fontSize: 9 }}>{freeOfferTypes.find((item) => item.value === freeOfferType)?.label}</span><span role="cell" style={{ fontSize: 9 }}>Free</span><span role="cell" style={{ color: muted, fontSize: 9 }}>No payment</span><span role="cell" style={{ fontSize: 9 }}>{formatMoney(0, currency)}</span><button type="button" role="cell" onClick={() => freeOfferType === 'routine' ? openProtocolBuilder() : openOfferEditor()} disabled={creatingProtocol} style={{ ...btn, minHeight: 46, padding: '0 12px', background: acid, color: black, borderColor: acid, fontSize: 8 }}>{creatingProtocol ? <><Loader2 size={12} className="animate-spin" /> Creating</> : freeOfferType === 'routine' ? <>{onboardingProtocol ? 'Open builder' : 'Build Protocol'} <ArrowRight size={13} /></> : <>{freeOfferSetupStage >= 2 ? 'Edit offer' : 'Build offer'} <ArrowRight size={13} /></>}</button></div>
-            {orderedUpsells.map((kind) => { const draft = upsellDrafts[kind]; const access = offerAccess[kind]; const built = (paidOfferSetupStages[kind] || 0) >= 3; return <button type="button" role="row" key={kind} onClick={() => openOfferEditor(kind)} style={{ width: '100%', display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) 120px 120px 120px 105px 130px', alignItems: 'center', border: 0, borderBottom: `1px solid ${line}`, padding: '13px 14px', background: 'transparent', color: ink, fontFamily: sans, textAlign: 'left', cursor: 'pointer' }}><strong role="cell" style={{ fontSize: 11 }}>{draft.title}</strong><span role="cell" style={{ color: muted, fontSize: 9 }}>{upsellSuggestions.find((item) => item.kind === kind)?.label || kind.replaceAll('_', ' ')}</span><span role="cell" style={{ fontSize: 9 }}>{access === 'paid' ? 'Paid' : 'Free'}</span><span role="cell" style={{ color: muted, fontSize: 9 }}>{access === 'paid' ? billingLabels[draft.billingModel].title : 'No payment'}</span><span role="cell" style={{ fontSize: 9 }}>{access === 'paid' ? `${formatMoney(draft.price, currency)}${billingLabels[draft.billingModel].suffix}` : formatMoney(0, currency)}</span><span role="cell" style={{ color: built ? acid : '#D49A74', fontSize: 8, fontWeight: 800, textTransform: 'uppercase' }}>{built ? 'Built · Edit' : 'To build →'}</span></button>; })}
-          </div></div>
-        </section>
+        {offerPlanStage === 2 && useCaseReady && <>
         <div id="offer-builder-entry" style={{ scrollMarginTop: 20 }}><FunnelStage number="01" eyebrow="Free · Build trust" title="Give your audience one useful win." copy="Choose one useful result, name it clearly, then decide how people receive it." art={freeOfferArt[freeOfferType]} aside={leadMagnetCard()}>
-          {freeOfferSetupStage > 0 && <div style={{ border: `1px solid ${line}`, padding: '12px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span><span style={{ ...label, marginBottom: 3 }}>Entry offer</span><strong style={{ color: ink, fontSize: 12, fontWeight: 600 }}>{freeOfferTypes.find((offer) => offer.value === freeOfferType)?.label}</strong></span><button type="button" onClick={() => setFreeOfferSetupStage(0)} style={{ ...btn, minHeight: 36, height: 36, background: 'transparent', color: ink, fontSize: 9 }}>Edit</button></div>}
-          {freeOfferSetupStage === 0 && <><label style={label}>Choose the entry offer</label>
-          {!showAllEntryOffers && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,220px),1fr))', gap: 10 }}>
-            <FreeOfferCard eyebrow="LEAD MAGNET · RECOMMENDED" title={suggestedFreeOffer.title} copy="Best fit for this audience." active recommended art={freeOfferArt[suggestedFreeOffer.kind]} onClick={() => { setFreeOfferType(suggestedFreeOffer.kind); setFreeDelivery(suggestedFreeOffer.kind === 'routine' ? ['Downloadable PDF', 'Interactive Protocol'] : [suggestedDelivery(suggestedFreeOffer.kind)]); setFreeAudienceValue(freeValueSuggestions[suggestedFreeOffer.kind]); setLeadMagnetTitle(suggestedFreeOffer.title); setFreeOfferSetupStage(1); }} />
-            {[0, 1].map((n) => <button key={n} type="button" onClick={() => setShowAllEntryOffers(true)} style={{ minHeight: 156, border: `1px dashed ${line}`, background: 'transparent', color: muted, fontSize: 11, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><span><span style={{ display: 'block', fontSize: 26, fontWeight: 300, color: ink, marginBottom: 6 }}>+</span>Add another</span></button>)}
-          </div>}
-          {showAllEntryOffers && <div style={{ overflowX: 'auto' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,minmax(145px,1fr))', gap: 0, minWidth: 870, borderTop: `1px solid ${line}`, borderLeft: `1px solid ${line}` }}>
-              {[...freeOfferTypes].sort((offer) => Number(offer.value !== 'routine')).map((offer) => <FreeOfferCard key={offer.value} eyebrow={offer.eyebrow} title={offer.label} copy={offer.copy} active={freeOfferType === offer.value} art={freeOfferArt[offer.value]} onClick={() => { setFreeOfferType(offer.value); setFreeDelivery(offer.value === 'routine' ? ['Downloadable PDF', 'Interactive Protocol'] : [suggestedDelivery(offer.value)]); setFreeAudienceValue(freeValueSuggestions[offer.value]); setFreeOfferSetupStage(1); }} />)}
-            </div>
-            <button type="button" onClick={() => setShowAllEntryOffers(false)} style={{ ...btn, marginTop: 10, background: 'transparent', color: ink }}>← Back to recommended</button>
-          </div>}</>}
+          {freeOfferSetupStage > 0 && <div style={{ border: `1px solid ${line}`, padding: '12px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span><span style={{ ...label, marginBottom: 3 }}>Entry offer</span><strong style={{ color: ink, fontSize: 12, fontWeight: 600 }}>{freeOfferTypes.find((offer) => offer.value === freeOfferType)?.label}</strong></span></div>}
           {freeOfferSetupStage > 1 && <div style={{ border: `1px solid ${line}`, padding: '12px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span><span style={{ ...label, marginBottom: 3 }}>Offer</span><strong style={{ color: ink, fontSize: 12, fontWeight: 600 }}>{leadMagnetTitle}</strong><span style={{ display: 'block', color: muted, fontSize: 9, marginTop: 3 }}>{freeAudienceValue}</span></span><button type="button" onClick={() => setFreeOfferSetupStage(1)} style={{ ...btn, minHeight: 36, height: 36, background: 'transparent', color: ink, fontSize: 9 }}>Edit</button></div>}
           {freeOfferSetupStage === 1 && <div>
           <label style={label}>Offer name</label>
@@ -3245,6 +3475,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       {step === 5 && <>
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginBottom: 14 }}><span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Preview on</span><DeviceToggle value={previewDevice} onChange={setPreviewDevice} /></div>
         <FunnelStage number="01" eyebrow="Site 01 · Your profile" title={`${displayName || 'Your'}${displayName ? '’s' : ''} story.`} copy="Your profile site: who you are, and every published offer path.">
+          <SitePublishBar site="Profile site" status={profileSiteState} action={sitePublish} busy={busy} error={error} liveHref={`/guardians/${guardianSlug}`} />
           {/* Builder left, live preview right (stacks on narrow screens). */}
           <div className="g-split" style={{ border: `1px solid ${line}`, background: panel, padding: 16 }}>
           <div>
@@ -3305,6 +3536,8 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
             </div>
             <label style={{ ...label, color: ink }}>Use your own background</label>
             <label style={{ ...btn, height: 40, background: 'transparent', color: ink, fontSize: 8, marginBottom: 14 }}>{uploadingBackground ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}{backgroundUrl ? 'Replace background' : 'Upload photo, GIF or video'}<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" onChange={(event) => uploadBackground(event.target.files?.[0])} style={{ display: 'none' }} /></label>
+            <YouTubeClipFields clips={backgroundClips} onChange={setBackgroundClips} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 14, color: ink, fontSize: 12, cursor: 'pointer' }}><input type="checkbox" checked={heroGlassOn(heroGlassSetting, backgroundClips.length > 0)} onChange={(event) => setHeroGlassSetting(event.target.checked ? 'on' : 'off')} aria-label="Glass and vignette over the background" />Glass and vignette over the background <span style={{ color: muted }}>· refracted glass ribs across the middle, soft dark edges</span></label>
             <label style={label}>Search ingredient and activity media <span style={{ color: acid }}>· videos first</span></label>
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 7, marginBottom: 10 }}><input style={input} value={backgroundSearch} onChange={(event) => setBackgroundSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void searchBackgroundCatalog(); } }} placeholder="e.g. lavender, walking, yoga" /><button type="button" onClick={() => void searchBackgroundCatalog()} disabled={searchingBackground || backgroundSearch.trim().length < 2} style={{ ...btn, minWidth: 88 }}>{searchingBackground ? 'Searching…' : 'Search'}</button></div>
             {backgroundMedia.length > 0 && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 7, maxHeight: 300, overflowY: 'auto', marginBottom: 14 }}>{backgroundMedia.map((media) => { const active = backgroundUrl === media.url; return <button type="button" key={media.id} onClick={() => { setBackgroundUrl(media.url); setBackgroundType(media.kind); }} aria-pressed={active} style={{ position: 'relative', minWidth: 0, padding: 0, border: `1px solid ${active ? acid : line}`, background: '#0D0E0C', color: ink, cursor: 'pointer', textAlign: 'left', overflow: 'hidden' }}>{media.kind === 'video' ? <video src={media.url} muted loop autoPlay playsInline preload="metadata" style={{ display: 'block', width: '100%', aspectRatio: '4 / 3', objectFit: 'cover' }} /> : <img src={media.url} alt="" loading="lazy" style={{ display: 'block', width: '100%', aspectRatio: '4 / 3', objectFit: 'cover' }} />}<span style={{ display: 'block', padding: '7px 8px', fontSize: 7.5, lineHeight: 1.3 }}><strong style={{ display: 'block', color: media.kind === 'video' ? acid : ink, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 3 }}>{media.kind} · {media.source}</strong>{media.name}</span>{active && <span style={{ position: 'absolute', top: 6, right: 6, width: 20, height: 20, display: 'grid', placeItems: 'center', background: acid, color: black }}><Check size={12} /></span>}</button>; })}</div>}
@@ -3336,7 +3569,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           </div>
           <div id="profile-site-preview" className="g-sticky" style={{ scrollMarginTop: 20 }}><span style={{ ...label, display: 'block', color: acid, marginBottom: 7 }}>Profile site preview <span style={{ color: muted }}>· shows every published offer path</span></span><PreviewFrame device={previewDevice}><div style={{ flex: '1 0 auto', background: pageColor, fontFamily: sans }}>
             {headerStyle !== 'hidden' && <GuardianSiteHeader brandName={brandName.trim()} path={`routine3.com/${displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-') || 'your-name'}`} />}
-            <GuardianSiteHero audience={audienceLabel(audienceDetails, audience)} reviewSummary={reviewStats(guardianReviews)} headlineStyle={headlineStyle} name={displayName} avatarUrl={avatarUrl} specialties={chosen} headline={generatedHeadline} tags={expertiseTags} bio={intro || `A practical ${chosen.slice(0, 2).join(' and ').toLowerCase() || 'guidance'} path shaped for ${audience.join(' and ').toLowerCase()}.`} accent={accentColor} headingFont={serif} background={effectiveBackground} backgroundIsVideo={backgroundType === 'video'} greyscale={imageTreatment === 'greyscale'}
+            <GuardianSiteHero audience={audienceLabel(audienceDetails, audience)} reviewSummary={reviewStats(guardianReviews)} headlineStyle={headlineStyle} name={displayName} avatarUrl={avatarUrl} specialties={chosen} headline={generatedHeadline} tags={expertiseTags} bio={intro || `A practical ${chosen.slice(0, 2).join(' and ').toLowerCase() || 'guidance'} path shaped for ${audience.join(' and ').toLowerCase()}.`} accent={accentColor} headingFont={serif} background={effectiveBackground} backgroundIsVideo={backgroundType === 'video'} clips={backgroundClips} glass={heroGlassOn(heroGlassSetting, backgroundClips.length > 0)} greyscale={imageTreatment === 'greyscale'}
               cards={[{ key: 'first', eyebrow: rampTargetProblem, title: customerFacingOfferTitle(leadMagnetTitle || suggestedFreeOffer.title), copy: freeAudienceValue, kind: freeOfferType, price: 'Free', imageUrl: effectiveBackground, onClick: () => document.getElementById('value-ramp-funnel-preview')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }]} />
             <GuardianOfferCatalog profile={{ user_id: userId, slug: displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-') || 'your-name', display_name: displayName || 'Your name', headline: generatedHeadline, bio: intro, avatar_url: avatarUrl, contact_email: contactEmail, whatsapp_phone: whatsappPhone, social_links: { audience_details: JSON.stringify(Object.fromEntries(audience.filter((group) => audienceDetails[group]).map((group) => [group, audienceDetails[group]]))) }, specialties: chosen, status: savedStatus || 'draft', commission_percent: 0, onboarding_step: 5 }} offers={related.offers.filter((offer) => offer.status === 'published')} ramps={related.ramps.filter((ramp) => ramp.status === 'published')} reviews={guardianReviews} accent={accentColor} protocols={related.protocols} />
             <GuardianShop guideId={userId} guardianSlug={displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-') || 'your-name'} guardianName={displayName || 'Your name'} pagePadding={PAGE_X} protocols={related.protocols} localePreference={{ region: pricingRegion, locale: languageOptions.find((option) => option.name === mainLanguage)?.code || 'en', currency }} />
@@ -3344,6 +3577,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           </div>
         </FunnelStage>
         <FunnelStage number="02" eyebrow="Site 02 · First offer path" title={`${rampTargetAudience} · ${rampTargetProblem} → ${customerFacingOfferTitle(leadMagnetTitle || 'your first offer')}`} copy="Audience, problem, solution: the page a visitor lands on, from the free offer through to the next one." last>
+        <SitePublishBar site="Offer funnel" status={funnelSiteState} action={sitePublish} busy={busy} error={error} liveHref={publishedSitePath} />
         <div id="value-ramp-funnel-preview" style={{ scrollMarginTop: 20, border: `1px solid ${line}`, background: panel, padding: 16, marginBottom: 24 }}>
           <div className="g-split"><div>
           {/* Same pattern as "Style your page": edit what the offer pages say, who they're for, media and upsells. */}
@@ -3439,7 +3673,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
               </div></div>
               <div style={{ textAlign: 'left', margin: '0 16px', padding: '16px 0 18px', borderTop: `1px solid ${APP.border}` }}><ReviewRail reviews={guardianReviews.length ? guardianReviews : SAMPLE_REVIEWS} sample={!guardianReviews.length} accent={APP.greenDark} /></div>
             </div>}
-            {funnelPageState === 'checkout' && funnelPreviewStage > 0 && <div style={{ width: '100%', maxWidth: 1040, margin: '0 auto', textAlign: 'left', display: 'grid', gap: 20 }}><div style={{ position: 'relative', display: 'flex', flexWrap: 'wrap', border: '1px solid rgba(17,18,15,.18)', background: 'rgba(255,255,255,.72)', borderRadius: 5, overflow: 'hidden', boxShadow: '0 14px 36px rgba(17,18,15,.08)' }}><span style={{ position: 'absolute', zIndex: 2, top: 12, right: 12, background: '#11120F', color: '#FFF', padding: '7px 12px', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{funnelPreviewStage === 0 ? 'Free' : activeFunnelStage.price}</span><div style={{ flex: '1 1 300px', maxWidth: '100%', display: 'grid', placeItems: 'center', padding: 18, background: 'rgba(17,18,15,.035)', borderRight: '1px solid rgba(17,18,15,.12)', minHeight: 180 }}>{(() => { const art = productArt(activeFunnelStage.kind); return activeFunnelStage.kind === 'routine' ? <img src="/images/guides/generated/r3-protocol-card.png" alt="Printed Protocol and the ROUTINE³ app" style={{ display: 'block', width: '80%', maxWidth: 220, height: 'auto', aspectRatio: '1', objectFit: 'contain', margin: 0 }} /> : art ? <span aria-hidden="true" style={{ display: 'block', margin: 0, width: 130 * art.cellAspect, height: 130, backgroundImage: `url(${art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${art.cols * 100}% ${art.rows * 100}%`, backgroundPosition: `${(art.index % art.cols) * 100 / Math.max(1, art.cols - 1)}% ${Math.floor(art.index / art.cols) * 100 / Math.max(1, art.rows - 1)}%`, filter: 'grayscale(1) contrast(.95) invert(.88)' }} /> : null; })()}</div><div style={{ flex: '999 1 320px', padding: 'clamp(18px,3cqw,30px)', minWidth: 0 }}>
+            {funnelPageState === 'checkout' && funnelPreviewStage > 0 && <div style={{ width: '100%', maxWidth: 1040, margin: '0 auto', textAlign: 'left', display: 'grid', gap: 20 }}><div style={{ position: 'relative', display: 'flex', flexWrap: 'wrap', border: '1px solid rgba(17,18,15,.18)', background: 'rgba(255,255,255,.72)', borderRadius: 5, overflow: 'hidden', boxShadow: '0 14px 36px rgba(17,18,15,.08)' }}><span style={{ position: 'absolute', zIndex: 2, top: 12, right: 12, background: '#11120F', color: '#FFF', padding: '7px 12px', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{funnelPreviewStage === 0 ? 'Free' : activeFunnelStage.price}</span><div style={{ flex: '1 1 300px', maxWidth: '100%', display: 'grid', placeItems: 'center', padding: 18, background: 'rgba(17,18,15,.035)', borderRight: '1px solid rgba(17,18,15,.12)', minHeight: 180 }}>{(() => { const art = productArt(activeFunnelStage.kind); return activeFunnelStage.kind === 'routine' ? <img src="/images/guides/generated/r3-protocol-card.webp" alt="Printed Protocol and the ROUTINE³ app" style={{ display: 'block', width: '80%', maxWidth: 220, height: 'auto', aspectRatio: '1', objectFit: 'contain', margin: 0 }} /> : art ? <span aria-hidden="true" style={{ display: 'block', margin: 0, width: 130 * art.cellAspect, height: 130, backgroundImage: `url(${art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${art.cols * 100}% ${art.rows * 100}%`, backgroundPosition: `${(art.index % art.cols) * 100 / Math.max(1, art.cols - 1)}% ${Math.floor(art.index / art.cols) * 100 / Math.max(1, art.rows - 1)}%`, filter: 'grayscale(1) contrast(.95) invert(.88)' }} /> : null; })()}</div><div style={{ flex: '999 1 320px', padding: 'clamp(18px,3cqw,30px)', minWidth: 0 }}>
               <div><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, margin: '0 0 12px' }}>{avatarUrl ? <img src={avatarUrl} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(17,18,15,.22)' }} /> : <span style={{ width: 28, height: 28, borderRadius: '50%', display: 'grid', placeItems: 'center', border: '1px solid rgba(17,18,15,.22)', fontFamily: serif }}>{(displayName || 'G')[0]}</span>}<span style={{ color: '#55564F', fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{displayName || 'Your Guardian'}</span></span></div>{funnelPreviewStage !== 0 && <span style={{ color: accentColor, fontSize: 9, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Secure checkout</span>}
               <div style={{ margin: '12px 0 12px' }}><h3 style={{ fontFamily: serif, fontSize: 'clamp(30px,4.2cqw,50px)', fontWeight: 300, lineHeight: .98, margin: 0 }}>{customerFacingOfferTitle(activeFunnelStage.title)}</h3></div>
               {funnelPreviewStage === 0 ? <><p style={{ color: '#66645F', fontSize: 14, lineHeight: 1.6, margin: '0 0 18px' }}>Enter your email to receive the free offer.</p>{/* Joined email + button, same seam as the homepage Subscribe control. */}<div style={{ maxWidth: 460, margin: '0 0 8px', display: 'flex' }}><input type="email" inputMode="email" autoComplete="email" required value={leadCaptureValue} onChange={(event) => setLeadCaptureValue(event.target.value)} placeholder="you@example.com" aria-label="Your email" aria-invalid={Boolean(leadCaptureValue) && !leadEmailIsValid} style={{ flex: 1, minWidth: 0, height: 44, boxSizing: 'border-box', border: `1px solid ${leadCaptureValue && !leadEmailIsValid ? '#A5463A' : '#11120F'}`, borderRight: 'none', borderRadius: '2px 0 0 2px', background: 'rgba(255,255,255,.7)', color: '#11120F', padding: '0 14px', fontFamily: sans, fontSize: 12, outline: 'none' }} /><button type="button" disabled={!leadEmailIsValid} onClick={completeFunnelCheckout} style={{ height: 44, boxSizing: 'border-box', padding: '0 16px', border: '1px solid #11120F', borderRadius: '0 2px 2px 0', background: '#11120F', color: '#FFFFFF', fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: leadEmailIsValid ? 'pointer' : 'default', opacity: leadEmailIsValid ? 1 : .55 }}>Send it <ArrowRight size={13} /></button></div>{leadCaptureValue && !leadEmailIsValid && <span role="alert" style={{ display: 'block', color: '#8A3D31', fontSize: 9, marginBottom: 10 }}>Enter a valid email address.</span>}</> : <>{(() => { const amount = activeFunnelStage.amount || 0; const total = couponApplied ? Math.round(amount * (1 - COUPON_RATE) * 100) / 100 : amount; return <>
@@ -3497,33 +3731,60 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         <div style={{ border: `1px solid ${acid}`, background: '#20251B', padding: 16, marginTop: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <span style={{ minWidth: 0, display: 'grid', gap: 8 }}>
             <span style={{ ...label, color: acid, marginBottom: 0 }}>Publishing</span>
-            {[['Profile site', `/guardians/${guardianSlug}`], ['First offer path', publishedSitePath]].map(([text, path]) => <a key={text} href={path} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'baseline', gap: 10, color: ink, textDecoration: 'none' }}><span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', minWidth: 104 }}>{text}</span><code style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10, overflowWrap: 'anywhere', borderBottom: `1px solid ${line}` }}>{path}</code><ExternalLink size={11} /></a>)}
+            {([['Profile site', `/guardians/${guardianSlug}`, profileSiteState], ['First offer path', publishedSitePath, funnelSiteState]] as const).map(([text, path, state]) => <a key={text} href={path} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'baseline', gap: 10, color: ink, textDecoration: 'none' }}><span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', minWidth: 104 }}>{text}</span><code style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10, overflowWrap: 'anywhere', borderBottom: `1px solid ${line}` }}>{path}</code><ExternalLink size={11} /><SiteStatusTag status={state} /></a>)}
           </span>
-          <button type="submit" disabled={busy} style={{ ...btn, flex: '0 0 auto' }}>{busy ? 'Publishing…' : 'Publish site'} <ArrowRight size={14} /></button>
+          <button type="submit" disabled={busy} style={{ ...btn, flex: '0 0 auto' }}>{busy ? `${sitePublish.busyLabel}…` : sitePublish.label} <ArrowRight size={14} /></button>
         </div>
       </>}
 
       {error && <p style={{ color: '#F0A7A7', fontSize: 12 }}>{error}</p>}
+      <div aria-label="Save this step" style={{ display: 'flex', justifyContent: 'center', marginTop: 26 }}><SaveButton state={saveState} onSave={() => saveProgress()} label="Save progress" /></div>
       {step !== 3 && step !== 5 && (step !== 4 || offerPlanStage === 2) && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', alignItems: 'center', gap: 12, marginTop: 34 }}>
         {step > 1 ? <button type="button" onClick={() => { setError(''); if (step === 3) setAudienceSetupStage(1); else if (step === 4) setOfferPlanStage(1); else setStep((current) => current - 1); }} style={{ ...btn, width: '100%', background: 'transparent', color: ink }}>← Back</button> : <span />}
-        {(step !== 4 || offerPlanStage === 2) && (step !== 5 || freeOfferSetupStage === 2) ? step < 5 ? <button type="button" onClick={step === 1 && profileStage === 0 ? goToBrandStage : continueSetup} disabled={importing} style={{ ...btn, width: '100%' }}>{importing ? <><Loader2 size={14} className="animate-spin" /> Reading profiles</> : <>{step === 1 && profileStage === 0 ? 'Continue to brand' : 'Continue'} <ArrowRight size={14} /></>}</button> : <button disabled={busy} style={{ ...btn, width: '100%' }}>{busy ? 'Creating your Guardian' : 'Create my Guardian profile'} <ArrowRight size={14} /></button> : <span />}
+        {(step !== 4 || offerPlanStage === 2) && (step !== 5 || freeOfferSetupStage === 2) ? step < 5 ? <button type="button" onClick={step === 1 && profileStage === 0 ? goToBrandStage : continueSetup} disabled={importing || (step === 4 && offerPlanStage === 2 && !useCaseReady)} style={{ ...btn, width: '100%' }}>{importing ? <><Loader2 size={14} className="animate-spin" /> Reading profiles</> : <>{step === 1 && profileStage === 0 ? 'Continue to brand' : 'Continue'} <ArrowRight size={14} /></>}</button> : <button disabled={busy} style={{ ...btn, width: '100%' }}>{busy ? 'Creating your Guardian' : 'Create my Guardian profile'} <ArrowRight size={14} /></button> : <span />}
       </div>}
         </section>
       </div>
     </form>}
-    {!summaryView && <StepRelated step={step} guardianSlug={guardianSlug} displayName={displayName} related={related} audience={audienceLabel(audienceDetails, audience)} />}
+    {!summaryView && <StepRelated step={step} profileStatus={savedStatus} guardianSlug={savedSlug || guardianSlug} displayName={displayName} brands={brandProfiles.map((brand) => ({ id: brand.localId, name: (brand.localId === activeBrandId ? displayName : brand.name) || 'Untitled brand', kind: brand.kind, logo: brand.localId === activeBrandId ? avatarUrl || brand.logo_url : brand.logo_url }))} activeBrandId={activeBrandId} related={related} audience={audienceLabel(audienceDetails, audience)} />}
       </div>
     </div>
   </div>;
 }
 
-/** Below the fold of each setup step: the Guardian's existing items for that stage. */
-function StepRelated({ step, guardianSlug, displayName, related, audience = '' }: { audience?: string;  step: number; guardianSlug: string; displayName: string; related: { leads: GuideLead[]; offers: GuideOffer[]; ramps: GuideValueRamp[]; protocols: AdminProtocol[] } }) {
+type RelatedRow = { key: string; title: string; meta: string; image?: string | null; href: string; brandId?: string; kind?: 'profile' | 'offer'; rampStatus?: GuideValueRamp['status'] };
+export interface RelatedBrand { id: string; name: string; kind: 'personal' | 'business'; logo: string | null }
+
+/** One wide card of the "In your workspace" grid: picture, serif title, the detail line and a single Open. */
+function WideCard({ row, onOpen }: { row: RelatedRow; onOpen: () => void }) {
+  return <button type="button" onClick={onOpen} aria-label={`Open ${row.title}`} style={{ display: 'grid', gridTemplateColumns: '96px minmax(0,1fr)', gap: 18, alignItems: 'center', width: '100%', boxSizing: 'border-box', textAlign: 'left', padding: 14, border: `1px solid ${line}`, background: panel, color: ink, fontFamily: sans, cursor: 'pointer' }}>
+    <span aria-hidden="true" style={{ width: 96, height: 96, display: 'grid', placeItems: 'center', overflow: 'hidden', border: `1px solid ${line}`, background: '#171812', color: muted, fontFamily: serif, fontSize: 30 }}>
+      {row.image ? <img src={row.image} alt="" loading="lazy" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : row.title.replace(/^R3 Protocol\s*>\s*/i, '').trim().charAt(0)}
+    </span>
+    <span style={{ minWidth: 0, display: 'grid', gap: 6 }}>
+      <span style={{ fontFamily: serif, fontSize: 24, fontWeight: 300, lineHeight: 1.15, overflowWrap: 'anywhere' }}>{row.title}</span>
+      <span style={{ color: muted, fontSize: 11, lineHeight: 1.5, overflowWrap: 'anywhere' }}>{row.meta}</span>
+      <span style={{ ...label, color: ink, marginTop: 4 }}>Open →</span>
+    </span>
+  </button>;
+}
+
+/** Below the fold of each setup step: the Guardian's existing items for that stage, as wide cards two to a row. */
+export function StepRelated({ step, guardianSlug, displayName, related, audience = '', brands = [], activeBrandId = 'personal', profileStatus = null }: { audience?: string; profileStatus?: GuideProfile['status'] | null;  step: number; guardianSlug: string; displayName: string; related: { leads: GuideLead[]; offers: GuideOffer[]; ramps: GuideValueRamp[]; protocols: AdminProtocol[] }; brands?: RelatedBrand[]; activeBrandId?: string }) {
+  const [brandFilter, setBrandFilter] = useState<string>('all');
+  const [siteMenu, setSiteMenu] = useState<string | null>(null);
   const open = (href: string) => () => { window.location.href = href; };
   const offerImage = (offer: GuideOffer) => offer.access_model === 'free' ? '/images/guides/lead-plate.png' : '/images/guides/offer-plate.png';
-  const rampRows = related.ramps.map((ramp) => ({ key: ramp.id, title: ramp.name, meta: `${[ramp.audience, ramp.problem].filter(Boolean).join(' · ')} · ${ramp.offer_ids.length} offers · ${ramp.status}`, image: '/images/guides/offer-plate.png', href: `/guardians/${guardianSlug}/value-ramp/${ramp.slug}` }));
-  const sections: Record<number, { title: string; tab: string; rows: { key: string; title: string; meta: string; image?: string | null; href: string }[] }> = {
-    1: { title: 'Your sites', tab: 'value_ramps', rows: [{ key: 'profile', title: `${displayName || 'Your'} profile site`, meta: `/guardians/${guardianSlug}`, image: '/images/guides/guide-plate.png', href: `/guardians/${guardianSlug}` }, ...rampRows] },
+  // Offer paths and offers are not tied to a brand in the data, so they belong to the whole Guardian and show under every filter.
+  const rampRows: RelatedRow[] = related.ramps.map((ramp) => ({ key: ramp.id, title: ramp.name, meta: `${[ramp.audience, ramp.problem].filter(Boolean).join(' · ')} · ${ramp.offer_ids.length} offers · ${ramp.status}`, image: '/images/guides/offer-plate.png', href: `/guardians/${guardianSlug}/value-ramp/${ramp.slug}`, kind: 'offer', rampStatus: ramp.status }));
+  // One profile site per brand (a single brand reads exactly as before).
+  const brandList: RelatedBrand[] = brands.length ? brands : [{ id: 'personal', name: displayName || 'Your', kind: 'personal', logo: null }];
+  const siteRows: RelatedRow[] = [
+    ...brandList.map((brand): RelatedRow => ({ key: `profile-${brand.id}`, brandId: brand.id, kind: 'profile', title: `${brand.name || 'Your'} profile site`, meta: `/guardians/${guardianSlug}${brandList.length > 1 ? ` · ${brand.kind === 'personal' ? 'Personal' : 'Business'} brand` : ''}`, image: brand.logo || '/images/guides/guide-plate.png', href: `/guardians/${guardianSlug}` })),
+    ...rampRows,
+  ];
+  const sections: Record<number, { title: string; tab: string; rows: RelatedRow[] }> = {
+    1: { title: 'Your sites', tab: 'value_ramps', rows: siteRows },
     2: { title: 'Your Protocols', tab: 'protocols', rows: related.protocols.map((protocol) => ({ key: protocol.id, title: protocol.name, meta: `${protocol.total_days || 1} days · ${protocol.is_public ? 'Published' : 'Draft'}`, image: protocol.image_url, href: '/guardians/workspace?tab=protocols' })) },
     3: { title: 'Your leads', tab: 'leads', rows: related.leads.map((lead) => ({ key: lead.id, title: lead.name, meta: `${lead.email} · ${lead.goal || 'No goal yet'} · ${lead.stage}`, href: '/guardians/workspace?tab=leads' })) },
     4: { title: 'Your offers', tab: 'offer_builder', rows: related.offers.map((offer) => ({ key: offer.id, title: offer.title, meta: [APP_PLAN_KINDS.includes(offer.kind) ? 'PDF + ROUTINE³' : OTHER_FORMATS[offer.kind] || offer.kind.replaceAll('_', ' '), offer.access_model === 'free' ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid', audience, offer.status].filter(Boolean).join(' · '), image: offerImage(offer), href: '/guardians/workspace?tab=offer_builder' })) },
@@ -3531,12 +3792,31 @@ function StepRelated({ step, guardianSlug, displayName, related, audience = '' }
   };
   const section = sections[step];
   if (!section) return null;
+  const filterable = step === 1 && brandList.length > 1;
+  const filterIds = ['all', ...[...brandList].sort((a, b) => Number(b.id === activeBrandId) - Number(a.id === activeBrandId)).map((brand) => brand.id)];
+  const rows = filterable && brandFilter !== 'all' ? section.rows.filter((row) => !row.brandId || row.brandId === brandFilter) : section.rows;
+  const chipLabel = (id: string) => id === 'all' ? 'All' : `${id === activeBrandId ? 'Current · ' : ''}${brandList.find((brand) => brand.id === id)?.name || 'Brand'}`;
   return <section aria-label={section.title} style={{ maxWidth: 1100, margin: '0 auto 80px', borderTop: `1px solid ${line}`, paddingTop: 28 }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 8 }}>
-      <span style={{ ...label, color: acid, marginBottom: 0 }}>In your workspace · {section.title} · {section.rows.length}</span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
+      <span style={{ ...label, color: acid, marginBottom: 0 }}>In your workspace · {section.title} · {rows.length}</span>
       <a href={`/guardians/workspace?tab=${section.tab}`} style={{ color: muted, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', textDecoration: 'none' }}>Open all →</a>
     </div>
-    {section.rows.length ? section.rows.slice(0, 8).map((row) => <Row key={row.key} title={row.title} meta={row.meta} image={row.image} action="Open" onClick={open(row.href)} />) : <p style={{ color: muted, fontSize: 12 }}>Nothing here yet. What you create in this step will appear here.</p>}
+    {filterable && <div role="group" aria-label="Filter sites by brand" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+      {filterIds.map((id) => <button key={id} type="button" aria-pressed={brandFilter === id} onClick={() => setBrandFilter(id)} style={{ minHeight: 30, padding: '0 12px', border: `1px solid ${brandFilter === id ? ink : line}`, background: brandFilter === id ? ink : 'transparent', color: brandFilter === id ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{chipLabel(id)}</button>)}
+    </div>}
+    {rows.length && (step === 1 || step === 5) ? <SiteCardGrid
+      minCardWidth={440}
+      openMenu={siteMenu}
+      onOpenMenu={setSiteMenu}
+      sites={rows.slice(0, 8).map((row): SiteCardData => {
+        const profile = row.kind === 'profile';
+        return { key: row.key, type: profile ? 'Profile site' : 'Offer site', title: row.title, path: row.href, status: siteStatus(profileStatus, profile ? undefined : row.rampStatus ?? 'draft'), heroLine: row.title, heroKicker: profile ? 'Profile' : 'Offer path', avatarUrl: profile ? row.image : null, backgroundUrl: profile && row.image ? row.image : undefined, previewId: `site-${row.key}`, previewHref: row.href };
+      })}
+      onEdit={(site) => { setSiteMenu(null); open(site.path)(); }}
+      onPreview={(site) => { setSiteMenu(null); open(site.path)(); }}
+    /> : rows.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,440px),1fr))', gap: 14 }}>
+      {rows.slice(0, 8).map((row) => <WideCard key={row.key} row={row} onOpen={open(row.href)} />)}
+    </div> : <p style={{ color: muted, fontSize: 12 }}>Nothing here yet. What you create in this step will appear here.</p>}
   </section>;
 }
 
@@ -3915,7 +4195,7 @@ const offerBuilderTypes = [
   { kind: 'in_person', access: 'paid', value: 5, title: 'In-person offer', eyebrow: 'Physical', copy: 'Package an appointment, workshop or local experience.', Icon: Globe2 },
 ] as const;
 
-function OfferBuilder({ profile, protocols, offers, recipes = [], librarySources = [], onOpenProtocols, onCreated, onUpdated, onDeleted }: { profile: GuideProfile; protocols: AdminProtocol[]; offers: GuideOffer[]; recipes?: GuideRecipe[]; librarySources?: GuideLibraryItem[]; onOpenProtocols: () => void; onCreated: (offer: GuideOffer) => void; onUpdated: (offer: GuideOffer) => void; onDeleted: (id: string) => void }) {
+function OfferBuilder({ profile, protocols, offers, recipes = [], librarySources = [], onOpenProtocols, onOpenContent, onCreated, onUpdated, onDeleted }: { profile: GuideProfile; protocols: AdminProtocol[]; offers: GuideOffer[]; recipes?: GuideRecipe[]; librarySources?: GuideLibraryItem[]; onOpenProtocols: () => void; onOpenContent?: () => void; onCreated: (offer: GuideOffer) => void; onUpdated: (offer: GuideOffer) => void; onDeleted: (id: string) => void }) {
   const { user } = useAuth();
   // Which routine each offer delivers (owner-only table). Quiet when the database update is not applied yet.
   const [offerRoutines, setOfferRoutines] = useState<Record<string, string>>({});
@@ -3948,7 +4228,7 @@ function OfferBuilder({ profile, protocols, offers, recipes = [], librarySources
     {(['free', 'flexible', 'paid'] as const).map((access) => <section key={access} style={{ marginTop: 22 }}><div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, borderBottom: `1px solid ${line}`, paddingBottom: 10 }}><h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 30, margin: 0 }}>{access === 'free' ? 'Free offers' : access === 'paid' ? 'Paid offers' : 'Free or paid'}</h2><span style={{ color: muted, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.1em' }}>{offerBuilderTypes.filter((item) => item.access === access).length} types</span></div><div style={typeView === 'cards' ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 12, marginTop: 12 } : { marginTop: 2 }}>{offerBuilderTypes.filter((item) => item.access === access).map(renderOfferType)}</div></section>)}
     {message && <p style={{ color: acid, fontSize: 11, marginTop: 16 }}>{message}</p>}
     <section style={{ borderTop: `1px solid ${line}`, marginTop: 38, paddingTop: 24 }}><h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 32, margin: 0 }}>R3 outputs</h2><p style={{ color: muted, fontSize: 12 }}>Every R3 Protocol can be edited against the full Routine database, exported as a PDF and delivered through web or iOS.</p><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><a href={APP_STORE_URL} target="_blank" rel="noreferrer" style={{ ...btn, textDecoration: 'none' }}>Open iOS app <ArrowRight size={13} /></a><button type="button" onClick={onOpenProtocols} style={{ ...btn, background: 'transparent', color: ink }}>Manage {protocols.length} Protocols</button><span style={{ ...btn, background: 'transparent', color: muted, cursor: 'default' }}><Download size={13} /> PDF export inside builder</span></div></section>
-    {offers.length > 0 && <section style={{ marginTop: 34 }}><div style={label}>Created offers · {offers.length}</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18, marginTop: 12 }}>{offers.map((offer) => { const free = offer.access_model === 'free'; const linkedRoutineId = offerRoutines[offer.id]; return <div key={offer.id}><ProductCard kind={offer.kind} imageUrl={offer.cover_url || (offer.kind === 'recipe_book' ? recipes.find((r) => r.image_url && r.offer_ids?.includes(offer.id))?.image_url : null)} eyebrow={[audienceLabel(profile.social_links?.audience_details) || 'Everyone', offer.status === 'published' ? 'Published' : 'Draft'].join(' · ')} title={customerFacingOfferTitle(offer.title)} copy={(offer.description || '').split(' Delivery:')[0].slice(0, 120) || undefined} price={free ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid'} name={profile.display_name} avatarUrl={profile.avatar_url} accent={acid} cta={profile.slug ? 'View on your site' : 'View offer'} href={profile.slug ? `/guardians/${encodeURIComponent(profile.slug)}#offers` : undefined} owned visibility={offer.status === "published" ? "public" : "private"} cardQr={linkedRoutineId ? <RoutineCardQr protocolId={linkedRoutineId} guardianSlug={profile.slug} /> : undefined} onDelete={async () => { if (!window.confirm(`Delete ${offer.title}?`)) return; await deleteGuideOffer(profile.user_id, offer.id); onDeleted(offer.id); }} />{offer.kind === "community" ? <CommunityChannelSetup offer={offer} profile={profile} /> : offer.kind === 'course' ? <CourseBuilder offer={offer} profile={profile} protocols={protocols} onOfferUpdated={onUpdated} /> : <OfferRoutineLink offer={offer} protocols={protocols} guideId={profile.user_id} guardianSlug={profile.slug} linkedProtocolId={linkedRoutineId} onChange={(offerId, protocolId) => setOfferRoutines((current) => { const next = { ...current }; if (protocolId) next[offerId] = protocolId; else delete next[offerId]; return next; })} />}</div>; })}</div></section>}
+    {offers.length > 0 && <section style={{ marginTop: 34 }}><div style={label}>Created offers · {offers.length}</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18, marginTop: 12 }}>{offers.map((offer) => { const free = offer.access_model === 'free'; const linkedRoutineId = offerRoutines[offer.id]; return <div key={offer.id}><ProductCard kind={offer.kind} imageUrl={offer.cover_url || (offer.kind === 'recipe_book' ? recipes.find((r) => r.image_url && r.offer_ids?.includes(offer.id))?.image_url : null)} eyebrow={[audienceLabel(profile.social_links?.audience_details) || 'Everyone', offer.status === 'published' ? 'Published' : 'Draft'].join(' · ')} title={customerFacingOfferTitle(offer.title)} copy={(offer.description || '').split(' Delivery:')[0].slice(0, 120) || undefined} price={free ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid'} name={profile.display_name} avatarUrl={profile.avatar_url} accent={acid} cta={profile.slug ? 'View on your site' : 'View offer'} href={profile.slug ? `/guardians/${encodeURIComponent(profile.slug)}#offers` : undefined} owned visibility={offer.status === "published" ? "public" : "private"} cardQr={linkedRoutineId ? <RoutineCardQr protocolId={linkedRoutineId} guardianSlug={profile.slug} /> : undefined} onDelete={async () => { if (!window.confirm(`Delete ${offer.title}?`)) return; await deleteGuideOffer(profile.user_id, offer.id); onDeleted(offer.id); }} /><OfferCoverControls offer={offer} title={customerFacingOfferTitle(offer.title)} guideId={profile.user_id} onUpdated={onUpdated} onOpenContentBuilder={onOpenContent} />{offer.kind === "community" ? <CommunityChannelSetup offer={offer} profile={profile} /> : offer.kind === 'course' ? <CourseBuilder offer={offer} profile={profile} protocols={protocols} onOfferUpdated={onUpdated} /> : <OfferRoutineLink offer={offer} protocols={protocols} guideId={profile.user_id} guardianSlug={profile.slug} linkedProtocolId={linkedRoutineId} onChange={(offerId, protocolId) => setOfferRoutines((current) => { const next = { ...current }; if (protocolId) next[offerId] = protocolId; else delete next[offerId]; return next; })} />}</div>; })}</div></section>}
   </>;
 }
 
@@ -4329,7 +4609,7 @@ function SiteBuilderOverview({ profile, valueRamps }: { profile: GuideProfile; v
       title: `${profile.display_name} profile`,
       description: 'Your main Guardian website with every published offer, product, event and retreat.',
       href: profilePath,
-      status: profile.status === 'approved' ? 'Published' : 'Draft',
+      status: siteStatus(profile.status).label,
     },
     ...valueRamps.map((ramp) => ({
       id: ramp.id,
@@ -4337,7 +4617,7 @@ function SiteBuilderOverview({ profile, valueRamps }: { profile: GuideProfile; v
       title: ramp.name,
       description: `${ramp.audience || 'Everyone'} · ${ramp.problem || 'Offer path'} · ${ramp.offer_ids.length} offer${ramp.offer_ids.length === 1 ? '' : 's'}`,
       href: `${profilePath}/value-ramp/${encodeURIComponent(ramp.slug)}`,
-      status: ramp.status === 'published' ? 'Published' : 'Draft',
+      status: siteStatus(profile.status, ramp.status).label,
     })),
   ];
 
@@ -4450,6 +4730,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
       .finally(() => { if (live) setPublicProtocolsLoading(false); });
     return () => { live = false; };
   }, [accessToken, tab]);
+  const navAvatarUrl = useGuardianAvatarUrl(user?.id, profile.avatar_url, (user?.user_metadata as { avatar_url?: string } | undefined)?.avatar_url);
   const offerInventory = useMemo(() => [
     { label: 'Offer paths', count: valueRamps.length, tab: 'value_ramps' as Tab },
     { label: 'Products', count: productsCount, tab: 'products' as Tab },
@@ -4478,7 +4759,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
   async function removeRamp(row: GuideValueRamp) { if (!user || !window.confirm(`Delete ${row.name}?`)) return; await deleteGuideValueRamp(user.id, row.id); setValueRamps((current) => current.filter((item) => item.id !== row.id)); }
   async function removeRecipe(row: GuideRecipe) { if (!user || !window.confirm(`Delete ${row.title}?`)) return; await deleteGuideRecipe(user.id, row.id); setRecipes((current) => current.filter((item) => item.id !== row.id)); }
   return <div style={{ minHeight: '100vh', background: black, color: ink, fontFamily: sans }}>
-    <GuardianHeader isSignedIn activeTab={tab} displayName={profile.display_name} onNavigate={(next) => { setTab(next); setProtocolId(null); setRecipeId(null); setChildPlanId(null); setParentContext(null); }} onSignOut={signOut} />
+    <GuardianHeader isSignedIn activeTab={tab} displayName={profile.display_name} avatarUrl={navAvatarUrl} onNavigate={(next) => { setTab(next); setProtocolId(null); setRecipeId(null); setChildPlanId(null); setParentContext(null); }} onSignOut={signOut} />
     <div className="g-workspace-shell" style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr)', height: 'calc(100vh - 63px)' }}>
       <div className="g-railwrap">
         <aside className="g-rail" aria-label="Guardian sections">
@@ -4529,8 +4810,8 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
         {tab === 'community' && user && <WorkspaceCommunity profile={profile} userId={user.id} />}
         {tab === 'library' && user && <GuideLibrary guideId={user.id} selectedIds={selectedLibraryIds} onSelectedIds={setSelectedLibraryIds} onUse={(destination, sources) => { setBuilderLibrarySources(sources); setTab(destination === 'protocol' ? 'protocols' : 'offer_builder'); }} />}
         {(tab === 'offer_builder' || tab === 'value_ramps' || tab === 'products') && !protocolId && !recipeId && <div role="tablist" aria-label="Offers" style={{ display: 'inline-flex', border: `1px solid ${line}`, marginBottom: 18 }}>{([['offer_builder', 'Offer builder'], ['value_ramps', 'Offer paths'], ['products', 'My products']] as const).map(([id, text], index) => <button type="button" role="tab" key={id} aria-selected={tab === id} onClick={() => setTab(id)} style={{ height: 36, padding: '0 16px', border: 0, borderLeft: index ? `1px solid ${line}` : 0, background: tab === id ? ink : 'transparent', color: tab === id ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer' }}>{text}</button>)}</div>}
-        {tab === 'offer_builder' && <OfferBuilder profile={profile} protocols={protocols} offers={offers} recipes={recipes} librarySources={builderLibrarySources} onOpenProtocols={() => setTab('protocols')} onCreated={(offer) => setOffers((current) => [offer, ...current])} onUpdated={(offer) => setOffers((current) => current.map((item) => item.id === offer.id ? offer : item))} onDeleted={(id) => setOffers((current) => current.filter((offer) => offer.id !== id))} />}
-        {tab === 'products' && user && <GuardianProducts guideId={user.id} guardianSlug={profile.slug} commissionPercent={profile.commission_percent} protocols={protocols} />}
+        {tab === 'offer_builder' && <><OfferBuilder profile={profile} protocols={protocols} offers={offers.filter((offer) => !isTreatKind(offer.kind))} recipes={recipes} librarySources={builderLibrarySources} onOpenProtocols={() => setTab('protocols')} onOpenContent={() => setTab('content')} onCreated={(offer) => setOffers((current) => [offer, ...current])} onUpdated={(offer) => setOffers((current) => current.map((item) => item.id === offer.id ? offer : item))} onDeleted={(id) => setOffers((current) => current.filter((offer) => offer.id !== id))} /><TreatsTalksManager profile={profile} offers={offers} onChange={setOffers} /></>}
+        {tab === 'products' && user && <GuardianProducts guideId={user.id} guardianSlug={profile.slug} commissionPercent={profile.commission_percent} protocols={protocols} onOpenContentBuilder={() => setTab('content')} />}
         {tab === 'leads' && !protocolId && !recipeId && user && <ReviewsPanel userId={user.id} slug={profile.slug} />}
         {selectedLead && user && <LeadProfileModal lead={selectedLead} guideId={user.id} authorId={user.id} onClose={() => setSelectedLead(null)} />}
         {removing && accessToken && <ProtocolRemovalDialog accessToken={accessToken} protocol={removing} onClose={() => setRemoving(null)} onDone={onRemoved} />}

@@ -28,8 +28,12 @@ import { isSleepItemByName } from "../../protocolDomain/category";
 import { HYGIENE_NAME_RE, SPORT_NAME_RE } from "../../utils/activityNamePatterns";
 import { claimsBedAnchor, claimsWakeAnchor } from "../../protocolDomain/sleepAnchorClaim";
 import { MOBILE_TIMELINE as MT } from "./mobileTimelineContract";
+import { OptimizedImage } from "../OptimizedImage";
 
 const POPPINS = '"Poppins", system-ui, -apple-system, sans-serif';
+// The thumbnails here are 32px wide at most, but come from full-size catalogue pictures (often 1-2 MB PNGs): ask Storage for
+// small ones. A tall capsule shows the picture at its height, so the sizes below follow the longer side.
+const THUMB_WIDTHS = [96, 192, 384];
 const JOHN_AVATAR = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=160&h=160&q=85";
 
 export interface HomeItem {
@@ -603,7 +607,7 @@ export function ProtocolHomeScreen({
           <div style={{ display: "flex", alignItems: "center", gap: 10, paddingLeft: MT.headerLeadPad, flexShrink: 1, minWidth: 0 }}>
             <span style={{ width: MT.avatarSize, height: MT.avatarSize, borderRadius: MT.avatarSize / 2, background: "#E5E7EB", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
               {imageUrl
-                ? <img src={imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ? <OptimizedImage src={imageUrl} alt="" aspectRatio={1} widths={THUMB_WIDTHS} sizes={`${MT.avatarSize}px`} style={{ height: "100%" }} />
                 : <User size={13} color="#4B5563" strokeWidth={1.5} />}
             </span>
             <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-start", minWidth: 0 }}>
@@ -736,7 +740,7 @@ export function ProtocolHomeScreen({
                             <span style={{ position: "absolute", left: MT.axisX - MT.itemOriginX - MT.nodeWidth / 2, top: isBlock ? 0 : 28 - capsuleH / 2, ...(isBlock ? { bottom: 0 } : { height: capsuleH }), width: MT.nodeWidth, borderRadius: wakeRow ? `0 0 ${MT.nodeWidth / 2}px ${MT.nodeWidth / 2}px` : bedRow ? `${MT.nodeWidth / 2}px ${MT.nodeWidth / 2}px 0 0` : MT.nodeWidth / 2, overflow: "hidden", ...(wakeRow || bedRow ? { background: nightDone ? nightHue : "transparent", border: `${nightStroke}px solid ${nightDone ? nightHue : ui.text}`, borderTopWidth: wakeRow ? 0 : nightStroke, borderBottomWidth: bedRow ? 0 : nightStroke } : isDone ? { background: withAlpha(h, 0.8), border: 0 } : { background: ui.row, border: `1px solid ${futureTone(h)}` }), boxSizing: "border-box", display: "inline-flex", alignItems: "center", justifyContent: "center", zIndex: 2 }}>
                               {!isDone && <span aria-hidden="true" style={{ position: "absolute", inset: 0, background: `${ui.muted}14` }} />}
                               {it.image_url && !/recipe_water-|openfoodfacts/i.test(it.image_url) && !wakeRow && !bedRow
-                                ? <img src={it.image_url} alt="" style={{ position: "relative", width: "100%", height: "100%", objectFit: "cover", filter: isDone ? "none" : "grayscale(1)", opacity: isDone ? 1 : 0.72 }} />
+                                ? <OptimizedImage src={it.image_url} alt="" proportional widths={THUMB_WIDTHS} sizes={`${isBlock ? 160 : Math.max(MT.nodeWidth, capsuleH)}px`} style={{ position: "relative", opacity: isDone ? 1 : 0.72 }} imgStyle={{ filter: isDone ? "none" : "grayscale(1)" }} />
                                 : wakeRow ? <Sun size={15} strokeWidth={2.2} color={isDone ? "#FFFFFF" : ui.muted} style={{ position: "relative" }} />
                                   : <ItemIcon size={15} strokeWidth={2.2} color={isDone ? "#FFFFFF" : ui.muted} style={{ position: "relative" }} />}
                             </span>

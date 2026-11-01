@@ -6,9 +6,11 @@
 // function.
 
 export const OPENAI_BASE = 'https://api.openai.com/v1';
-export const DEFAULT_MODEL = 'gpt-image-1';
-/** The price list below is gpt-image-1's, so only that model is accepted; any other configured model falls back to it. */
-export const SUPPORTED_MODELS = ['gpt-image-1'];
+// gpt-image-1 was shut down by OpenAI on 2026-10-23 (requests now fail with "The model `gpt-image-1` does not exist"), so the
+// default is its successor. Check OpenAI's deprecations page before adding another model here.
+export const DEFAULT_MODEL = 'gpt-image-2';
+/** The price list below is an estimate for this model family, so only these models are accepted; any other configured model falls back to the default. */
+export const SUPPORTED_MODELS = ['gpt-image-2'];
 export const pickModel = (configured?: string | null) => (configured && SUPPORTED_MODELS.includes(configured) ? configured : DEFAULT_MODEL);
 export const PROMPT_MAX = 4000;
 
@@ -18,10 +20,10 @@ export type Quality = 'low' | 'medium' | 'high';
 export const QUALITIES: Quality[] = ['low', 'medium', 'high'];
 export type Source = 'house' | 'own';
 
-/** The nearest size gpt-image-1 renders; the post's frame crops it (cover-fit), and the prompt warns of the crop. */
+/** The nearest size gpt-image-2 renders; the post's frame crops it (cover-fit), and the prompt warns of the crop. */
 export const SIZE: Record<Aspect, '1024x1536' | '1024x1024' | '1536x1024'> = { '9:16': '1024x1536', '4:5': '1024x1536', '1:1': '1024x1024', '16:9': '1536x1024' };
 
-/** Published per-image prices for gpt-image-1 (USD), shown before generating. Square is cheaper than portrait or
+/** Estimated per-image prices for gpt-image-2 (USD), shown before generating. Square is cheaper than portrait or
  *  landscape. Approximate: OpenAI bills tokens, and these are its own per-image figures. */
 export const PRICE_USD: Record<Quality, { square: number; wide: number }> = {
   low: { square: 0.011, wide: 0.016 },
@@ -49,9 +51,32 @@ export function shapeImageRequest(input: GenerateInput, model: string = DEFAULT_
   return { ok: true, source, aspect, quality, usd: priceFor(aspect, quality), body: { model, prompt, size: SIZE[aspect], quality, n: 1, output_format: 'webp', moderation: 'auto' } };
 }
 
+/**
+ * As-Tro plates sent beside the Guardian's photo as style references (the prompt below was written for ChatGPT with "the
+ * attached AS-TRO reference images"). They teach the engraved fine-art look only; the prompt forbids copying their faces.
+ * Only 384 px plates exist on as-tro.com. A reference that cannot be fetched is skipped, never fatal.
+ */
+export const AVATAR_STYLE_REFERENCES = [
+  'https://www.as-tro.com/assets/plates/384/people/abraham.webp',
+  'https://www.as-tro.com/assets/plates/384/people/james-son-of-alphaeus.webp',
+  'https://www.as-tro.com/assets/plates/384/people/teresa-of-avila.webp',
+];
+
 export function avatarPrompt(name?: unknown): string {
   const person = String(name || 'the person').replace(/[\r\n]+/g, ' ').trim().slice(0, 100) || 'the person';
-  return `Create a refined R³ Guardian profile portrait of ${person} from the supplied photograph. Preserve the person's identity, facial structure, age, expression, hair, and distinguishing features exactly. Editorial black-and-white photography, soft natural window light, clean warm-light-grey seamless background, subtle film grain, calm and credible expression, head-and-shoulders framing, face centered, eyes near the upper third. Square composition with generous circle-safe space around the head and shoulders. Remove the original background, text, logos, other people, and distracting objects. Do not beautify, de-age, change ethnicity, add accessories, or alter clothing beyond simplifying it to a neutral tonal treatment.`;
+  return `Create an image of ${person} in the exact visual house style of the attached AS-TRO reference images. The FIRST attached image is a photograph of ${person}: portray this very person from it. Preserve the person's identity, facial structure, age, expression, hair and distinguishing features exactly, so they are clearly recognisable. The other attached images are AS-TRO style references only: match their style, never their faces, clothing or poses.
+STYLE
+Timeless esoteric fine-art illustration, classical engraved portraiture blended with delicate painterly realism. Inspired by antique astronomical manuscripts, Renaissance illustrations, alchemical drawings and museum-quality historical artwork. Match the references in colour palette, contrast, illustration technique, texture, lighting, linework and overall artistic character.
+COMPOSITION
+One central subject, visually dominant, head and shoulders. Balanced, elegant, historically appropriate composition. Detailed subject with subtle, natural shading and fine textures. Preserve a consistent illustration style across all AS-TRO images. No unnecessary decorative elements. Square composition with generous circle-safe space around the head and shoulders, so a circular crop never cuts the subject.
+BACKGROUND - CRITICAL
+Place the subject on a perfectly flat, solid, pure chroma-key green background (#00FF00, RGB 0,255,0), edge to edge, so the green can be removed afterwards. The green must be completely uniform: no gradient, no vignette, no texture, no shadow, no floor, no reflection, and never a checkerboard or any transparency pattern. There must be no green anywhere on the subject, its clothing or its edges, and no green light spilling onto it. Keep a clean, crisp edge between the subject and the green.
+RENDERING
+Sophisticated historical fine art, intricate detailing, muted natural colours, subtle antique texture applied only to the subject, realistic proportions, delicate chiaroscuro lighting.
+AVOID
+Cartoon, anime, modern 3D, photorealistic stock photography, neon colours, excessive gold, fantasy effects, generic mystical backgrounds, typography, logos, borders, frames or watermarks. Do not beautify, de-age, change ethnicity or add accessories.
+OUTPUT
+One illustration on the flat green, centred, with the subject entirely within the canvas and comfortable margins.`;
 }
 
 export function shapeAvatarRequest(input: AvatarInput) {
@@ -74,7 +99,15 @@ export function friendlyOpenAIError(status: number, body: any): string {
   if (status === 429) return code === 'insufficient_quota' ? 'This OpenAI account has no credit left.' : 'OpenAI is rate-limiting this account; try again in a minute.';
   if (code === 'moderation_blocked' || /safety/i.test(body?.error?.message || '')) return 'OpenAI declined this prompt. Try describing the scene differently.';
   if (status === 403) return 'This OpenAI organisation is not verified for image generation yet.';
-  return `Image generation failed (${status}).`;
+  // A 400 means OpenAI rejected the request itself (bad size, format or parameter). Say why, so it can be fixed rather than guessed at.
+  const detail = status === 400 ? safeDetail(body?.error?.message) : '';
+  return detail ? `Image generation failed (${status}): ${detail}` : `Image generation failed (${status}).`;
+}
+
+/** OpenAI's own message, shortened and with anything shaped like a secret key removed, for 400 responses only. */
+export function safeDetail(message: unknown): string {
+  if (typeof message !== 'string') return '';
+  return message.replace(/sk-[A-Za-z0-9_-]{8,}/g, '[key]').replace(/\s+/g, ' ').trim().slice(0, 200);
 }
 
 /* ── encryption (AES-GCM, key bound to the user id) ── */

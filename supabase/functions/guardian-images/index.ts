@@ -18,6 +18,33 @@ const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 const fail = (error: string, status = 400) => json({ error }, status);
 
+/**
+ * Answers at once and keeps the connection alive while OpenAI works. A portrait or image edit can take longer than the
+ * ~100 s the proxy in front of Edge Functions waits for a first byte, after which the browser only sees "Failed to send a
+ * request" even though the image was made and billed. So the body streams: a space now and every 15 s (leading whitespace
+ * is valid JSON), then the real JSON. The status is already 200 by then, so a failure travels as `{ error }` in the body,
+ * which the browser client already reads.
+ */
+const streamed = (work: () => Promise<Response>) => {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      controller.enqueue(encoder.encode(' '));
+      const beat = setInterval(() => { try { controller.enqueue(encoder.encode(' ')); } catch { /* closed */ } }, 15000);
+      try {
+        const res = await work();
+        const text = await res.text();
+        let body = text;
+        if (!res.ok) { let message = 'Image request failed.'; try { message = JSON.parse(text)?.error || message; } catch { /* keep default */ } body = JSON.stringify({ error: message, status: res.status }); }
+        controller.enqueue(encoder.encode(body));
+      } catch (error) {
+        controller.enqueue(encoder.encode(JSON.stringify({ error: error instanceof Error ? error.message : 'Image request failed.' })));
+      } finally { clearInterval(beat); controller.close(); }
+    },
+  });
+  return new Response(stream, { headers: { ...cors, 'Content-Type': 'application/json' } });
+};
+
 async function ownKey(userId: string): Promise<string | null> {
   const { data } = await service.from('guardian_openai_connections').select('credentials_ciphertext, credentials_iv').eq('user_id', userId).maybeSingle();
   return data ? gi.decryptKey(data, userId, ENC) : null;
@@ -116,6 +143,7 @@ Deno.serve(async (req) => {
       if (jobId) await service.from('guardian_image_jobs').update({ status, error: error ?? null }).eq('id', jobId);
       else await service.from('guardian_image_jobs').insert({ ...log, status, ...(error ? { error } : {}) });
     };
+    return streamed(async () => {
     let res: Response; let out: any;
     try {
       res = await fetch(`${gi.OPENAI_BASE}/images/generations`, { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(shaped.body) });
@@ -133,6 +161,7 @@ Deno.serve(async (req) => {
     }
     await finish('completed');
     return json({ image: `data:image/webp;base64,${b64}`, usd: shaped.usd, mock: false, size: shaped.body.size });
+    });
   }
 
   if (action === 'convert-avatar') {
@@ -162,16 +191,25 @@ Deno.serve(async (req) => {
       if (jobId) await service.from('guardian_image_jobs').update({ status, error: error ?? null }).eq('id', jobId);
       else await service.from('guardian_image_jobs').insert({ ...log, status, ...(error ? { error } : {}) });
     };
+    return streamed(async () => {
     let response: Response; let output: any;
     try {
+      // Their photo first, then the As-Tro style references (any that will not load are skipped, never fatal).
+      const photo = await referenceBlob(shaped.imageUrl);
+      const styleRefs = (await Promise.all(gi.AVATAR_STYLE_REFERENCES.map(async (url) => {
+        try { const res = await fetch(url, { signal: AbortSignal.timeout(8000) }); return res.ok ? await res.blob() : null; } catch { return null; }
+      }))).filter((blob): blob is Blob => !!blob && blob.type.startsWith('image/'));
       const form = new FormData();
       form.append('model', MODEL);
-      form.append('image', await referenceBlob(shaped.imageUrl), 'source-portrait.png');
+      form.append('image[]', photo, 'source-portrait.png');
+      styleRefs.forEach((blob, index) => form.append('image[]', blob, `as-tro-style-${index + 1}.webp`));
       form.append('prompt', shaped.prompt);
       form.append('size', shaped.size);
       form.append('quality', shaped.quality);
       form.append('n', '1');
       form.append('output_format', 'webp');
+      // The model cannot draw real transparency (it paints a checkerboard), so it is asked for a flat green background and the
+      // browser keys the green out afterwards (utils/chromaKey.ts).
       response = await fetch(`${gi.OPENAI_BASE}/images/edits`, { method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form });
       output = await response.json().catch(() => ({}));
     } catch (error) {
@@ -187,6 +225,7 @@ Deno.serve(async (req) => {
     }
     await finish('completed');
     return json({ image: `data:image/webp;base64,${image}`, usd: shaped.usd, mock: false, size: shaped.size });
+    });
   }
 
   return fail('Unknown action.');

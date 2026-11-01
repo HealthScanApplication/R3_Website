@@ -7,7 +7,8 @@ import { FlutedGlassBackground } from "./FlutedGlassBackground";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
 import { APP_STORE_URL } from "../config/appLinks";
 import { GOAL_WORDS } from "../config/goalWords";
-import heroPoster from "../assets/5f38caf68dd6b8af22362056b70854ea4cf4b933.png";
+import { OptimizedImage } from "./OptimizedImage";
+import { HERO_COVER, HERO_SIZES } from "../config/homeImages";
 import {
   ed,
   GRO,
@@ -79,7 +80,9 @@ export function HeroSection({ hasReferral, isActive, referralCode }: HeroSection
   const [backgroundVideos, setBackgroundVideos] = useState<string[]>([]);
   const [wordIndex, setWordIndex] = useState(0);
   const [wordVisible, setWordVisible] = useState(true);
-  const [posterLoaded, setPosterLoaded] = useState(false);
+  // The file the hero <img> actually picked (a size for this screen). The WebGL layer is given exactly that one, so
+  // the poster is fetched once and the shader (compile + upload) does not compete with the largest paint for the network or CPU.
+  const [posterUrl, setPosterUrl] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -123,6 +126,12 @@ export function HeroSection({ hasReferral, isActive, referralCode }: HeroSection
     fetchVideos();
   }, [allowVideo]);
 
+  // Never leave the shader waiting on a load event that was missed: after a few seconds start it on the default size.
+  useEffect(() => {
+    const t = setTimeout(() => setPosterUrl((u) => u ?? HERO_COVER.src), 4000);
+    return () => clearTimeout(t);
+  }, []);
+
   useEffect(() => {
     const t = setInterval(() => {
       setWordVisible(false);
@@ -143,17 +152,21 @@ export function HeroSection({ hasReferral, isActive, referralCode }: HeroSection
           (a port of Function Health's "fluting" hero). The plain <img> sits behind
           as a fallback for no-WebGL / reduced-motion. */}
       <div style={{ position: "absolute", inset: 0, zIndex: 0, background: ed.paperAlt }} aria-hidden="true">
-        <img
-          src={heroPoster}
+        <OptimizedImage
+          src={HERO_COVER.src}
+          srcSet={HERO_COVER.srcSet}
+          sizes={HERO_SIZES}
           alt=""
-          {...({ fetchpriority: "high" } as any)}
-          decoding="async"
-          ref={(el) => { if (el?.complete) setPosterLoaded(true); }}
-          onLoad={() => setPosterLoaded(true)}
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "saturate(0.95) contrast(1.03)", opacity: posterLoaded ? 1 : 0, transition: "opacity 1.1s ease" }}
+          priority
+          placeholderSrc={HERO_COVER.lqip}
+          placeholderColor={HERO_COVER.color}
+          onLoad={(e) => setPosterUrl(e.currentTarget.currentSrc || HERO_COVER.src)}
+          onError={() => setPosterUrl(HERO_COVER.src)}
+          style={{ position: "absolute", inset: 0 }}
+          imgStyle={{ filter: "saturate(0.95) contrast(1.03)" }}
         />
-        {!reduceMotion && (
-          <FlutedGlassBackground videos={backgroundVideos} poster={heroPoster} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }} />
+        {!reduceMotion && posterUrl && (
+          <FlutedGlassBackground videos={backgroundVideos} poster={posterUrl} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }} />
         )}
 
         {/* Warm tint — very subtle soft-light warmth so the fluted video sits in

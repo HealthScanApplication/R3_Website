@@ -232,3 +232,24 @@ it('the action buttons show on hover and focus, always on touch, and the delete 
   expect(css).toMatch(/@media \(hover:none\),\(pointer:coarse\)\{ \.r3-pcard-actions\{opacity:1;pointer-events:auto/);
   expect(css).toMatch(/\.r3-pcard-act\.danger:hover\{background:#B4472F/);
 });
+
+const STORED = 'https://mofhvoudjxinvpplsytd.supabase.co/storage/v1/object/public/catalog-media/auto-generated/recipe_lunch.png';
+
+it('a picture in Storage is asked for at card size, the blurred copies at a much smaller one, never the 1-2 MB original', () => {
+  const { container } = render(<ProtocolCard title="Stored" imageUrl={STORED} />);
+  const [sharp, ...soft] = [...container.querySelectorAll('img')];
+  expect(sharp.getAttribute('srcset')).toMatch(/width=480&height=1920&resize=contain.* 480w, .*width=960.* 960w$/);
+  expect(sharp.getAttribute('src')).not.toBe(STORED);
+  expect(soft.map((i) => i.getAttribute('src'))).toEqual([expect.stringContaining('width=160'), expect.stringContaining('width=160')]);
+  expect(soft.every((i) => i.getAttribute('aria-hidden') === 'true')).toBe(true);
+  expect([sharp, ...soft].every((i) => i.getAttribute('loading') === 'lazy' && i.getAttribute('decoding') === 'async')).toBe(true);
+});
+
+it('if the resized picture will not load the card goes back to the original before it gives up for the plate', () => {
+  const { container } = render(<ProtocolCard title="Stored" imageUrl={STORED} />);
+  fireEvent.error(container.querySelector('.r3-pcard-img')!);
+  expect([...container.querySelectorAll('img')].map((i) => i.getAttribute('src'))).toEqual([STORED, STORED, STORED]);
+  expect(container.querySelector('.r3-pcard-img')!.getAttribute('srcset')).toBeNull();
+  fireEvent.error(container.querySelector('.r3-pcard-img')!);
+  expect([...container.querySelectorAll('img')].map((i) => i.getAttribute('src'))).toEqual([PROTOCOL_PLATE]);
+});

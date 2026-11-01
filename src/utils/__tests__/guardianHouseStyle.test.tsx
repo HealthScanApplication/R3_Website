@@ -9,6 +9,7 @@ vi.mock('../guardianImages', () => ({
   convertGuardianAvatar: (...args: unknown[]) => convert(...args),
   generatedImageFile: () => new File(['x'], 'guardian-avatar.webp', { type: 'image/webp' }),
 }));
+vi.mock('../chromaKey', () => ({ removeGreenBackground: async (image: string) => image }));
 vi.mock('../guidePortal', () => ({ uploadGuideImage: (...args: unknown[]) => upload(...args) }));
 import { HOUSE_AVATARS, HOUSE_STYLE_REQUIRED, houseAvatarFlag, isHouseStyleAvatar } from '../guardianHouseStyle';
 import { HouseAvatarReview } from '../../components/guides/HouseAvatarReview';
@@ -60,11 +61,13 @@ describe('HouseAvatarReview', () => {
   });
 
   it('shows the error and lets the Guardian try again', async () => {
-    convert.mockRejectedValueOnce(new Error('Image service is busy.')).mockResolvedValueOnce({ image: 'data:image/webp;base64,eA==', mock: true });
+    convert.mockRejectedValueOnce(new Error('Image service is busy.')).mockResolvedValueOnce({ image: 'data:image/svg+xml;base64,eA==', mock: true });
     render(<HouseAvatarReview userId="u1" name="Ana" source="https://cdn.example/raw.jpg" onApplied={() => {}} onCancel={() => {}} />);
     expect(await screen.findByText('Image service is busy.')).toBeTruthy();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Try again' })); });
     expect(convert).toHaveBeenCalledTimes(2);
     expect(await screen.findByAltText('R3 house-style avatar preview')).toBeTruthy();
+    // A test-mode placeholder cannot be saved as the avatar.
+    expect((screen.getByRole('button', { name: 'Use this avatar' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
