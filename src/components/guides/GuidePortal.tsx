@@ -581,7 +581,7 @@ const btn: React.CSSProperties = { minHeight: 44, border: `1px solid ${line}`, b
 const compactControl: React.CSSProperties = { height: 40, fontSize: 11, fontWeight: 600, lineHeight: 1.2 };
 const titleHighlight: React.CSSProperties = { display: 'inline', width: 'fit-content', background: 'rgba(245,242,234,.82)', color: black, padding: '3px 7px 4px', boxDecorationBreak: 'clone', WebkitBoxDecorationBreak: 'clone' };
 
-interface TagArt { src: string; cols: number; rows: number; index: number; cellAspect: number }
+interface TagArt { src: string; cols: number; rows: number; index: number; cellAspect: number; /** A single photo cropped to the square (the subject sits right of centre) instead of one cell of an atlas. */ cover?: boolean }
 const atlas = (src: string, cols: number, rows: number, labels: readonly string[], cellAspect = 1) => Object.fromEntries(labels.map((name, index) => [name, { src, cols, rows, index, cellAspect } as TagArt]));
 function InventoryThumb({ art }: { art: TagArt }) {
   const col = art.index % art.cols;
@@ -665,7 +665,7 @@ function TagChoice({ text, description, active, art, onClick, badge }: { text: s
   return <button className="guardian-card" type="button" onClick={onClick} aria-pressed={active} style={choiceCardStyle(active)}>
     {active && <ChoiceCheck />}
     {badge && <span style={{ position: 'absolute', top: 9, right: 10, color: badge === 'FREE' ? acid : '#C88A66', fontSize: 8, fontWeight: 700, letterSpacing: '.14em' }}>{badge}</span>}
-    <span role="img" aria-label="" style={{ width: 64, height: 64, justifySelf: 'center', alignSelf: 'center', backgroundImage: `url(${art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${art.cols * 100}% ${art.rows * 100}%`, backgroundPosition: `${art.cols === 1 ? 0 : col * 100 / (art.cols - 1)}% ${art.rows === 1 ? 0 : row * 100 / (art.rows - 1)}%`, filter: 'grayscale(1) contrast(.92)' }} />
+    <span role="img" aria-label="" style={{ width: 64, height: 64, justifySelf: 'center', alignSelf: 'center', backgroundImage: `url(${art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: art.cover ? 'cover' : `${art.cols * 100}% ${art.rows * 100}%`, backgroundPosition: art.cover ? '70% 40%' : `${art.cols === 1 ? 0 : col * 100 / (art.cols - 1)}% ${art.rows === 1 ? 0 : row * 100 / (art.rows - 1)}%`, filter: art.cover ? 'saturate(.85)' : 'grayscale(1) contrast(.92)' }} />
     <span aria-hidden="true" style={{ alignSelf: 'stretch', background: line }} />
     <ChoiceText title={text} description={description} active={active} />
   </button>;
@@ -2526,7 +2526,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     </div>}
   </div>; };
   const audienceProblems = Array.from(new Set(audience.flatMap((group) => audienceProblemsByGroup[group] || [])));
-  const audienceProblemArt = atlas('/images/guides/tags/body.webp', 4, 3, audienceProblemSuggestions);
+  const audienceProblemArt: Record<string, TagArt> = Object.fromEntries(audienceProblemSuggestions.map((name) => [name, { src: `/images/guides/problems/${name.toLowerCase().replace(/ /g, '-')}.jpg`, cols: 1, rows: 1, index: 0, cellAspect: 1, cover: true } as TagArt]));
   const formats: { label: string; value: string; description: string; art: TagArt }[] = [
     { label: 'Protocol (Physical + Interactive)', value: 'PHYSICAL + APP', description: 'A guide to keep with interactive steps in the app', art: supportArt['ROUTINE³ (physical + digital)'] },
     { label: 'Protocol + Guidance', value: 'INTERACTIVE', description: 'Review progress and suggest the next action', art: offerArt['ROUTINE³'] },
