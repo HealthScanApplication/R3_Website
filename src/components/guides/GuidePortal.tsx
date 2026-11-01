@@ -61,6 +61,7 @@ import { ProduceVideoBackdrop } from './ProduceVideoBackdrop';
 import { HeroGlassOverlay, heroGlassOn } from './HeroGlassOverlay';
 import { GUARDIAN_SCENES, guardianTypeClipUrl, isSceneBackground } from '../../utils/guardianTypeClip';
 import { openSiteBuilder } from '../../utils/guardianSiteRoute';
+import { profileSectionStates, type ProfileSectionState } from '../../utils/profileSections';
 import { confirmInPage } from '../../utils/confirmInPage';
 import { countryForPlace, mapQueryFor } from '../../utils/placeCountry';
 import { YouTubeClipFields } from './YouTubeClipFields';
@@ -1650,9 +1651,10 @@ function MountNearViewport({ children, margin = '500px' }: { children: React.Rea
 
 /** The section links under the hero's sign-up. Treats and Talks join them when the Guardian has published some. */
 const HERO_ICONS: Record<string, React.ComponentType<{ size?: number; 'aria-hidden'?: boolean }>> = { catalog: ListChecks, shop: ShoppingBag, events: CalendarDays, retreats: Mountain, treats: Sparkle, talks: GraduationCap };
-const HERO_SECTIONS: Array<[string, string]> = [['catalog', 'Routines'], ['shop', 'Products'], ['events', 'Events'], ['retreats', 'Retreats']];
+type HeroSection = [id: string, text: string, state?: 'filled' | 'empty', category?: string];
+const HERO_SECTIONS: HeroSection[] = [['catalog', 'Routines'], ['shop', 'Products'], ['events', 'Events'], ['retreats', 'Retreats']];
 
-function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, accent, headingFont, background, backgroundIsVideo = false, clips = [], typeVideo = null, glass = false, sections = HERO_SECTIONS, greyscale = false, cards, headlineStyle = 'editorial', guideId, sourceOfferId }: { audience?: string; reviewSummary?: { rating?: number; reviewCount?: number }; headlineStyle?: HeadlineStyle; name: string; avatarUrl?: string | null; specialties: string[]; headline: string; tags: string[]; bio: string; accent: string; headingFont: string; background?: string | null; backgroundIsVideo?: boolean; clips?: YtClip[]; typeVideo?: string | null; glass?: boolean; sections?: Array<[string, string]>; greyscale?: boolean; cards: SiteHeroCard[]; guideId?: string; sourceOfferId?: string | null }) {
+function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, accent, headingFont, background, backgroundIsVideo = false, clips = [], typeVideo = null, glass = false, sections = HERO_SECTIONS, greyscale = false, cards, headlineStyle = 'editorial', guideId, sourceOfferId }: { audience?: string; reviewSummary?: { rating?: number; reviewCount?: number }; headlineStyle?: HeadlineStyle; name: string; avatarUrl?: string | null; specialties: string[]; headline: string; tags: string[]; bio: string; accent: string; headingFont: string; background?: string | null; backgroundIsVideo?: boolean; clips?: YtClip[]; typeVideo?: string | null; glass?: boolean; sections?: HeroSection[]; greyscale?: boolean; cards: SiteHeroCard[]; guideId?: string; sourceOfferId?: string | null }) {
   const [email, setEmail] = useState('');
   const [captureState, setCaptureState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
   const heroMedia = ownBackground(background);
@@ -1665,7 +1667,8 @@ function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, a
       setCaptureState('done');
     } catch { setCaptureState('error'); }
   }
-  const goTo = (id: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
+  const goTo = (id: string, category?: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (category) window.dispatchEvent(new CustomEvent('guardian:catalog-category', { detail: category })); // open that tab of the catalog
     const target = document.getElementById(id);
     if (!target) return;
     event.preventDefault();
@@ -1691,7 +1694,7 @@ function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, a
         </form>
         {captureState === 'error' && <span role="alert" style={{ display: 'block', color: '#FFD0C8', fontFamily: APP.font, fontSize: 12, marginTop: 8 }}>We could not add your email. Please try again.</span>}
         <nav aria-label={`${name} profile sections`} style={{ display: 'flex', gap: 0, flexWrap: 'wrap', marginTop: 14, fontFamily: APP.font }}>
-          {sections.map(([id, text]) => <a key={id} href={`#${id}`} onClick={goTo(id)} style={{ minHeight: 44, padding: '0 16px', background: 'rgba(8,10,7,.24)', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)', color: '#FFF', border: '1px solid rgba(255,255,255,.72)', marginLeft: -1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', gap: 7 }}>{(() => { const Icon = HERO_ICONS[id]; return Icon ? <Icon size={14} aria-hidden /> : null; })()}{text}</a>)}
+          {sections.map(([id, text, state, category]) => <a key={`${id}-${text}`} href={`#${id}`} data-hero-tag={text} data-hero-tag-state={state || 'filled'} onClick={goTo(id, category)} style={{ minHeight: 44, padding: '0 16px', background: 'rgba(8,10,7,.24)', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)', color: '#FFF', border: state === 'empty' ? '1px dashed rgba(255,255,255,.55)' : '1px solid rgba(255,255,255,.72)', opacity: state === 'empty' ? .72 : 1, marginLeft: -1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', gap: 7 }}>{(() => { const Icon = HERO_ICONS[id]; return Icon ? <Icon size={14} aria-hidden /> : null; })()}{text}</a>)}
         </nav>
       </div>
     </div>
@@ -1742,8 +1745,32 @@ function FreeOfferFlipCard({ profile, offer, protocol, reviews, accent, upsellRa
   </div>;
 }
 
+/** The owner's view of the sections they have not filled yet: dotted placeholders in the same order, each one a way to add something. */
+function ProfileSectionSkeleton({ sections }: { sections: ProfileSectionState[] }) {
+  const empty = sections.filter((section) => !section.filled);
+  if (!empty.length) return null;
+  return <section data-profile-skeleton aria-label="Sections still to fill" style={{ background: '#F2EFE7', color: '#11120F', padding: `clamp(48px,7vw,88px) ${PAGE_X}` }}>
+    <div style={{ maxWidth: 1240, margin: '0 auto' }}>
+      <span style={{ color: '#667245', fontSize: 11, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>Only you see this · {empty.length} to fill</span>
+      <h2 style={{ fontFamily: serif, fontSize: 'clamp(30px,4vw,48px)', fontWeight: 300, letterSpacing: '-.03em', lineHeight: 1, margin: '10px 0 20px' }}>Add a product and its section appears.</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,230px),1fr))', gap: 14 }}>
+        {empty.map((section) => <a key={section.id} id={`section-${section.id}`} data-skeleton-section={section.id} href={section.addHref} style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 150, padding: 18, border: '1px dashed rgba(17,18,15,.4)', backgroundImage: 'radial-gradient(rgba(17,18,15,.12) 1px, transparent 1px)', backgroundSize: '14px 14px', color: '#11120F', textDecoration: 'none' }}>
+          <span style={{ color: '#667245', fontSize: 9, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>{section.label}</span>
+          <strong style={{ fontFamily: serif, fontSize: 24, fontWeight: 300, lineHeight: 1.08 }}>Nothing here yet</strong>
+          <span style={{ marginTop: 'auto', fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Add {section.label.toLowerCase()} →</span>
+        </a>)}
+      </div>
+    </div>
+  </section>;
+}
+
 function GuardianOfferCatalog({ profile, offers, ramps, reviews, accent, protocols, categoryOrder }: { profile: GuideProfile; offers: GuideOffer[]; ramps: GuideValueRamp[]; reviews: GuardianReview[]; accent: string; protocols: AdminProtocol[]; categoryOrder?: string }) {
   const [activeCategory, setActiveCategory] = useState('All');
+  useEffect(() => {
+    const open = (event: Event) => { const category = (event as CustomEvent<string>).detail; if (category) setActiveCategory(category); };
+    window.addEventListener('guardian:catalog-category', open);
+    return () => window.removeEventListener('guardian:catalog-category', open);
+  }, []);
   const [unlocked, setUnlocked] = useState<{ offer: GuideOffer; protocol?: AdminProtocol; email: string } | null>(null);
   const [protocolItems, setProtocolItems] = useState<Awaited<ReturnType<typeof listProtocolItems>>>([]);
   const [deliveryState, setDeliveryState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
@@ -1999,6 +2026,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   const [guardianProtocols, setGuardianProtocols] = useState<AdminProtocol[]>([]);
   const [events, setEvents] = useState<GuideEvent[]>([]);
   const [retreats, setRetreats] = useState<GuideRetreat[]>([]);
+  const [shopProductCount, setShopProductCount] = useState(0);
   const [publicBrands, setPublicBrands] = useState<GuideBrand[]>([]);
   const [eventSource, setEventSource] = useState('');
   const [localePreference, setLocalePreference] = useState<GuardianLocalePreference>(() => {
@@ -2041,6 +2069,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
       setGuardianProtocols(found ? (await listPublicProtocols('').catch(() => [])).filter((protocol) => protocol.user_id === found.user_id) : []);
       setEvents(found ? await listGuideEvents(found.user_id).catch(() => []) : []);
       setRetreats(found ? await listGuideRetreats(found.user_id).catch(() => []) : []);
+      setShopProductCount(found ? (await listGuideProducts(found.user_id).catch(() => [])).length : 0);
       setPublicBrands(found ? await listGuideBrands(found.user_id).catch(() => []) : []);
       setEventSource(found ? await getGuideEventSource(found.user_id).catch(() => found.social_links?.events_source_url || (found.slug === 'barbara-oneill' ? 'https://www.barbaraoneill.com/pages/events' : '')) : '');
     }).catch(() => { setProfile(null); setOffers([]); }).finally(() => setLoading(false));
@@ -2050,6 +2079,10 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   const selectedRamp = pathSlug ? publishedRamps.find(ramp => encodeURIComponent(ramp.slug) === pathSlug) : publishedRamps[0];
   if (!profile || (pathSlug && !selectedRamp)) return <div style={{ minHeight: '100vh', background: black, color: ink, display: 'grid', placeItems: 'center', padding: 24, fontFamily: sans, textAlign: 'center' }}><div><Brand /><h1 style={{ fontFamily: serif, fontSize: 48, fontWeight: 300, margin: '48px 0 12px' }}>This page is not published yet.</h1><a href="/guardians" style={{ color: acid }}>Return to Guardians</a></div></div>;
   const publishedOffers = offers.filter((offer) => offer.status === 'published');
+  // Every section of the page in value-ramp order. A section with something in it is a tag under the call to action; the owner also sees the empty ones.
+  const isOwner = isSignedIn && user?.id === profile.user_id;
+  const profileSections = profileSectionStates({ offers: publishedOffers, products: shopProductCount, events: events.length, retreats: retreats.length });
+  const sectionTags: HeroSection[] = profileSections.filter((section) => section.filled || isOwner).map((section): HeroSection => section.filled ? [section.anchor, section.label, 'filled', section.category] : [`section-${section.id}`, section.label, 'empty']);
   const freeOffers = publishedOffers.filter((offer) => offer.access_model === 'free');
   const socials = profile.social_links || {};
   const publicHeadingFont = serif;
@@ -2092,7 +2125,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
     </header>}
     <main style={{ paddingTop: publicHeaderStyle === 'hidden' ? 0 : 64 }}>
       {/* Shared with the builder preview, so what Guardians build is what they publish. */}
-      <GuardianSiteHero audience={heroAudience} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={profile.display_name} avatarUrl={profile.avatar_url} specialties={heroSpecialties} headline={heroHeadline} tags={heroTags} bio={heroBio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} clips={clipsFromLinks(socials.theme_background_clips)} typeVideo={publicTypeVideo} glass={publicGlass} sections={[...HERO_SECTIONS.slice(0, 3), ...(publishedOffers.some((offer) => offer.kind === 'talk') ? [['talks', 'Talks'] as [string, string]] : []), ...(publishedOffers.some((offer) => offer.kind === 'treat') ? [['treats', 'Treats'] as [string, string]] : []), HERO_SECTIONS[3]]} greyscale={publicGreyscale}
+      <GuardianSiteHero audience={heroAudience} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={profile.display_name} avatarUrl={profile.avatar_url} specialties={heroSpecialties} headline={heroHeadline} tags={heroTags} bio={heroBio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} clips={clipsFromLinks(socials.theme_background_clips)} typeVideo={publicTypeVideo} glass={publicGlass} sections={sectionTags} greyscale={publicGreyscale}
         guideId={profile.user_id} sourceOfferId={heroSourceOfferId}
         cards={publishedRamps.length ? (onOfferPath ? [selectedRamp!] : publishedRamps).slice(0, 1).map((ramp) => { const offer = publishedOffers.find((item) => item.id === ramp.offer_ids[0]); return { key: ramp.id, offerTitle: offer?.title || ramp.name, eyebrow: ramp.problem || undefined, title: customerFacingOfferTitle(offer?.title || ramp.name), copy: offer?.description || '', kind: offer?.kind, price: offer?.access_model === 'free' ? 'Free' : undefined, imageUrl: offer?.cover_url, href: pathSlug === encodeURIComponent(ramp.slug) ? '#offers' : `/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}` }; }) : freeOffers.slice(0, 1).map((offer) => ({ key: offer.id, offerTitle: offer.title, eyebrow: profile.specialties.slice(0, 2).join(' · '), title: customerFacingOfferTitle(offer.title), copy: offer.description || '', kind: offer.kind, price: 'Free', imageUrl: offer.cover_url, href: '#start' }))} />
       {publicBrands.filter((brand) => brand.kind === 'business').length > 0 && <section aria-labelledby="guardian-brands-title" style={{ padding: `clamp(54px,7vw,100px) ${PAGE_X}`, background: '#11120F', color: ink }}>
@@ -2111,6 +2144,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
       <GuardianForumTeaser profile={profile} pagePadding={PAGE_X} />
       <GuardianRetreats profile={profile} retreats={retreats} />
       {reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}
+      {isOwner && <ProfileSectionSkeleton sections={profileSections} />}
       <GuardianFunnel key={selectedRamp?.id || 'default'} backdrop={emailBackdrop} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} />
       <footer style={{ padding: `28px ${PAGE_X}`, borderTop: '1px solid rgba(17,18,15,.2)', color: '#66645F', fontSize: 11, lineHeight: 1.6 }}>
         {profile.display_name} shares general wellbeing guidance, not medical advice. Speak to your GP or doctor before changing medication, diet or exercise, and about any health concern. Individual results vary.
@@ -3060,6 +3094,8 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     { n: 6, label: 'Site', title: 'Build your site.', copy: 'Preview the customer journey, then publish.', image: '/images/guides/guide-plate.png' },
   ];
   const activeStep = steps[Math.max(step, 1) - 1];
+  // The preview shows the whole skeleton: a tag for every section in value-ramp order, dotted until a product of that type is added.
+  const previewHeroTags: HeroSection[] = profileSectionStates({ offers: related.offers, products: related.products.length }).map((section): HeroSection => [section.anchor === 'catalog' ? 'catalog' : section.anchor, section.label, section.filled ? 'filled' : 'empty', section.category]);
   const rampAudienceOptions = audience.length ? audience : ['Everyone'];
   // A specific group (e.g. Women) beats the 'Everyone' default, so the path matches the audience chip on the cards.
   const specificAudience = rampAudienceOptions.find((group) => group !== 'Everyone');
@@ -3825,7 +3861,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           </div>
           <div id="profile-site-preview" className="g-sticky" style={{ scrollMarginTop: 20 }}><span style={{ ...label, display: 'block', color: acid, marginBottom: 7 }}>Profile site preview <span style={{ color: muted }}>· shows every published offer path</span></span><PreviewFrame device={previewDevice}><div style={{ flex: '1 0 auto', background: pageColor, fontFamily: sans }}>
             {headerStyle !== 'hidden' && <GuardianSiteHeader brandName={brandName.trim()} path={`routine3.com/${displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-') || 'your-name'}`} />}
-            <GuardianSiteHero audience={audienceLabel(audienceDetails, audience)} reviewSummary={reviewStats(guardianReviews)} headlineStyle={headlineStyle} name={displayName} avatarUrl={avatarUrl} specialties={chosen} headline={generatedHeadline} tags={expertiseTags} bio={intro || `A practical ${chosen.slice(0, 2).join(' and ').toLowerCase() || 'guidance'} path shaped for ${audience.join(' and ').toLowerCase()}.`} accent={accentColor} headingFont={serif} background={effectiveBackground} backgroundIsVideo={backgroundType === 'video'} clips={backgroundClips} typeVideo={typeBackground} glass={heroGlassOn(heroGlassSetting, backgroundClips.length > 0 || !!typeBackground || isSceneBackground(backgroundUrl))} greyscale={imageTreatment === 'greyscale'}
+            <GuardianSiteHero audience={audienceLabel(audienceDetails, audience)} reviewSummary={reviewStats(guardianReviews)} headlineStyle={headlineStyle} name={displayName} avatarUrl={avatarUrl} specialties={chosen} headline={generatedHeadline} tags={expertiseTags} bio={intro || `A practical ${chosen.slice(0, 2).join(' and ').toLowerCase() || 'guidance'} path shaped for ${audience.join(' and ').toLowerCase()}.`} accent={accentColor} headingFont={serif} background={effectiveBackground} backgroundIsVideo={backgroundType === 'video'} clips={backgroundClips} typeVideo={typeBackground} glass={heroGlassOn(heroGlassSetting, backgroundClips.length > 0 || !!typeBackground || isSceneBackground(backgroundUrl))} sections={previewHeroTags} greyscale={imageTreatment === 'greyscale'}
               cards={[{ key: 'first', eyebrow: rampTargetProblem, title: customerFacingOfferTitle(leadMagnetTitle || suggestedFreeOffer.title), copy: freeAudienceValue, kind: freeOfferType, price: 'Free', imageUrl: effectiveBackground, onClick: () => document.getElementById('value-ramp-funnel-preview')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }]} />
             <GuardianOfferCatalog profile={{ user_id: userId, slug: displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-') || 'your-name', display_name: displayName || 'Your name', headline: generatedHeadline, bio: intro, avatar_url: avatarUrl, contact_email: contactEmail, whatsapp_phone: whatsappPhone, social_links: { audience_details: JSON.stringify(Object.fromEntries(audience.filter((group) => audienceDetails[group]).map((group) => [group, audienceDetails[group]]))) }, specialties: chosen, status: savedStatus || 'draft', commission_percent: 0, onboarding_step: 5 }} offers={related.offers.filter((offer) => offer.status === 'published')} ramps={related.ramps.filter((ramp) => ramp.status === 'published')} reviews={guardianReviews} accent={accentColor} protocols={related.protocols} />
             <GuardianShop guideId={userId} guardianSlug={displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-') || 'your-name'} guardianName={displayName || 'Your name'} pagePadding={PAGE_X} protocols={related.protocols} localePreference={{ region: pricingRegion, locale: languageOptions.find((option) => option.name === mainLanguage)?.code || 'en', currency }} />
