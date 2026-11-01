@@ -2105,7 +2105,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   </div>;
 }
 
-const GET_STARTED_STEPS = ['Profile', 'Guidance', 'Audience', 'Products', 'Offers', 'Site'] as const;
+const GET_STARTED_STEPS = ['Profile', 'Guidance', 'Audience', 'Products', 'Offer path', 'Site'] as const;
 
 /**
  * What a new Guardian meets before the profile step: what the role is, in three plain promises, and the five steps ahead.
@@ -2977,7 +2977,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     { n: 2, label: 'Guidance', title: 'Where can you help?', copy: 'Choose the areas where your experience is most useful.', image: '/images/guides/build-plate.png' },
     { n: 3, label: 'Audience', title: 'Who do you help?', copy: 'Tell us who you work with and the problems you help solve.', image: '/images/guides/lead-plate.png' },
     { n: 4, label: 'Products', title: 'Upload your products.', copy: 'Free lead magnets to bring people in, then the paid products they can move on to.', image: '/images/guides/build-plate.png' },
-    { n: 5, label: 'Offers', title: 'Build your offers.', copy: 'Plan the journey, then build every free and paid offer it contains.', image: '/images/guides/offer-plate.png' },
+    { n: 5, label: 'Offer path', title: 'Build your offer path.', copy: 'Put your products in order, from the first free win to the paid support.', image: '/images/guides/offer-plate.png' },
     { n: 6, label: 'Site', title: 'Build your site.', copy: 'Preview the customer journey, then publish.', image: '/images/guides/guide-plate.png' },
   ];
   const activeStep = steps[Math.max(step, 1) - 1];
@@ -3519,31 +3519,16 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
                 <button type="button" onClick={addUseCase} style={{ ...btn, justifySelf: 'start' }}>Add this use case</button>
               </div>}
             </div>
-            {useCaseReady && <><span data-offer-step="2" style={{ display: 'block', color: ink, fontFamily: sans, fontSize: 10, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>Step 2 · Arrange your offers</span><label style={{ ...label, color: ink }}>Your offers <span style={{ color: acid }}>· value rises at every step</span></label>
-            <p style={{ color: muted, fontSize: 9, lineHeight: 1.5, margin: '-1px 0 12px' }}>Add or remove steps in one continuous customer journey.</p>
+            {useCaseReady && <><span data-offer-step="2" style={{ display: 'block', color: ink, fontFamily: sans, fontSize: 10, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>Step 2 · Choose your steps</span><label style={{ ...label, color: ink }}>Your offer path <span style={{ color: acid }}>· value rises at every step</span></label>
+            <p style={{ color: muted, fontSize: 9, lineHeight: 1.5, margin: '-1px 0 12px' }}>Switch steps on or off. Each one you keep is built below, in order.</p>
             {(() => { const usable = related.offers.filter((offer) => offer.access_model === 'paid' && upsellSuggestions.some((item) => item.kind === offer.kind) && !selectedUpsells.includes(offer.kind as UpsellKind)); return usable.length > 0 && <div data-use-built-products style={{ border: `1px solid ${line}`, padding: 10, margin: '0 0 12px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
               <span style={{ ...label, marginBottom: 0, color: acid }}>From your products</span>
               {usable.sort((a, b) => (b.price_cents || 0) - (a.price_cents || 0)).map((offer) => <button key={offer.id} type="button" onClick={() => { const kind = offer.kind as UpsellKind; setSelectedUpsells((current) => current.includes(kind) ? current : [...current, kind]); setOfferAccess((current) => ({ ...current, [kind]: 'paid' })); setUpsellDrafts((current) => ({ ...current, [kind]: { ...current[kind], title: offer.title, price: String((offer.price_cents || 0) / 100) } })); }} style={{ minHeight: 30, padding: '0 11px', border: `1px solid ${acid}`, background: 'transparent', color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.06em', cursor: 'pointer' }}>+ {offer.title} · {formatMoney((offer.price_cents || 0) / 100, offer.currency || 'GBP')}</button>)}
             </div>; })()}
-            <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'stretch', gap: 0, minWidth: 'max-content' }}>
-                {leadMagnetCluster()}
-                {offerCards.filter((offer) => selectedUpsells.includes(offer.kind)).map((offer, position) => <Fragment key={offer.kind}>{position === 0 && extraLeadMagnets.length < 1
-                  ? <span data-journey-plus="free" style={{ width: 64, flex: '0 0 64px', alignSelf: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, position: 'relative' }}>
-                    <ArrowRight aria-hidden="true" size={22} strokeWidth={1.4} color={acid} />
-                    <button type="button" onClick={() => setShowLeadMagnetPicker((current) => !current)} aria-expanded={showLeadMagnetPicker} aria-label="Add another lead magnet" title="Add a second free way in" style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid #FFF', background: '#FFF', color: black, cursor: 'pointer', display: 'grid', placeItems: 'center', fontSize: 18, lineHeight: 1, fontFamily: sans, padding: 0 }}>+</button>
-                    {showLeadMagnetPicker && <div style={{ position: 'absolute', top: '100%', marginTop: 8, zIndex: 5, width: 200, display: 'grid', gap: 6, padding: 10, background: panel, border: `1px solid ${line}` }}><span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>Second free way in</span>{leadMagnetOptions.map((option) => <button key={option.value} type="button" onClick={() => { setSelectedLeadMagnets((current) => current.includes(option.value) ? current : [...current, option.value]); setShowLeadMagnetPicker(false); }} style={{ ...btn, minHeight: 36, height: 'auto', padding: '8px 10px', background: 'transparent', color: ink, fontSize: 10, textAlign: 'left' }}>{option.label}</button>)}</div>}
-                  </span>
-                  : <span aria-hidden="true" style={{ width: 34, flex: '0 0 34px', alignSelf: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: acid }}><ArrowRight size={22} strokeWidth={1.4} /></span>}{paidOfferCard(offer)}{position === 0 && offerCards.some((card) => !selectedUpsells.includes(card.kind)) && <span data-journey-plus="upsell" style={{ width: 64, flex: '0 0 64px', alignSelf: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                    <button type="button" onClick={() => setShowAddOfferOptions(true)} aria-label="Add an upsell" title="Add an upsell" style={{ width: 28, height: 28, borderRadius: '50%', border: `1px solid ${acid}`, background: 'transparent', color: acid, cursor: 'pointer', display: 'grid', placeItems: 'center', fontSize: 18, lineHeight: 1, fontFamily: sans, padding: 0 }}>+</button>
-                  </span>}</Fragment>)}
-                {offerCards.some((offer) => !selectedUpsells.includes(offer.kind)) && <Fragment><span aria-hidden="true" style={{ width: 34, flex: '0 0 34px', alignSelf: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: line }}><ArrowRight size={22} strokeWidth={1.4} /></span><div style={{ width: 320, flex: '0 0 320px', border: `1px dashed ${muted}`, background: 'transparent', display: 'flex', flexDirection: 'column' }}>
-                  <button type="button" onClick={() => setShowAddOfferOptions((current) => !current)} aria-expanded={showAddOfferOptions} style={{ minHeight: 190, flex: '1 1 auto', border: 0, background: 'transparent', color: ink, fontFamily: sans, cursor: 'pointer', display: 'grid', placeItems: 'center', textAlign: 'center', padding: '38px 20px 24px' }}><span><span style={{ width: 48, height: 48, margin: '0 auto 14px', border: `1px solid ${ink}`, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 25, fontWeight: 300 }}>+</span><strong style={{ display: 'block', fontSize: 16 }}>Add next offer</strong><span style={{ display: 'block', color: muted, fontSize: 10, marginTop: 7 }}>{offerCards.filter((offer) => !selectedUpsells.includes(offer.kind)).length} options available</span></span></button>
-                  {showAddOfferOptions && <div style={{ display: 'grid', gap: 6, padding: '0 10px 10px' }}>{offerCards.filter((offer) => !selectedUpsells.includes(offer.kind)).map((offer) => { const art = offerTypeArt[offer.kind]; return <button type="button" key={offer.kind} onClick={() => addValuePathOffer(offer.kind)} style={{ minHeight: 58, border: `1px solid ${line}`, background: panel, color: ink, padding: '8px 10px', fontFamily: sans, cursor: 'pointer', display: 'grid', gridTemplateColumns: '42px minmax(0,1fr) auto', alignItems: 'center', gap: 9, textAlign: 'left' }}><span aria-hidden="true" style={{ width: 38, height: 38, backgroundImage: `url(${art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${art.cols * 100}% ${art.rows * 100}%`, backgroundPosition: `${(art.index % art.cols) * 100 / Math.max(1, art.cols - 1)}% ${Math.floor(art.index / art.cols) * 100 / Math.max(1, art.rows - 1)}%`, filter: 'grayscale(1) contrast(.98)' }} /><span><strong style={{ display: 'block', fontSize: 10 }}>{offer.label}</strong><span style={{ display: 'block', color: muted, fontSize: 8, marginTop: 3 }}>{offerAccess[offer.kind] === 'free' ? 'Free' : `${formatMoney(upsellDrafts[offer.kind].price, currency)}${billingLabels[upsellDrafts[offer.kind].billingModel].suffix}`}</span></span><Plus size={14} /></button>; })}</div>}
-                  <div style={{ borderTop: `1px solid ${line}`, minHeight: 50, marginTop: 'auto', padding: 10, background: 'rgba(245,242,234,.025)', display: 'flex', alignItems: 'center' }}><strong style={{ color: muted, fontSize: 9, letterSpacing: '.08em', textTransform: 'uppercase' }}>Next value step</strong></div>
-                </div></Fragment>}
-              </div>
-            </div></>}
+            <div role="group" aria-label="Steps in your offer path" data-offer-step-toggles style={{ display: 'flex', flexWrap: 'wrap', gap: 8, paddingBottom: 8 }}>
+              {offerCards.map((offer) => { const on = selectedUpsells.includes(offer.kind); return <button key={offer.kind} type="button" aria-pressed={on} onClick={() => on ? toggleUpsell(offer.kind) : addValuePathOffer(offer.kind)} style={{ minHeight: 36, padding: '0 14px', border: `1px solid ${on ? acid : line}`, background: on ? '#20251B' : 'transparent', color: ink, fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: '.04em', cursor: 'pointer' }}>{on ? '✓ ' : '+ '}{offer.label}</button>; })}
+            </div>
+            </>}
           </div>}
         </div>
         {offerPlanStage === 2 && useCaseReady && <>
@@ -5602,7 +5587,7 @@ export function SiteProfileForm({ userId, profile, onProfile }: { userId: string
   </div>;
 }
 
-const GUARDIAN_STEP_LABELS = ['Profile', 'Guidance', 'Audience', 'Products', 'Offers', 'Site', 'Content'];
+const GUARDIAN_STEP_LABELS = ['Profile', 'Guidance', 'Audience', 'Products', 'Offer path', 'Site', 'Content'];
 /** Steps 1–5 are the setup flow; 06 opens the Content builder. */
 const guardianStepHref = (label: string, index: number) => (label === 'Content' ? '/guardians/workspace?tab=content' : `/guardians/workspace?step=${index + 1}`);
 
