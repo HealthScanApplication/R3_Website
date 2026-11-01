@@ -2536,15 +2536,15 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   };
   // Age slider (and women's life stages) stacked directly under each selected audience card.
   const agePanel = (g: string) => { const d = audienceDetails[g]; const set = (patch: Partial<typeof d>) => setAudienceDetails((current) => ({ ...current, [g]: { ...current[g], ...patch } })); return <div style={{ border: `1px solid ${line}`, borderTop: 0, background: 'rgba(245,242,234,.04)', padding: '10px 12px 12px', display: 'grid', gap: 10 }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+    <div data-age-row style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px 10px' }}>
                     <span style={{ color: muted, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase' }}>Ages</span>
-      <div className="age-range" style={{ flex: '1 1 120px', minWidth: 100 }}>
+      <div className="age-range" style={{ flex: '1 1 100px', minWidth: 100, order: 3 }}>
         <span aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, top: 10, height: 2, background: line }} />
         <span aria-hidden="true" style={{ position: 'absolute', top: 10, height: 2, background: acid, left: `${d.min / (g === 'Children' ? 12 : g === 'Teenagers' ? 19 : 90) * 100}%`, right: `${100 - d.max / (g === 'Children' ? 12 : g === 'Teenagers' ? 19 : 90) * 100}%` }} />
         <input type="range" aria-label={`${g} minimum age`} min={0} max={g === 'Children' ? 12 : g === 'Teenagers' ? 19 : 90} value={d.min} onChange={(e) => set({ min: Math.min(Number(e.target.value), d.max - 1) })} />
         <input type="range" aria-label={`${g} maximum age`} min={0} max={g === 'Children' ? 12 : g === 'Teenagers' ? 19 : 90} value={d.max} onChange={(e) => set({ max: Math.max(Number(e.target.value), d.min + 1) })} />
       </div>
-      <span style={{ color: ink, fontSize: 13, fontWeight: 600, minWidth: 44, textAlign: 'right' }}>{d.min}–{d.max}{d.max >= 90 ? '+' : ''}</span>
+      <span style={{ color: ink, fontSize: 13, fontWeight: 600, minWidth: 44, textAlign: 'right', marginLeft: 'auto' }}>{d.min}–{d.max}{d.max >= 90 ? '+' : ''}</span>
     </div>
     {AUDIENCE_CHIPS[g] && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
       <span style={{ flexBasis: '100%', color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase' }}>{AUDIENCE_CHIPS[g].label}</span>

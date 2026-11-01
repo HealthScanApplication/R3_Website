@@ -36,4 +36,12 @@ describe('vertical choice cards with a realm tag', () => {
     expect(everyone.style.textAlign).toBe('center');
     expect(within(everyone).getByText(/General guidance/)).toBeTruthy();
   });
+  it('the age controls wrap inside the narrow card instead of spilling into the next one', async () => {
+    setup(3);
+    await screen.findAllByText('Everyone');
+    const everyone = document.querySelector('[data-choice-card]') as HTMLElement;
+    const row = everyone.parentElement!.parentElement!.querySelector('[data-age-row]') as HTMLElement | null ?? document.querySelector('[data-age-row]') as HTMLElement;
+    expect(row).toBeTruthy();
+    expect(row.style.flexWrap).toBe('wrap');
+  });
 });
