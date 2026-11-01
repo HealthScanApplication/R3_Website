@@ -56,6 +56,7 @@ import { ProduceVideoBackdrop } from './ProduceVideoBackdrop';
 import { HeroGlassOverlay, heroGlassOn } from './HeroGlassOverlay';
 import { GUARDIAN_SCENES, guardianTypeClipUrl, isSceneBackground } from '../../utils/guardianTypeClip';
 import { openSiteBuilder } from '../../utils/guardianSiteRoute';
+import { confirmInPage } from '../../utils/confirmInPage';
 import { countryForPlace, mapQueryFor } from '../../utils/placeCountry';
 import { YouTubeClipFields } from './YouTubeClipFields';
 import { clipsFromLinks, clipsToLinks, type YtClip } from '../../utils/youtubeClip';
@@ -1806,7 +1807,7 @@ function WorkspaceEvents({ guideId }: { guideId: string }) {
     finally { setBusy(false); }
   }
   async function remove(event: GuideEvent) {
-    if (!window.confirm(`Delete “${event.title}”?`)) return;
+    if (!(await confirmInPage(`Delete “${event.title}”?`))) return;
     try { await deleteGuideEvent(guideId, event.id); setEvents((rows) => rows.filter((row) => row.id !== event.id)); setNotice('Event deleted.'); }
     catch (error) { setProblem((error as Error).message || 'Could not delete this event.'); }
   }
@@ -2293,16 +2294,6 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const [offerPlanStage, setOfferPlanStage] = useState(0);
   // Paid offers are built one at a time: the next appears when the Guardian asks for it (progressive disclosure under Step 3).
   const [paidStepsOpen, setPaidStepsOpen] = useState(1);
-  // Build a product (setup step 04): any offer type saved as a draft, ready to drop into the offer path in step 05.
-  const [buildKind, setBuildKind] = useState<UpsellKind | null>(null);
-  const [buildFilter, setBuildFilter] = useState<'all' | UpsellKind>('all');
-  const [buildMode, setBuildMode] = useState<'create' | 'pdf' | 'link'>('create');
-  const [buildFile, setBuildFile] = useState<File | null>(null);
-  const [buildLink, setBuildLink] = useState('');
-  const [buildTitle, setBuildTitle] = useState('');
-  const [buildPrice, setBuildPrice] = useState('');
-  const [buildBusy, setBuildBusy] = useState(false);
-  const [buildNote, setBuildNote] = useState('');
   const [showProtocolInfo, setShowProtocolInfo] = useState(false);
   const [summaryView, setSummaryView] = useState<'offers' | 'sites' | null>(null);
   const [inventoryMenu, setInventoryMenu] = useState<string | null>(null);
@@ -2973,7 +2964,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     { n: 1, label: 'Profile', title: 'Start with what you know.', copy: 'Add your name and any public profile you want us to learn from.', image: '/images/guides/guide-plate.png' },
     { n: 2, label: 'Guidance', title: 'Where can you help?', copy: 'Choose the areas where your experience is most useful.', image: '/images/guides/build-plate.png' },
     { n: 3, label: 'Audience', title: 'Who do you help?', copy: 'Tell us who you work with and the problems you help solve.', image: '/images/guides/lead-plate.png' },
-    { n: 4, label: 'Products', title: 'What do you recommend?', copy: 'Your products, listed by value, so your offers can point to them.', image: '/images/guides/build-plate.png' },
+    { n: 4, label: 'Products', title: 'Upload your products.', copy: 'Free lead magnets to bring people in, then the paid products they can move on to.', image: '/images/guides/build-plate.png' },
     { n: 5, label: 'Offers', title: 'Build your offers.', copy: 'Plan the journey, then build every free and paid offer it contains.', image: '/images/guides/offer-plate.png' },
     { n: 6, label: 'Site', title: 'Build your site.', copy: 'Preview the customer journey, then publish.', image: '/images/guides/guide-plate.png' },
   ];
@@ -3439,70 +3430,16 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       </>}
 
       {step === 4 && <div data-products-step>
-        <section data-build-product aria-label="Build a product" style={{ border: `1px solid ${line}`, background: panel, padding: 16, marginBottom: 22 }}>
-          <span style={{ display: 'block', color: acid, fontFamily: sans, fontSize: 10, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>Build a product</span>
-          <h2 style={{ fontFamily: serif, fontSize: 'clamp(34px,5vw,54px)', fontWeight: 300, lineHeight: 1, letterSpacing: '-.03em', margin: '8px 0 6px', color: ink }}>Build your products.</h2>
-          <p style={{ color: muted, fontSize: 12, lineHeight: 1.5, margin: '0 0 14px' }}>Choose a type, name it and price it. It is saved as a draft you can drop into your offers in the next step.</p>
-          <div role="group" aria-label="Filter product types" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-            {[['all', 'All'], ...upsellSuggestions.map((type) => [type.kind, PRODUCT_TYPE_CHIPS[type.kind] || type.label])].map(([id, text]) => <button key={id} type="button" aria-pressed={buildFilter === id} onClick={() => setBuildFilter(id as 'all' | UpsellKind)} style={{ minHeight: 34, padding: '0 14px', border: `1px solid ${buildFilter === id ? ink : line}`, background: buildFilter === id ? ink : 'transparent', color: buildFilter === id ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{text}</button>)}
-          </div>
-          <style>{`[data-build-product] .r3-pcard,[data-build-product] [data-product-type]{min-height:500px}`}</style>
-          <ProtocolCardGrid>
-            {[...upsellSuggestions].sort((a, b) => Number(upsellDrafts[a.kind].price || 0) - Number(upsellDrafts[b.kind].price || 0)).map((type, rank) => ({ type, rank })).filter(({ type }) => buildFilter === 'all' || buildFilter === type.kind).map(({ type, rank }) => <button key={type.kind} type="button" data-product-type={type.kind} aria-pressed={buildKind === type.kind} onClick={() => { setBuildKind(type.kind); setBuildTitle(type.label); setBuildPrice(upsellDrafts[type.kind]?.price || ''); setBuildNote(''); setBuildMode('create'); setBuildFile(null); setBuildLink(''); }} style={{ display: 'flex', flexDirection: 'column', minHeight: 500, padding: 0, textAlign: 'left', overflow: 'hidden', borderRadius: 6, border: `1px dashed ${buildKind === type.kind ? acid : 'rgba(245,242,234,.4)'}`, backgroundColor: buildKind === type.kind ? '#20251B' : 'transparent', color: ink, fontFamily: sans, cursor: 'pointer' }}>
-              <span style={{ position: 'relative', height: 220, flex: '0 0 220px', display: 'grid', placeItems: 'center', borderBottom: '1px dashed rgba(245,242,234,.3)', backgroundImage: 'radial-gradient(rgba(245,242,234,.14) 1px, transparent 1px)', backgroundSize: '14px 14px' }}>
-                <span data-value-rank style={{ position: 'absolute', top: 12, left: 12, padding: '5px 9px', background: ink, color: black, fontSize: 10, fontWeight: 800, letterSpacing: '.08em' }}>#{String(rank + 1).padStart(2, '0')}</span>
-                <span data-suggested-price style={{ position: 'absolute', top: 12, right: 12, padding: '5px 9px', border: '1px solid rgba(245,242,234,.5)', background: 'rgba(9,10,8,.6)', color: ink, fontSize: 10, fontWeight: 700, letterSpacing: '.06em' }}>Suggested {formatMoney(Number(upsellDrafts[type.kind].price || 0), currency)}</span>
-                <span aria-hidden="true" style={{ width: 116 * type.art.cellAspect, height: 116, backgroundImage: `url(${type.art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${type.art.cols * 100}% ${type.art.rows * 100}%`, backgroundPosition: `${type.art.cols === 1 ? 0 : (type.art.index % type.art.cols) * 100 / (type.art.cols - 1)}% ${type.art.rows === 1 ? 0 : Math.floor(type.art.index / type.art.cols) * 100 / (type.art.rows - 1)}%`, filter: 'grayscale(1) contrast(.94)' }} />
-              </span>
-              <span style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, padding: '16px 20px 20px' }}>
-                <span style={{ color: acid, fontSize: 9, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>{PRODUCT_TYPE_CHIPS[type.kind] || type.value}</span>
-                <strong style={{ fontFamily: serif, fontSize: 24, fontWeight: 300, lineHeight: 1.08, letterSpacing: '-.01em' }}>{type.label}</strong>
-                <span style={{ color: muted, fontSize: 11, lineHeight: 1.45, flex: 1 }}>{type.why}</span>
-                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 40, background: ink, color: black, fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Build it <ArrowRight size={13} /></span>
-              </span>
-            </button>)}
-          </ProtocolCardGrid>
-          {buildKind && <div data-build-form style={{ marginTop: 14, border: `1px solid ${line}`, padding: 14 }}>
-            <div role="radiogroup" aria-label="How will people get it?" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-              {([['create', 'Create it here'], ['pdf', 'Upload a PDF'], ['link', 'I have a link']] as const).map(([id, text]) => <button key={id} type="button" role="radio" aria-checked={buildMode === id} onClick={() => setBuildMode(id)} style={{ minHeight: 34, padding: '0 14px', border: `1px solid ${buildMode === id ? ink : line}`, background: buildMode === id ? ink : 'transparent', color: buildMode === id ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{text}</button>)}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr)', gap: 8, marginBottom: 8 }}>
-              <div><label style={{ ...label, marginBottom: 5 }}>Product name</label><input aria-label="Product name" style={input} value={buildTitle} onChange={(event) => setBuildTitle(event.target.value)} /></div>
-              <div><label style={{ ...label, marginBottom: 5 }}>Price · {currency}</label><input aria-label="Product price" style={input} inputMode="decimal" value={buildPrice} onChange={(event) => setBuildPrice(event.target.value.replace(/[^0-9.]/g, ''))} placeholder="0 for free" /></div>
-            </div>
-            {buildMode === 'pdf' && <div style={{ marginBottom: 8 }}><label style={{ ...label, marginBottom: 5 }}>PDF, EPUB or ZIP · up to 50 MB</label><label style={{ ...btn, background: 'transparent', color: ink, display: 'inline-flex' }}><Upload size={12} /> {buildFile ? buildFile.name : 'Choose a file'}<input aria-label="Product file" type="file" accept="application/pdf,application/epub+zip,application/zip" onChange={(event) => setBuildFile(event.target.files?.[0] || null)} style={{ display: 'none' }} /></label></div>}
-            {buildMode === 'link' && <div style={{ marginBottom: 8 }}><label style={{ ...label, marginBottom: 5 }}>Booking link, video series or any page people should open</label><input aria-label="Product link" style={input} type="url" value={buildLink} onChange={(event) => setBuildLink(event.target.value)} placeholder="https://" /></div>}
-            <button type="button" disabled={buildBusy || !buildTitle.trim() || (buildMode === 'pdf' && !buildFile) || (buildMode === 'link' && !/^https?:\/\//i.test(buildLink.trim()))} onClick={async () => {
-              const suggestion = upsellSuggestions.find((item) => item.kind === buildKind);
-              const priceCents = Math.round(Number(buildPrice || 0) * 100);
-              const bookingKinds: string[] = ['one_to_one_call', 'group_call', 'in_person', 'festival', 'routine_guidance'];
-              setBuildBusy(true); setError(''); setBuildNote('');
-              try {
-                const filePath = buildMode === 'pdf' && buildFile ? await uploadGuideFile(userId, buildFile) : null;
-                const link = buildMode === 'link' ? buildLink.trim() : '';
-                const created = await createGuideOffer(userId, { kind: buildKind!, title: buildTitle.trim(), description: suggestion?.why || null, price_cents: priceCents, affiliate_url: link && !bookingKinds.includes(buildKind!) ? link : null, access_model: priceCents > 0 ? 'paid' : 'free', file_path: filePath, booking_url: link && bookingKinds.includes(buildKind!) ? link : null, status: 'draft', currency });
-                setRelated((current) => ({ ...current, offers: [...current.offers, created] }));
-                setBuildNote(`Saved “${created.title}”. Use it in your offers in the next step.`);
-                setBuildKind(null); setBuildTitle(''); setBuildPrice(''); setBuildMode('create'); setBuildFile(null); setBuildLink('');
-              } catch (e: any) { setError(e?.message || 'The product could not be saved.'); }
-              finally { setBuildBusy(false); }
-            }} style={{ ...btn, minHeight: 44, width: '100%' }}>{buildBusy ? 'Saving' : 'Save product'}</button>
-          </div>}
-          {buildNote && <p role="status" style={{ color: acid, fontSize: 12, margin: '10px 0 0' }}>{buildNote}</p>}
-        {related.offers.length > 0 && <section data-built-products aria-label="Products you have built" style={{ marginTop: 28 }}>
-            <span style={{ ...label, color: acid }}>Products you have built · {related.offers.length} · by value</span>
-            <ProtocolCardGrid>{[...related.offers].sort((a, b) => (b.price_cents || 0) - (a.price_cents || 0)).map((offer) => <ProductCard key={offer.id} kind={offer.kind} imageUrl={offer.cover_url}
-              eyebrow={[offer.status === 'published' ? 'Published' : 'Draft', offer.access_model === 'free' ? 'Free' : 'Paid'].join(' · ')} title={customerFacingOfferTitle(offer.title)} copy={(offer.description || '').split(' Delivery:')[0].slice(0, 120) || undefined}
-              price={offer.access_model === 'free' ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid'} name={displayName || 'You'} owned visibility={offer.status === 'published' ? 'public' : 'private'}
-              onEdit={() => { window.location.href = '/guardians/workspace?tab=offer_builder'; }}
-              onDelete={async () => { if (!window.confirm(`Delete ${offer.title}?`)) return; await deleteGuideOffer(userId, offer.id); setRelated((current) => ({ ...current, offers: current.offers.filter((item) => item.id !== offer.id) })); }} />)}</ProtocolCardGrid>
-          </section>}
-        </section>
-        <p style={{ color: muted, fontSize: 12, lineHeight: 1.6, margin: '0 0 16px' }}>Everything you recommend or sell, highest value first. Your offers can point to these, and visitors see the visible ones on your site.</p>
-        {related.products.length
-          ? <ProtocolCardGrid>{valueSortedProducts(related.products).map((product, index) => <ProtocolCard key={product.id} badge={product.price_cents ? formatMoney(product.price_cents / 100, product.currency || 'GBP') : undefined} kicker={`#${String(index + 1).padStart(2, '0')} by value`} title={product.title} imageUrl={product.image_url} copy={clipCopy(product.description || '')} by={displayName} cta="Manage products" onClick={() => { window.location.href = '/guardians/workspace?tab=products'; }} owned />)}</ProtocolCardGrid>
-          : <Empty title="No products yet" copy="Add the products you recommend, from your own shop or ones you earn commission on. They appear here from highest value down." action={<a href="/guardians/workspace?tab=products" style={{ ...btn, textDecoration: 'none' }}>Add products</a>} />}
-        <div style={{ marginTop: 14 }}><a href="/guardians/workspace?tab=products" style={{ color: muted, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', textDecoration: 'none' }}>Add or edit products →</a></div>
+        <p style={{ color: muted, fontSize: 12, lineHeight: 1.6, margin: '0 0 18px' }}>Add what you already sell or give away. Paste the link, set the price and pick the type; we sort out the rest. Free lead magnets and paid products are kept apart.</p>
+        {PRODUCT_UPLOAD_GROUPS.map((group) => <ProductUploadSection key={group.id} group={group} userId={userId} currency={currency}
+          offers={related.offers.filter((offer) => offer.access_model === group.id)}
+          onSaved={(created) => setRelated((current) => ({ ...current, offers: [...current.offers, ...created] }))}
+          onDeleted={(offerId) => setRelated((current) => ({ ...current, offers: current.offers.filter((offer) => offer.id !== offerId) }))}
+          displayName={displayName} />)}
+        {related.products.length > 0 && <section data-shop-products aria-label="Shop products" style={{ marginTop: 28 }}>
+          <span style={{ ...label, color: acid }}>Shop products · {related.products.length} · by value</span>
+          <ProtocolCardGrid>{valueSortedProducts(related.products).map((product, index) => <ProtocolCard key={product.id} badge={product.price_cents ? formatMoney(product.price_cents / 100, product.currency || 'GBP') : undefined} kicker={`#${String(index + 1).padStart(2, '0')} by value`} title={product.title} imageUrl={product.image_url} copy={clipCopy(product.description || '')} by={displayName} cta="Manage products" onClick={() => { window.location.href = '/guardians/workspace?tab=products'; }} owned />)}</ProtocolCardGrid>
+        </section>}
       </div>}
 
       {step === 5 && <>
@@ -4004,8 +3941,164 @@ function WideCard({ row, onOpen }: { row: RelatedRow; onOpen: () => void }) {
 }
 
 /** Below the fold of each setup step: the Guardian's existing items for that stage, as wide cards two to a row. */
-/** Short names for the product types, used on the filter chips and card eyebrows. */
-const PRODUCT_TYPE_CHIPS: Record<string, string> = { ebook: 'Guide', recipe_book: 'Recipes', routine: 'Protocol', routine_guidance: 'Protocol + call', festival: 'Retreat', group_call: 'Coaching', one_to_one_call: '1:1 call', in_person: 'In person' };
+/** The kinds of product a Guardian can list, in the order of the type drop-down. */
+const PRODUCT_UPLOAD_TYPES: Array<{ value: GuideOffer['kind']; label: string; booking?: boolean }> = [
+  { value: 'ebook', label: 'PDF guide' },
+  { value: 'recipe_book', label: 'Recipe book (PDF)' },
+  { value: 'course', label: 'Video course' },
+  { value: 'routine', label: 'Protocol' },
+  { value: 'routine_guidance', label: 'Protocol + call', booking: true },
+  { value: 'one_to_one_call', label: '1:1 call', booking: true },
+  { value: 'group_call', label: 'Coaching', booking: true },
+  { value: 'community', label: 'Community or membership' },
+  { value: 'festival', label: 'Retreat', booking: true },
+  { value: 'in_person', label: 'Workshop or in person', booking: true },
+  { value: 'product', label: 'Physical product' },
+];
+/** Where each type is built: the workspace builder that makes that kind of product. */
+const PRODUCT_BUILDER_TAB: Record<string, Tab> = { ebook: 'content', recipe_book: 'recipes', course: 'offer_builder', routine: 'protocols', routine_guidance: 'protocols', one_to_one_call: 'offer_builder', group_call: 'offer_builder', community: 'community', festival: 'events', in_person: 'events', product: 'products' };
+const PRODUCT_UPLOAD_GROUPS: Array<{ id: 'free' | 'paid'; title: string; copy: string }> = [
+  { id: 'free', title: 'Lead magnets', copy: 'Free things that bring people in: a PDF, a short video series, a starter Protocol, a booking link for a free call.' },
+  { id: 'paid', title: 'Paid products', copy: 'What people pay for, from a low-priced guide up to a retreat.' },
+];
+
+/** The suggested products shown as dotted cards: what each type is, its usual price, and a value rank. */
+const PRODUCT_SUGGESTIONS: Array<{ kind: GuideOffer['kind']; why: string; price: number; free?: boolean; art: TagArt }> = [
+  { kind: 'recipe_book', why: 'A collection of practical recipes, as a PDF or a printed book.', price: 24, free: true, art: offerTypeArt.recipe_book },
+  { kind: 'ebook', why: 'The complete method to read and apply at their own pace.', price: 29, free: true, art: offerTypeArt.ebook },
+  { kind: 'community', why: 'A private community people join for ongoing support.', price: 19, free: true, art: offerArt['Team program'] },
+  { kind: 'product', why: 'Something you make or sell that is sent to people.', price: 35, art: offerArt.Paid },
+  { kind: 'routine', why: 'A Protocol shaped around them, in print and in the ROUTINE³ app.', price: 49, free: true, art: offerTypeArt.routine },
+  { kind: 'routine_guidance', why: 'A personalised Protocol plus a call to set it up.', price: 79, art: offerTypeArt.routine_guidance },
+  { kind: 'course', why: 'A video series people follow step by step.', price: 97, free: true, art: offerArt.Journey },
+  { kind: 'one_to_one_call', why: 'A private call to refine their plan and agree next actions.', price: 104, free: true, art: offerTypeArt.one_to_one_call },
+  { kind: 'group_call', why: 'Weekly coaching with daily feedback on their Protocol.', price: 299, free: true, art: offerTypeArt.group_call },
+  { kind: 'in_person', why: 'A workshop or in-person session with your full attention.', price: 349, art: offerTypeArt.in_person },
+  { kind: 'festival', why: 'Three focused days away with coaching and practical sessions.', price: 1500, art: offerTypeArt.festival },
+];
+
+/** Reads a pasted link: the type it most likely is, and a name taken from the address. */
+export function guessProductFromUrl(raw: string): { type?: GuideOffer['kind']; title?: string } {
+  const text = raw.trim();
+  if (!/^https?:\/\//i.test(text)) return {};
+  let url: URL;
+  try { url = new URL(text); } catch { return {}; }
+  const host = url.hostname.replace(/^www\./, '').toLowerCase();
+  const path = url.pathname.toLowerCase();
+  let type: GuideOffer['kind'] | undefined;
+  if (/\.(pdf|epub)$/.test(path)) type = 'ebook';
+  else if (/(youtube\.com|youtu\.be|vimeo\.com|loom\.com|wistia|teachable|kajabi|thinkific|udemy|podia|skillshare)/.test(host)) type = 'course';
+  else if (/(calendly|cal\.com|acuityscheduling|setmore|savvycal|square\.site|tidycal|youcanbook)/.test(host)) type = 'one_to_one_call';
+  else if (/(skool|circle\.so|mightynetworks|patreon|substack|discord|memberful)/.test(host)) type = 'community';
+  else if (/(eventbrite|lu\.ma|meetup)/.test(host)) type = 'in_person';
+  else if (/(shopify|etsy|amazon|ebay|gumroad)|\/products?\//.test(host + path)) type = 'product';
+  const segment = decodeURIComponent(path.split('/').filter(Boolean).pop() || '').replace(/\.[a-z0-9]{2,4}$/, '').replace(/[-_+]+/g, ' ').trim();
+  const title = (segment || host.split('.')[0]).replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return { type, title };
+}
+
+type UploadRow = { id: number; url: string; title: string; price: string; type: GuideOffer['kind']; touchedType: boolean; touchedTitle: boolean };
+
+/** One group (lead magnets or paid products) of the Products step: a row per product with link, name, price and type, plus the cards already saved. */
+function ProductUploadSection({ group, userId, currency, offers, onSaved, onDeleted, displayName }: { group: { id: 'free' | 'paid'; title: string; copy: string }; userId: string; currency: string; offers: GuideOffer[]; onSaved: (created: GuideOffer[]) => void; onDeleted: (offerId: string) => void; displayName: string }) {
+  const nextId = useRef(1);
+  const blank = (): UploadRow => ({ id: nextId.current++, url: '', title: '', price: '', type: 'ebook', touchedType: false, touchedTitle: false });
+  const [rows, setRows] = useState<UploadRow[]>(() => [blank()]);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState('');
+  const [problem, setProblem] = useState('');
+  const update = (id: number, patch: Partial<UploadRow>) => setRows((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row));
+  const rowsRef = useRef<HTMLDivElement | null>(null);
+  /** A dotted card was chosen: use the first empty row (or add one) with that type and price, and bring it into view. */
+  const prefill = (kind: GuideOffer['kind'] | null, price: string, title: string) => {
+    setRows((current) => {
+      const target = current.find((row) => !row.url.trim());
+      const patch = kind ? { type: kind, touchedType: true, price, title, touchedTitle: false } : {};
+      if (target) return current.map((row) => row.id === target.id ? { ...row, ...patch } : row);
+      return [...current, { ...blank(), ...patch }];
+    });
+    window.setTimeout(() => { try { rowsRef.current?.scrollIntoView({ block: 'center', behavior: prefersReducedMotionNow() ? 'auto' : 'smooth' }); (rowsRef.current?.querySelector('input[type="url"]:not([value])') as HTMLInputElement | null)?.focus(); } catch { /* scrolling is a convenience */ } }, 40);
+  };
+  const onUrl = (row: UploadRow, url: string) => {
+    const guess = guessProductFromUrl(url);
+    update(row.id, { url, ...(guess.type && !row.touchedType ? { type: guess.type } : {}), ...(guess.title && !row.touchedTitle ? { title: guess.title } : {}) });
+  };
+  const valid = (row: UploadRow) => /^https?:\/\/\S+\.\S+/i.test(row.url.trim()) && row.title.trim() && (group.id === 'free' || row.price.trim() !== '');
+  const filled = rows.filter((row) => row.url.trim());
+  const save = async () => {
+    setBusy(true); setProblem(''); setNote('');
+    try {
+      const created: GuideOffer[] = [];
+      for (const row of filled) {
+        const type = PRODUCT_UPLOAD_TYPES.find((item) => item.value === row.type);
+        const priceCents = group.id === 'free' ? 0 : Math.round(Number(row.price || 0) * 100);
+        const link = row.url.trim();
+        created.push(await createGuideOffer(userId, { kind: row.type, title: row.title.trim(), description: null, price_cents: priceCents, affiliate_url: type?.booking ? null : link, access_model: priceCents > 0 ? 'paid' : 'free', file_path: null, booking_url: type?.booking ? link : null, status: 'draft', currency }));
+      }
+      onSaved(created);
+      setRows([blank()]);
+      setNote(`Saved ${created.length} ${created.length === 1 ? 'product' : 'products'}.`);
+    } catch (error: any) { setProblem(error?.message || 'Those could not be saved.'); }
+    finally { setBusy(false); }
+  };
+  const input: React.CSSProperties = { width: '100%', minHeight: 44, boxSizing: 'border-box', background: '#0B0C0A', color: ink, border: `1px solid ${line}`, padding: '0 12px', fontFamily: sans, fontSize: 14 };
+  return <section data-upload-group={group.id} aria-label={group.title} style={{ border: `1px solid ${line}`, background: panel, padding: 16, marginBottom: 18 }}>
+    <h3 style={{ fontFamily: serif, fontSize: 'clamp(26px,3vw,36px)', fontWeight: 300, letterSpacing: '-.02em', lineHeight: 1.05, margin: 0, color: ink }}>{group.title}</h3>
+    <p style={{ color: muted, fontSize: 12, lineHeight: 1.5, margin: '6px 0 14px' }}>{group.copy}</p>
+    <style>{`[data-upload-group] .r3-pcard,[data-upload-group] [data-suggestion]{min-height:500px}`}</style>
+    <div style={{ marginBottom: 16 }}>
+      <ProtocolCardGrid>{[...offers].sort((a, b) => (b.price_cents || 0) - (a.price_cents || 0)).map((offer) => <ProductCard key={offer.id} kind={offer.kind} imageUrl={offer.cover_url}
+        eyebrow={[PRODUCT_UPLOAD_TYPES.find((item) => item.value === offer.kind)?.label || offer.kind.replace(/_/g, ' '), offer.status === 'published' ? 'Published' : 'Draft'].join(' · ')} title={customerFacingOfferTitle(offer.title)} copy={(offer.description || '').split(' Delivery:')[0].slice(0, 120) || undefined}
+        price={offer.access_model === 'free' ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid'} name={displayName || 'You'} owned visibility={offer.status === 'published' ? 'public' : 'private'}
+        href={offer.affiliate_url || offer.booking_url || undefined}
+        onEdit={() => { window.location.href = '/guardians/workspace?tab=offer_builder'; }}
+        onDelete={async () => { if (!(await confirmInPage(`Delete ${offer.title}?`))) return; await deleteGuideOffer(userId, offer.id); onDeleted(offer.id); }} />)}
+        {PRODUCT_SUGGESTIONS.filter((suggestion) => (group.id === 'paid' || suggestion.free) && !offers.some((offer) => offer.kind === suggestion.kind)).map((suggestion) => {
+          const type = PRODUCT_UPLOAD_TYPES.find((item) => item.value === suggestion.kind)!;
+          const rank = [...PRODUCT_SUGGESTIONS].sort((x, y) => x.price - y.price).findIndex((item) => item.kind === suggestion.kind) + 1;
+          return <div key={suggestion.kind} data-suggestion={suggestion.kind} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 6, border: `1px dashed rgba(245,242,234,.4)`, color: ink, fontFamily: sans }}>
+            <span style={{ position: 'relative', height: 220, flex: '0 0 220px', display: 'grid', placeItems: 'center', borderBottom: '1px dashed rgba(245,242,234,.3)', backgroundImage: 'radial-gradient(rgba(245,242,234,.14) 1px, transparent 1px)', backgroundSize: '14px 14px' }}>
+              <span data-value-rank style={{ position: 'absolute', top: 12, left: 12, padding: '5px 9px', background: ink, color: black, fontSize: 10, fontWeight: 800, letterSpacing: '.08em' }}>#{String(rank).padStart(2, '0')}</span>
+              <span data-suggested-price style={{ position: 'absolute', top: 12, right: 12, padding: '5px 9px', border: '1px solid rgba(245,242,234,.5)', background: 'rgba(9,10,8,.6)', color: ink, fontSize: 10, fontWeight: 700, letterSpacing: '.06em' }}>{group.id === 'free' ? 'Free' : `Suggested ${formatMoney(suggestion.price, currency)}`}</span>
+              <span aria-hidden="true" style={{ width: 116 * suggestion.art.cellAspect, height: 116, backgroundImage: `url(${suggestion.art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${suggestion.art.cols * 100}% ${suggestion.art.rows * 100}%`, backgroundPosition: `${suggestion.art.cols === 1 ? 0 : (suggestion.art.index % suggestion.art.cols) * 100 / (suggestion.art.cols - 1)}% ${suggestion.art.rows === 1 ? 0 : Math.floor(suggestion.art.index / suggestion.art.cols) * 100 / (suggestion.art.rows - 1)}%`, filter: 'grayscale(1) contrast(.94)' }} />
+            </span>
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, padding: '16px 20px 20px' }}>
+              <span style={{ color: acid, fontSize: 9, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>{group.id === 'free' ? `Lead magnet · ${type.label}` : type.label}</span>
+              <strong style={{ fontFamily: serif, fontSize: 24, fontWeight: 300, lineHeight: 1.08, letterSpacing: '-.01em' }}>Add a {group.id === 'free' ? 'free ' : ''}{type.label.toLowerCase()}</strong>
+              <span style={{ color: muted, fontSize: 11, lineHeight: 1.45, flex: 1 }}>{suggestion.why}</span>
+              <span style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <button type="button" data-suggestion-upload onClick={() => prefill(suggestion.kind, group.id === 'free' ? '' : String(suggestion.price), type.label)} style={{ minHeight: 40, background: ink, color: black, border: 0, fontFamily: sans, fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>Add link</button>
+                <a data-suggestion-build href={`/guardians/workspace?tab=${PRODUCT_BUILDER_TAB[suggestion.kind]}`} style={{ minHeight: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${ink}`, color: ink, textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Build it</a>
+              </span>
+            </span>
+          </div>;
+        })}
+        <button type="button" data-add-empty onClick={() => prefill(null, '', '')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, border: '1px dashed rgba(245,242,234,.4)', borderRadius: 6, background: 'transparent', color: muted, fontFamily: sans, cursor: 'pointer' }}><Plus size={28} strokeWidth={1.2} /><span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Add a {group.id === 'free' ? 'lead magnet' : 'product'}</span></button>
+      </ProtocolCardGrid>
+    </div>
+    <div ref={rowsRef} style={{ display: 'grid', gap: 10 }}>
+      {rows.map((row, index) => <div key={row.id} data-upload-row style={{ display: 'grid', gridTemplateColumns: group.id === 'free' ? 'minmax(0,3fr) minmax(0,2fr) minmax(0,2fr) auto' : 'minmax(0,3fr) minmax(0,2fr) minmax(0,1fr) minmax(0,2fr) auto', gap: 8, alignItems: 'end' }}>
+        <div><label style={{ ...label, marginBottom: 5 }}>{index === 0 ? 'Link' : ' '}</label><input aria-label={`${group.title} link ${index + 1}`} type="url" style={input} value={row.url} onChange={(event) => onUrl(row, event.target.value)} placeholder="https://" /></div>
+        <div><label style={{ ...label, marginBottom: 5 }}>{index === 0 ? 'Name' : ' '}</label><input aria-label={`${group.title} name ${index + 1}`} style={input} value={row.title} onChange={(event) => update(row.id, { title: event.target.value, touchedTitle: true })} /></div>
+        {group.id === 'paid' && <div><label style={{ ...label, marginBottom: 5 }}>{index === 0 ? `Price · ${currency}` : ' '}</label><input aria-label={`${group.title} price ${index + 1}`} inputMode="decimal" style={input} value={row.price} onChange={(event) => update(row.id, { price: event.target.value.replace(/[^0-9.]/g, '') })} placeholder="29" /></div>}
+        <div><label style={{ ...label, marginBottom: 5 }}>{index === 0 ? 'Type' : ' '}</label><select aria-label={`${group.title} type ${index + 1}`} style={input} value={row.type} onChange={(event) => update(row.id, { type: event.target.value as GuideOffer['kind'], touchedType: true })}>{PRODUCT_UPLOAD_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></div>
+        <button type="button" aria-label={`Remove row ${index + 1}`} disabled={rows.length === 1 && !row.url} onClick={() => setRows((current) => current.length === 1 ? [blank()] : current.filter((item) => item.id !== row.id))} style={{ ...btn, minHeight: 44, background: 'transparent', color: ink, padding: '0 12px' }}><Trash2 size={14} /></button>
+      </div>)}
+    </div>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginTop: 12 }}>
+      <button type="button" onClick={() => setRows((current) => [...current, blank()])} style={{ ...btn, background: 'transparent', color: ink }}><Plus size={13} /> Add another</button>
+      <button type="button" disabled={busy || filled.length === 0 || filled.some((row) => !valid(row))} onClick={save} style={btn}>{busy ? 'Saving' : `Save ${filled.length > 1 ? `${filled.length} ${group.title.toLowerCase()}` : group.title.toLowerCase().replace(/s$/, '')}`}</button>
+      {note && <span role="status" style={{ color: acid, fontSize: 12 }}>{note}</span>}
+      {problem && <span role="alert" style={{ color: '#F0A7A7', fontSize: 12 }}>{problem}</span>}
+    </div>
+    <div data-build-new style={{ marginTop: 18, paddingTop: 14, borderTop: `1px dashed ${line}` }}>
+      <span style={{ ...label, color: acid }}>Or build a new one</span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {PRODUCT_UPLOAD_TYPES.map((type) => <a key={type.value} data-build-type={type.value} href={`/guardians/workspace?tab=${PRODUCT_BUILDER_TAB[type.value]}`} aria-label={`Build a new ${type.label.toLowerCase()}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 34, padding: '0 12px', border: `1px dashed ${line}`, color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', textDecoration: 'none' }}>{type.label} <ArrowRight size={12} /></a>)}
+      </div>
+    </div>
+  </section>;
+}
 
 /** Products by value: the dearest first, unpriced ones last. */
 const valueSortedProducts = (products: GuideProduct[]): GuideProduct[] => [...products].sort((a, b) => (b.price_cents || 0) - (a.price_cents || 0) || a.title.localeCompare(b.title));
@@ -4066,7 +4159,7 @@ export function StepRelated({ step, guardianSlug, displayName, related, audience
         copy={a.problems.length ? `Helps with ${a.problems.slice(0, 4).join(', ').toLowerCase()}${a.problems.length > 4 ? ` and ${a.problems.length - 4} more` : ''}.` : 'Choose the problems you help this audience with.'}
         plate={art ? <span aria-hidden="true" style={{ display: 'block', width: 116 * art.cellAspect, height: 116, backgroundImage: `url(${art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${art.cols * 100}% ${art.rows * 100}%`, backgroundPosition: `${art.cols === 1 ? 0 : (art.index % art.cols) * 100 / (art.cols - 1)}% ${art.rows === 1 ? 0 : Math.floor(art.index / art.cols) * 100 / (art.rows - 1)}%` }} /> : undefined}
         by={displayName} owned inert onEdit={onEditAudience ? () => onEditAudience(a.group) : undefined}
-        onDelete={onRemoveAudience ? () => { if (window.confirm(`Remove ${name} from the people you help?`)) onRemoveAudience(a.group); } : undefined} />;
+        onDelete={onRemoveAudience ? async () => { if (await confirmInPage(`Remove ${name} from the people you help?`, 'Remove')) onRemoveAudience(a.group); } : undefined} />;
     })}</ProtocolCardGrid> : step === 5 && related.offers.length ? <ProtocolCardGrid>{related.offers.slice(0, 8).map((offer) => {
       const free = offer.access_model === 'free';
       return <ProductCard key={offer.id} kind={offer.kind} imageUrl={offer.cover_url}
@@ -4076,7 +4169,7 @@ export function StepRelated({ step, guardianSlug, displayName, related, audience
         name={displayName} cta={guardianSlug ? 'View on your site' : 'View offer'} href={guardianSlug ? `/guardians/${encodeURIComponent(guardianSlug)}#offers` : undefined}
         owned visibility={offer.status === 'published' ? 'public' : 'private'}
         onEdit={() => open('/guardians/workspace?tab=offer_builder')()}
-        onDelete={userId ? async () => { if (!window.confirm(`Delete ${offer.title}?`)) return; await deleteGuideOffer(userId, offer.id); onOfferDeleted?.(offer.id); } : undefined} />;
+        onDelete={userId ? async () => { if (!(await confirmInPage(`Delete ${offer.title}?`))) return; await deleteGuideOffer(userId, offer.id); onOfferDeleted?.(offer.id); } : undefined} />;
     })}</ProtocolCardGrid> : rows.length && (step === 1 || step === 6) ? <SiteCardGrid
       minCardWidth={440}
       openMenu={siteMenu}
@@ -4502,7 +4595,7 @@ function OfferBuilder({ profile, protocols, offers, recipes = [], librarySources
     {(['free', 'flexible', 'paid'] as const).map((access) => <section key={access} style={{ marginTop: 22 }}><div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, borderBottom: `1px solid ${line}`, paddingBottom: 10 }}><h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 30, margin: 0 }}>{access === 'free' ? 'Free offers' : access === 'paid' ? 'Paid offers' : 'Free or paid'}</h2><span style={{ color: muted, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.1em' }}>{offerBuilderTypes.filter((item) => item.access === access).length} types</span></div><div style={typeView === 'cards' ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 12, marginTop: 12 } : { marginTop: 2 }}>{offerBuilderTypes.filter((item) => item.access === access).map(renderOfferType)}</div></section>)}
     {message && <p style={{ color: acid, fontSize: 11, marginTop: 16 }}>{message}</p>}
     <section style={{ borderTop: `1px solid ${line}`, marginTop: 38, paddingTop: 24 }}><h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 32, margin: 0 }}>R3 outputs</h2><p style={{ color: muted, fontSize: 12 }}>Every R3 Protocol can be edited against the full Routine database, exported as a PDF and delivered through web or iOS.</p><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><a href={APP_STORE_URL} target="_blank" rel="noreferrer" style={{ ...btn, textDecoration: 'none' }}>Open iOS app <ArrowRight size={13} /></a><button type="button" onClick={onOpenProtocols} style={{ ...btn, background: 'transparent', color: ink }}>Manage {protocols.length} Protocols</button><span style={{ ...btn, background: 'transparent', color: muted, cursor: 'default' }}><Download size={13} /> PDF export inside builder</span></div></section>
-    {offers.length > 0 && <section style={{ marginTop: 34 }}><div style={label}>Created offers · {offers.length}</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18, marginTop: 12 }}>{offers.map((offer) => { const free = offer.access_model === 'free'; const linkedRoutineId = offerRoutines[offer.id]; return <div key={offer.id}><ProductCard kind={offer.kind} imageUrl={offer.cover_url || (offer.kind === 'recipe_book' ? recipes.find((r) => r.image_url && r.offer_ids?.includes(offer.id))?.image_url : null)} eyebrow={[audienceLabel(profile.social_links?.audience_details) || 'Everyone', offer.status === 'published' ? 'Published' : 'Draft'].join(' · ')} title={customerFacingOfferTitle(offer.title)} copy={(offer.description || '').split(' Delivery:')[0].slice(0, 120) || undefined} price={free ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid'} name={profile.display_name} avatarUrl={profile.avatar_url} accent={acid} cta={profile.slug ? 'View on your site' : 'View offer'} href={profile.slug ? `/guardians/${encodeURIComponent(profile.slug)}#offers` : undefined} owned visibility={offer.status === "published" ? "public" : "private"} cardQr={linkedRoutineId ? <RoutineCardQr protocolId={linkedRoutineId} guardianSlug={profile.slug} /> : undefined} onDelete={async () => { if (!window.confirm(`Delete ${offer.title}?`)) return; await deleteGuideOffer(profile.user_id, offer.id); onDeleted(offer.id); }} /><OfferCoverControls offer={offer} title={customerFacingOfferTitle(offer.title)} guideId={profile.user_id} onUpdated={onUpdated} onOpenContentBuilder={onOpenContent} />{offer.kind === "community" ? <CommunityChannelSetup offer={offer} profile={profile} /> : offer.kind === 'course' ? <CourseBuilder offer={offer} profile={profile} protocols={protocols} onOfferUpdated={onUpdated} /> : <OfferRoutineLink offer={offer} protocols={protocols} guideId={profile.user_id} guardianSlug={profile.slug} linkedProtocolId={linkedRoutineId} onChange={(offerId, protocolId) => setOfferRoutines((current) => { const next = { ...current }; if (protocolId) next[offerId] = protocolId; else delete next[offerId]; return next; })} />}</div>; })}</div></section>}
+    {offers.length > 0 && <section style={{ marginTop: 34 }}><div style={label}>Created offers · {offers.length}</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18, marginTop: 12 }}>{offers.map((offer) => { const free = offer.access_model === 'free'; const linkedRoutineId = offerRoutines[offer.id]; return <div key={offer.id}><ProductCard kind={offer.kind} imageUrl={offer.cover_url || (offer.kind === 'recipe_book' ? recipes.find((r) => r.image_url && r.offer_ids?.includes(offer.id))?.image_url : null)} eyebrow={[audienceLabel(profile.social_links?.audience_details) || 'Everyone', offer.status === 'published' ? 'Published' : 'Draft'].join(' · ')} title={customerFacingOfferTitle(offer.title)} copy={(offer.description || '').split(' Delivery:')[0].slice(0, 120) || undefined} price={free ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid'} name={profile.display_name} avatarUrl={profile.avatar_url} accent={acid} cta={profile.slug ? 'View on your site' : 'View offer'} href={profile.slug ? `/guardians/${encodeURIComponent(profile.slug)}#offers` : undefined} owned visibility={offer.status === "published" ? "public" : "private"} cardQr={linkedRoutineId ? <RoutineCardQr protocolId={linkedRoutineId} guardianSlug={profile.slug} /> : undefined} onDelete={async () => { if (!(await confirmInPage(`Delete ${offer.title}?`))) return; await deleteGuideOffer(profile.user_id, offer.id); onDeleted(offer.id); }} /><OfferCoverControls offer={offer} title={customerFacingOfferTitle(offer.title)} guideId={profile.user_id} onUpdated={onUpdated} onOpenContentBuilder={onOpenContent} />{offer.kind === "community" ? <CommunityChannelSetup offer={offer} profile={profile} /> : offer.kind === 'course' ? <CourseBuilder offer={offer} profile={profile} protocols={protocols} onOfferUpdated={onUpdated} /> : <OfferRoutineLink offer={offer} protocols={protocols} guideId={profile.user_id} guardianSlug={profile.slug} linkedProtocolId={linkedRoutineId} onChange={(offerId, protocolId) => setOfferRoutines((current) => { const next = { ...current }; if (protocolId) next[offerId] = protocolId; else delete next[offerId]; return next; })} />}</div>; })}</div></section>}
   </>;
 }
 
@@ -4646,7 +4739,7 @@ function WorkspaceCommunity({ profile, userId }: { profile: GuideProfile; userId
       </aside>
       <div style={{ display: 'grid', gap: 18 }}>
         {selected && <section style={{ border: `1px solid ${line}`, background: panel }}>
-          <header style={{ padding: 18, borderBottom: `1px solid ${line}`, display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start' }}><span><span style={{ ...label, color: acid }}>Channel</span><h2 style={{ fontFamily: serif, fontSize: 34, fontWeight: 300, margin: 0 }}># {selected.name}</h2><p style={{ color: muted, fontSize: 11, margin: '7px 0 0' }}>{selected.description}</p></span><span style={{ display: 'flex', gap: 7 }}><button type="button" title="Edit channel" onClick={() => { setEditingChannel(selected.id); setChannelName(selected.name); setChannelDescription(selected.description || ''); }} style={{ ...btn, width: 38, minHeight: 38, padding: 0, background: 'transparent', color: ink }}><PencilRuler size={14} /></button><button type="button" title="Delete channel" onClick={async () => { if (!window.confirm(`Delete #${selected.name} and its messages?`)) return; await deleteGuideCommunityChannel(userId, selected.id); setChannels((current) => current.filter((item) => item.id !== selected.id)); setSelectedId(channels.find((item) => item.id !== selected.id)?.id || null); }} style={{ ...btn, width: 38, minHeight: 38, padding: 0, background: 'transparent', color: muted }}><Trash2 size={14} /></button></span></header>
+          <header style={{ padding: 18, borderBottom: `1px solid ${line}`, display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start' }}><span><span style={{ ...label, color: acid }}>Channel</span><h2 style={{ fontFamily: serif, fontSize: 34, fontWeight: 300, margin: 0 }}># {selected.name}</h2><p style={{ color: muted, fontSize: 11, margin: '7px 0 0' }}>{selected.description}</p></span><span style={{ display: 'flex', gap: 7 }}><button type="button" title="Edit channel" onClick={() => { setEditingChannel(selected.id); setChannelName(selected.name); setChannelDescription(selected.description || ''); }} style={{ ...btn, width: 38, minHeight: 38, padding: 0, background: 'transparent', color: ink }}><PencilRuler size={14} /></button><button type="button" title="Delete channel" onClick={async () => { if (!(await confirmInPage(`Delete #${selected.name} and its messages?`))) return; await deleteGuideCommunityChannel(userId, selected.id); setChannels((current) => current.filter((item) => item.id !== selected.id)); setSelectedId(channels.find((item) => item.id !== selected.id)?.id || null); }} style={{ ...btn, width: 38, minHeight: 38, padding: 0, background: 'transparent', color: muted }}><Trash2 size={14} /></button></span></header>
           <div aria-label={`${selected.name} messages`} style={{ minHeight: 180, maxHeight: 420, overflowY: 'auto', padding: '8px 18px' }}>{messages.length ? messages.map((item) => <article key={item.id} style={{ borderBottom: `1px solid ${line}`, padding: '13px 0' }}><strong style={{ fontSize: 11 }}>{item.author_name}</strong><time style={{ float: 'right', color: muted, fontSize: 8 }}>{new Date(item.created_at).toLocaleString()}</time><p style={{ whiteSpace: 'pre-wrap', margin: '6px 0 0', lineHeight: 1.55 }}>{item.body}</p></article>) : <p style={{ color: muted, padding: '24px 0' }}>No messages yet. Start this channel.</p>}</div>
           <form onSubmit={post} style={{ padding: 12, borderTop: `1px solid ${line}`, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8 }}><input aria-label="Message" value={messageBody} onChange={(e) => setMessageBody(e.target.value)} maxLength={2000} placeholder={`Message #${selected.name}`} style={input} /><button type="submit" disabled={busy || !messageBody.trim()} style={btn}>Send</button></form>
         </section>}
@@ -4752,7 +4845,7 @@ export function GuideLibrary({ guideId, selectedIds, onSelectedIds, onUse }: { g
   return <section>
     <div style={{ minHeight: 230, border: `1px solid ${line}`, padding: 'clamp(24px,4vw,46px)', background: panel, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 180px', alignItems: 'center', gap: 24 }}><div><div style={{ ...label, color: acid }}>Source library</div><h1 style={{ fontFamily: serif, fontSize: 'clamp(42px,6vw,72px)', lineHeight: .95, fontWeight: 300, margin: '12px 0 16px' }}>Build from what you trust.</h1><p style={{ color: muted, lineHeight: 1.6, maxWidth: 650, margin: 0 }}>Keep PDFs, webpages, transcripts, books, podcasts, research papers and audio organised, then select the sources that should inform your next Protocol or PDF guide.</p></div><FolderOpen size={128} strokeWidth={.7} color={acid} style={{ opacity: .7 }} /></div>
     <div style={{ display: 'grid', gridTemplateColumns: '220px minmax(0,1fr)', border: `1px solid ${line}`, borderTop: 0 }}>
-      <aside style={{ padding: 18, borderRight: `1px solid ${line}` }}><div style={{ ...label, color: ink }}>Folders</div>{[['all','All sources'],['unfiled','Unfiled']].map(([id, name]) => <button key={id} onClick={() => setFolder(id)} style={filterButton(folder === id)}>{name}</button>)}{folders.map((entry) => <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 30px 30px', alignItems: 'center' }}><button onClick={() => setFolder(entry.id)} style={filterButton(folder === entry.id)}>{entry.name}</button><button type="button" aria-label={`Rename ${entry.name}`} onClick={async () => { const name = window.prompt('Folder name', entry.name)?.trim(); if (!name) return; const saved = await updateGuideLibraryFolder(guideId, entry.id, name); setFolders((current) => current.map((row) => row.id === saved.id ? saved : row)); }} style={{ border: 0, background: 'transparent', color: muted, cursor: 'pointer' }}><PencilRuler size={13} /></button><button type="button" aria-label={`Delete ${entry.name}`} onClick={async () => { if (!window.confirm(`Delete folder ${entry.name}? Sources will remain unfiled.`)) return; await deleteGuideLibraryFolder(guideId, entry.id); setFolders((current) => current.filter((row) => row.id !== entry.id)); if (folder === entry.id) setFolder('all'); }} style={{ border: 0, background: 'transparent', color: muted, cursor: 'pointer' }}><Trash2 size={13} /></button></div>)}<div style={{ display: 'flex', gap: 6, marginTop: 16 }}><input aria-label="New folder name" style={{ ...input, height: 38, minWidth: 0 }} value={folderName} onChange={(event) => setFolderName(event.target.value)} placeholder="New folder" /><button type="button" onClick={addFolder} disabled={busy || !folderName.trim()} style={{ ...btn, width: 40, minHeight: 38, padding: 0 }}><Plus size={14} /></button></div>
+      <aside style={{ padding: 18, borderRight: `1px solid ${line}` }}><div style={{ ...label, color: ink }}>Folders</div>{[['all','All sources'],['unfiled','Unfiled']].map(([id, name]) => <button key={id} onClick={() => setFolder(id)} style={filterButton(folder === id)}>{name}</button>)}{folders.map((entry) => <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 30px 30px', alignItems: 'center' }}><button onClick={() => setFolder(entry.id)} style={filterButton(folder === entry.id)}>{entry.name}</button><button type="button" aria-label={`Rename ${entry.name}`} onClick={async () => { const name = window.prompt('Folder name', entry.name)?.trim(); if (!name) return; const saved = await updateGuideLibraryFolder(guideId, entry.id, name); setFolders((current) => current.map((row) => row.id === saved.id ? saved : row)); }} style={{ border: 0, background: 'transparent', color: muted, cursor: 'pointer' }}><PencilRuler size={13} /></button><button type="button" aria-label={`Delete ${entry.name}`} onClick={async () => { if (!(await confirmInPage(`Delete folder ${entry.name}? Sources will remain unfiled.`))) return; await deleteGuideLibraryFolder(guideId, entry.id); setFolders((current) => current.filter((row) => row.id !== entry.id)); if (folder === entry.id) setFolder('all'); }} style={{ border: 0, background: 'transparent', color: muted, cursor: 'pointer' }}><Trash2 size={13} /></button></div>)}<div style={{ display: 'flex', gap: 6, marginTop: 16 }}><input aria-label="New folder name" style={{ ...input, height: 38, minWidth: 0 }} value={folderName} onChange={(event) => setFolderName(event.target.value)} placeholder="New folder" /><button type="button" onClick={addFolder} disabled={busy || !folderName.trim()} style={{ ...btn, width: 40, minHeight: 38, padding: 0 }}><Plus size={14} /></button></div>
         <div style={{ ...label, color: ink, marginTop: 26 }}>Types</div>
         <button type="button" onClick={() => setKindFilter('all')} style={filterButton(kindFilter === 'all')}>All types</button>
         {LIBRARY_KINDS.map(({ kind, plural }) => { const Icon = LIBRARY_KIND_ICONS[kind]; const count = items.filter((item) => item.kind === kind).length; return <button key={kind} type="button" aria-pressed={kindFilter === kind} onClick={() => setKindFilter(kindFilter === kind ? 'all' : kind)} style={{ ...filterButton(kindFilter === kind), display: 'flex', alignItems: 'center', gap: 9 }}><Icon size={14} strokeWidth={1.6} /><span style={{ flex: 1 }}>{plural}</span><span style={{ fontSize: 10, opacity: count ? 1 : .45 }}>{count}</span></button>; })}
@@ -5030,9 +5123,9 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
   }
   function editLead(row: GuideLead) { setEditingId(row.id); setNewTitle(row.name); setNewEmail(row.email); setNewGoal(row.goal || ''); setAdding(true); }
   function editRamp(row: GuideValueRamp) { setEditingId(row.id); setNewTitle(row.name); setNewGoal(row.problem || ''); setAdding(true); }
-  async function removeLead(row: GuideLead) { if (!user || !window.confirm(`Delete ${row.name}?`)) return; await deleteGuideLead(user.id, row.id); setLeads((current) => current.filter((item) => item.id !== row.id)); }
-  async function removeRamp(row: GuideValueRamp) { if (!user || !window.confirm(`Delete ${row.name}?`)) return; await deleteGuideValueRamp(user.id, row.id); setValueRamps((current) => current.filter((item) => item.id !== row.id)); }
-  async function removeRecipe(row: GuideRecipe) { if (!user || !window.confirm(`Delete ${row.title}?`)) return; await deleteGuideRecipe(user.id, row.id); setRecipes((current) => current.filter((item) => item.id !== row.id)); }
+  async function removeLead(row: GuideLead) { if (!user || !(await confirmInPage(`Delete ${row.name}?`))) return; await deleteGuideLead(user.id, row.id); setLeads((current) => current.filter((item) => item.id !== row.id)); }
+  async function removeRamp(row: GuideValueRamp) { if (!user || !(await confirmInPage(`Delete ${row.name}?`))) return; await deleteGuideValueRamp(user.id, row.id); setValueRamps((current) => current.filter((item) => item.id !== row.id)); }
+  async function removeRecipe(row: GuideRecipe) { if (!user || !(await confirmInPage(`Delete ${row.title}?`))) return; await deleteGuideRecipe(user.id, row.id); setRecipes((current) => current.filter((item) => item.id !== row.id)); }
   return <div style={{ minHeight: '100vh', background: black, color: ink, fontFamily: sans }}>
     <GuardianHeader isSignedIn activeTab={tab} displayName={profile.display_name} avatarUrl={navAvatarUrl} onNavigate={(next) => { setTab(next); setProtocolId(null); setRecipeId(null); setChildPlanId(null); setParentContext(null); }} onSignOut={signOut} />
     <div className="g-workspace-shell" style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr)', height: 'calc(100vh - 78px)' }}>

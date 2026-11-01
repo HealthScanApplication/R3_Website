@@ -27,20 +27,20 @@ describe('your offers in the workspace', () => {
 
   it('deletes an offer after confirming and tells the page', async () => {
     const onOfferDeleted = vi.fn();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     view(onOfferDeleted);
     const card = screen.getByText('21-day sleep reset').closest('.r3-pcard') as HTMLElement;
     fireEvent.click(within(card).getByRole('button', { name: /delete/i }));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(mocks.del).toHaveBeenCalledWith('owner', 'o1'));
     expect(onOfferDeleted).toHaveBeenCalledWith('o1');
   });
 
   it('keeps the offer when the Guardian cancels', async () => {
     mocks.del.mockClear();
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     view();
     const card = screen.getByText('21-day sleep reset').closest('.r3-pcard') as HTMLElement;
     fireEvent.click(within(card).getByRole('button', { name: /delete/i }));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancel' }));
     expect(mocks.del).not.toHaveBeenCalled();
   });
 });
@@ -57,9 +57,8 @@ describe('protocols, audiences and sites under each setup step', () => {
     expect(within(section).getAllByRole('button', { name: /edit/i }).length).toBeGreaterThanOrEqual(2);
   });
 
-  it('shows one card per audience, and removing one tells the page', () => {
+  it('shows one card per audience, and removing one tells the page', async () => {
     const onRemoveAudience = vi.fn();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<StepRelated step={3} guardianSlug="john-ferreira" displayName="John Ferreira" related={{ leads: [], offers: [], ramps: [], protocols: [] }}
       audiences={[{ group: 'Everyone', ages: '18–80', stages: [], problems: ['Sleep problems', 'Low energy'] }, { group: 'Women', ages: '32–55', stages: ['Menopause'], problems: ['Hot flushes'] }]} onRemoveAudience={onRemoveAudience} />);
     const section = screen.getByRole('region', { name: 'Your audiences' });
@@ -67,7 +66,8 @@ describe('protocols, audiences and sites under each setup step', () => {
     expect(within(section).getByText(/Helps with sleep problems, low energy/)).toBeTruthy();
     const card = within(section).getByText('Women').closest('.r3-pcard') as HTMLElement;
     fireEvent.click(within(card).getByRole('button', { name: /delete/i }));
-    expect(onRemoveAudience).toHaveBeenCalledWith('Women');
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(onRemoveAudience).toHaveBeenCalledWith('Women'));
   });
 
   it('lists every site under Site, with All / Profile / Offer path tabs and a brand filter', () => {

@@ -11,6 +11,7 @@ import {
 } from '../../utils/guideProducts';
 import { listProtocolItems, type AdminProtocol } from '../../utils/protocolAdmin';
 import { generateProtocolPdf } from '../../utils/protocolPdf';
+import { confirmInPage } from '../../utils/confirmInPage';
 
 export interface GuardianLocalePreference {
   region: string;
@@ -171,7 +172,7 @@ export function GuardianProducts({ guideId, guardianSlug, commissionPercent, pro
   }
 
   async function remove(product: GuideProduct) {
-    if (!window.confirm(`Remove ${product.title} from your products?`)) return;
+    if (!(await confirmInPage(`Remove ${product.title} from your products?`))) return;
     try { await deleteGuideProduct(product.id); setProducts((current) => current.filter((entry) => entry.id !== product.id)); }
     catch (error: any) { setMessage(productsErrorMessage(error)); }
   }

@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { createGuideOffer, deleteGuideOffer, updateGuideOfferDetails, type GuideOffer, type GuideProfile } from '../../utils/guidePortal';
 import { KIND_LABEL, composeOfferDescription, formatOfferPrice, isTreatKind, parseOfferMeta, type TreatKind } from '../../utils/treatOffers';
+import { confirmInPage } from '../../utils/confirmInPage';
 
 const ink = '#F5F2EA', muted = '#B8B6AF', line = 'rgba(245,242,234,0.24)', panel = '#11120F', black = '#090A08', acid = '#C7D8A3';
 const sans = '"EuclidCircularA", "DM Sans", "Helvetica Neue", Arial, sans-serif';
@@ -64,7 +65,7 @@ function Row({ offer, currency, guideId, onSaved, onDeleted }: { offer: GuideOff
     finally { setBusy(false); }
   }
   async function remove() {
-    if (!window.confirm(`Delete ${offer.title}?`)) return;
+    if (!(await confirmInPage(`Delete ${offer.title}?`))) return;
     setBusy(true); setMessage('');
     try { await deleteGuideOffer(guideId, offer.id); onDeleted(offer.id); }
     catch (error) { setMessage((error as Error).message || 'Could not delete.'); setBusy(false); }
