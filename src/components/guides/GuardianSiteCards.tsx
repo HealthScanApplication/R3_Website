@@ -77,7 +77,7 @@ function ScaledPreview({ href, title }: { href: string; title: string }) {
     return () => observer.disconnect();
   }, []);
   return <div ref={box} data-site-preview style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: '#F2EFE7' }}>
-    <iframe src={href} title={`${title} website preview`} loading="lazy" tabIndex={-1} aria-hidden="true" style={{ width: PREVIEW_WIDTH, height: Math.ceil(PREVIEW_WIDTH * 1.25), border: 0, pointerEvents: 'none', transformOrigin: '0 0', transform: `scale(${scale})`, background: '#F2EFE7' }} />
+    <iframe src={href} title={`${title} website preview`} loading="lazy" tabIndex={-1} aria-hidden="true" style={{ width: PREVIEW_WIDTH, height: Math.ceil(PREVIEW_WIDTH * 9 / 16), border: 0, pointerEvents: 'none', transformOrigin: '0 0', transform: `scale(${scale})`, background: '#F2EFE7' }} />
   </div>;
 }
 
@@ -91,7 +91,7 @@ function SiteHero({ site }: { site: SiteCardData }) {
   const showAvatar = !!site.avatarUrl && !avatarFailed;
   // The title sits under the picture too, so text over the picture is only for a card whose hero line says something else.
   const overlay = site.heroLine.trim() !== site.title.trim();
-  return <div data-site-hero style={{ position: 'relative', aspectRatio: '4 / 5', overflow: 'hidden', background: '#0D0E0B', borderBottom: `1px solid ${LINE}` }}>
+  return <div data-site-hero style={{ position: 'relative', aspectRatio: '16 / 9', overflow: 'hidden', background: '#0D0E0B', borderBottom: `1px solid ${LINE}` }}>
     {showPreview && <ScaledPreview href={site.previewHref!} title={site.title} />}
     {showImage && <img src={site.backgroundUrl} alt="" onError={() => setImageFailed(true)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: site.greyscale ? 'grayscale(1)' : undefined }} />}
     {overlay && <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg,rgba(9,10,8,.12) 0%,rgba(9,10,8,.55) 55%,rgba(9,10,8,.9) 100%)' }} />}
@@ -106,7 +106,7 @@ function SiteHero({ site }: { site: SiteCardData }) {
 }
 
 const CARD_CSS = `
-.g-sitecards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(280px,100%),1fr));gap:18px}
+.g-sitecards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(380px,100%),1fr));gap:18px}
 .g-sitecard{position:relative;min-width:0;border:1px solid ${LINE};background:${PANEL};transition:border-color 160ms ease,transform 160ms ease}
 .g-sitecard:hover{border-color:${ACID}}
 .g-sitecard:focus-within{border-color:${ACID}}
@@ -119,10 +119,10 @@ const CARD_CSS = `
 const menuItem: React.CSSProperties = { display: 'block', boxSizing: 'border-box', width: '100%', border: 0, background: 'transparent', color: INK, padding: '10px 12px', textAlign: 'left', fontFamily: sans, fontSize: 13, fontWeight: 700, cursor: 'pointer', textDecoration: 'none' };
 
 /**
- * The All sites inventory: one tall (4:5) hero card per site, with a live preview of the page once it is published, in the card language of the public Guardians page.
+ * The All sites inventory: one website-shaped (16:9) hero card per site, with a live preview of the page once it is published, in the card language of the public Guardians page.
  * The whole card opens the site in the builder; the three dots menu holds Edit, the preview and View live.
  */
-export function SiteCardGrid({ sites, openMenu, onOpenMenu, onEdit, onPreview, minCardWidth = 280 }: {
+export function SiteCardGrid({ sites, openMenu, onOpenMenu, onEdit, onPreview, minCardWidth = 380 }: {
   sites: SiteCardData[];
   /** Narrowest a card may get before the grid drops a column. 440 holds two to a row in a 1100px column. */
   minCardWidth?: number;

@@ -25,7 +25,7 @@ const card = (key: string) => document.querySelector(`[data-site-card="${key}"]`
 it('shows one 16:9 hero card per site with its type, title, path and real status', () => {
   render(<Grid sites={[profile({ status: siteStatus('approved') }), funnel({ status: siteStatus('submitted', 'published') })]} />);
   const a = card('profile-site'), b = card('funnel-site');
-  expect((a.querySelector('[data-site-hero]') as HTMLElement).style.aspectRatio).toBe('4 / 5');
+  expect((a.querySelector('[data-site-hero]') as HTMLElement).style.aspectRatio).toBe('16 / 9');
   expect(within(a).getByText('Profile site')).toBeTruthy();
   expect(within(a).getByText('/guardians/test-guide')).toBeTruthy();
   expect(a.querySelector('[data-site-status]')!.textContent).toBe('Published');
@@ -95,7 +95,7 @@ it('closes the menu with Escape', () => {
 it('lays the cards out in a grid that collapses to one column on a phone', () => {
   render(<Grid sites={[profile(), funnel()]} />);
   const css = document.querySelector('.g-sitecards style')!.textContent!;
-  expect(css).toContain('repeat(auto-fill,minmax(min(280px,100%),1fr))');
+  expect(css).toContain('repeat(auto-fill,minmax(min(380px,100%),1fr))');
   expect(css).toContain(':focus-visible');
 });
 

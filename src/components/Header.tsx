@@ -32,7 +32,7 @@ import { HEADER_GAP, HEADER_LINK_GAP, parked, useHeaderLayout } from './header/u
 
 // ROUTINE³ lockup — a square, single-bordered box joining the wordmark to the BETA tag,
 // same joined-seam treatment as the email/Subscribe container.
-export function RoutineMark({ size = 28, textColor = '#16140F', hairline = '#16140F', suffix = 'Beta' }: { size?: number; textColor?: string; hairline?: string; suffix?: string }) {
+export function RoutineMark({ size = 28, textColor = '#16140F', hairline = '#16140F', suffix = 'Beta', wordmark = 'ROUTINE³' }: { size?: number; textColor?: string; hairline?: string; suffix?: string; wordmark?: string }) {
   return (
     <div
       style={{
@@ -47,7 +47,7 @@ export function RoutineMark({ size = 28, textColor = '#16140F', hairline = '#161
     >
       <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px' }}>
         <span style={{ fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.13em', color: textColor, whiteSpace: 'nowrap', transition: 'color 350ms ease' }}>
-          ROUTINE³
+          {wordmark}
         </span>
       </div>
       {suffix && <div style={{ display: 'flex', alignItems: 'center', padding: '0 10px', borderLeft: `1px solid ${hairline}`, transition: 'border-color 350ms ease' }}>

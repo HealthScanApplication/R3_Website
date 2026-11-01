@@ -87,7 +87,7 @@ describe('the use case is built step by step', () => {
     expect(selectNamed('Problem')).toBeNull();
   });
 
-  it('puts a dashed Add another beside the first lead magnet, and a second one joins into the upsell', async () => {
+  it('has a white + after the lead magnet for a second free way in (no dashed card), and a second one joins into the upsell', async () => {
     await openUseCase();
     choose('Audience', (selectNamed('Audience')!.options[1] as HTMLOptionElement).value);
     choose('Sex / population', 'Women');
@@ -96,16 +96,30 @@ describe('the use case is built step by step', () => {
     choose('Problem', (selectNamed('Problem')!.options[1] as HTMLOptionElement).value);
     fireEvent.click(await screen.findByRole('button', { name: 'Add this use case' }));
     const group = await screen.findByRole('group', { name: 'Lead magnets' });
-    const add = within(group).getByRole('button', { name: 'Add another lead magnet' });
-    expect(within(group).getByText('Add another')).toBeTruthy();
-    expect(within(group).queryByRole('img', { name: /join into your upsell/ })).toBeNull(); // one lead magnet: nothing to join yet
+    expect(within(group).queryByText('Add another')).toBeNull(); // the dashed card is gone
+    const plus = document.querySelector('[data-journey-plus="free"]') as HTMLElement;
+    const add = within(plus).getByRole('button', { name: 'Add another lead magnet' });
+    expect((add as HTMLElement).style.background).toMatch(/255, 255, 255|#fff/i); // white for free
+    expect(within(group).queryByRole('img', { name: /join into your upsell/ })).toBeNull();
     fireEvent.click(add);
-    const options = within(group).getAllByRole('button').filter((button) => !/Add another lead magnet/.test(button.getAttribute('aria-label') || ''));
+    const options = within(plus).getAllByRole('button').filter((button) => !/Add another lead magnet/.test(button.getAttribute('aria-label') || ''));
     const pick = options.find((button) => !(button as HTMLButtonElement).disabled && /call|guide|recipe|challenge|workshop|checklist|video|webinar|book|class|template|community|session/i.test(button.textContent || '')) || options[options.length - 1];
     fireEvent.click(pick);
     await waitFor(() => expect(within(screen.getByRole('group', { name: 'Lead magnets' })).getByRole('img', { name: 'Both lead magnets join into your upsell' })).toBeTruthy());
-    expect(within(screen.getByRole('group', { name: 'Lead magnets' })).queryByRole('button', { name: 'Add another lead magnet' })).toBeNull(); // two is the pair that joins
+    expect(document.querySelector('[data-journey-plus="free"]')).toBeNull(); // two is the pair that joins
     fireEvent.click(within(screen.getByRole('group', { name: 'Lead magnets' })).getByRole('button', { name: /^Remove / }));
-    await waitFor(() => expect(within(screen.getByRole('group', { name: 'Lead magnets' })).getByRole('button', { name: 'Add another lead magnet' })).toBeTruthy());
+    await waitFor(() => expect(document.querySelector('[data-journey-plus="free"]')).toBeTruthy());
+  });
+
+  it('has a + after the first upsell to add the next one', async () => {
+    await openUseCase();
+    choose('Audience', (selectNamed('Audience')!.options[1] as HTMLOptionElement).value);
+    choose('Sex / population', 'Women');
+    choose('Age range', 'Women 45–64');
+    choose('Health / life stage', 'Menopause');
+    choose('Problem', (selectNamed('Problem')!.options[1] as HTMLOptionElement).value);
+    fireEvent.click(await screen.findByRole('button', { name: 'Add this use case' }));
+    const plus = await waitFor(() => { const el = document.querySelector('[data-journey-plus="upsell"]') as HTMLElement; expect(el).toBeTruthy(); return el; });
+    expect(within(plus).getByRole('button', { name: 'Add an upsell' })).toBeTruthy();
   });
 });
