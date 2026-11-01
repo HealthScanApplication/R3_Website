@@ -55,7 +55,10 @@ describe('events calendar', () => {
     visit();
     const root = await section();
     expect(day(root, '2099-03-05').style.background).toMatch(/rgb\(199, 216, 163\)/); // an event starts: green
-    expect(day(root, '2099-03-09').style.background).toMatch(/rgb\(17, 21, 15\)/); // under way: plain, the day number still shows in white
+    expect(day(root, '2099-03-09').style.backgroundImage).toMatch(/repeating-linear-gradient/); // the days inside an event: diagonal lines, not a fill
+    expect(day(root, '2099-03-09').style.backgroundColor).toMatch(/rgb\(17, 21, 15\)/);
+    expect(day(root, '2099-03-05').style.backgroundImage).toBe('none'); // the start day is solid
+    expect(day(root, '2099-03-13').style.backgroundImage).toBe('none'); // a day with nothing on is plain
     expect(day(root, '2099-03-09').style.color).toMatch(/rgb\(242, 239, 231\)/);
     // Days of the neighbouring months are ordinary days: nothing disabled, dimmed or greyed.
     const outside = day(root, '2099-02-27');
@@ -69,7 +72,7 @@ describe('events calendar', () => {
     expect(stack.getAttribute('aria-label')).toBe('Events');
     expect(stack.querySelectorAll('article').length).toBe(3);
     expect(layout.querySelector('.g-events-calendar')!.nextElementSibling!.contains(stack)).toBe(true); // the stack is the column to the right of the calendar
-    expect(root.textContent).not.toMatch(/Under way/);
+    expect(root.textContent).toMatch(/Days of the event/); // the legend says what the lines are
   });
 
   it('numbers each day of a multi-day event inside the calendar, and leaves one-day events unnumbered', async () => {

@@ -47,6 +47,17 @@ describe('event places', () => {
     expect(new URL((capeTown.querySelector('iframe[data-place-map]') as HTMLIFrameElement).getAttribute('src')!).searchParams.get('q')).toMatch(/Rots Church.*Cape Town, South Africa|Cape Town, South Africa.*Rots Church/);
   });
 
+  it('keeps the map to a plain picture: not interactive, and no name tag laid over it', async () => {
+    window.history.replaceState({}, '', '/guardians/barbara-oneill');
+    render(<GuardianWebsite slug="barbara-oneill" isSignedIn={false} />);
+    await waitFor(() => expect(document.querySelectorAll('[data-destination-header] iframe[data-place-map]').length).toBeGreaterThanOrEqual(2));
+    for (const header of [...document.querySelectorAll('[data-destination-header]')] as HTMLElement[]) {
+      const map = header.querySelector('iframe[data-place-map]') as HTMLIFrameElement | null;
+      if (map) expect(map.style.pointerEvents).toBe('none');
+      expect(header.textContent).not.toMatch(/Barbara O'Neill/); // the logo badge says whose it is; no second label on the map
+    }
+  });
+
   it('an online event has no map and no flag', async () => {
     window.history.replaceState({}, '', '/guardians/barbara-oneill');
     render(<GuardianWebsite slug="barbara-oneill" isSignedIn={false} />);

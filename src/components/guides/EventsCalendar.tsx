@@ -7,6 +7,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { dayMarks, monthBounds, monthCells, monthOf, openingMonth, pickDay, shiftMonth, type CalendarEvent, type DayRange } from '../../utils/eventCalendar';
 
+/** Days inside an event (not its first day): fine diagonal lines. The day it starts is solid. */
+const HATCH = 'repeating-linear-gradient(135deg, transparent 0 5px, rgba(242,239,231,.38) 5px 6px)';
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const sans = '"EuclidCircularA", "DM Sans", "Helvetica Neue", Arial, sans-serif';
 const longDay = (key: string) => new Date(`${key}T00:00:00Z`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -43,12 +45,12 @@ export function EventsCalendar({ events, range, onChange, ink = '#F2EFE7', surfa
           const mark = marks.get(cell.key);
           const count = (mark?.starts || 0) + (mark?.ongoing || 0);
           const chosen = inRange(cell.key);
-          const filled = !!mark?.starts;
+          const filled = !!mark?.starts, underWay = !!mark && !mark.starts;
           const label = mark ? dayLabel(mark.days) : '';
           return <button key={cell.key} type="button" data-day={cell.key} data-has-event={count ? 'true' : undefined} aria-pressed={chosen}
             aria-label={`${longDay(cell.key)}${count ? `, ${count} ${count === 1 ? 'event' : 'events'}${mark!.days.length ? `, ${mark!.days.map((day) => `day ${day.n} of ${day.of}`).join(' and ')}` : ''}` : ', no events'}`}
             onClick={() => onChange(pickDay(range, cell.key))}
-            style={{ position: 'relative', minHeight: 38, border: 0, padding: '3px 0 11px', background: filled ? accent : surface, color: filled ? '#11150F' : ink, fontFamily: sans, fontSize: 11, fontWeight: filled ? 800 : 500, lineHeight: 1.2, cursor: 'pointer', boxShadow: chosen ? (filled ? `inset 0 0 0 2px ${surface}, inset 0 0 0 4px ${ink}` : `inset 0 0 0 2px ${ink}`) : 'none' }}>
+            style={{ position: 'relative', minHeight: 38, border: 0, padding: '3px 0 11px', backgroundColor: filled ? accent : surface, backgroundImage: underWay ? HATCH : 'none', color: filled ? '#11150F' : ink, fontFamily: sans, fontSize: 11, fontWeight: filled ? 800 : 500, lineHeight: 1.2, cursor: 'pointer', boxShadow: chosen ? (filled ? `inset 0 0 0 2px ${surface}, inset 0 0 0 4px ${ink}` : `inset 0 0 0 2px ${ink}`) : 'none' }}>
             {cell.day}
             {label ? <span data-day-label aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, bottom: 2, fontSize: 7, fontWeight: 700, letterSpacing: '.02em', whiteSpace: 'nowrap', opacity: .85 }}>{label}</span> : null}
           </button>;
@@ -56,6 +58,7 @@ export function EventsCalendar({ events, range, onChange, ink = '#F2EFE7', surfa
       </div>
       <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 9, color: 'rgba(242,239,231,.7)', flexWrap: 'wrap' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><i aria-hidden="true" style={{ width: 9, height: 9, background: accent, display: 'inline-block' }} />Event starts</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><i aria-hidden="true" style={{ width: 9, height: 9, backgroundImage: HATCH, border: `1px solid ${line}`, display: 'inline-block' }} />Days of the event</span>
         <span style={{ marginLeft: 'auto' }}>Choose a day, or two for a range</span>
       </div>
       {range && <p data-calendar-range role="status" style={{ margin: '8px 0 0', fontSize: 11 }}>{range.from === range.to ? shortDay(range.from) : `${shortDay(range.from)} – ${shortDay(range.to)}`} · <button type="button" onClick={() => onChange(null)} style={{ border: 0, background: 'transparent', color: ink, padding: 0, font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>Clear dates</button></p>}

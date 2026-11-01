@@ -7,6 +7,8 @@ import { GuardianWebsite } from '../../components/guides/GuidePortal';
 const room = (label: string, prices: [number, number][], note: string | null = null) => ({ label, note, currency: 'AUD', prices: prices.map(([guests, cents]) => ({ guests, cents })) });
 const retreat = (id: string, title: string, options: unknown[] = []) => ({ id, guide_id: 'owner', title, description: 'A residential program.', location: 'Misty Mountain, Bellbrook NSW', image_url: null, booking_url: 'https://www.mmh.com.au/contact', source_url: 'https://www.mmh.com.au/our-program', source_external_id: id, status: 'published', options });
 let RETREATS: any[] = [];
+let EVENTS: any[] = [];
+const session = (id: string, title: string, start: string, end: string) => ({ id, guide_id: 'owner', title, description: null, start_at: start, end_at: end, timezone: 'Australia/Sydney', venue: null, location: 'Bellbrook NSW', format: 'in_person', image_url: null, info_url: 'https://www.mmh.com.au/our-program', source_url: 'https://www.mmh.com.au/our-program', source_name: null, source_external_id: id, status: 'published', brand_id: null });
 const PROFILE = { user_id: 'owner', slug: 'barbara-oneill', display_name: "Barbara O'Neill", headline: 'Hi', bio: 'Bio.', avatar_url: null, specialties: ['Wellness'], status: 'approved', onboarding_step: 5, contact_email: 'a@b.com', social_links: {} };
 
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: null, accessToken: null, signOut: () => {}, loading: false }) }));
@@ -16,12 +18,13 @@ vi.mock('../guidePortal', async (importOriginal) => ({
   getGuideProfileBySlug: async () => PROFILE,
   listGuideOffers: async () => [],
   listGuideValueRamps: async () => [],
-  listGuideEvents: async () => [],
+  listGuideEvents: async () => EVENTS,
   listGuideRetreats: async () => RETREATS,
   listPublicGuideBrands: async () => [],
 }));
 
 beforeEach(() => {
+  EVENTS = [session('s1', '8 Day / 7 Night Lifestyle Program', '2099-03-04T13:00:00.000Z', '2099-03-11T13:00:00.000Z'), session('s2', 'Spring Talk', '2099-04-01T13:00:00.000Z', '2099-04-01T13:00:00.000Z')];
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => [], text: async () => '[]' }) as Response));
   RETREATS = [
     retreat('r8', '8 Day / 7 Night Lifestyle Program', [room('Lodge Room', [[1, 365000], [2, 585000], [3, 785000]], 'Shared bathroom.'), room('Family Unit', [[1, 550000], [2, 760000], [3, 990000], [4, 1200000]], 'Two bedrooms.')]),
@@ -32,6 +35,14 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const visit = () => { window.history.replaceState({}, '', '/guardians/barbara-oneill'); return render(<GuardianWebsite slug="barbara-oneill" isSignedIn={false} />); };
 const card = async (title: string) => { await screen.findByRole('region', { name: "Barbara O'Neill's retreats" }); return ([...document.querySelectorAll('[data-retreat-card]')] as HTMLElement[]).find((el) => el.textContent!.includes(title))!; };
+
+describe('retreat cards', () => {
+  it('sit two across', async () => {
+    visit();
+    await card('Day Retreat');
+    expect((document.querySelector('.g-retreats-grid') as HTMLElement).style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))');
+  });
+});
 
 describe('retreat rooms as a dropdown', () => {
   it('offers the rooms of a programme as a choice on one card, priced for the first room and guest count', async () => {
@@ -64,5 +75,35 @@ describe('retreat rooms as a dropdown', () => {
     const plain = await card('Day Retreat');
     expect(plain.querySelector('[data-retreat-rooms]')).toBeNull();
     expect(plain.textContent).toMatch(/See package price/);
+  });
+});
+
+describe('rooms on the upcoming sessions', () => {
+  const eventCard = async (title: string) => { const region = await screen.findByRole('region', { name: "Barbara O'Neill's events" }); return ([...region.querySelectorAll('article')] as HTMLElement[]).find((el) => el.textContent!.includes(title))!; };
+
+  it('a session of a programme offers that programme\'s rooms and prices the choice', async () => {
+    visit();
+    const sessionCard = await eventCard('8 Day / 7 Night');
+    const rooms = within(sessionCard).getByLabelText(/Room for/) as HTMLSelectElement;
+    expect([...rooms.options].map((option) => option.text)).toEqual(['Lodge Room', 'Family Unit']);
+    expect(sessionCard.querySelector('[data-room-price]')!.textContent).toMatch(/\$3,650/);
+    fireEvent.change(within(sessionCard).getByLabelText(/Guests for/), { target: { value: '3' } });
+    expect(sessionCard.querySelector('[data-room-price]')!.textContent).toMatch(/\$7,850/);
+    fireEvent.change(rooms, { target: { value: '1' } });
+    expect(sessionCard.querySelector('[data-room-price]')!.textContent).toMatch(/\$5,500/); // the new room, one guest again
+  });
+
+  it('keeps each session\'s choice to itself, and gives an event with no programme no dropdown', async () => {
+    EVENTS = [session('s1', '8 Day / 7 Night Lifestyle Program', '2099-03-04T13:00:00.000Z', '2099-03-11T13:00:00.000Z'), session('s3', '8 Day / 7 Night Lifestyle Program', '2099-03-18T13:00:00.000Z', '2099-03-25T13:00:00.000Z'), session('s2', 'Spring Talk', '2099-04-01T13:00:00.000Z', '2099-04-01T13:00:00.000Z')];
+    visit();
+    const region = await screen.findByRole('region', { name: "Barbara O'Neill's events" });
+    const sessions = ([...region.querySelectorAll('article')] as HTMLElement[]).filter((el) => el.textContent!.includes('8 Day / 7 Night'));
+    expect(sessions).toHaveLength(2);
+    fireEvent.change(within(sessions[0]).getByLabelText(/Room for/), { target: { value: '1' } });
+    expect(sessions[0].querySelector('[data-room-price]')!.textContent).toMatch(/Family Unit/);
+    expect(sessions[1].querySelector('[data-room-price]')!.textContent).toMatch(/Lodge Room/); // the other session is untouched
+    const talk = ([...region.querySelectorAll('article')] as HTMLElement[]).find((el) => el.textContent!.includes('Spring Talk'))!;
+    expect(talk.querySelector('[data-retreat-rooms]')).toBeNull();
+    expect(talk.textContent).toMatch(/See booking price/);
   });
 });

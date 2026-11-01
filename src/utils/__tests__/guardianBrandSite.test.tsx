@@ -121,16 +121,18 @@ describe('the public page of each brand', () => {
     if (portrait) expect(portrait.style.filter).not.toBe('invert(1)');
   });
 
-  it('puts a brand\'s logo across the edge of the event map, white, on the card\'s own dark background', async () => {
+  it('puts a brand\'s logo across the edge of the event map, black on the card\'s own white background, under a white text area', async () => {
     visit('/guardians/barbara-oneill/tre-lune', 'tre-lune');
     const section = await screen.findByRole('region', { name: "Tre Lune's events" });
     const card = await within(section).findByText('Tre Lune Workshop').then((el) => el.closest('article') as HTMLElement);
+    expect(card.style.background).toMatch(/rgb\(255, 255, 255\)|#FFFFFF/i); // a white card on the dark section
+    expect(card.style.color).toMatch(/rgb\(17, 18, 15\)|#11120F/i); // with dark text
     const header = card.querySelector('[data-destination-header]') as HTMLElement;
     const badge = card.querySelector('[data-destination-badge]') as HTMLElement;
     expect(header.contains(badge)).toBe(false); // it sits across the edge of the map, not on it
     expect(badge.style.bottom).toBe('-34px');
-    expect(badge.style.background).toMatch(/rgb\(23, 27, 20\)|#171B14/i); // the card's own background
-    expect((badge.querySelector('img') as HTMLImageElement).style.filter).toBe('invert(1)'); // white logo
+    expect(badge.style.background).toMatch(/rgb\(255, 255, 255\)|#FFFFFF/i); // cut from the card's own white
+    expect((badge.querySelector('img') as HTMLImageElement).style.filter).toBe(''); // the flat logo stays black on white
     expect(within(section).queryByText('Personal Talk')).toBeNull(); // only this brand's events
   });
 
@@ -180,6 +182,23 @@ describe('the public page of each brand', () => {
     const treLuneTreats = await screen.findByRole('region', { name: "Tre Lune's treats" });
     const treLuneEvents = await screen.findByRole('region', { name: "Tre Lune's events" });
     expect(!!(treLuneEvents.compareDocumentPosition(treLuneTreats) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true); // the default
+  });
+
+  it('puts a brand\'s name and its descriptor on two lines in the hero', async () => {
+    const hero = async () => { await screen.findByRole('region', { name: /treats/i }); const section = document.querySelector('.guardian-public-site main > section') as HTMLElement; return within(section).getAllByText((_, el) => el?.tagName === 'STRONG')[0]; };
+    visit('/guardians/barbara-oneill/misty-mountain', 'misty-mountain');
+    const name = await hero();
+    expect(name.textContent).toBe('Misty Mountain');
+    expect(name.nextElementSibling!.textContent).toBe('Lifestyle Retreat'); // in place of the specialties line
+    cleanup();
+    visit('/guardians/barbara-oneill/tre-lune', 'tre-lune');
+    const tre = await hero();
+    expect(tre.textContent).toBe('Tre Lune');
+    expect(tre.nextElementSibling!.textContent).toBe('Natural products');
+    cleanup();
+    visit('/guardians/barbara-oneill');
+    const barbara = await hero();
+    expect(barbara.nextElementSibling!.textContent).toBe('Wellness'); // her own page is unchanged
   });
 
   it('an address that is not one of the Guardian\'s brands is a page that is not published', async () => {
