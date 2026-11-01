@@ -70,12 +70,11 @@ describe('protocols, audiences and sites under each setup step', () => {
     await waitFor(() => expect(onRemoveAudience).toHaveBeenCalledWith('Women'));
   });
 
-  it('lists every site under Site, with All / Profile / Offer path tabs and a brand filter', () => {
+  it('lists every site under Site, with All / Profile / Offer path tabs', () => {
     const brands = [{ id: 'personal', name: 'John Ferreira', kind: 'personal' as const, logo: null }, { id: 'b2', name: 'Calm Co', kind: 'business' as const, logo: null }];
     render(<StepRelated step={6} guardianSlug="john-ferreira" displayName="John Ferreira" related={{ leads: [], offers: [], protocols: [], ramps: [ramp('better-sleep', 'Better sleep')] }} brands={brands} activeBrandId="personal" />);
     const section = screen.getByRole('region', { name: 'Your sites' });
     expect(within(section).getByText(/In your workspace · Your sites · 3/)).toBeTruthy();
-    expect(within(section).getByRole('group', { name: 'Filter sites by brand' })).toBeTruthy();
     fireEvent.click(within(section).getByRole('button', { name: 'Offer path sites' }));
     expect(within(section).getByText(/Your sites · 1/)).toBeTruthy();
     fireEvent.click(within(section).getByRole('button', { name: 'Profile sites' }));

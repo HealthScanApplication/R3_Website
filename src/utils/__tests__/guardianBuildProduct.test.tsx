@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Onboarding, guessProductFromUrl } from '../../components/guides/GuidePortal';
 
-const mocks = vi.hoisted(() => ({ create: vi.fn(), del: vi.fn(), offers: vi.fn() }));
+const mocks = vi.hoisted(() => ({ create: vi.fn(), del: vi.fn(), offers: vi.fn(), products: vi.fn() }));
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'owner', app_metadata: {} }, accessToken: null, signOut: () => {} }) }));
 vi.mock('../supabase/client', async (importOriginal) => ({ ...await importOriginal<any>(), getSupabaseClient: () => ({ functions: { invoke: vi.fn() } }) }));
 vi.mock('../guidePortal', async (importOriginal) => ({
@@ -12,13 +12,13 @@ vi.mock('../guidePortal', async (importOriginal) => ({
   getGuideProfile: async () => null,
   listGuideBrands: async () => [],
   listGuideOffers: async () => mocks.offers(),
-  listGuideProducts: async () => [],
+  listGuideProducts: async () => mocks.products(),
   createGuideOffer: mocks.create,
   deleteGuideOffer: mocks.del,
 }));
 
 beforeEach(() => {
-  mocks.create.mockReset(); mocks.del.mockReset(); mocks.offers.mockReset(); mocks.offers.mockReturnValue([]);
+  mocks.create.mockReset(); mocks.del.mockReset(); mocks.offers.mockReset(); mocks.offers.mockReturnValue([]); mocks.products.mockReset(); mocks.products.mockReturnValue([]);
   mocks.create.mockImplementation(async (_guide: string, offer: any) => ({ id: `offer-${mocks.create.mock.calls.length}`, guide_id: 'owner', cover_url: null, ...offer }));
   mocks.del.mockResolvedValue(undefined);
   window.history.replaceState({}, '', '/guardians/workspace?step=4');
@@ -47,6 +47,20 @@ describe('reading a pasted link', () => {
 });
 
 describe('Upload your products (setup step 04)', () => {
+  it('keeps physical products and the shop under Paid products, not under Lead magnets', async () => {
+    const product = (id: string, title: string, price: number) => ({ id, guide_id: 'owner', shop_domain: 'shop.example', myshopify_domain: null, product_handle: id, variant_id: null, variant_title: null, title, description: null, image_url: null, price_cents: price, currency: 'AUD', discount_code: null, commission_percent: null, status: 'published', sort_order: 0, created_at: '', updated_at: '', brand_id: null });
+    mocks.products.mockReturnValue([product('p1', 'Mineral Bundle', 26990), product('p2', 'Wild Yam Cream', 23500)]);
+    setup();
+    const free = await group('free');
+    expect(free.querySelector('[data-build-type="product"]')).toBeNull();
+    expect([...(within(free).getByLabelText('Lead magnets type 1') as HTMLSelectElement).options].map((option) => option.text)).not.toContain('Physical product');
+    expect(document.querySelector('[data-shop-products]')).toBeNull();
+    const paid = await group('paid');
+    expect(paid.querySelector('[data-build-type="product"]')).not.toBeNull();
+    await waitFor(() => expect(document.querySelector('[data-shop-products]')).not.toBeNull());
+    expect(document.querySelector('[data-shop-products]')!.textContent).toMatch(/Shop products · 2/);
+  });
+
   it('keeps lead magnets and paid products apart, each with a link, name, type and (for paid) price per row', async () => {
     setup();
     const free = await group('free');

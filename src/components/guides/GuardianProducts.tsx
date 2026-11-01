@@ -317,7 +317,7 @@ const publicProductCardStyle: React.CSSProperties = {
 };
 
 /** Public "Shop" block on a Guardian's site. Renders nothing until there are published products. */
-export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding, protocols = [], localePreference, categoryOrder }: { guideId: string; guardianSlug: string; guardianName: string; pagePadding: string; protocols?: AdminProtocol[]; localePreference?: GuardianLocalePreference; categoryOrder?: string }) {
+export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding, protocols = [], localePreference, categoryOrder, owns }: { /** Which products belong on this page: a brand's page shows only its own. Omitted, the page shows them all. */ owns?: (brandId: string | null | undefined) => boolean; guideId: string; guardianSlug: string; guardianName: string; pagePadding: string; protocols?: AdminProtocol[]; localePreference?: GuardianLocalePreference; categoryOrder?: string }) {
   const [products, setProducts] = useState<GuideProduct[]>([]);
   const [usage, setUsage] = useState<Record<string, string[]>>({});
   const [downloading, setDownloading] = useState('');
@@ -326,7 +326,7 @@ export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding,
   const [rates, setRates] = useState<Record<string, number> | null>(null);
   useEffect(() => {
     let live = true;
-    listPublicGuideProducts(guideId).then((rows) => { if (live) setProducts(rows); }).catch(() => { if (live) setProducts([]); });
+    listPublicGuideProducts(guideId).then((rows) => { if (live) setProducts(owns ? rows.filter((row) => owns(row.brand_id)) : rows); }).catch(() => { if (live) setProducts([]); });
     return () => { live = false; };
   }, [guideId]);
   useEffect(() => {

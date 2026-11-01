@@ -54,6 +54,8 @@ export interface GuideLeadComment {
 export interface GuideEvent {
   id: string;
   guide_id: string;
+  /** The brand this belongs to; empty means the Guardian's own (personal) page. */
+  brand_id?: string | null;
   title: string;
   description: string | null;
   start_at: string;
@@ -149,7 +151,7 @@ export async function deleteGuideEvent(guideId: string, eventId: string): Promis
   if (error) throw error;
 }
 
-export type GuideRetreat = { id: string; guide_id: string; title: string; description: string | null; location: string | null; image_url: string | null; booking_url: string | null; source_url: string; source_external_id: string; status: string; duration_days?: number | null; price_from_cents?: number | null; currency?: string | null; price_label?: string | null };
+export type GuideRetreat = { id: string; guide_id: string; brand_id?: string | null; title: string; description: string | null; location: string | null; image_url: string | null; booking_url: string | null; source_url: string; source_external_id: string; status: string; duration_days?: number | null; price_from_cents?: number | null; currency?: string | null; price_label?: string | null };
 export async function listGuideRetreats(guideId: string): Promise<GuideRetreat[]> {
   const { data, error } = await db().from('guide_retreats').select('*').eq('guide_id', guideId).eq('status', 'published').order('title');
   if (error) throw error;
@@ -177,6 +179,8 @@ export async function importGuideEvents(guideId: string, sourceUrl?: string): Pr
 export interface GuideOffer {
   id: string;
   guide_id: string;
+  /** The brand this belongs to; empty means the Guardian's own (personal) page. */
+  brand_id?: string | null;
   kind: 'lead_magnet' | 'ebook' | 'recipe_book' | 'routine' | 'routine_guidance' | 'one_to_one_call' | 'group_call' | 'community' | 'course' | 'in_person' | 'journey' | 'festival' | 'team_program' | 'product' | 'program' | 'treat' | 'talk';
   title: string;
   description: string | null;
@@ -295,6 +299,8 @@ export interface GuideBrand {
   guide_id: string;
   name: string;
   kind: 'personal' | 'business';
+  /** The brand's own page is /guardians/<guardian>/<slug>; the personal brand has none (its page is /guardians/<guardian>). */
+  slug?: string | null;
   logo_url: string | null;
   contact_email: string;
   whatsapp_phone: string;
@@ -848,12 +854,65 @@ export async function listGuideBrands(guideId: string): Promise<GuideBrand[]> {
   return ((data || []) as GuideBrand[]).sort((a, b) => Number(b.kind === 'personal') - Number(a.kind === 'personal') || a.name.localeCompare(b.name));
 }
 
-export async function replaceGuideBrands(guideId: string, brands: Omit<GuideBrand, 'id' | 'guide_id'>[]): Promise<GuideBrand[]> {
-  const { error: deleteError } = await db().from('guide_brands').delete().eq('guide_id', guideId);
-  if (deleteError) throw deleteError;
-  const { data, error } = await db().from('guide_brands').insert(brands.map((brand) => ({ ...brand, guide_id: guideId }))).select();
+/** The page address of a brand: lower-case words joined with dashes. */
+export const brandSlugify = (name: string): string =>
+  name.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/g, '') || 'brand';
+
+/** Words that already mean something after /guardians/<guardian>/, so a brand cannot take them. */
+export const RESERVED_BRAND_SLUGS = ['community', 'value-ramp', 'workspace'];
+
+type BrandInput = Omit<GuideBrand, 'id' | 'guide_id'> & { id?: string };
+
+/**
+ * Saves the Guardian's brands without ever replacing a brand that already exists: a brand keeps its id (so the products,
+ * offers and events that belong to it stay with it) and its slug (so its page address does not change). A brand is
+ * recognised by its id, else the personal brand by its kind, else by its name. Brands no longer listed are removed.
+ */
+export async function replaceGuideBrands(guideId: string, brands: BrandInput[]): Promise<GuideBrand[]> {
+  const existing = await listGuideBrands(guideId);
+  const claimed = new Set<string>();
+  const matches = brands.map((brand) => {
+    const hit = existing.find((item) => !claimed.has(item.id!) && (brand.id ? item.id === brand.id : brand.kind === 'personal' ? item.kind === 'personal' : item.name.trim().toLowerCase() === brand.name.trim().toLowerCase()));
+    if (hit) claimed.add(hit.id!);
+    return hit;
+  });
+  const gone = existing.filter((item) => !claimed.has(item.id!)).map((item) => item.id!);
+  if (gone.length) {
+    const { error } = await db().from('guide_brands').delete().eq('guide_id', guideId).in('id', gone);
+    if (error) throw error;
+  }
+  const taken = new Set<string>(existing.filter((item) => claimed.has(item.id!)).map((item) => (item.slug || '').toLowerCase()).filter(Boolean));
+  const slugFor = (brand: BrandInput, hit?: GuideBrand): string | null => {
+    if (brand.kind === 'personal') return null;
+    const keep = (brand.slug || hit?.slug || '').toLowerCase();
+    if (keep && !RESERVED_BRAND_SLUGS.includes(keep)) { taken.add(keep); return keep; }
+    const base = brandSlugify(brand.name);
+    let slug = RESERVED_BRAND_SLUGS.includes(base) ? `${base}-brand` : base;
+    for (let n = 2; taken.has(slug); n += 1) slug = `${base}-${n}`;
+    taken.add(slug);
+    return slug;
+  };
+  for (const [index, brand] of brands.entries()) {
+    const hit = matches[index];
+    const { id: _ignored, ...fields } = brand;
+    const row = { ...fields, slug: slugFor(brand, hit), guide_id: guideId };
+    if (hit) {
+      const { error } = await db().from('guide_brands').update(row).eq('guide_id', guideId).eq('id', hit.id!);
+      if (error) throw error;
+    } else {
+      const { error } = await db().from('guide_brands').insert(row);
+      if (error) throw error;
+    }
+  }
+  return listGuideBrands(guideId);
+}
+
+/** The public face of a published Guardian's brands (what a visitor may read): name, slug, logo, website, links. */
+export async function listPublicGuideBrands(guideId: string): Promise<GuideBrand[]> {
+  const { data, error } = await db().rpc('public_guide_brands', { p_guide_id: guideId });
   if (error) throw error;
-  return (data || []) as GuideBrand[];
+  return ((data || []) as GuideBrand[]).map((brand) => ({ ...brand, guide_id: guideId, contact_email: '', whatsapp_phone: '', language: '', pricing_region: '', currency: 'GBP' as const }))
+    .sort((a, b) => Number(b.kind === 'personal') - Number(a.kind === 'personal') || a.name.localeCompare(b.name));
 }
 
 export async function listGuideSocialConnections(guideId: string): Promise<GuideSocialConnection[]> {
@@ -1119,6 +1178,8 @@ export async function listPersonalProtocolPeople(userId: string): Promise<Map<st
 export interface GuideProduct {
   id: string;
   guide_id: string;
+  /** The brand this belongs to; empty means the Guardian's own (personal) page. */
+  brand_id?: string | null;
   shop_domain: string;
   myshopify_domain: string | null;
   product_handle: string;
