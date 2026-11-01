@@ -363,7 +363,8 @@ export function Header({
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
-  const overHero = currentPage === 'home' && atTop;
+  // Home and Wearables share one hero-top bar: the frosted capsule over the hero, solid cream once scrolled.
+  const overHero = (currentPage === 'home' || currentPage === 'hardware') && atTop;
   // Dark, elegant editorial text everywhere (readable on the light frosted blur).
   const navText = oura.body;
   // Shared cell for the joined header lockups (Sign in | Subscribe, Dashboard | Sign out).
@@ -401,7 +402,7 @@ export function Header({
           <div ref={rowRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: HEADER_GAP, height: 64 }}>
             {/* Lockup */}
             <div ref={logoRef as React.RefObject<HTMLDivElement>} className="flex items-center cursor-pointer flex-shrink-0" onClick={handleHomeNavigation}>
-              <RoutineMark size={28} textColor={navStrong} />
+              <RoutineMark size={28} textColor={navStrong} suffix={currentPage === 'hardware' ? 'Ring + Clip' : 'Beta'} />
             </div>
 
             {/* The links that fit. The rest are in the menu: Guardians is the last to go. A link that is not shown is parked

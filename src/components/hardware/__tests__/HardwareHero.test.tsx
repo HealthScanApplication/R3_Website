@@ -30,8 +30,8 @@ describe('HardwareHero', () => {
     render(<HardwareHero />);
     const h1s = screen.getAllByRole('heading', { level: 1 });
     expect(h1s).toHaveLength(1);
-    expect(line1()).toBe('Capture your meals');
-    expect(line2()).toBe('without phone.');
+    expect(line1()).toBe('Capture your nutrition');
+    expect(line2()).toBe('without a phone.');
   });
 
   it('rotates the feature word in order and wraps', () => {
@@ -41,7 +41,7 @@ describe('HardwareHero', () => {
     for (let i = 1; i <= HERO_FEATURE_WORDS.length; i++) {
       act(() => { vi.advanceTimersByTime(3200); });
       expect(line1()).toBe(`Capture your ${HERO_FEATURE_WORDS[i % HERO_FEATURE_WORDS.length]}`);
-      expect(line2()).toBe('without phone.');
+      expect(line2()).toBe('without a phone.');
     }
   });
 
@@ -50,13 +50,13 @@ describe('HardwareHero', () => {
     bg.reduceMotion = true;
     render(<HardwareHero />);
     act(() => { vi.advanceTimersByTime(20000); });
-    expect(line1()).toBe('Capture your meals');
+    expect(line1()).toBe('Capture your nutrition');
   });
 
   it('has deck, overline, preorder wrapper, devices, hidden poster and labelled section', () => {
     const { container } = render(<HardwareHero />);
     expect(screen.getByText(DECK)).toBeTruthy();
-    expect(screen.getByText('R³ hardware · first batch')).toBeTruthy();
+    expect(screen.getByText('Set · Track · Adapt')).toBeTruthy();
     const wrap = container.querySelector('#preorder') as HTMLElement;
     expect(within(wrap).getAllByRole('button', { name: 'Continue to payment' })).toHaveLength(1);
     expect(screen.getByTestId('devices')).toBeTruthy();
@@ -83,7 +83,7 @@ describe('HardwareHero', () => {
 
   it('pairs each word with its clip, in order', () => {
     expect(HERO_MOMENTS.map(m => [m.word, m.clip])).toEqual([
-      ['meals', 'meal'], ['workouts', 'activity'], ['thoughts', 'journal'], ['moments', 'reel'], ['ideas', 'task'], ['heartbeats', 'sleep'],
+      ['nutrition', 'meal'], ['workouts', 'activity'], ['thoughts', 'journal'], ['moments', 'reel'], ['ideas', 'task'], ['heartbeats', 'sleep'],
     ]);
     expect(HERO_CLIPS).toEqual(['meal', 'activity', 'journal', 'reel', 'task', 'sleep'].map(id => `/videos/hero/${id}.mp4`));
   });
@@ -94,7 +94,7 @@ describe('HardwareHero', () => {
     render(<HardwareHero />);
     act(() => { glass.onClipStart?.(0); });
     act(() => { vi.advanceTimersByTime(10000); });
-    expect(line1()).toBe('Capture your meals');
+    expect(line1()).toBe('Capture your nutrition');
     act(() => { glass.onClipStart?.(3); });
     act(() => { vi.advanceTimersByTime(320); });
     expect(line1()).toBe('Capture your moments');
@@ -124,7 +124,7 @@ describe('HardwareHero', () => {
   });
 
   it('uses the owner capture word list', () => {
-    expect(HERO_FEATURE_WORDS).toEqual(['meals', 'workouts', 'thoughts', 'moments', 'ideas', 'heartbeats']);
+    expect(HERO_FEATURE_WORDS).toEqual(['nutrition', 'workouts', 'thoughts', 'moments', 'ideas', 'heartbeats']);
     // Short words only: 10 letters ("heartbeats") is checked to fit one line at 375px and on desktop.
     for (const w of HERO_FEATURE_WORDS) expect(w.length).toBeLessThanOrEqual(10);
   });

@@ -40,7 +40,7 @@ describe('HardwarePreorder teaser', () => {
     render(<HardwarePreorder />);
     const link = screen.getByRole('link', { name: /See the R³ Ring/ });
     expect(link.getAttribute('href')).toBe('/wearables');
-    expect(link.textContent).toBe('See the R³ Ring — from $149');
+    expect(link.textContent).toBe('See the R³ Ring — from $209');
     expect(screen.getAllByRole('link')).toHaveLength(1);
   });
 
@@ -69,13 +69,13 @@ describe('HardwarePreorder teaser', () => {
     expect(container.querySelector(`#${labelId}`)?.tagName).toBe('H2');
   });
 
-  it('carries none of the old copy and shows only the $149 price', () => {
+  it('carries none of the old copy and shows only the $209 price', () => {
     const { container } = render(<HardwarePreorder />);
     const text = container.textContent ?? '';
     for (const banned of ['Heart', 'Nothing records', 'ambient', 'camera off by default', 'Capture the moment']) {
       expect(text).not.toContain(banned);
     }
-    expect(text.match(/\$\d+/g)).toEqual(['$149']);
+    expect(text.match(/\$\d+/g)).toEqual(['$209']);
   });
 
   it('has the hidden poster background and renders the fluted layer only with videos and motion', () => {

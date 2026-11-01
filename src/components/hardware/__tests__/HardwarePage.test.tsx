@@ -23,8 +23,8 @@ describe('HardwarePage', () => {
     render(<HardwarePage />);
     const h1s = screen.getAllByRole('heading', { level: 1 });
     expect(h1s).toHaveLength(1);
-    expect((h1s[0].children[0] as HTMLElement).textContent).toBe('Capture your meals');
-    expect((h1s[0].children[1] as HTMLElement).textContent).toBe('without phone.');
+    expect((h1s[0].children[0] as HTMLElement).textContent).toBe('Capture your nutrition');
+    expect((h1s[0].children[1] as HTMLElement).textContent).toBe('without a phone.');
   });
 
   it('shows device and section headings', () => {
@@ -61,7 +61,7 @@ describe('HardwarePage', () => {
     }
     expect(text).not.toMatch(/\bHeart\b(?!\s+rate)/);
     const prices = Array.from(new Set(text.match(/\$\d+(?:\.\d+)?/g) ?? [])).sort();
-    expect(prices).toEqual(['$149', '$199', '$299']); // hero preorder shows no struck regular prices
+    expect(prices).toEqual(['$209', '$269', '$349', '$389', '$449', '$649']); // sale prices and their struck list prices
   });
 
   it('has one #preorder inside the hero with the only checkout, and one email field', () => {
@@ -69,14 +69,14 @@ describe('HardwarePage', () => {
     expect(container.querySelectorAll('#preorder')).toHaveLength(1);
     const section = container.querySelector('#preorder') as HTMLElement;
     expect(section.closest('#hardware-hero')).toBeTruthy();
-    expect(screen.getAllByRole('button', { name: 'Reserve →' })).toHaveLength(1);
-    expect(within(section).getByRole('button', { name: 'Reserve →' })).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Reserve' })).toHaveLength(1);
+    expect(within(section).getByRole('button', { name: 'Reserve' })).toBeTruthy();
     expect(container.querySelectorAll('#preorder-email')).toHaveLength(1);
   });
 
   it('closing band links to #preorder', () => {
     render(<HardwarePage />);
-    const link = screen.getByRole('link', { name: 'Reserve the R³ Ring — $149' });
+    const link = screen.getByRole('link', { name: 'Reserve the R³ Ring — $209' });
     expect(link.getAttribute('href')).toBe('#preorder');
     expect((link as HTMLElement).style.background).toBe('rgb(199, 217, 159)');
   });

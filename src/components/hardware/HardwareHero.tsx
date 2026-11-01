@@ -45,24 +45,25 @@ export function HardwareHero() {
     <section id="hardware-hero" aria-labelledby="hardware-hero-title" style={{ position: 'relative', minHeight: '100svh', background: ed.paper, overflow: 'hidden' }}>
       <HeroBackdrop clips={HERO_CLIPS} onClipStart={showWord} />
 
-      <div style={{ position: 'relative', zIndex: 2, minHeight: '100svh', display: 'flex', flexDirection: 'column', maxWidth: 1440, margin: '0 auto', paddingLeft: 'clamp(20px, 5vw, 72px)', paddingRight: 'clamp(20px, 5vw, 72px)', paddingTop: 'clamp(88px, 9vh, 104px)', paddingBottom: 'clamp(32px, 5vh, 56px)', boxSizing: 'border-box' }}>
+      <div style={{ position: 'relative', zIndex: 2, minHeight: '100svh', display: 'flex', flexDirection: 'column', maxWidth: 1440, margin: '0 auto', paddingLeft: 'clamp(20px, 5vw, 72px)', paddingRight: 'clamp(20px, 5vw, 72px)', paddingTop: 'clamp(88px, 9vh, 104px)', paddingBottom: 'clamp(104px, 14vh, 128px)', boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderTop: `1px solid ${ed.hair}`, paddingTop: 14, paddingLeft: 'clamp(16px, 2vw, 28px)', paddingRight: 'clamp(16px, 2vw, 28px)' }}>
-          <p style={overline}>R³ hardware · first batch</p>
+          <p style={overline}>Set · Track · Adapt</p>
         </div>
 
         <div className="r3-hw-hero-grid" style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 0.9fr)', gap: 'clamp(28px, 5vw, 80px)', alignItems: 'end', paddingTop: 'clamp(24px, 5vh, 80px)' }}>
-          <div style={{ alignSelf: 'center' }}>
-            <h1 id="hardware-hero-title" style={{ ...coverStyle, color: ed.ink }}>
-              <span style={{ display: 'block' }}>
+          <div style={{ alignSelf: 'center', marginBottom: 'clamp(16px, 12vh, 120px)' }}>
+            {/* Two lines on a wide screen (the title may run past its column over the devices' empty top); it wraps on a phone. */}
+            <h1 id="hardware-hero-title" className="r3-hw-title" style={{ ...coverStyle, fontSize: 'clamp(2.8rem, 7.4vw, 8.2rem)', color: ed.ink, position: 'relative', zIndex: 3 }}>
+              <span style={{ display: 'block', whiteSpace: 'nowrap' }}>
                 Capture your{' '}
-                <span style={{ display: 'block', fontStyle: 'italic', color: '#FFFFFF', textShadow: '0 4px 24px rgba(0,0,0,0.38)', transition: reduceMotion ? undefined : 'opacity 320ms ease', opacity: wordVisible ? 1 : 0 }}>
+                <span style={{ fontStyle: 'italic', color: '#FFFFFF', textShadow: '0 4px 24px rgba(0,0,0,0.38)', transition: reduceMotion ? undefined : 'opacity 320ms ease', opacity: wordVisible ? 1 : 0 }}>
                   {HERO_FEATURE_WORDS[reduceMotion ? 0 : wordIndex]}
                 </span>
               </span>
-              <span style={{ display: 'block' }}>without phone.</span>
+              <span style={{ display: 'block', whiteSpace: 'nowrap' }}>without a phone.</span>
             </h1>
             <p style={{ ...deckStyle, color: ed.ink, marginTop: 'clamp(20px, 3vw, 36px)', maxWidth: '34ch' }}>{DECK}</p>
-            <div id="preorder" style={{ scrollMarginTop: 'calc(64px + 64px + 16px)', marginTop: 'clamp(28px, 4vh, 48px)', maxWidth: 560 }}>
+            <div id="preorder" style={{ scrollMarginTop: 'calc(64px + 64px + 16px)', marginTop: 'clamp(28px, 4vh, 48px)', maxWidth: 640 }}>
               <PreorderBlock variant="hero" />
             </div>
           </div>
@@ -72,7 +73,7 @@ export function HardwareHero() {
         </div>
       </div>
       <style>{`@supports not (min-height: 100svh) { #hardware-hero, #hardware-hero > div { min-height: 100vh !important; } }
-@media (max-width: 800px) { .r3-hw-hero-grid { grid-template-columns: minmax(0, 1fr) !important; align-content: end; } .r3-hw-hero-devices { aspect-ratio: 1 / 1 !important; min-height: 0 !important; max-height: 52svh; } }`}</style>
+@media (max-width: 800px) { .r3-hw-title span { white-space: normal !important; } .r3-hw-hero-grid { grid-template-columns: minmax(0, 1fr) !important; align-content: end; } .r3-hw-hero-devices { aspect-ratio: 1 / 1 !important; min-height: 0 !important; max-height: 52svh; } }`}</style>
     </section>
   );
 }
