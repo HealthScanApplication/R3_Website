@@ -2296,6 +2296,9 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   // Build a product (setup step 04): any offer type saved as a draft, ready to drop into the offer path in step 05.
   const [buildKind, setBuildKind] = useState<UpsellKind | null>(null);
   const [buildFilter, setBuildFilter] = useState<'all' | UpsellKind>('all');
+  const [buildMode, setBuildMode] = useState<'create' | 'pdf' | 'link'>('create');
+  const [buildFile, setBuildFile] = useState<File | null>(null);
+  const [buildLink, setBuildLink] = useState('');
   const [buildTitle, setBuildTitle] = useState('');
   const [buildPrice, setBuildPrice] = useState('');
   const [buildBusy, setBuildBusy] = useState(false);
@@ -3444,29 +3447,43 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
             {[['all', 'All'], ...upsellSuggestions.map((type) => [type.kind, PRODUCT_TYPE_CHIPS[type.kind] || type.label])].map(([id, text]) => <button key={id} type="button" aria-pressed={buildFilter === id} onClick={() => setBuildFilter(id as 'all' | UpsellKind)} style={{ minHeight: 34, padding: '0 14px', border: `1px solid ${buildFilter === id ? ink : line}`, background: buildFilter === id ? ink : 'transparent', color: buildFilter === id ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{text}</button>)}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,290px),1fr))', gap: 18 }}>
-            {upsellSuggestions.filter((type) => buildFilter === 'all' || buildFilter === type.kind).map((type) => <button key={type.kind} type="button" data-product-type={type.kind} aria-pressed={buildKind === type.kind} onClick={() => { setBuildKind(type.kind); setBuildTitle(type.label); setBuildPrice(upsellDrafts[type.kind]?.price || ''); setBuildNote(''); }} style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 360, padding: 24, textAlign: 'left', border: `1px dashed ${buildKind === type.kind ? acid : 'rgba(245,242,234,.4)'}`, backgroundColor: buildKind === type.kind ? '#20251B' : 'transparent', backgroundImage: 'radial-gradient(rgba(245,242,234,.12) 1px, transparent 1px)', backgroundSize: '14px 14px', color: ink, fontFamily: sans, cursor: 'pointer' }}>
-              <span style={{ color: acid, fontSize: 9, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>{PRODUCT_TYPE_CHIPS[type.kind] || type.value}</span>
-              <strong style={{ fontFamily: serif, fontSize: 'clamp(28px,3vw,38px)', fontWeight: 300, lineHeight: 1.04, letterSpacing: '-.02em' }}>Build a {type.label.toLowerCase()}?</strong>
-              <span style={{ color: muted, fontSize: 12, lineHeight: 1.5 }}>{type.why}</span>
-              <span aria-hidden="true" style={{ width: 56, height: 56, marginTop: 'auto', backgroundImage: `url(${type.art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${type.art.cols * 100}% ${type.art.rows * 100}%`, backgroundPosition: `${type.art.cols === 1 ? 0 : (type.art.index % type.art.cols) * 100 / (type.art.cols - 1)}% ${type.art.rows === 1 ? 0 : Math.floor(type.art.index / type.art.cols) * 100 / (type.art.rows - 1)}%`, filter: 'grayscale(1) contrast(.94)' }} />
-              <span style={{ alignSelf: 'stretch', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 46, background: ink, color: black, fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Build a {(PRODUCT_TYPE_CHIPS[type.kind] || type.label).toLowerCase()} <ArrowRight size={14} /></span>
+            {upsellSuggestions.filter((type) => buildFilter === 'all' || buildFilter === type.kind).map((type) => <button key={type.kind} type="button" data-product-type={type.kind} aria-pressed={buildKind === type.kind} onClick={() => { setBuildKind(type.kind); setBuildTitle(type.label); setBuildPrice(upsellDrafts[type.kind]?.price || ''); setBuildNote(''); setBuildMode('create'); setBuildFile(null); setBuildLink(''); }} style={{ display: 'flex', flexDirection: 'column', minHeight: 390, padding: 0, textAlign: 'left', overflow: 'hidden', border: `1px dashed ${buildKind === type.kind ? acid : 'rgba(245,242,234,.4)'}`, backgroundColor: buildKind === type.kind ? '#20251B' : 'transparent', color: ink, fontFamily: sans, cursor: 'pointer' }}>
+              <span aria-hidden="true" style={{ height: 220, flex: '0 0 220px', display: 'grid', placeItems: 'center', borderBottom: '1px dashed rgba(245,242,234,.3)', backgroundImage: 'radial-gradient(rgba(245,242,234,.14) 1px, transparent 1px)', backgroundSize: '14px 14px' }}>
+                <span style={{ width: 116 * type.art.cellAspect, height: 116, backgroundImage: `url(${type.art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${type.art.cols * 100}% ${type.art.rows * 100}%`, backgroundPosition: `${type.art.cols === 1 ? 0 : (type.art.index % type.art.cols) * 100 / (type.art.cols - 1)}% ${type.art.rows === 1 ? 0 : Math.floor(type.art.index / type.art.cols) * 100 / (type.art.rows - 1)}%`, filter: 'grayscale(1) contrast(.94)' }} />
+              </span>
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, padding: '16px 20px 20px' }}>
+                <span style={{ color: acid, fontSize: 9, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>{PRODUCT_TYPE_CHIPS[type.kind] || type.value}</span>
+                <strong style={{ fontFamily: serif, fontSize: 24, fontWeight: 300, lineHeight: 1.08, letterSpacing: '-.01em' }}>{type.label}</strong>
+                <span style={{ color: muted, fontSize: 11, lineHeight: 1.45, flex: 1 }}>{type.why}</span>
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 40, background: ink, color: black, fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Build it <ArrowRight size={13} /></span>
+              </span>
             </button>)}
           </div>
-          {buildKind && <div data-build-form style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr) auto', gap: 8, alignItems: 'end', marginTop: 12 }}>
-            <div><label style={{ ...label, marginBottom: 5 }}>Product name</label><input aria-label="Product name" style={input} value={buildTitle} onChange={(event) => setBuildTitle(event.target.value)} /></div>
-            <div><label style={{ ...label, marginBottom: 5 }}>Price · {currency}</label><input aria-label="Product price" style={input} inputMode="decimal" value={buildPrice} onChange={(event) => setBuildPrice(event.target.value.replace(/[^0-9.]/g, ''))} placeholder="0 for free" /></div>
-            <button type="button" disabled={buildBusy || !buildTitle.trim()} onClick={async () => {
+          {buildKind && <div data-build-form style={{ marginTop: 14, border: `1px solid ${line}`, padding: 14 }}>
+            <div role="radiogroup" aria-label="How will people get it?" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+              {([['create', 'Create it here'], ['pdf', 'Upload a PDF'], ['link', 'I have a link']] as const).map(([id, text]) => <button key={id} type="button" role="radio" aria-checked={buildMode === id} onClick={() => setBuildMode(id)} style={{ minHeight: 34, padding: '0 14px', border: `1px solid ${buildMode === id ? ink : line}`, background: buildMode === id ? ink : 'transparent', color: buildMode === id ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{text}</button>)}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr)', gap: 8, marginBottom: 8 }}>
+              <div><label style={{ ...label, marginBottom: 5 }}>Product name</label><input aria-label="Product name" style={input} value={buildTitle} onChange={(event) => setBuildTitle(event.target.value)} /></div>
+              <div><label style={{ ...label, marginBottom: 5 }}>Price · {currency}</label><input aria-label="Product price" style={input} inputMode="decimal" value={buildPrice} onChange={(event) => setBuildPrice(event.target.value.replace(/[^0-9.]/g, ''))} placeholder="0 for free" /></div>
+            </div>
+            {buildMode === 'pdf' && <div style={{ marginBottom: 8 }}><label style={{ ...label, marginBottom: 5 }}>PDF, EPUB or ZIP · up to 50 MB</label><label style={{ ...btn, background: 'transparent', color: ink, display: 'inline-flex' }}><Upload size={12} /> {buildFile ? buildFile.name : 'Choose a file'}<input aria-label="Product file" type="file" accept="application/pdf,application/epub+zip,application/zip" onChange={(event) => setBuildFile(event.target.files?.[0] || null)} style={{ display: 'none' }} /></label></div>}
+            {buildMode === 'link' && <div style={{ marginBottom: 8 }}><label style={{ ...label, marginBottom: 5 }}>Booking link, video series or any page people should open</label><input aria-label="Product link" style={input} type="url" value={buildLink} onChange={(event) => setBuildLink(event.target.value)} placeholder="https://" /></div>}
+            <button type="button" disabled={buildBusy || !buildTitle.trim() || (buildMode === 'pdf' && !buildFile) || (buildMode === 'link' && !/^https?:\/\//i.test(buildLink.trim()))} onClick={async () => {
               const suggestion = upsellSuggestions.find((item) => item.kind === buildKind);
               const priceCents = Math.round(Number(buildPrice || 0) * 100);
+              const bookingKinds: string[] = ['one_to_one_call', 'group_call', 'in_person', 'festival', 'routine_guidance'];
               setBuildBusy(true); setError(''); setBuildNote('');
               try {
-                const created = await createGuideOffer(userId, { kind: buildKind, title: buildTitle.trim(), description: suggestion?.why || null, price_cents: priceCents, affiliate_url: null, access_model: priceCents > 0 ? 'paid' : 'free', file_path: null, booking_url: null, status: 'draft', currency });
+                const filePath = buildMode === 'pdf' && buildFile ? await uploadGuideFile(userId, buildFile) : null;
+                const link = buildMode === 'link' ? buildLink.trim() : '';
+                const created = await createGuideOffer(userId, { kind: buildKind!, title: buildTitle.trim(), description: suggestion?.why || null, price_cents: priceCents, affiliate_url: link && !bookingKinds.includes(buildKind!) ? link : null, access_model: priceCents > 0 ? 'paid' : 'free', file_path: filePath, booking_url: link && bookingKinds.includes(buildKind!) ? link : null, status: 'draft', currency });
                 setRelated((current) => ({ ...current, offers: [...current.offers, created] }));
                 setBuildNote(`Saved “${created.title}”. Use it in your offers in the next step.`);
-                setBuildKind(null); setBuildTitle(''); setBuildPrice('');
+                setBuildKind(null); setBuildTitle(''); setBuildPrice(''); setBuildMode('create'); setBuildFile(null); setBuildLink('');
               } catch (e: any) { setError(e?.message || 'The product could not be saved.'); }
               finally { setBuildBusy(false); }
-            }} style={{ ...btn, minHeight: 44 }}>{buildBusy ? 'Saving' : 'Save product'}</button>
+            }} style={{ ...btn, minHeight: 44, width: '100%' }}>{buildBusy ? 'Saving' : 'Save product'}</button>
           </div>}
           {buildNote && <p role="status" style={{ color: acid, fontSize: 12, margin: '10px 0 0' }}>{buildNote}</p>}
         </section>
