@@ -3,7 +3,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { GuardianWebsite } from '../../components/guides/GuidePortal';
-import { brandSitePath, brandSiteProfile, brandSlugFromPath, siteOwns } from '../brandSite';
+import { brandSitePath, brandSiteProfile, brandSlugFromPath, savedBrandId, savedBrandMoves, siteOwns } from '../brandSite';
 
 const treat = (id: string, title: string, brand_id: string | null) => ({ id, guide_id: 'owner', kind: 'treat', title, description: 'Massage · 60 min\nA treat.', cover_url: null, price_cents: 13000, currency: 'AUD', affiliate_url: null, access_model: 'paid', file_path: null, booking_url: null, status: 'published', brand_id });
 const PROFILE = { user_id: 'owner', slug: 'barbara-oneill', display_name: "Barbara O'Neill", headline: 'Self Heal by Design', bio: 'Her bio.', avatar_url: 'https://x/barbara.jpg', specialties: ['Wellness'], status: 'approved', onboarding_step: 5, contact_email: 'barbara@example.com', social_links: { instagram: 'https://instagram.com/barbara' } };
@@ -55,6 +55,24 @@ describe('brand page helpers', () => {
     expect(profile).toMatchObject({ display_name: 'Tre Lune', avatar_url: 'https://x/logo-mono-1.png', headline: 'Natural hormonal support', contact_email: 'barbara@example.com', user_id: 'owner', slug: 'barbara-oneill' });
     expect(profile.social_links).toMatchObject({ instagram: 'https://instagram.com/trelune_', website: 'https://www.trelune.com.au/' });
     expect(brandSiteProfile(PROFILE as any, BRANDS[0] as any)).toBe(PROFILE);
+  });
+});
+
+describe('brands added this session get their saved ids after a save', () => {
+  it('reads a saved id from a local id', () => {
+    expect(savedBrandId('brand-0b1c2d3e-aaaa-bbbb-cccc-111122223333')).toBe('0b1c2d3e-aaaa-bbbb-cccc-111122223333');
+    expect(savedBrandId('brand-1730000000000')).toBeUndefined();
+    expect(savedBrandId('personal')).toBeUndefined();
+  });
+  it('moves a temporary local id to the saved one (with its page address) and leaves saved and personal brands alone', () => {
+    const drafts = [
+      { localId: 'personal', name: "Barbara O'Neill", kind: 'personal' },
+      { localId: 'brand-1730000000000', name: 'Tre Lune', kind: 'business' },
+      { localId: 'brand-0b1c2d3e-aaaa-bbbb-cccc-111122223333', name: 'Misty Mountain', kind: 'business' },
+    ];
+    const saved = [{ id: 'p', name: "Barbara O'Neill", kind: 'personal', slug: null }, { id: 'new-id', name: 'tre lune ', kind: 'business', slug: 'tre-lune' }, { id: '0b1c2d3e-aaaa-bbbb-cccc-111122223333', name: 'Misty Mountain', kind: 'business', slug: 'misty-mountain' }] as any;
+    const moves = savedBrandMoves(drafts, saved);
+    expect([...moves.entries()]).toEqual([['brand-1730000000000', { localId: 'brand-new-id', slug: 'tre-lune' }]]);
   });
 });
 

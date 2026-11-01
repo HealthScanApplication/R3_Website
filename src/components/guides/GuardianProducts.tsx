@@ -4,6 +4,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Check, Copy, Download, ExternalLink, Grid2X2, List, Loader2, Pencil, Plus, ShoppingBag, Smartphone, Trash2, X } from 'lucide-react';
 import { CoverImageActions } from './CoverImageActions';
+import { useBrandScope } from './BrandScopeBar';
+import { ALL_BRANDS, PERSONAL_BRAND, inBrandScope } from '../../utils/brandScope';
 import { deleteGuideProduct, listGuideProducts, listPublicGuideProducts, saveGuideProduct, type GuideProduct } from '../../utils/guidePortal';
 import {
   attributionSlug, buildCartPermalink, buildProductBuyUrl, effectiveCommissionPercent, formatProductPrice, importShopifyProduct, normalizeDiscountCode, parsePriceToCents, parseShopifyProductUrl, regionalProduct, regionalProductOrNull,
@@ -121,6 +123,9 @@ export function GuardianProducts({ guideId, guardianSlug, commissionPercent, pro
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [view, setView] = useState<'cards' | 'list'>('cards');
   const [basketProtocolId, setBasketProtocolId] = useState('');
+  // The workspace 'Showing' bar: a brand's products only. New products are saved under the brand being shown.
+  const scope = useBrandScope();
+  const shown = useMemo(() => products.filter((product) => inBrandScope(scope, product.brand_id)), [products, scope]);
 
   useEffect(() => {
     let live = true;
@@ -163,7 +168,7 @@ export function GuardianProducts({ guideId, guardianSlug, commissionPercent, pro
       const saved = await saveGuideProduct(guideId, {
         id: form.id, shop_domain: ref.shopDomain, myshopify_domain: form.myshopify_domain, product_handle: ref.handle, variant_id: ref.variantId, variant_title: form.variant_title,
         title, description: form.description.trim().slice(0, 600) || null, image_url: image || null, price_cents: parsePriceToCents(form.price), currency: form.currency,
-        discount_code: normalizeDiscountCode(form.discount_code), status: form.status, sort_order: form.id ? products.find((product) => product.id === form.id)?.sort_order ?? 0 : products.length,
+        discount_code: normalizeDiscountCode(form.discount_code), status: form.status, brand_id: form.id ? products.find((product) => product.id === form.id)?.brand_id ?? null : scope !== ALL_BRANDS && scope !== PERSONAL_BRAND ? scope : null, sort_order: form.id ? products.find((product) => product.id === form.id)?.sort_order ?? 0 : products.length,
       }, form.protocolIds);
       setProducts((current) => form.id ? current.map((product) => product.id === saved.id ? saved : product) : [...current, saved]);
       setForm(null); setMessage(`${saved.title} saved.`);
@@ -242,7 +247,7 @@ export function GuardianProducts({ guideId, guardianSlug, commissionPercent, pro
 
     {message && <p role="status" style={{ color: message.endsWith('saved.') ? acid : '#F0A7A7', fontSize: 12 }}>{message}</p>}
 
-    {!loading && products.length > 0 && <>
+    {!loading && shown.length > 0 && <>
       <section style={{ border: `1px solid ${line}`, marginTop: 18, padding: 'clamp(18px,3vw,26px)', background: panel }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'end', flexWrap: 'wrap' }}>
           <div><span style={{ ...label, margin: 0, color: acid }}>Protocol basket</span><h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 28, margin: '6px 0 0' }}>One checkout, when the store supports it.</h2></div>
@@ -263,7 +268,7 @@ export function GuardianProducts({ guideId, guardianSlug, commissionPercent, pro
     </>}
 
     <div style={{ marginTop: 12 }}>
-      {loading ? <p style={{ color: muted, fontSize: 12 }}>Loading products…</p> : products.length ? <div style={view === 'cards' ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,280px),1fr))', gap: 14 } : undefined}>{products.map((product) => {
+      {loading ? <p style={{ color: muted, fontSize: 12 }}>Loading products…</p> : shown.length ? <div style={view === 'cards' ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,280px),1fr))', gap: 14 } : undefined}>{products.map((product) => {
         const { local, onProtocols, cartReady } = productMeta(product);
         const regions = (['AU', 'UK'] as const).map((region) => ({ region, product: regionVersion(product, region) }));
         const actions = <div style={{ display: 'flex', gap: 6 }}><a href={buyUrl(product)} target="_blank" rel="noopener noreferrer" title="Open buy link" aria-label={`Open buy link for ${product.title}`} style={{ ...iconBtn, textDecoration: 'none' }}><ExternalLink size={14} /></a><button type="button" title="Copy buy link" aria-label={`Copy buy link for ${product.title}`} onClick={() => void copyLink(product)} style={iconBtn}>{copiedId === product.id ? <Check size={14} color={acid} /> : <Copy size={14} />}</button><button type="button" title="Edit product" aria-label={`Edit ${product.title}`} onClick={() => { setForm(formFromProduct(product)); setMessage(''); }} style={iconBtn}><Pencil size={14} /></button><button type="button" title="Remove product" aria-label={`Remove ${product.title}`} onClick={() => void remove(product)} style={{ ...iconBtn, color: muted }}><Trash2 size={14} /></button></div>;

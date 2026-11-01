@@ -24,6 +24,10 @@ export function BrandScopeBar({ userId, personalName }: { userId: string; person
   const [brands, setBrands] = useState<GuideBrand[]>([]);
   const scope = useBrandScope();
   useEffect(() => { let live = true; listGuideBrands(userId).then((list) => { if (live) setBrands(list); }).catch(() => undefined); return () => { live = false; }; }, [userId]);
+  // A remembered choice that is not one of this Guardian's brands (another account, a removed brand) must not hide everything.
+  const known = brands.map((brand) => (brand.kind === 'personal' ? PERSONAL_BRAND : brand.id!));
+  const stale = brands.length > 0 && scope !== ALL_BRANDS && (brands.length < 2 || !known.includes(scope));
+  useEffect(() => { if (stale) writeBrandScope(ALL_BRANDS); }, [stale]);
   if (brands.length < 2) return null;
   const chips = [
     { id: ALL_BRANDS, name: 'All' },
