@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "exportedAt": "2026-11-01T18:00:00.000Z",
+  "consent": {
+    "status": "none",
+    "at": null
+  },
+  "creator": {
+    "handle": "example_preview",
+    "platform": "instagram",
+    "displayName": "Example Preview",
+    "website": "https://example.com",
+    "avatarUrl": "https://example.com/avatar.jpg",
+    "country": "US",
+    "language": "en",
+    "niche": "Gut health"
+  },
+  "pocket": {
+    "title": "Women with gut problems",
+    "audienceTotal": 480000,
+    "audienceAverage": 32000,
+    "creatorsOnFile": 15,
+    "creatorsInPlay": 6,
+    "openings": 4,
+    "reachable": 9
+  },
+  "problems": [],
+  "products": [],
+  "sources": [
+    {
+      "kind": "website",
+      "url": "https://example.com",
+      "title": "Example Wellness"
+    }
+  ]
+}
