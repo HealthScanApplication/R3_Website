@@ -51,6 +51,21 @@ describe('events calendar', () => {
     expect(day(root, '2099-03-13').getAttribute('aria-label')).toMatch(/no events/);
   });
 
+  it('highlights only the days an event starts, not the days one is under way, and stacks the cards beside the calendar', async () => {
+    visit();
+    const root = await section();
+    expect(day(root, '2099-03-05').style.background).toMatch(/rgb\(242, 239, 231\)/); // an event starts: filled
+    expect(day(root, '2099-03-09').style.background).toMatch(/rgb\(17, 21, 15\)/); // under way: no highlight (the day number still shows)
+    expect(day(root, '2099-03-09').getAttribute('data-has-event')).toBe('true');
+    const layout = root.querySelector('.g-events-layout') as HTMLElement;
+    expect(layout.querySelector('.g-events-calendar [data-events-calendar]')).not.toBeNull();
+    const stack = layout.querySelector('.g-events-stack') as HTMLElement;
+    expect(stack.getAttribute('aria-label')).toBe('Events');
+    expect(stack.querySelectorAll('article').length).toBe(3);
+    expect(layout.querySelector('.g-events-calendar')!.nextElementSibling!.contains(stack)).toBe(true); // the stack is the column to the right of the calendar
+    expect(root.textContent).not.toMatch(/Under way/);
+  });
+
   it('numbers each day of a multi-day event inside the calendar, and leaves one-day events unnumbered', async () => {
     visit();
     const root = await section();

@@ -1996,12 +1996,15 @@ function GuardianEvents({ profile, events, sourceUrl, canEditSource, onImported,
           {message && <span role={state === 'error' ? 'alert' : 'status'} style={{ gridColumn: '1 / -1', color: state === 'error' ? '#FFB4A8' : '#C7D8A3', fontSize: 11, marginTop: 8 }}>{message}</span>}
         </div>}
       </div>
-      {upcoming.length ? <>
-        <div style={{ marginBottom: 28 }}><EventsCalendar events={upcoming} range={range} onChange={setRange} /></div>
-        <p data-events-count role="status" style={{ color: '#9FA897', fontSize: 12, margin: '0 0 14px' }}>{range ? `${fitting.length} of ${upcoming.length} events fit your dates` : `${upcoming.length} upcoming`}</p>
-        {fitting.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,320px),1fr))', gap: 16 }}>{fitting.map((event) => <EventCommerceCard key={event.id} profile={profile} event={event} />)}</div>
-          : <p style={{ color: '#C7D8A3', fontSize: 14 }}>Nothing is on for those dates. Choose other days, or <button type="button" onClick={() => setRange(null)} style={{ border: 0, background: 'transparent', color: '#C7D8A3', padding: 0, font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>clear the dates</button>.</p>}
-      </> : <div style={{ border: '1px dashed rgba(242,239,231,.3)', padding: 32, color: '#B8B6AF' }}>No upcoming events yet. Add one in Guardian workspace or pull from the official events page.</div>}
+      {upcoming.length ? <div className="g-events-layout">
+        <style>{`.g-events-layout{display:grid;grid-template-columns:minmax(260px,300px) minmax(0,1fr);gap:36px;align-items:start}.g-events-calendar{position:sticky;top:84px}.g-events-stack{max-height:min(80vh,820px);overflow-y:auto;overscroll-behavior:contain;padding-right:6px}@media (max-width:860px){.g-events-layout{grid-template-columns:minmax(0,1fr)}.g-events-calendar{position:static}.g-events-stack{max-height:none;overflow:visible;padding-right:0}}`}</style>
+        <div className="g-events-calendar"><EventsCalendar events={upcoming} range={range} onChange={setRange} /></div>
+        <div style={{ minWidth: 0 }}>
+          <p data-events-count role="status" style={{ color: '#9FA897', fontSize: 12, margin: '0 0 14px' }}>{range ? `${fitting.length} of ${upcoming.length} events fit your dates` : `${upcoming.length} upcoming`}</p>
+          {fitting.length ? <div className="g-events-stack" role="region" aria-label="Events" tabIndex={0} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 16 }}>{fitting.map((event) => <EventCommerceCard key={event.id} profile={profile} event={event} />)}</div>
+            : <p style={{ color: '#C7D8A3', fontSize: 14 }}>Nothing is on for those dates. Choose other days, or <button type="button" onClick={() => setRange(null)} style={{ border: 0, background: 'transparent', color: '#C7D8A3', padding: 0, font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>clear the dates</button>.</p>}
+        </div>
+      </div> : <div style={{ border: '1px dashed rgba(242,239,231,.3)', padding: 32, color: '#B8B6AF' }}>No upcoming events yet. Add one in Guardian workspace or pull from the official events page.</div>}
     </div>
   </section>;
 }
