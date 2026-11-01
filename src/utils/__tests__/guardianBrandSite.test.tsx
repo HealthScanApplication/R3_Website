@@ -140,6 +140,21 @@ describe('the public page of each brand', () => {
     expect(within(section).queryByRole('button', { name: /refresh events/i })).toBeNull();
   });
 
+  it('lists the official brands after the page\'s content and subscription, as white tiles with dark text and a dark logo', async () => {
+    visit('/guardians/barbara-oneill');
+    await screen.findByRole('region', { name: "Barbara O'Neill's treats" });
+    const brands = document.querySelector('section[aria-labelledby="guardian-brands-title"]') as HTMLElement;
+    expect(brands).not.toBeNull();
+    const after = (a: Element, b: Element) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(after(screen.getByRole('region', { name: "Barbara O'Neill's treats" }), brands)).toBe(true); // below the page's content
+    expect(brands.nextElementSibling).toBe(document.querySelector('footer')); // the last thing before the footer, so below the subscription
+    const tiles = [...brands.querySelectorAll('[data-brand-tile]')] as HTMLElement[];
+    expect(tiles.length).toBe(2); // Tre Lune and Misty Mountain
+    for (const tile of tiles) { expect(tile.style.background).toMatch(/rgb\(255, 255, 255\)|#FFFFFF/i); expect(tile.style.color).toMatch(/rgb\(17, 18, 15\)|#11120F/i); }
+    const logo = brands.querySelector('img[src="https://x/logo-mono-1.png"]') as HTMLImageElement;
+    expect(logo.style.filter).toBe(''); // black logo on the white tile, not inverted
+  });
+
   it('an address that is not one of the Guardian\'s brands is a page that is not published', async () => {
     visit('/guardians/barbara-oneill/nothing-here', 'nothing-here');
     expect(await screen.findByText('This page is not published yet.')).toBeTruthy();
