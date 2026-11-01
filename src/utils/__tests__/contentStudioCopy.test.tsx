@@ -31,3 +31,17 @@ describe('ContentStudio default copy', () => {
     expect(value('Headline')).not.toMatch(/Build a routine/);
   });
 });
+
+describe('ContentStudio brief chips', () => {
+  it('link to the workspace tab where each part is edited, and the call to action opens its link', () => {
+    const { container } = render(<ContentStudio creator="Ana" siteUrl="/guardians/ana" problem="Sleep" audience="Everyone" offers={[{ title: 'Evening wind-down', free: true }]} />);
+    const href = (key: string) => container.querySelector(`a[data-brief-link="${key}"]`)?.getAttribute('href');
+    expect(href('Creator')).toBe('/guardians/workspace?tab=profile');
+    expect(href('Audience')).toBe('/guardians/workspace?tab=value_ramps');
+    expect(href('Problem')).toBe('/guardians/workspace?tab=value_ramps');
+    expect(href('Offer')).toBe('/guardians/workspace?tab=offer_builder');
+    expect(href('Solution')).toBe('/guardians/workspace?tab=protocols');
+    expect(href('CTA')).toMatch(/ana/);
+    expect(container.querySelector('a[data-brief-link="CTA"]')?.getAttribute('target')).toBe('_blank');
+  });
+});

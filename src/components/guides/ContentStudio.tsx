@@ -352,6 +352,9 @@ export function StyleThumb({ styleId, bg, headline, subline, cta, credit, brand,
   return <canvas ref={ref} aria-hidden="true" style={{ width: '100%', aspectRatio: '9 / 16', display: 'block', background: '#1B1C18' }} />;
 }
 
+/** Each chip of the brief links to the workspace tab where that part is edited (the call to action opens the link itself). */
+export const BRIEF_EDIT_LINKS: Record<string, string> = { Creator: 'profile', Audience: 'value_ramps', Problem: 'value_ramps', Offer: 'offer_builder', Solution: 'protocols', CTA: 'cta' };
+
 export function ContentStudio({ creator, avatar = null, audience, problem, offers, siteUrl, pageUrl, heading = 'Create posts for this offer path', brand = null, kind = 'offer' }: { kind?: CopyKind; creator: string; avatar?: string | null; audience: string; problem: string; offers: StudioOffer[]; siteUrl: string; /** The Guardian's page, when siteUrl points elsewhere (a routine link): keeps the @handle on the post. */ pageUrl?: string; heading?: string; brand?: PostBrand | null }) {
   // Template fonts load from Google Fonts; redraw once they are registered, or the first frame uses a fallback.
   const [fontsReady, setFontsReady] = useState(0);
@@ -435,7 +438,10 @@ export function ContentStudio({ creator, avatar = null, audience, problem, offer
     </div>
     {/* The brief every post is built from. */}
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
-      {[['Creator', creator], ['Audience', audience], ['Problem', problem], ['Offer', offer.title], ['Solution', `A routine for ${solution}`], ['CTA', fullUrl.replace(/^https?:\/\//, '').replace(/\?.*$/, '')]].map(([k, v]) => <span key={k} style={{ border: `1px solid ${line}`, padding: '6px 9px', color: ink, fontSize: 10 }}><strong style={{ color: acid, fontSize: 8, letterSpacing: '.1em', textTransform: 'uppercase', marginRight: 6 }}>{k}</strong>{v}</span>)}
+      {[['Creator', creator], ['Audience', audience], ['Problem', problem], ['Offer', offer.title], ['Solution', `A routine for ${solution}`], ['CTA', fullUrl.replace(/^https?:\/\//, '').replace(/\?.*$/, '')]].map(([k, v]) => {
+        const href = BRIEF_EDIT_LINKS[k] === 'cta' ? fullUrl : `/guardians/workspace?tab=${BRIEF_EDIT_LINKS[k]}`;
+        return <a key={k} href={href} {...(k === 'CTA' ? { target: '_blank', rel: 'noopener noreferrer' } : {})} data-brief-link={k} title={k === 'CTA' ? 'Open this link' : `Edit ${k.toLowerCase()}`} style={{ border: `1px solid ${line}`, padding: '6px 9px', color: ink, fontSize: 10, textDecoration: 'none', cursor: 'pointer' }}><strong style={{ color: acid, fontSize: 8, letterSpacing: '.1em', textTransform: 'uppercase', marginRight: 6 }}>{k}</strong>{v}</a>;
+      })}
     </div>
     <div className="g-split">
       <div style={{ display: 'grid', gap: 12, alignContent: 'start' }}>
