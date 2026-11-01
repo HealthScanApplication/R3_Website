@@ -3862,7 +3862,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         </section>
       </div>
     </form>}
-    {!summaryView && <StepRelated step={step} profileStatus={savedStatus} guardianSlug={savedSlug || guardianSlug} displayName={displayName} brands={brandProfiles.map((brand) => ({ id: brand.localId, name: (brand.localId === activeBrandId ? displayName : brand.name) || 'Untitled brand', kind: brand.kind, logo: brand.localId === activeBrandId ? avatarUrl || brand.logo_url : brand.logo_url }))} activeBrandId={activeBrandId} related={related} audience={audienceLabel(audienceDetails, audience)} />}
+    {!summaryView && <StepRelated step={step} profileStatus={savedStatus} guardianSlug={savedSlug || guardianSlug} displayName={displayName} brands={brandProfiles.map((brand) => ({ id: brand.localId, name: (brand.localId === activeBrandId ? displayName : brand.name) || 'Untitled brand', kind: brand.kind, logo: brand.localId === activeBrandId ? avatarUrl || brand.logo_url : brand.logo_url }))} activeBrandId={activeBrandId} related={related} audience={audienceLabel(audienceDetails, audience)} userId={userId} onOfferDeleted={(offerId) => setRelated((current) => ({ ...current, offers: current.offers.filter((offer) => offer.id !== offerId) }))} />}
       </div>
     </div>
   </div>;
@@ -3886,7 +3886,7 @@ function WideCard({ row, onOpen }: { row: RelatedRow; onOpen: () => void }) {
 }
 
 /** Below the fold of each setup step: the Guardian's existing items for that stage, as wide cards two to a row. */
-export function StepRelated({ step, guardianSlug, displayName, related, audience = '', brands = [], activeBrandId = 'personal', profileStatus = null }: { audience?: string; profileStatus?: GuideProfile['status'] | null;  step: number; guardianSlug: string; displayName: string; related: { leads: GuideLead[]; offers: GuideOffer[]; ramps: GuideValueRamp[]; protocols: AdminProtocol[] }; brands?: RelatedBrand[]; activeBrandId?: string }) {
+export function StepRelated({ step, guardianSlug, displayName, related, audience = '', brands = [], activeBrandId = 'personal', profileStatus = null, userId, onOfferDeleted }: { userId?: string; onOfferDeleted?: (offerId: string) => void; audience?: string; profileStatus?: GuideProfile['status'] | null;  step: number; guardianSlug: string; displayName: string; related: { leads: GuideLead[]; offers: GuideOffer[]; ramps: GuideValueRamp[]; protocols: AdminProtocol[] }; brands?: RelatedBrand[]; activeBrandId?: string }) {
   const [brandFilter, setBrandFilter] = useState<string>('all');
   const [siteMenu, setSiteMenu] = useState<string | null>(null);
   const open = (href: string) => () => { window.location.href = href; };
@@ -3920,7 +3920,17 @@ export function StepRelated({ step, guardianSlug, displayName, related, audience
     {filterable && <div role="group" aria-label="Filter sites by brand" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
       {filterIds.map((id) => <button key={id} type="button" aria-pressed={brandFilter === id} onClick={() => setBrandFilter(id)} style={{ minHeight: 30, padding: '0 12px', border: `1px solid ${brandFilter === id ? ink : line}`, background: brandFilter === id ? ink : 'transparent', color: brandFilter === id ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{chipLabel(id)}</button>)}
     </div>}
-    {rows.length && (step === 1 || step === 5) ? <SiteCardGrid
+    {step === 4 && related.offers.length ? <ProtocolCardGrid>{related.offers.slice(0, 8).map((offer) => {
+      const free = offer.access_model === 'free';
+      return <ProductCard key={offer.id} kind={offer.kind} imageUrl={offer.cover_url}
+        eyebrow={[audience || 'Everyone', offer.status === 'published' ? 'Published' : 'Draft'].join(' · ')}
+        title={customerFacingOfferTitle(offer.title)} copy={(offer.description || '').split(' Delivery:')[0].slice(0, 120) || undefined}
+        price={free ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid'}
+        name={displayName} cta={guardianSlug ? 'View on your site' : 'View offer'} href={guardianSlug ? `/guardians/${encodeURIComponent(guardianSlug)}#offers` : undefined}
+        owned visibility={offer.status === 'published' ? 'public' : 'private'}
+        onEdit={() => open('/guardians/workspace?tab=offer_builder')()}
+        onDelete={userId ? async () => { if (!window.confirm(`Delete ${offer.title}?`)) return; await deleteGuideOffer(userId, offer.id); onOfferDeleted?.(offer.id); } : undefined} />;
+    })}</ProtocolCardGrid> : rows.length && (step === 1 || step === 5) ? <SiteCardGrid
       minCardWidth={440}
       openMenu={siteMenu}
       onOpenMenu={setSiteMenu}
