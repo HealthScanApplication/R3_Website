@@ -1,6 +1,6 @@
 /*
  * The Guardian's profile image, as one full-width, centred card: their current photo featured first, then a single
- * Replace and a single "Create my R3 house style" (each action appears once). Once they have a result the card shows
+ * Replace and a single "Create my R3 house style" (each action appears once), then one Save for the image and the photos. Once they have a result the card shows
  * their original beside it with Use this avatar / Try again / Cancel. Before there is a result, an empty slot beside their
  * photo shows where it will appear. One reference image of the style stays below as the goal.
  *
@@ -8,6 +8,7 @@
  */
 import { Loader2, Sparkles, Upload } from 'lucide-react';
 import { SaveButton, type SaveState } from './SaveButton';
+import { IMAGE_REQUIREMENTS } from '../../utils/imageValidation';
 
 const ink = '#F5F2EA', muted = '#B8B6AF', line = 'rgba(245,242,234,0.24)', black = '#090A08', panel = '#11120F', acid = '#C7D8A3';
 const sans = '"EuclidCircularA", "DM Sans", "Helvetica Neue", Arial, sans-serif';
@@ -92,28 +93,28 @@ export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, 
           Live image generation is currently in test mode. This is a placeholder, so it cannot be saved as your avatar yet.
         </p>
       )}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 16 }}>
-        {resultUrl ? (
-          <>
-            <button type="button" onClick={onApply} disabled={applying || resultMock} aria-describedby={resultMock ? noteId : undefined} style={{ ...primary, opacity: resultMock ? 0.45 : 1, cursor: applying ? 'wait' : resultMock ? 'not-allowed' : 'pointer' }}>{applying ? 'Adding…' : 'Add to profile'}</button>
-            <button type="button" onClick={onCreate} disabled={busy} style={{ ...secondary, cursor: converting ? 'wait' : 'pointer' }}>{converting ? 'Creating…' : 'Try again'}</button>
-            <button type="button" onClick={onCancel} disabled={applying} style={{ ...secondary, border: 0, color: muted, padding: '0 6px', cursor: 'pointer' }}>Cancel</button>
-          </>
-        ) : (
-          <>
-            <button type="button" onClick={onCreate} disabled={busy || needsUpload} aria-busy={converting} style={{ ...primary, opacity: needsUpload ? 0.45 : 1, cursor: converting ? 'wait' : needsUpload ? 'not-allowed' : 'pointer' }}>
-              {converting ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}{converting ? 'Creating your portrait…' : 'Create my R3 house style'}
-            </button>
-            <button type="button" onClick={onUpload} disabled={uploading} aria-label={featured ? 'Replace profile image' : 'Upload profile image'} style={{ ...secondary, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: uploading ? 'wait' : 'pointer' }}>
-              {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}{uploading ? 'Uploading' : featured ? 'Replace photo' : 'Upload photo'}
-            </button>
-          </>
-        )}
+      {resultUrl ? (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 16 }}>
+          <button type="button" onClick={onApply} disabled={applying || resultMock} aria-describedby={resultMock ? noteId : undefined} style={{ ...primary, opacity: resultMock ? 0.45 : 1, cursor: applying ? 'wait' : resultMock ? 'not-allowed' : 'pointer' }}>{applying ? 'Adding…' : 'Add to profile'}</button>
+          <button type="button" onClick={onCreate} disabled={busy} style={{ ...secondary, cursor: converting ? 'wait' : 'pointer' }}>{converting ? 'Creating…' : 'Try again'}</button>
+          <button type="button" onClick={onCancel} disabled={applying} style={{ ...secondary, border: 0, color: muted, padding: '0 6px', cursor: 'pointer' }}>Cancel</button>
+        </div>
+      ) : (
+        <div data-image-actions style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 8, maxWidth: 480, margin: '16px auto 0' }}>
+          <button type="button" onClick={onCreate} disabled={busy || needsUpload} aria-busy={converting} style={{ ...primary, justifyContent: 'center', opacity: needsUpload ? 0.45 : 1, cursor: converting ? 'wait' : needsUpload ? 'not-allowed' : 'pointer' }}>
+            {converting ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}{converting ? 'Creating your portrait…' : 'Create my R3 house style'}
+          </button>
+          <button type="button" onClick={onUpload} disabled={uploading} aria-label={featured ? 'Replace profile image' : 'Upload profile image'} style={{ ...secondary, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, cursor: uploading ? 'wait' : 'pointer' }}>
+            {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}{uploading ? 'Uploading' : featured ? 'Replace photo' : 'Upload photo'}
+          </button>
+        </div>
+      )}
+      <div data-image-footer style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 16, paddingTop: 14, borderTop: `1px solid ${line}`, textAlign: 'left' }}>
+        <p style={{ color: muted, fontSize: 11, lineHeight: 1.5, margin: 0, flex: '1 1 240px' }}>
+          {dragging ? 'Drop to upload' : needsUpload ? 'This is a stock image. Upload your own photo to create your house style.' : `${IMAGE_REQUIREMENTS}. Drag a photo anywhere on this card to replace it.`}
+        </p>
+        {save && onSave && <SaveButton state={save} onSave={onSave} label="Save" />}
       </div>
-      {save && onSave && <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}><SaveButton state={save} onSave={onSave} label="Save profile image" /></div>}
-      <p style={{ color: muted, fontSize: 11, lineHeight: 1.5, margin: '10px 0 0' }}>
-        {dragging ? 'Drop to upload' : needsUpload ? 'This is a stock image. Replace it with your own photo to create your house style, or drag one here.' : 'or drag a photo here'}
-      </p>
       {error && <p role="alert" style={{ color: ink, background: 'rgba(245,242,234,.06)', borderLeft: `2px solid ${acid}`, fontSize: 12, lineHeight: 1.5, margin: '12px auto 0', padding: '8px 10px', maxWidth: 480, textAlign: 'left' }}>{error}</p>}
       {children}
       <details style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${line}` }}>

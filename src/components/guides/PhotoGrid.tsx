@@ -22,6 +22,7 @@ export interface PhotoGridProps {
   uploading: boolean;
   onAdd: (files: FileList | null) => void;
   onRemove: (index: number) => void;
+  /** The row layout has its own Save; the quad layout is saved by the profile image card's single Save. */
   save: SaveState;
   onSave: () => void;
   /** Sits inside another card (the profile image card): no box of its own, just a divider above. */
@@ -55,12 +56,6 @@ export function PhotoGrid({ photos, accountAvatarUrl, uploading, onAdd, onRemove
         <figcaption style={{ ...label, marginTop: 8, textAlign: 'center' }}>Your photos · {filled.length} of {PHOTO_SLOTS}</figcaption>
         {forBrand && <p style={{ ...label, color: acid, margin: '4px 0 0', textAlign: 'center' }}>For {forBrand}</p>}
         <p style={{ color: enough ? acid : muted, fontFamily: sans, fontSize: 11, lineHeight: 1.5, margin: '4px 0 0', textAlign: 'center' }}>{enough ? 'Add up to 4. The first is used for your house style.' : `Add at least ${PHOTO_MIN} real photos of you.`}</p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 10 }}>
-          <button type="button" onClick={onSave} disabled={save.status === 'saving'} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 36, padding: '0 14px', border: `1px solid ${ink}`, background: 'transparent', color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase', cursor: save.status === 'saving' ? 'wait' : 'pointer' }}>
-            {save.status === 'saving' ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Save photos
-          </button>
-          <SaveStatus state={save} />
-        </div>
       </figure>
     );
   }
