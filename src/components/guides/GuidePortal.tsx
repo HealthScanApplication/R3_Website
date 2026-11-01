@@ -2841,7 +2841,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         const status: GuideProfile['status'] = savedStatus === 'approved' ? 'approved' : savedStatus === 'submitted' ? 'submitted' : 'draft';
         // A live (or submitted) page only takes an R³ house-style profile image; drafts can be saved with any photo.
         if (status !== 'draft' && !isHouseStyleAvatar(freshAvatar ?? avatarUrl, houses)) throw new Error(HOUSE_STYLE_REQUIRED);
-        const saved = await saveGuideProfile(profileRow(status, Math.min(5, Math.max(savedStep, step, 1)), savedSlug, freshAvatar, houses)); // an existing public url is kept
+        const saved = await saveGuideProfile(profileRow(status, Math.min(6, Math.max(savedStep, step, 1)), savedSlug, freshAvatar, houses)); // an existing public url is kept
         setSavedStatus(saved.status); setSavedStep(saved.onboarding_step || step);
         if (saved.slug) setSavedSlug(saved.slug);
       }
@@ -2869,6 +2869,25 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     finally { setPhotosUploading(false); }
   }
 
+  /** Publishes only the profile site (profile row and brands). Offers, recipes, Protocols and the offer path are left exactly as saved. */
+  async function publishProfileSite() {
+    setBusy(true); setError('');
+    try {
+      if (!displayName.trim()) throw new Error('Add the name people should call you.');
+      if (!isValidContactEmail(contactEmail)) throw new Error('Add a valid contact email.');
+      if (!chosen.length) throw new Error('Choose at least one area you can help with.');
+      if (!avatarIsHouseStyle) throw new Error(HOUSE_STYLE_REQUIRED);
+      if (brandsLoaded === 'loading') throw new Error('Your saved brands are still loading. Try again in a moment.');
+      if (brandsLoaded === 'failed') throw new Error('Your saved brands could not be loaded, so publishing is paused to avoid overwriting them. Reload the page to try again.');
+      const profile = await saveGuideProfile(profileRow(savedStatus === 'approved' ? 'approved' : 'submitted', 6));
+      const selectedBrand = currentBrandDraft();
+      const brandsToSave = brandProfiles.map((brand) => brand.localId === activeBrandId ? selectedBrand : brand);
+      await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, is_primary: localId === activeBrandId })));
+      if (profile.status !== 'approved') await requestGuardianReview().catch(() => null);
+      setSavedStatus(profile.status);
+    } catch (e: any) { setError(e.message?.includes('guide_profiles') ? 'Guardian database is not installed yet. Apply the portal migration first.' : e.message); }
+    finally { setBusy(false); }
+  }
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setError('');
     try {
@@ -2882,7 +2901,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       const audienceText = audience.join(', ').toLowerCase();
       const headline = generatedHeadline;
       const bio = intro.trim() || `I help ${audienceText} with ${chosen.join(', ').toLowerCase()} through ${format.join(', ').toLowerCase()}.`;
-      const profile = await saveGuideProfile(profileRow(savedStatus === 'approved' ? 'approved' : 'submitted', 5));
+      const profile = await saveGuideProfile(profileRow(savedStatus === 'approved' ? 'approved' : 'submitted', 6));
       const selectedBrand = currentBrandDraft();
       const brandsToSave = brandProfiles.map((brand) => brand.localId === activeBrandId ? selectedBrand : brand);
       await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, is_primary: localId === activeBrandId })));
@@ -3615,7 +3634,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         <SiteProfileSection userId={userId} />
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginBottom: 14 }}><span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Preview on</span><DeviceToggle value={previewDevice} onChange={setPreviewDevice} /></div>
         <FunnelStage number="01" eyebrow="Site 01 · Your profile" title={`${displayName || 'Your'}${displayName ? '’s' : ''} story.`} copy="Your profile site: who you are, and every published offer path.">
-          <SitePublishBar site="Profile site" status={profileSiteState} action={sitePublish} busy={busy} error={error} liveHref={`/guardians/${guardianSlug}`} />
+          <SitePublishBar site="Profile site" status={profileSiteState} action={{ ...sitePublish, hint: sitePublish.hint.replace(' and offer path', '') }} busy={busy} error={error} liveHref={`/guardians/${guardianSlug}`} onPublish={publishProfileSite} />
           {/* Builder left, live preview right (stacks on narrow screens). */}
           <div className="g-split" style={{ border: `1px solid ${line}`, background: panel, padding: 16 }}>
           <div>
