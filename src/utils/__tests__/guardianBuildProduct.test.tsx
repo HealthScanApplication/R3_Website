@@ -47,6 +47,57 @@ describe('reading a pasted link', () => {
 });
 
 describe('Upload your products (setup step 04)', () => {
+  const offer = (id: string, kind: string, title: string, price: number) => ({ id, guide_id: 'owner', kind, title, description: null, cover_url: null, price_cents: price, currency: 'GBP', affiliate_url: 'https://x.example/a', access_model: price ? 'paid' : 'free', file_path: null, booking_url: null, status: 'draft' });
+
+  it('has one section per type, lowest value first, and lead magnets (free) apart from paid', async () => {
+    mocks.offers.mockReturnValue([offer('o1', 'festival', 'Misty Retreat', 365000), offer('o2', 'ebook', 'Sleep guide', 1900), offer('o3', 'course', 'Gut course', 14900), offer('o4', 'ebook', 'Free checklist', 0)]);
+    setup();
+    const free = await group('free');
+    const VALUE_ORDER = ['ebook', 'recipe_book', 'product', 'course', 'routine', 'routine_guidance', 'one_to_one_call', 'group_call', 'community', 'in_person', 'festival'];
+    const kinds = [...free.querySelectorAll('[data-type-section]')].map((el) => el.getAttribute('data-type-section')!);
+    expect(kinds.length).toBeGreaterThan(1);
+    expect(kinds).toEqual([...kinds].sort((a, b) => VALUE_ORDER.indexOf(a) - VALUE_ORDER.indexOf(b))); // lowest value first
+    expect(kinds).not.toContain('product'); // a physical product is never a lead magnet
+    expect(free.querySelectorAll('[data-built-card]').length).toBe(1); // only the free checklist is a lead magnet
+    const paid = await group('paid');
+    await waitFor(() => expect(paid.querySelectorAll('[data-built-card]').length).toBe(3));
+    const order = [...paid.querySelectorAll('[data-type-section]')].filter((el) => el.querySelector('[data-built-card]')).map((el) => el.getAttribute('data-type-section'));
+    expect(order).toEqual(['ebook', 'course', 'festival']); // a PDF guide, then the course, then the retreat
+  });
+
+  it('sorts the cards inside a section from low to high', async () => {
+    mocks.offers.mockReturnValue([offer('o1', 'ebook', 'Big guide', 9900), offer('o2', 'ebook', 'Small guide', 900), offer('o3', 'ebook', 'Middle guide', 2900)]);
+    setup();
+    const paid = await group('paid');
+    await waitFor(() => expect(paid.querySelectorAll('[data-built-card]').length).toBe(3));
+    expect([...paid.querySelectorAll('[data-type-section="ebook"] [data-built-card]')].map((el) => /Small|Middle|Big/.exec(el.textContent || '')![0])).toEqual(['Small', 'Middle', 'Big']);
+  });
+
+  it('collapses and expands each section, saying so for assistive tech', async () => {
+    mocks.offers.mockReturnValue([offer('o1', 'ebook', 'Sleep guide', 1900)]);
+    setup();
+    const paid = await group('paid');
+    await waitFor(() => expect(paid.querySelector('[data-built-card]')).not.toBeNull());
+    const section = paid.querySelector('[data-type-section="ebook"]') as HTMLElement;
+    const toggle = section.querySelector('[data-type-toggle]') as HTMLButtonElement;
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle.textContent).toMatch(/PDF guide · 1/);
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect((section.querySelector('[data-built-card]')!.closest('[hidden]'))).not.toBeNull();
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(section.querySelector('[data-built-card]')!.closest('[hidden]')).toBeNull();
+  });
+
+  it('gives every card the same fixed size', async () => {
+    setup();
+    await group('paid');
+    const css = [...document.querySelectorAll('style')].map((el) => el.textContent).join('\n');
+    expect(css).toMatch(/\[data-upload-group\] \.r3-pcard\{height:480px;min-height:480px\}/);
+    expect(css).toMatch(/\[data-upload-group\] \.r3-pcard-media\{height:200px\}/);
+  });
+
   it('keeps physical products and the shop under Paid products, not under Lead magnets', async () => {
     const product = (id: string, title: string, price: number) => ({ id, guide_id: 'owner', shop_domain: 'shop.example', myshopify_domain: null, product_handle: id, variant_id: null, variant_title: null, title, description: null, image_url: null, price_cents: price, currency: 'AUD', discount_code: null, commission_percent: null, status: 'published', sort_order: 0, created_at: '', updated_at: '', brand_id: null });
     mocks.products.mockReturnValue([product('p1', 'Mineral Bundle', 26990), product('p2', 'Wild Yam Cream', 23500)]);
@@ -54,11 +105,12 @@ describe('Upload your products (setup step 04)', () => {
     const free = await group('free');
     expect(free.querySelector('[data-build-type="product"]')).toBeNull();
     expect([...(within(free).getByLabelText('Lead magnets type 1') as HTMLSelectElement).options].map((option) => option.text)).not.toContain('Physical product');
-    expect(document.querySelector('[data-shop-products]')).toBeNull();
+    expect(free.querySelector('[data-shop-products]')).toBeNull();
     const paid = await group('paid');
     expect(paid.querySelector('[data-build-type="product"]')).not.toBeNull();
-    await waitFor(() => expect(document.querySelector('[data-shop-products]')).not.toBeNull());
-    expect(document.querySelector('[data-shop-products]')!.textContent).toMatch(/Shop products · 2/);
+    await waitFor(() => expect(paid.querySelector('[data-shop-products]')).not.toBeNull());
+    expect(paid.querySelector('[data-shop-products]')!.textContent).toMatch(/Shop products · 2/);
+    expect(paid.querySelector('[data-type-section="product"]')!.contains(paid.querySelector('[data-shop-products]'))).toBe(true); // in the Physical product section
   });
 
   it('keeps lead magnets and paid products apart, each with a link, name, type and (for paid) price per row', async () => {

@@ -2374,6 +2374,8 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const [productTab, setProductTab] = useState<'free' | 'paid'>('free');
   const brandScope = useBrandScope();
   const shopProducts = related.products.filter((product) => brandProfiles.length < 2 || inBrandScope(brandScope, product.brand_id));
+  /** The shop's physical products as cards, lowest price first (they sit in the Physical product section of Paid products). */
+  const renderShopCards = (products: GuideProduct[]) => <ProtocolCardGrid>{[...products].sort((a, b) => (a.price_cents || 0) - (b.price_cents || 0) || a.title.localeCompare(b.title)).map((product, index) => <ProtocolCard key={product.id} badge={product.price_cents ? formatMoney(product.price_cents / 100, product.currency || 'GBP') : undefined} kicker={`#${String(index + 1).padStart(2, '0')} low to high`} title={product.title} imageUrl={product.image_url} copy={clipCopy(product.description || '')} by={displayName} cta="Manage products" onClick={() => { window.location.href = '/guardians/workspace?tab=products'; }} owned />)}</ProtocolCardGrid>;
   const [showProtocolInfo, setShowProtocolInfo] = useState(false);
   const [summaryView, setSummaryView] = useState<'offers' | 'sites' | null>(null);
   const [inventoryMenu, setInventoryMenu] = useState<string | null>(null);
@@ -3587,11 +3589,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           offers={related.offers.filter((offer) => offer.access_model === group.id)}
           onSaved={(created) => setRelated((current) => ({ ...current, offers: [...current.offers, ...created] }))}
           onDeleted={(offerId) => setRelated((current) => ({ ...current, offers: current.offers.filter((offer) => offer.id !== offerId) }))}
-          displayName={displayName} /></div>)}
-        {productTab === 'paid' && shopProducts.length > 0 && <section data-shop-products aria-label="Shop products" style={{ marginTop: 28 }}>
-          <span style={{ ...label, color: acid }}>Shop products · {shopProducts.length} · by value</span>
-          <ProtocolCardGrid>{valueSortedProducts(shopProducts).map((product, index) => <ProtocolCard key={product.id} badge={product.price_cents ? formatMoney(product.price_cents / 100, product.currency || 'GBP') : undefined} kicker={`#${String(index + 1).padStart(2, '0')} by value`} title={product.title} imageUrl={product.image_url} copy={clipCopy(product.description || '')} by={displayName} cta="Manage products" onClick={() => { window.location.href = '/guardians/workspace?tab=products'; }} owned />)}</ProtocolCardGrid>
-        </section>}
+          displayName={displayName} shopProducts={group.id === 'paid' ? shopProducts : []} renderShop={renderShopCards} /></div>)}
       </div>}
 
       {step === 5 && <>
@@ -4105,6 +4103,8 @@ const PRODUCT_BUILDER_HREF: Record<string, string> = {
   recipe_book: '/guardians/workspace?tab=recipes', routine: '/guardians/workspace?tab=protocols', routine_guidance: '/guardians/workspace?tab=protocols',
   festival: '/guardians/workspace?tab=events', product: '/guardians/workspace?tab=products',
 };
+/** Types from the lowest value to the highest: a PDF guide up to a retreat. Lead magnets are free, so they are their own group before paid. */
+const PRODUCT_VALUE_ORDER: GuideOffer['kind'][] = ['ebook', 'recipe_book', 'product', 'course', 'routine', 'routine_guidance', 'one_to_one_call', 'group_call', 'community', 'in_person', 'festival'];
 const PRODUCT_UPLOAD_GROUPS: Array<{ id: 'free' | 'paid'; title: string; copy: string }> = [
   { id: 'free', title: 'Lead magnets', copy: 'Free things that bring people in: a PDF, a short video series, a starter Protocol, a booking link for a free call.' },
   { id: 'paid', title: 'Paid products', copy: 'What people pay for, from a low-priced guide up to a retreat.' },
@@ -4132,7 +4132,9 @@ const PRODUCT_TYPE_COLOUR: Record<string, string> = {
 };
 /** Tilt-shift and glow for the product cards: the dotted suggestions use the Protocol card's picture, with a type-coloured glow and soft top and bottom blur. */
 const PRODUCT_CARD_CSS = `
-[data-upload-group] .r3-pcard{min-height:440px}
+[data-upload-group] .r3-pcard{height:480px;min-height:480px}
+[data-upload-group] .r3-pcard-media{height:200px}
+[data-upload-group] [data-add-empty]{height:480px}
 [data-upload-group] [data-built-card]{display:flex;--type:#C88A66}
 [data-upload-group] [data-built-card] .r3-pcard{flex:1}
 [data-upload-group] [data-type-colour] .r3-pcard-glow{background:radial-gradient(70% 80% at 50% 58%,color-mix(in srgb,var(--type) 64%,transparent),color-mix(in srgb,var(--type) 30%,transparent) 48%,transparent 80%)}
@@ -4174,7 +4176,7 @@ export function guessProductFromUrl(raw: string): { type?: GuideOffer['kind']; t
 type UploadRow = { id: number; url: string; title: string; price: string; type: GuideOffer['kind']; touchedType: boolean; touchedTitle: boolean };
 
 /** One group (lead magnets or paid products) of the Products step: a row per product with link, name, price and type, plus the cards already saved. */
-function ProductUploadSection({ group, userId, currency, offers, onSaved, onDeleted, displayName }: { group: { id: 'free' | 'paid'; title: string; copy: string }; userId: string; currency: string; offers: GuideOffer[]; onSaved: (created: GuideOffer[]) => void; onDeleted: (offerId: string) => void; displayName: string }) {
+function ProductUploadSection({ group, userId, currency, offers, onSaved, onDeleted, displayName, shopProducts = [], renderShop }: { shopProducts?: GuideProduct[]; renderShop?: (products: GuideProduct[]) => React.ReactNode; group: { id: 'free' | 'paid'; title: string; copy: string }; userId: string; currency: string; offers: GuideOffer[]; onSaved: (created: GuideOffer[]) => void; onDeleted: (offerId: string) => void; displayName: string }) {
   const nextId = useRef(1);
   const blank = (): UploadRow => ({ id: nextId.current++, url: '', title: '', price: '', type: 'ebook', touchedType: false, touchedTitle: false });
   const [rows, setRows] = useState<UploadRow[]>(() => [blank()]);
@@ -4215,19 +4217,13 @@ function ProductUploadSection({ group, userId, currency, offers, onSaved, onDele
     } catch (error: any) { setProblem(error?.message || 'Those could not be saved.'); }
     finally { setBusy(false); }
   };
-  const input: React.CSSProperties = { width: '100%', minHeight: 44, boxSizing: 'border-box', background: '#0B0C0A', color: ink, border: `1px solid ${line}`, padding: '0 12px', fontFamily: sans, fontSize: 14 };
-  return <section data-upload-group={group.id} aria-label={group.title} style={{ border: `1px solid ${line}`, background: panel, padding: 16, marginBottom: 18 }}>
-    <h3 style={{ fontFamily: serif, fontSize: 'clamp(26px,3vw,36px)', fontWeight: 300, letterSpacing: '-.02em', lineHeight: 1.05, margin: 0, color: ink }}>{group.title}</h3>
-    <p style={{ color: muted, fontSize: 12, lineHeight: 1.5, margin: '6px 0 14px' }}>{group.copy}</p>
-    <style>{PRODUCT_CARD_CSS}</style>
-    <div style={{ marginBottom: 16 }}>
-      <ProtocolCardGrid min={240}>{[...offers].sort((a, b) => (b.price_cents || 0) - (a.price_cents || 0)).map((offer) => <div key={offer.id} data-built-card data-type-colour={offer.kind} style={{ '--type': PRODUCT_TYPE_COLOUR[offer.kind] || '#C88A66' } as React.CSSProperties}><ProductCard kind={offer.kind} imageUrl={offer.cover_url}
+  const builtCard = (offer: GuideOffer) => <div key={offer.id} data-built-card data-type-colour={offer.kind} style={{ '--type': PRODUCT_TYPE_COLOUR[offer.kind] || '#C88A66' } as React.CSSProperties}><ProductCard kind={offer.kind} imageUrl={offer.cover_url}
         eyebrow={[PRODUCT_UPLOAD_TYPES.find((item) => item.value === offer.kind)?.label || offer.kind.replace(/_/g, ' '), offer.status === 'published' ? 'Published' : 'Draft'].join(' · ')} title={customerFacingOfferTitle(offer.title)} copy={(offer.description || '').split(' Delivery:')[0].slice(0, 120) || undefined}
         price={offer.access_model === 'free' ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid'} name={displayName || 'You'} owned visibility={offer.status === 'published' ? 'public' : 'private'}
         href={offer.affiliate_url || offer.booking_url || undefined}
         onEdit={() => { window.location.href = '/guardians/workspace?tab=offer_builder'; }}
-        onDelete={async () => { if (!(await confirmInPage(`Delete ${offer.title}?`))) return; await deleteGuideOffer(userId, offer.id); onDeleted(offer.id); }} /></div>)}
-        {PRODUCT_SUGGESTIONS.filter((suggestion) => (group.id === 'paid' || suggestion.free) && !offers.some((offer) => offer.kind === suggestion.kind)).map((suggestion) => {
+        onDelete={async () => { if (!(await confirmInPage(`Delete ${offer.title}?`))) return; await deleteGuideOffer(userId, offer.id); onDeleted(offer.id); }} /></div>;
+  const suggestionCard = (suggestion: typeof PRODUCT_SUGGESTIONS[number]) => {
           const type = PRODUCT_UPLOAD_TYPES.find((item) => item.value === suggestion.kind)!;
           const rank = [...PRODUCT_SUGGESTIONS].sort((x, y) => x.price - y.price).findIndex((item) => item.kind === suggestion.kind) + 1;
           const art = suggestion.art;
@@ -4243,9 +4239,45 @@ function ProductUploadSection({ group, userId, currency, offers, onSaved, onDele
                 <a data-suggestion-build href={PRODUCT_BUILDER_HREF[suggestion.kind]} style={{ minHeight: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #F5F2EA', color: '#F5F2EA', textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Build it</a>
               </span>} />
           </div>;
+  };
+  // One section per type, lowest value first: lead magnets (free) are their own group, so each type is a step up from the one before.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const sections = PRODUCT_VALUE_ORDER.filter((kind) => group.id === 'paid' || kind !== 'product').map((kind) => {
+    const built = offers.filter((offer) => offer.kind === kind).sort((a, b) => (a.price_cents || 0) - (b.price_cents || 0));
+    const suggestion = PRODUCT_SUGGESTIONS.find((item) => item.kind === kind && (group.id === 'paid' || item.free));
+    const shop = kind === 'product' && group.id === 'paid' ? shopProducts : [];
+    const prices = [...built.map((offer) => offer.price_cents || 0), ...shop.map((product) => product.price_cents || 0)].filter((cents) => cents > 0);
+    const range = group.id === 'free' ? 'Free' : prices.length ? (Math.min(...prices) === Math.max(...prices) ? formatMoney(Math.min(...prices) / 100, currency) : `${formatMoney(Math.min(...prices) / 100, currency)} – ${formatMoney(Math.max(...prices) / 100, currency)}`) : suggestion ? `Suggested ${formatMoney(suggestion.price, currency)}` : '';
+    return { kind, label: PRODUCT_UPLOAD_TYPES.find((item) => item.value === kind)?.label || kind, built, shopCount: shop.length, shopCards: shop.length ? renderShop?.(shop) : null, suggestion: built.length || shop.length ? undefined : suggestion, count: built.length + shop.length, range };
+  }).filter((section) => section.count > 0 || section.suggestion);
+  const input: React.CSSProperties = { width: '100%', minHeight: 44, boxSizing: 'border-box', background: '#0B0C0A', color: ink, border: `1px solid ${line}`, padding: '0 12px', fontFamily: sans, fontSize: 14 };
+  return <section data-upload-group={group.id} aria-label={group.title} style={{ border: `1px solid ${line}`, background: panel, padding: 16, marginBottom: 18 }}>
+    <h3 style={{ fontFamily: serif, fontSize: 'clamp(26px,3vw,36px)', fontWeight: 300, letterSpacing: '-.02em', lineHeight: 1.05, margin: 0, color: ink }}>{group.title}</h3>
+    <p style={{ color: muted, fontSize: 12, lineHeight: 1.5, margin: '6px 0 14px' }}>{group.copy}</p>
+    <style>{PRODUCT_CARD_CSS}</style>
+    <div style={{ marginBottom: 16 }}>
+      <div data-type-sections style={{ display: 'grid', gap: 12 }}>
+        {sections.map((section) => {
+          const open = !collapsed[section.kind];
+          return <section key={section.kind} data-type-section={section.kind} aria-label={`${section.label} · ${section.count}`} style={{ border: `1px solid ${line}` }}>
+            <button type="button" data-type-toggle aria-expanded={open} onClick={() => setCollapsed((current) => ({ ...current, [section.kind]: open }))} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, minHeight: 46, padding: '0 14px', border: 0, background: 'rgba(245,242,234,.03)', color: ink, fontFamily: sans, fontSize: 11, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer', textAlign: 'left' }}>
+              <ChevronRight size={14} aria-hidden="true" style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 180ms ease' }} />
+              <span style={{ flex: 1 }}>{section.label} · {section.count}</span>
+              <span style={{ color: muted, fontWeight: 600, letterSpacing: '.04em', textTransform: 'none' }}>{section.range}</span>
+            </button>
+            <div hidden={!open} style={{ padding: open ? 14 : 0 }}>
+              {section.kind === 'product' && group.id === 'paid' && section.shopCards ? <div data-shop-products aria-label="Shop products"><span style={{ ...label, color: acid }}>Shop products · {section.shopCount} · low to high</span>{section.shopCards}</div> : null}
+              <ProtocolCardGrid min={240}>
+                {section.built.map((offer) => builtCard(offer))}
+                {section.suggestion ? suggestionCard(section.suggestion) : null}
+              </ProtocolCardGrid>
+            </div>
+          </section>;
         })}
-        <button type="button" data-add-empty onClick={() => prefill(null, '', '')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 440, border: '1px dashed rgba(245,242,234,.4)', borderRadius: 6, background: 'transparent', color: muted, fontFamily: sans, cursor: 'pointer' }}><Plus size={28} strokeWidth={1.2} /><span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Add a {group.id === 'free' ? 'lead magnet' : 'product'}</span></button>
-      </ProtocolCardGrid>
+        <ProtocolCardGrid min={240}>
+        <button type="button" data-add-empty onClick={() => prefill(null, '', '')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 480, border: '1px dashed rgba(245,242,234,.4)', borderRadius: 6, background: 'transparent', color: muted, fontFamily: sans, cursor: 'pointer' }}><Plus size={28} strokeWidth={1.2} /><span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Add a {group.id === 'free' ? 'lead magnet' : 'product'}</span></button>
+        </ProtocolCardGrid>
+      </div>
     </div>
     <div ref={rowsRef} style={{ display: 'grid', gap: 10 }}>
       {rows.map((row, index) => <div key={row.id} data-upload-row style={{ display: 'grid', gridTemplateColumns: group.id === 'free' ? 'minmax(0,3fr) minmax(0,2fr) minmax(0,2fr) auto' : 'minmax(0,3fr) minmax(0,2fr) minmax(0,1fr) minmax(0,2fr) auto', gap: 8, alignItems: 'end' }}>
