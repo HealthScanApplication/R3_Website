@@ -22,7 +22,7 @@ import { PullFromLink } from './PullFromLink';
 import { eventDay } from '../../utils/eventDates';
 import { LogoBadge } from './LogoBadge';
 import { EventsCalendar } from './EventsCalendar';
-import { guestsLabel, parseRetreatOptions, roomPrice } from '../../utils/retreatRooms';
+import { guestsLabel, parseRetreatOptions, roomPrice, type RetreatRoomOption } from '../../utils/retreatRooms';
 import { eventsInRange, type DayRange } from '../../utils/eventCalendar';
 import { DEFAULT_SECTION_ORDER, PAGE_SECTIONS, moveSection, orderPageSections, serializeSectionOrder, type PageSectionKey } from '../../utils/pageSections';
 import { BrandScopeBar, useBrandScope } from './BrandScopeBar';
@@ -1663,7 +1663,7 @@ const HERO_ICONS: Record<string, React.ComponentType<{ size?: number; 'aria-hidd
 type HeroSection = [id: string, text: string, state?: 'filled' | 'empty', category?: string];
 const HERO_SECTIONS: HeroSection[] = [['catalog', 'Routines'], ['shop', 'Products'], ['events', 'Events'], ['retreats', 'Retreats']];
 
-function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, accent, headingFont, background, backgroundIsVideo = false, clips = [], typeVideo = null, glass = false, sections = HERO_SECTIONS, greyscale = false, cards, headlineStyle = 'editorial', guideId, sourceOfferId }: { audience?: string; reviewSummary?: { rating?: number; reviewCount?: number }; headlineStyle?: HeadlineStyle; name: string; avatarUrl?: string | null; specialties: string[]; headline: string; tags: string[]; bio: string; accent: string; headingFont: string; background?: string | null; backgroundIsVideo?: boolean; clips?: YtClip[]; typeVideo?: string | null; glass?: boolean; sections?: HeroSection[]; greyscale?: boolean; cards: SiteHeroCard[]; guideId?: string; sourceOfferId?: string | null }) {
+function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, accent, headingFont, background, backgroundIsVideo = false, clips = [], typeVideo = null, glass = false, sections = HERO_SECTIONS, greyscale = false, cards, headlineStyle = 'editorial', guideId, sourceOfferId, identityLine }: { /** The second line under the name, in place of the specialties (a brand's descriptor, e.g. "Lifestyle Retreat"). */ identityLine?: string; audience?: string; reviewSummary?: { rating?: number; reviewCount?: number }; headlineStyle?: HeadlineStyle; name: string; avatarUrl?: string | null; specialties: string[]; headline: string; tags: string[]; bio: string; accent: string; headingFont: string; background?: string | null; backgroundIsVideo?: boolean; clips?: YtClip[]; typeVideo?: string | null; glass?: boolean; sections?: HeroSection[]; greyscale?: boolean; cards: SiteHeroCard[]; guideId?: string; sourceOfferId?: string | null }) {
   const [email, setEmail] = useState('');
   const [captureState, setCaptureState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
   const heroMedia = ownBackground(background);
@@ -1691,7 +1691,7 @@ function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, a
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
           {avatarUrl ? <img src={avatarUrl} alt={name} style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', filter: isMonoLogoUrl(avatarUrl) ? 'invert(1)' : greyscale ? 'grayscale(1)' : 'none' }} /> : <span style={{ width: 56, height: 56, borderRadius: '50%', background: '#D7D4CC', display: 'grid', placeItems: 'center', fontFamily: headingFont, fontSize: 24 }}>{(name || 'G').charAt(0)}</span>}
-          <span style={{ fontFamily: APP.font }}><strong style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#FFF' }}>{name || 'Your name'}</strong><span style={{ display: 'block', marginTop: 2, fontSize: 12, fontWeight: 700, color: '#D6E7A8' }}>{specialties.slice(0, 3).join(' · ') || 'Personal guidance'}</span></span>
+          <span style={{ fontFamily: APP.font }}><strong style={{ display: 'block', fontSize: 15, fontWeight: 600, color: '#FFF' }}>{name || 'Your name'}</strong><span style={{ display: 'block', marginTop: 2, fontSize: 12, fontWeight: 700, color: '#D6E7A8' }}>{identityLine || specialties.slice(0, 3).join(' · ') || 'Personal guidance'}</span></span>
         </div>
         <h1 style={{ ...HEADLINE_STYLES[headlineStyle].hero, color: '#FFF', fontSize: 'clamp(48px,7vw,96px)', textShadow: '0 2px 28px rgba(0,0,0,.28)', margin: '0 0 16px' }}>{HEADLINE_STYLES[headlineStyle].stripStop ? (headline || name).replace(/\.$/, '') : (headline || name)}</h1>
         <ExpertiseTags tags={tags} color={accent} />
@@ -1907,23 +1907,34 @@ function WorkspaceEvents({ guideId }: { guideId: string }) {
  * The top of an event or retreat card: a real map of the place with its country's flag in the tag. `lines` are every piece of the
  * place we have (location, venue, title), because the venue alone often has no city or country; the map is asked for all of it.
  */
+/**
+ * Google's embedded map draws a street-view thumbnail (bottom left) and a fullscreen/pan control (bottom right). The map here is
+ * only a picture of the place (the whole header opens Maps), so those two corners are cut from the picture. The attribution
+ * line along the bottom edge is left alone, as Google requires.
+ */
+const MAP_WITHOUT_CONTROLS: React.CSSProperties = {
+  WebkitMask: 'linear-gradient(#000 0 0), linear-gradient(#000 0 0) left bottom / 92px 76px no-repeat, linear-gradient(#000 0 0) right 0 bottom 26px / 92px 64px no-repeat',
+  WebkitMaskComposite: 'xor',
+  mask: 'linear-gradient(#000 0 0), linear-gradient(#000 0 0) left bottom / 92px 76px no-repeat, linear-gradient(#000 0 0) right 0 bottom 26px / 92px 64px no-repeat',
+  maskComposite: 'exclude',
+};
+
 function DestinationHeader({ profile, place, lines = [place], kind, virtual = false }: { profile: GuideProfile; place: string; lines?: Array<string | null | undefined>; kind: 'event' | 'retreat'; virtual?: boolean }) {
-  // The card under the map: dark for an event, light for a retreat. The logo badge is cut from the same surface, so it reads as part of the card.
-  const surface = kind === 'retreat' ? '#F2EFE7' : '#171B14';
-  const onDark = kind !== 'retreat';
+  // The card under the map is light (white for an event, cream for a retreat), so the logo badge is cut from it and shown black. The logo badge is cut from the same surface, so it reads as part of the card.
+  const surface = kind === 'retreat' ? '#F2EFE7' : '#FFFFFF';
+  const onDark = false;
   const query = mapQueryFor(...lines) || place;
   const online = virtual || /^online$/i.test(place.trim()) || /to be announced/i.test(place); // nothing to put on a map
   const country = online ? null : countryForPlace(...lines);
   const mapHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-  return <div data-destination style={{ position: 'relative' }}><div data-destination-header style={{ position: 'relative', height: 210, overflow: 'hidden', background: kind === 'retreat' ? '#D7D0C2' : '#263024' }}>
-    {!online && <iframe data-place-map src={`https://maps.google.com/maps?q=${encodeURIComponent(query)}&z=12&output=embed`} title={`Map of ${query}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" tabIndex={-1} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, filter: 'invert(.92) hue-rotate(180deg) brightness(.72) contrast(.92) saturate(.55)' }} />}
+  return <div data-destination style={{ position: 'relative' }}><div data-destination-header style={{ position: 'relative', height: 210, overflow: 'hidden', background: '#202A21' }}>
+    {!online && <iframe data-place-map src={`https://maps.google.com/maps?q=${encodeURIComponent(query)}&z=12&output=embed`} title={`Map of ${query}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" tabIndex={-1} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, filter: 'invert(.92) hue-rotate(180deg) brightness(.72) contrast(.92) saturate(.55)', pointerEvents: 'none', ...MAP_WITHOUT_CONTROLS }} />}
     <a href={mapHref} target="_blank" rel="noreferrer" aria-label={`Open ${query} in maps`} style={{ position: 'absolute', inset: 0, color: '#F5F2EA', textDecoration: 'none' }}>
       <span data-place-tag style={{ position: 'absolute', left: 18, top: 18, maxWidth: '68%', display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: '1px solid rgba(245,242,234,.42)', background: 'rgba(17,18,15,.72)', backdropFilter: 'blur(10px)', fontSize: 9, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>
         {country && <span role="img" aria-label={country.name} title={country.name} data-place-flag style={{ fontSize: 15, lineHeight: 1, letterSpacing: 0 }}>{country.flag}</span>}
         <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{place}</span>
       </span>
     </a>
-    <span style={{ position: 'absolute', right: 96, bottom: 12, padding: '6px 8px', color: '#F5F2EA', background: 'rgba(17,18,15,.52)', backdropFilter: 'blur(10px)', fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', pointerEvents: 'none' }}>{profile.display_name}</span>
   </div>
   <LogoBadge url={profile.avatar_url} name={profile.display_name} surface={surface} onDark={onDark} />
   </div>;
@@ -1951,22 +1962,25 @@ const publicCommerceCardCta: React.CSSProperties = {
   boxShadow: '0 0 0 1px rgba(255,255,255,.18)',
 };
 
-function EventCommerceCard({ profile, event }: { profile: GuideProfile; event: GuideEvent }) {
+function EventCommerceCard({ profile, event, rooms = [] }: { profile: GuideProfile; event: GuideEvent; rooms?: RetreatRoomOption[] }) {
   const date = new Date(event.start_at);
+  const choice = useRoomChoice(rooms);
   const href = event.info_url || (event.source_url !== 'manual' ? event.source_url : '');
   const place = event.location || event.venue || (event.format === 'virtual' ? 'Online' : 'Location to be announced');
-  return <article style={{ minHeight: 520, border: '1px solid rgba(242,239,231,.28)', display: 'flex', flexDirection: 'column', background: '#171B14', overflow: 'hidden' }}>
+  return <article style={{ minHeight: 520, border: '1px solid rgba(242,239,231,.28)', display: 'flex', flexDirection: 'column', background: '#FFFFFF', color: '#11120F', overflow: 'hidden' }}>
     <DestinationHeader profile={profile} place={place} lines={[event.location, event.venue, event.title]} kind="event" virtual={event.format === 'virtual'} />
-    <div style={{ padding: 22, display: 'flex', flex: 1, flexDirection: 'column' }}><div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><span style={{ color: '#C7D8A3', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{eventDay(event.start_at, event.timezone, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span><span style={{ border: '1px solid rgba(199,216,163,.5)', borderRadius: 999, color: '#C7D8A3', padding: '4px 7px', fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{eventFormatLabel(event.format)}</span></div><h3 style={{ fontFamily: serif, fontSize: 31, fontWeight: 300, lineHeight: 1.05, margin: '11px 0 9px' }}>{event.title}</h3><p style={{ color: '#B8B6AF', fontSize: 13, lineHeight: 1.5, margin: '0 0 8px' }}>{event.venue || place}</p>{event.description && <p style={{ color: '#9FA897', fontSize: 12, lineHeight: 1.5, margin: '0 0 20px' }}>{clipCopy(event.description, 145)}</p>}<div style={{ marginTop: 'auto', paddingTop: 18, borderTop: '1px solid rgba(242,239,231,.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}><strong style={{ fontFamily: serif, fontSize: 20, fontWeight: 300 }}>{event.price_label || 'See booking price'}</strong>{href && <a href={href} target="_blank" rel="noreferrer" style={publicCommerceCardCta}>Book <ArrowRight size={13} /></a>}</div></div>
+    <div style={{ padding: 22, display: 'flex', flex: 1, flexDirection: 'column' }}><div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><span style={{ color: '#667245', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{eventDay(event.start_at, event.timezone, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span><span style={{ border: '1px solid rgba(102,114,69,.55)', borderRadius: 999, color: '#667245', padding: '4px 7px', fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{eventFormatLabel(event.format)}</span></div><h3 style={{ fontFamily: serif, fontSize: 31, fontWeight: 300, lineHeight: 1.05, margin: '11px 0 9px' }}>{event.title}</h3><p style={{ color: '#66645F', fontSize: 13, lineHeight: 1.5, margin: '0 0 8px' }}>{event.venue || place}</p>{event.description && <p style={{ color: '#66645F', fontSize: 12, lineHeight: 1.5, margin: '0 0 20px' }}>{clipCopy(event.description, 145)}</p>}<RoomSelectors title={event.title} rooms={rooms} choice={choice} /><div style={{ marginTop: choice.room ? 16 : 'auto', paddingTop: 18, borderTop: '1px solid rgba(17,18,15,.18)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}><RoomPrice choice={choice} fallback={event.price_label || 'See booking price'} />{href && <a href={href} target="_blank" rel="noreferrer" style={publicCommerceCardCta}>Book <ArrowRight size={13} /></a>}</div></div>
   </article>;
 }
 
-function GuardianEvents({ profile, events, sourceUrl, canEditSource, onImported, onSourceChanged }: { profile: GuideProfile; events: GuideEvent[]; sourceUrl: string; canEditSource: boolean; onImported: (events: GuideEvent[]) => void; onSourceChanged: (sourceUrl: string) => void }) {
+function GuardianEvents({ retreats = [], profile, events, sourceUrl, canEditSource, onImported, onSourceChanged }: { retreats?: GuideRetreat[]; profile: GuideProfile; events: GuideEvent[]; sourceUrl: string; canEditSource: boolean; onImported: (events: GuideEvent[]) => void; onSourceChanged: (sourceUrl: string) => void }) {
   const [draftSourceUrl, setDraftSourceUrl] = useState(sourceUrl);
   const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [message, setMessage] = useState('');
   useEffect(() => setDraftSourceUrl(sourceUrl), [sourceUrl]);
   const upcoming = events.filter((event) => new Date(event.end_at || event.start_at).getTime() >= Date.now() - 86400000);
+  // A session of a retreat programme offers that programme's rooms (the programme and its sessions share a name).
+  const roomsFor = (event: GuideEvent) => parseRetreatOptions(retreats.find((retreat) => retreat.title.trim().toLowerCase() === event.title.trim().toLowerCase())?.options);
   const [range, setRange] = useState<DayRange | null>(null);
   const fitting = eventsInRange(upcoming, range);
   // Different events (another brand's page, or a fresh import) start without dates chosen from the old ones.
@@ -2001,7 +2015,7 @@ function GuardianEvents({ profile, events, sourceUrl, canEditSource, onImported,
         <div className="g-events-calendar"><EventsCalendar events={upcoming} range={range} onChange={setRange} /></div>
         <div style={{ minWidth: 0 }}>
           <p data-events-count role="status" style={{ color: '#9FA897', fontSize: 12, margin: '0 0 14px' }}>{range ? `${fitting.length} of ${upcoming.length} events fit your dates` : `${upcoming.length} upcoming`}</p>
-          {fitting.length ? <div className="g-events-stack" role="region" aria-label="Events" tabIndex={0} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 16 }}>{fitting.map((event) => <EventCommerceCard key={event.id} profile={profile} event={event} />)}</div>
+          {fitting.length ? <div className="g-events-stack" role="region" aria-label="Events" tabIndex={0} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 16 }}>{fitting.map((event) => <EventCommerceCard key={event.id} profile={profile} event={event} rooms={roomsFor(event)} />)}</div>
             : <p style={{ color: '#C7D8A3', fontSize: 14 }}>Nothing is on for those dates. Choose other days, or <button type="button" onClick={() => setRange(null)} style={{ border: 0, background: 'transparent', color: '#C7D8A3', padding: 0, font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>clear the dates</button>.</p>}
         </div>
       </div> : <div style={{ border: '1px dashed rgba(242,239,231,.3)', padding: 32, color: '#B8B6AF' }}>No upcoming events yet. Add one in Guardian workspace or pull from the official events page.</div>}
@@ -2022,24 +2036,44 @@ function brandTileName(name: string, links: Record<string, string>): { name: str
 /** A web address as people read it: no protocol, no closing slash ("www.mmh.com.au"). */
 const websiteLabel = (url: string) => url.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
 
-function RetreatCard({ profile, retreat }: { profile: GuideProfile; retreat: GuideRetreat }) {
-  const rooms = parseRetreatOptions(retreat.options);
-  const [roomIndex, setRoomIndex] = useState(0);
+/** The chosen room and guest count for a programme with room options, and the price they make. */
+function useRoomChoice(rooms: RetreatRoomOption[]) {
+  const [roomIndex, setRoomIndexState] = useState(0);
   const [guests, setGuests] = useState<number | null>(null);
   const room = rooms[Math.min(roomIndex, rooms.length - 1)];
   const price = room ? roomPrice(room, guests ?? room.prices[0].guests) : null;
-  const label = { color: '#66645F', fontSize: 9, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' } as const;
-  const select = { width: '100%', minHeight: 42, boxSizing: 'border-box', padding: '0 10px', border: '1px solid rgba(17,18,15,.3)', background: '#FFF', color: '#11120F', fontFamily: sans, fontSize: 13 } as const;
+  return { room, price, roomIndex, setGuests, setRoomIndex: (index: number) => { setRoomIndexState(index); setGuests(null); } };
+}
+
+/** Room and Guests dropdowns for a programme's room options, in the colours of the card they sit on. */
+function RoomSelectors({ title, rooms, choice, dark = false }: { title: string; rooms: RetreatRoomOption[]; choice: ReturnType<typeof useRoomChoice>; dark?: boolean }) {
+  const { room, price } = choice;
+  if (!room || !price) return null;
+  const label = { color: dark ? '#9FA897' : '#66645F', fontSize: 9, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' } as const;
+  const select = { width: '100%', minHeight: 42, boxSizing: 'border-box', padding: '0 10px', border: `1px solid ${dark ? 'rgba(242,239,231,.35)' : 'rgba(17,18,15,.3)'}`, background: dark ? '#0F130D' : '#FFF', color: dark ? '#F2EFE7' : '#11120F', fontFamily: sans, fontSize: 13 } as const;
+  return <div data-retreat-rooms style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
+    <label style={{ display: 'grid', gap: 5 }}><span style={label}>Room</span><select aria-label={`Room for ${title}`} value={choice.roomIndex} onChange={(event) => choice.setRoomIndex(Number(event.target.value))} style={select}>{rooms.map((option, index) => <option key={option.label} value={index}>{option.label}</option>)}</select></label>
+    <label style={{ display: 'grid', gap: 5 }}><span style={label}>Guests</span><select aria-label={`Guests for ${title}`} value={price.guests} onChange={(event) => choice.setGuests(Number(event.target.value))} style={select}>{room.prices.map((option) => <option key={option.guests} value={option.guests}>{guestsLabel(option.guests)}</option>)}</select></label>
+    {room.note && <p data-room-note style={{ gridColumn: '1 / -1', margin: 0, color: dark ? '#9FA897' : '#66645F', fontSize: 12, lineHeight: 1.5 }}>{room.note}</p>}
+  </div>;
+}
+
+/** The price line for the chosen room, or the card's own price text when it has no rooms. */
+function RoomPrice({ choice, fallback, dark = false }: { choice: ReturnType<typeof useRoomChoice>; fallback: string; dark?: boolean }) {
+  const { room, price } = choice;
+  if (!room || !price) return <strong style={{ fontFamily: serif, fontSize: dark ? 20 : 23, fontWeight: 300 }}>{fallback}</strong>;
+  return <span data-room-price><strong style={{ fontFamily: serif, fontSize: 26, fontWeight: 300 }}>{formatMoney(price.cents / 100, room.currency)}</strong><span style={{ display: 'block', color: dark ? '#9FA897' : '#66645F', fontSize: 11 }}>{guestsLabel(price.guests)} · {room.label}</span></span>;
+}
+
+function RetreatCard({ profile, retreat }: { profile: GuideProfile; retreat: GuideRetreat }) {
+  const rooms = parseRetreatOptions(retreat.options);
+  const choice = useRoomChoice(rooms);
   return <article data-retreat-card style={{ border: '1px solid rgba(17,18,15,.2)', background: '#F2EFE7', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
     <DestinationHeader profile={profile} place={retreat.location || 'Misty Mountain, Australia'} lines={[retreat.location, retreat.title]} kind="retreat" />
     <div style={{ padding: 24, display: 'flex', flex: 1, flexDirection: 'column' }}><span style={{ color: '#667245', fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>{[retreat.duration_days && `${retreat.duration_days} days`, retreat.location || 'Retreat'].filter(Boolean).join(' · ')}</span><h3 style={{ fontFamily: serif, fontSize: 36, fontWeight: 300, lineHeight: 1.05, margin: '10px 0' }}>{retreat.title}</h3><p style={{ color: '#66645F', fontSize: 14, lineHeight: 1.55 }}>{retreat.description}</p>
-      {room && <div data-retreat-rooms style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
-        <label style={{ display: 'grid', gap: 5 }}><span style={label}>Room</span><select aria-label={`Room for ${retreat.title}`} value={roomIndex} onChange={(event) => { setRoomIndex(Number(event.target.value)); setGuests(null); }} style={select}>{rooms.map((option, index) => <option key={option.label} value={index}>{option.label}</option>)}</select></label>
-        <label style={{ display: 'grid', gap: 5 }}><span style={label}>Guests</span><select aria-label={`Guests for ${retreat.title}`} value={price!.guests} onChange={(event) => setGuests(Number(event.target.value))} style={select}>{room.prices.map((option) => <option key={option.guests} value={option.guests}>{guestsLabel(option.guests)}</option>)}</select></label>
-        {room.note && <p data-room-note style={{ gridColumn: '1 / -1', margin: 0, color: '#66645F', fontSize: 12, lineHeight: 1.5 }}>{room.note}</p>}
-      </div>}
-      <div style={{ marginTop: 'auto', paddingTop: 18, borderTop: '1px solid rgba(17,18,15,.18)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, ...(room ? { marginTop: 16 } : {}) }}>
-        {price && room ? <span data-room-price><strong style={{ fontFamily: serif, fontSize: 26, fontWeight: 300 }}>{formatMoney(price.cents / 100, room.currency)}</strong><span style={{ display: 'block', color: '#66645F', fontSize: 11 }}>{guestsLabel(price.guests)} · {room.label}</span></span> : <strong style={{ fontFamily: serif, fontSize: 23, fontWeight: 300 }}>{retreat.price_label || 'See package price'}</strong>}
+      <RoomSelectors title={retreat.title} rooms={rooms} choice={choice} />
+      <div style={{ marginTop: choice.room ? 16 : 'auto', paddingTop: 18, borderTop: '1px solid rgba(17,18,15,.18)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+        <RoomPrice choice={choice} fallback={retreat.price_label || 'See package price'} />
         <a href={retreat.booking_url || retreat.source_url} target="_blank" rel="noreferrer" style={publicCommerceCardCta}>Book <ArrowRight size={13} /></a></div></div>
   </article>;
 }
@@ -2050,7 +2084,7 @@ function GuardianRetreats({ profile, retreats }: { profile: GuideProfile; retrea
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
       <span style={{ color: '#667245', fontSize: 11, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>Stay and learn · {retreats.length}</span>
       <h2 style={{ fontFamily: serif, fontSize: 'clamp(46px,7vw,82px)', fontWeight: 300, lineHeight: .96, letterSpacing: '-.04em', margin: '12px 0 34px' }}>Retreats.</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,360px),1fr))', gap: 18 }}>{retreats.map((retreat) => <RetreatCard key={retreat.id} profile={profile} retreat={retreat} />)}</div>
+      <div className="g-retreats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 18 }}><style>{`@media (max-width:760px){.g-retreats-grid{grid-template-columns:minmax(0,1fr)!important}}`}</style>{retreats.map((retreat) => <RetreatCard key={retreat.id} profile={profile} retreat={retreat} />)}</div>
     </div>
   </section>;
 }
@@ -2180,6 +2214,8 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   const publicClips = clipsFromLinks(socials.theme_background_clips);
   const publicGlass = heroGlassOn(socials.theme_glass, publicClips.length > 0 || !!publicTypeVideo || isSceneBackground(socials.theme_background));
   const emailBackdrop = <MountNearViewport><HeroBackdrop heroMedia={socials.theme_background || null} backgroundIsVideo={publicBackgroundIsVideo} clips={publicClips} typeVideo={publicTypeVideo} glass={publicGlass} greyscale={publicGreyscale} /></MountNearViewport>;
+  // On a brand's page the name and its descriptor sit on two lines: "Misty Mountain" over "Lifestyle Retreat".
+  const heroIdentity = activeBrand ? brandTileName(activeBrand.name, (activeBrand.social_links || {}) as Record<string, string>) : null;
   const ownerName = ownerProfile?.display_name || profile.display_name;
   const ownerLinks = (ownerProfile?.social_links || {}) as Record<string, string>;
   const brandTiles = publicBrands.map((brand) => brand.kind === 'personal'
@@ -2189,7 +2225,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   const sectionNodes: Record<PageSectionKey, React.ReactNode> = {
     offers: <GuardianOfferCatalog profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} categoryOrder={socials.protocol_filter_order} />,
     shop: <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} protocols={guardianProtocols} owns={onSite} brandId={brandSlug ? activeBrand?.id : null} logoUrl={profile.avatar_url} localePreference={localePreference} categoryOrder={socials.product_filter_order} />,
-    events: <GuardianEvents profile={profile} events={siteEvents} sourceUrl={eventSource} canEditSource={isSignedIn && user?.id === profile.user_id} onImported={setEvents} onSourceChanged={setEventSource} />,
+    events: <GuardianEvents retreats={siteRetreats} profile={profile} events={siteEvents} sourceUrl={eventSource} canEditSource={isSignedIn && user?.id === profile.user_id} onImported={setEvents} onSourceChanged={setEventSource} />,
     talks: <GuardianOfferShelf kind="talk" profile={profile} offers={offers.filter((offer) => onSite(offer.brand_id))} pagePadding={PAGE_X} />,
     treats: <GuardianOfferShelf kind="treat" profile={profile} offers={offers.filter((offer) => onSite(offer.brand_id))} pagePadding={PAGE_X} />,
     forum: <GuardianForumTeaser profile={profile} pagePadding={PAGE_X} />,
@@ -2219,7 +2255,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
     </header>}
     <main style={{ paddingTop: publicHeaderStyle === 'hidden' ? 0 : 64 }}>
       {/* Shared with the builder preview, so what Guardians build is what they publish. */}
-      <GuardianSiteHero audience={heroAudience} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={profile.display_name} avatarUrl={profile.avatar_url} specialties={heroSpecialties} headline={heroHeadline} tags={heroTags} bio={heroBio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} clips={clipsFromLinks(socials.theme_background_clips)} typeVideo={publicTypeVideo} glass={publicGlass} sections={sectionTags} greyscale={publicGreyscale}
+      <GuardianSiteHero audience={heroAudience} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={heroIdentity?.title || profile.display_name} identityLine={heroIdentity?.blurb || undefined} avatarUrl={profile.avatar_url} specialties={heroSpecialties} headline={heroHeadline} tags={heroTags} bio={heroBio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} clips={clipsFromLinks(socials.theme_background_clips)} typeVideo={publicTypeVideo} glass={publicGlass} sections={sectionTags} greyscale={publicGreyscale}
         guideId={profile.user_id} sourceOfferId={heroSourceOfferId}
         cards={publishedRamps.length ? (onOfferPath ? [selectedRamp!] : publishedRamps).slice(0, 1).map((ramp) => { const offer = publishedOffers.find((item) => item.id === ramp.offer_ids[0]); return { key: ramp.id, offerTitle: offer?.title || ramp.name, eyebrow: ramp.problem || undefined, title: customerFacingOfferTitle(offer?.title || ramp.name), copy: offer?.description || '', kind: offer?.kind, price: offer?.access_model === 'free' ? 'Free' : undefined, imageUrl: offer?.cover_url, href: pathSlug === encodeURIComponent(ramp.slug) ? '#offers' : `/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}` }; }) : freeOffers.slice(0, 1).map((offer) => ({ key: offer.id, offerTitle: offer.title, eyebrow: profile.specialties.slice(0, 2).join(' · '), title: customerFacingOfferTitle(offer.title), copy: offer.description || '', kind: offer.kind, price: 'Free', imageUrl: offer.cover_url, href: '#start' }))} />
       {orderPageSections(socials.section_order).map((key) => <Fragment key={key}>{sectionNodes[key]}</Fragment>)}

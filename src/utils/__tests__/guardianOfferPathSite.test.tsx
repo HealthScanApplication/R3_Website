@@ -26,6 +26,8 @@ beforeEach(() => { socialExtras = {}; offerBrand = null; vi.stubGlobal('fetch', 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const visit = (path: string) => { window.history.replaceState({}, '', path); return render(<GuardianWebsite slug="john-ferreira" isSignedIn={false} />); };
+/** The page's text without the official-brands row, which lists each brand's own line (Barbara's headline) by design. */
+const pageText = () => { const clone = document.body.cloneNode(true) as HTMLElement; clone.querySelectorAll('[data-page-section="brands"], style').forEach((el) => el.remove()); return clone.textContent || ''; };
 const heroHeading = async () => (await screen.findAllByRole('heading', { level: 1 }))[0];
 
 describe('an offer path is its own page', () => {
@@ -38,7 +40,7 @@ describe('an offer path is its own page', () => {
   it('the offer path speaks about its own offer, audience and problem, not the profile headline', async () => {
     visit('/guardians/john-ferreira/value-ramp/better-sleep');
     expect((await heroHeading()).textContent).toMatch(/7-day menopause sleep challenge for women/i);
-    expect(document.body.textContent).not.toMatch(/Feel better in your everyday life\./);
+    expect(pageText()).not.toMatch(/Feel better in your everyday life\./);
     expect(document.body.textContent).toMatch(/A free week to sleep through the night again\./);
     expect(document.body.textContent).toMatch(/Women/);
     expect(document.body.textContent).toMatch(/Sleep problems/);
