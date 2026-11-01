@@ -2294,6 +2294,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const [offerPlanStage, setOfferPlanStage] = useState(0);
   // Paid offers are built one at a time: the next appears when the Guardian asks for it (progressive disclosure under Step 3).
   const [paidStepsOpen, setPaidStepsOpen] = useState(1);
+  const [productTab, setProductTab] = useState<'free' | 'paid'>('free');
   const [showProtocolInfo, setShowProtocolInfo] = useState(false);
   const [summaryView, setSummaryView] = useState<'offers' | 'sites' | null>(null);
   const [inventoryMenu, setInventoryMenu] = useState<string | null>(null);
@@ -3431,7 +3432,10 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
 
       {step === 4 && <div data-products-step>
         <p style={{ color: muted, fontSize: 12, lineHeight: 1.6, margin: '0 0 18px' }}>Add what you already sell or give away. Paste the link, set the price and pick the type; we sort out the rest. Free lead magnets and paid products are kept apart.</p>
-        {PRODUCT_UPLOAD_GROUPS.map((group) => <ProductUploadSection key={group.id} group={group} userId={userId} currency={currency}
+        <div role="tablist" aria-label="Product kind" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', border: `1px solid ${line}`, marginBottom: 14 }}>
+          {PRODUCT_UPLOAD_GROUPS.map((group, index) => { const active = productTab === group.id; const count = related.offers.filter((offer) => offer.access_model === group.id).length; return <button key={group.id} type="button" role="tab" aria-selected={active} onClick={() => setProductTab(group.id)} style={{ minHeight: 48, border: 0, borderLeft: index ? `1px solid ${line}` : 0, background: active ? ink : 'transparent', color: active ? black : ink, fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', cursor: 'pointer' }}>{group.title}{count ? ` · ${count}` : ''}</button>; })}
+        </div>
+        {PRODUCT_UPLOAD_GROUPS.filter((group) => group.id === productTab).map((group) => <ProductUploadSection key={group.id} group={group} userId={userId} currency={currency}
           offers={related.offers.filter((offer) => offer.access_model === group.id)}
           onSaved={(created) => setRelated((current) => ({ ...current, offers: [...current.offers, ...created] }))}
           onDeleted={(offerId) => setRelated((current) => ({ ...current, offers: current.offers.filter((offer) => offer.id !== offerId) }))}
@@ -3977,6 +3981,32 @@ const PRODUCT_SUGGESTIONS: Array<{ kind: GuideOffer['kind']; why: string; price:
   { kind: 'festival', why: 'Three focused days away with coaching and practical sessions.', price: 1500, art: offerTypeArt.festival },
 ];
 
+/** One colour per kind of product: the glow behind its card, and its tag. */
+const PRODUCT_TYPE_COLOUR: Record<string, string> = {
+  ebook: '#C88A66', recipe_book: '#9BB86A', routine: '#6FB0A4', routine_guidance: '#7C9BD6', course: '#B08BD6', community: '#D6A15A',
+  group_call: '#D67C8B', one_to_one_call: '#6CC3D6', in_person: '#D6C46F', festival: '#E0865A', product: '#A9A9A9',
+};
+/** Tilt-shift and glow for the product cards: the dotted suggestions use the Protocol card's picture, with a type-coloured glow and soft top and bottom blur. */
+const PRODUCT_CARD_CSS = `
+[data-upload-group] .r3-pcard{min-height:440px}
+[data-upload-group] [data-built-card]{display:flex;--type:#C88A66}
+[data-upload-group] [data-built-card] .r3-pcard{flex:1}
+[data-upload-group] [data-type-colour] .r3-pcard-glow{background:radial-gradient(70% 80% at 50% 58%,color-mix(in srgb,var(--type) 64%,transparent),color-mix(in srgb,var(--type) 30%,transparent) 48%,transparent 80%)}
+[data-upload-group] [data-type-colour] .r3-pcard-kicker{color:var(--type)}
+[data-upload-group] [data-type-colour] .r3-pcard:hover,[data-upload-group] [data-type-colour] .r3-pcard:focus-within{border-color:var(--type);box-shadow:0 22px 44px -18px color-mix(in srgb,var(--type) 55%,transparent)}
+[data-upload-group] [data-suggestion]{display:flex}
+[data-upload-group] [data-suggestion] .r3-pcard{flex:1;background:transparent;color:#F5F2EA;border:1px dashed rgba(245,242,234,.42)}
+[data-upload-group] [data-suggestion] .r3-pcard-media{background-color:#101110;background-image:radial-gradient(rgba(245,242,234,.14) 1px,transparent 1px);background-size:14px 14px;border-bottom:1px dashed rgba(245,242,234,.3)}
+[data-upload-group] [data-suggestion] .r3-pcard-media::before,[data-upload-group] [data-suggestion] .r3-pcard-media::after{content:"";position:absolute;left:0;right:0;height:34%;z-index:1;pointer-events:none;-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px)}
+[data-upload-group] [data-suggestion] .r3-pcard-media::before{top:0;-webkit-mask-image:linear-gradient(to bottom,#000,transparent);mask-image:linear-gradient(to bottom,#000,transparent)}
+[data-upload-group] [data-suggestion] .r3-pcard-media::after{bottom:0;-webkit-mask-image:linear-gradient(to top,#000,transparent);mask-image:linear-gradient(to top,#000,transparent)}
+[data-upload-group] [data-suggestion] .r3-pcard-badge,[data-upload-group] [data-suggestion] .r3-pcard-corner{z-index:2}
+[data-upload-group] [data-suggestion] .r3-pcard-title{color:#F5F2EA}
+[data-upload-group] [data-suggestion] .r3-pcard-copy{color:rgba(245,242,234,.7)}
+[data-upload-group] [data-suggestion] .r3-pcard-foot{display:none}
+[data-upload-group] [data-suggestion] .r3-pcard-extra{margin-top:auto}
+`;
+
 /** Reads a pasted link: the type it most likely is, and a name taken from the address. */
 export function guessProductFromUrl(raw: string): { type?: GuideOffer['kind']; title?: string } {
   const text = raw.trim();
@@ -4045,35 +4075,32 @@ function ProductUploadSection({ group, userId, currency, offers, onSaved, onDele
   return <section data-upload-group={group.id} aria-label={group.title} style={{ border: `1px solid ${line}`, background: panel, padding: 16, marginBottom: 18 }}>
     <h3 style={{ fontFamily: serif, fontSize: 'clamp(26px,3vw,36px)', fontWeight: 300, letterSpacing: '-.02em', lineHeight: 1.05, margin: 0, color: ink }}>{group.title}</h3>
     <p style={{ color: muted, fontSize: 12, lineHeight: 1.5, margin: '6px 0 14px' }}>{group.copy}</p>
-    <style>{`[data-upload-group] .r3-pcard,[data-upload-group] [data-suggestion]{min-height:500px}`}</style>
+    <style>{PRODUCT_CARD_CSS}</style>
     <div style={{ marginBottom: 16 }}>
-      <ProtocolCardGrid>{[...offers].sort((a, b) => (b.price_cents || 0) - (a.price_cents || 0)).map((offer) => <ProductCard key={offer.id} kind={offer.kind} imageUrl={offer.cover_url}
+      <ProtocolCardGrid min={240}>{[...offers].sort((a, b) => (b.price_cents || 0) - (a.price_cents || 0)).map((offer) => <div key={offer.id} data-built-card data-type-colour={offer.kind} style={{ '--type': PRODUCT_TYPE_COLOUR[offer.kind] || '#C88A66' } as React.CSSProperties}><ProductCard kind={offer.kind} imageUrl={offer.cover_url}
         eyebrow={[PRODUCT_UPLOAD_TYPES.find((item) => item.value === offer.kind)?.label || offer.kind.replace(/_/g, ' '), offer.status === 'published' ? 'Published' : 'Draft'].join(' · ')} title={customerFacingOfferTitle(offer.title)} copy={(offer.description || '').split(' Delivery:')[0].slice(0, 120) || undefined}
         price={offer.access_model === 'free' ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid'} name={displayName || 'You'} owned visibility={offer.status === 'published' ? 'public' : 'private'}
         href={offer.affiliate_url || offer.booking_url || undefined}
         onEdit={() => { window.location.href = '/guardians/workspace?tab=offer_builder'; }}
-        onDelete={async () => { if (!(await confirmInPage(`Delete ${offer.title}?`))) return; await deleteGuideOffer(userId, offer.id); onDeleted(offer.id); }} />)}
+        onDelete={async () => { if (!(await confirmInPage(`Delete ${offer.title}?`))) return; await deleteGuideOffer(userId, offer.id); onDeleted(offer.id); }} /></div>)}
         {PRODUCT_SUGGESTIONS.filter((suggestion) => (group.id === 'paid' || suggestion.free) && !offers.some((offer) => offer.kind === suggestion.kind)).map((suggestion) => {
           const type = PRODUCT_UPLOAD_TYPES.find((item) => item.value === suggestion.kind)!;
           const rank = [...PRODUCT_SUGGESTIONS].sort((x, y) => x.price - y.price).findIndex((item) => item.kind === suggestion.kind) + 1;
-          return <div key={suggestion.kind} data-suggestion={suggestion.kind} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 6, border: `1px dashed rgba(245,242,234,.4)`, color: ink, fontFamily: sans }}>
-            <span style={{ position: 'relative', height: 220, flex: '0 0 220px', display: 'grid', placeItems: 'center', borderBottom: '1px dashed rgba(245,242,234,.3)', backgroundImage: 'radial-gradient(rgba(245,242,234,.14) 1px, transparent 1px)', backgroundSize: '14px 14px' }}>
-              <span data-value-rank style={{ position: 'absolute', top: 12, left: 12, padding: '5px 9px', background: ink, color: black, fontSize: 10, fontWeight: 800, letterSpacing: '.08em' }}>#{String(rank).padStart(2, '0')}</span>
-              <span data-suggested-price style={{ position: 'absolute', top: 12, right: 12, padding: '5px 9px', border: '1px solid rgba(245,242,234,.5)', background: 'rgba(9,10,8,.6)', color: ink, fontSize: 10, fontWeight: 700, letterSpacing: '.06em' }}>{group.id === 'free' ? 'Free' : `Suggested ${formatMoney(suggestion.price, currency)}`}</span>
-              <span aria-hidden="true" style={{ width: 116 * suggestion.art.cellAspect, height: 116, backgroundImage: `url(${suggestion.art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${suggestion.art.cols * 100}% ${suggestion.art.rows * 100}%`, backgroundPosition: `${suggestion.art.cols === 1 ? 0 : (suggestion.art.index % suggestion.art.cols) * 100 / (suggestion.art.cols - 1)}% ${suggestion.art.rows === 1 ? 0 : Math.floor(suggestion.art.index / suggestion.art.cols) * 100 / (suggestion.art.rows - 1)}%`, filter: 'grayscale(1) contrast(.94)' }} />
-            </span>
-            <span style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, padding: '16px 20px 20px' }}>
-              <span style={{ color: acid, fontSize: 9, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>{group.id === 'free' ? `Lead magnet · ${type.label}` : type.label}</span>
-              <strong style={{ fontFamily: serif, fontSize: 24, fontWeight: 300, lineHeight: 1.08, letterSpacing: '-.01em' }}>Add a {group.id === 'free' ? 'free ' : ''}{type.label.toLowerCase()}</strong>
-              <span style={{ color: muted, fontSize: 11, lineHeight: 1.45, flex: 1 }}>{suggestion.why}</span>
-              <span style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <button type="button" data-suggestion-upload onClick={() => prefill(suggestion.kind, group.id === 'free' ? '' : String(suggestion.price), type.label)} style={{ minHeight: 40, background: ink, color: black, border: 0, fontFamily: sans, fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>Add link</button>
-                <a data-suggestion-build href={`/guardians/workspace?tab=${PRODUCT_BUILDER_TAB[suggestion.kind]}`} style={{ minHeight: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${ink}`, color: ink, textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Build it</a>
-              </span>
-            </span>
+          const art = suggestion.art;
+          return <div key={suggestion.kind} data-suggestion={suggestion.kind} data-type-colour={suggestion.kind} style={{ '--type': PRODUCT_TYPE_COLOUR[suggestion.kind] || '#C88A66' } as React.CSSProperties}>
+            <ProtocolCard inert
+              badge={<span data-value-rank>#{String(rank).padStart(2, '0')}</span>}
+              corner={<span data-suggested-price style={{ padding: '5px 9px', border: '1px solid rgba(245,242,234,.6)', borderRadius: 3, background: 'rgba(9,10,8,.55)', color: '#FFF', fontSize: 10, fontWeight: 700, letterSpacing: '.06em' }}>{group.id === 'free' ? 'Free' : `Suggested ${formatMoney(suggestion.price, currency)}`}</span>}
+              plate={<span aria-hidden="true" style={{ display: 'block', width: 116 * art.cellAspect, height: 116, backgroundImage: `url(${art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${art.cols * 100}% ${art.rows * 100}%`, backgroundPosition: `${art.cols === 1 ? 0 : (art.index % art.cols) * 100 / (art.cols - 1)}% ${art.rows === 1 ? 0 : Math.floor(art.index / art.cols) * 100 / (art.rows - 1)}%` }} />}
+              kicker={group.id === 'free' ? `Lead magnet · ${type.label}` : type.label}
+              title={`Add a ${group.id === 'free' ? 'free ' : ''}${type.label.toLowerCase()}`} copy={suggestion.why}
+              extra={<span style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <button type="button" data-suggestion-upload onClick={() => prefill(suggestion.kind, group.id === 'free' ? '' : String(suggestion.price), type.label)} style={{ minHeight: 40, background: '#F5F2EA', color: '#090A08', border: 0, fontFamily: sans, fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>Add link</button>
+                <a data-suggestion-build href={`/guardians/workspace?tab=${PRODUCT_BUILDER_TAB[suggestion.kind]}`} style={{ minHeight: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #F5F2EA', color: '#F5F2EA', textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>Build it</a>
+              </span>} />
           </div>;
         })}
-        <button type="button" data-add-empty onClick={() => prefill(null, '', '')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, border: '1px dashed rgba(245,242,234,.4)', borderRadius: 6, background: 'transparent', color: muted, fontFamily: sans, cursor: 'pointer' }}><Plus size={28} strokeWidth={1.2} /><span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Add a {group.id === 'free' ? 'lead magnet' : 'product'}</span></button>
+        <button type="button" data-add-empty onClick={() => prefill(null, '', '')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 440, border: '1px dashed rgba(245,242,234,.4)', borderRadius: 6, background: 'transparent', color: muted, fontFamily: sans, cursor: 'pointer' }}><Plus size={28} strokeWidth={1.2} /><span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Add a {group.id === 'free' ? 'lead magnet' : 'product'}</span></button>
       </ProtocolCardGrid>
     </div>
     <div ref={rowsRef} style={{ display: 'grid', gap: 10 }}>

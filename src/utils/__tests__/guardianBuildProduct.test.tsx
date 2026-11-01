@@ -27,7 +27,12 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const setup = () => render(<Onboarding userId="owner" accessToken="t" name="Test Guide" email="guide@example.com" accountAvatarUrl={null} onDone={() => {}} />);
-const group = async (id: 'free' | 'paid') => { await screen.findByText(/Add what you already sell/); return document.querySelector(`[data-upload-group="${id}"]`) as HTMLElement; };
+const group = async (id: 'free' | 'paid') => {
+  await screen.findByText(/Add what you already sell/);
+  fireEvent.click(screen.getByRole('tab', { name: id === 'free' ? /^Lead magnets/ : /^Paid products/ }));
+  return document.querySelector(`[data-upload-group="${id}"]`) as HTMLElement;
+};
+const built = (el: HTMLElement) => el.querySelectorAll('[data-built-card] .r3-pcard');
 
 describe('reading a pasted link', () => {
   it('guesses the type and a name from the address', () => {
@@ -45,10 +50,12 @@ describe('Upload your products (setup step 04)', () => {
   it('keeps lead magnets and paid products apart, each with a link, name, type and (for paid) price per row', async () => {
     setup();
     const free = await group('free');
-    const paid = await group('paid');
     expect(within(free).getByRole('heading', { name: 'Lead magnets' })).toBeTruthy();
-    expect(within(paid).getByRole('heading', { name: 'Paid products' })).toBeTruthy();
     expect(within(free).queryByLabelText(/price/i)).toBeNull(); // free means no price
+    expect(screen.getAllByRole('tab').map((tab) => tab.getAttribute('aria-selected'))).toEqual(['true', 'false']);
+    const paid = await group('paid');
+    expect(within(paid).getByRole('heading', { name: 'Paid products' })).toBeTruthy();
+    expect(document.querySelector('[data-upload-group="free"]')).toBeNull(); // one tab at a time
     expect(within(paid).getByLabelText('Paid products price 1')).toBeTruthy();
     const options = [...(within(paid).getByLabelText('Paid products type 1') as HTMLSelectElement).options].map((option) => option.text);
     expect(options).toEqual(expect.arrayContaining(['PDF guide', 'Video course', 'Protocol', 'Protocol + call', 'Community or membership', 'Retreat', 'Physical product']));
@@ -88,7 +95,7 @@ describe('Upload your products (setup step 04)', () => {
     fireEvent.change(within(paid).getByLabelText('Paid products price 2'), { target: { value: '99' } });
     fireEvent.click(within(paid).getByRole('button', { name: /^Save 2 paid products/i }));
     await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(paid.querySelectorAll('.r3-pcard').length).toBe(2));
+    await waitFor(() => expect(built(paid).length).toBe(2));
   });
 
   it('every type has a "build a new one" link to its own builder', async () => {
@@ -113,7 +120,7 @@ describe('Upload your products (setup step 04)', () => {
     const dialog = await screen.findByRole('alertdialog');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(mocks.del).toHaveBeenCalledWith('owner', 'o1'));
-    await waitFor(() => expect(free.querySelectorAll('.r3-pcard').length).toBe(0));
+    await waitFor(() => expect(built(free).length).toBe(0));
     expect(nativeConfirm).not.toHaveBeenCalled();
   });
 
@@ -161,5 +168,15 @@ describe('Upload your products (setup step 04)', () => {
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(paid.querySelector('[data-suggestion="ebook"]')).toBeTruthy());
     expect(paid.querySelector('[data-add-empty]')).toBeTruthy();
+  });
+
+  it('the suggestion cards carry a colour for their type, and the cards sit three to a row', async () => {
+    setup();
+    const paid = await group('paid');
+    const colours = [...paid.querySelectorAll('[data-suggestion]')].map((card) => (card as HTMLElement).style.getPropertyValue('--type'));
+    expect(colours.every((colour) => /^#[0-9A-F]{6}$/i.test(colour))).toBe(true);
+    expect(new Set(colours).size).toBe(colours.length); // a different colour for each type
+    const grid = paid.querySelector('.r3-pcard')!.closest('[style*="grid-template-columns"]') as HTMLElement;
+    expect(grid.style.gridTemplateColumns).toMatch(/minmax\(240px/);
   });
 });
