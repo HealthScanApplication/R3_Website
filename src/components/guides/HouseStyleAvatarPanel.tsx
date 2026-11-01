@@ -47,6 +47,8 @@ export interface HouseStyleAvatarPanelProps {
   onSave?: () => void;
   /** Content shown inside the card under the actions, e.g. the photo grid. */
   children?: React.ReactNode;
+  /** The Guardian's photos as a two-by-two block. When given it takes the place of the single "Your photo" picture, beside the house style. */
+  photosSlot?: React.ReactNode;
   /** The profile image is already in the R³ house style, which publishing requires. */
   houseStyle?: boolean;
 }
@@ -64,17 +66,18 @@ function Shot({ src, alt, caption, tag, grey, size }: { src: string; alt: string
   );
 }
 
-export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, converting, applying, uploading, dragging, resultUrl, resultMock, error, onCreate, onUpload, onApply, onCancel, save, onSave, children, houseStyle = false }: HouseStyleAvatarPanelProps) {
+export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, converting, applying, uploading, dragging, resultUrl, resultMock, error, onCreate, onUpload, onApply, onCancel, save, onSave, children, photosSlot, houseStyle = false }: HouseStyleAvatarPanelProps) {
   const busy = converting || applying;
   const noteId = `${id}-note`;
   const featured = resultUrl ? sourceUrl : currentUrl || sourceUrl;
-  const pairColumns = featured ? 'repeat(2,minmax(0,260px))' : 'minmax(0,280px)';
+  const pairColumns = featured || photosSlot ? 'repeat(2,minmax(0,260px))' : 'minmax(0,280px)';
   return (
     <section id={id} aria-label="R3 house style profile image" style={{ width: '100%', boxSizing: 'border-box', marginTop: 18, padding: 20, border: `1px solid ${dragging ? ink : line}`, outline: dragging ? `2px dashed ${ink}` : 'none', background: 'rgba(245,242,234,.025)', textAlign: 'center' }}>
       <h3 style={{ ...label, margin: '0 0 14px', textAlign: 'center', color: houseStyle ? muted : '#E8B86A' }}>Profile image · R3 house style {houseStyle ? 'done' : 'required'}</h3>
       <div style={{ display: 'grid', gridTemplateColumns: pairColumns, gap: 16, justifyContent: 'center' }}>
-        {featured && <Shot src={featured} alt={resultUrl ? 'Your original portrait' : 'Your current profile image'} caption={resultUrl ? 'Original' : 'Your photo'} />}
-        {!resultUrl && featured && (
+        {photosSlot || (featured && <Shot src={featured} alt={resultUrl ? 'Your original portrait' : 'Your current profile image'} caption={resultUrl ? 'Original' : 'Your photo'} />)}
+        {!resultUrl && photosSlot && houseStyle && currentUrl && <Shot src={currentUrl} alt="Your portrait in the R3 house style" caption="R3 house style" tag="On your profile" />}
+        {!resultUrl && (featured || photosSlot) && !(photosSlot && houseStyle && currentUrl) && (
           <figure style={{ margin: 0, minWidth: 0 }}>
             <div aria-label="Your R3 house style will appear here" style={{ aspectRatio: '1', display: 'grid', placeItems: 'center', padding: 16, boxSizing: 'border-box', border: `1px dashed ${line}`, background: panel, color: muted, fontSize: 12, lineHeight: 1.5 }}>
               {converting ? 'Illustrating your portrait…' : 'Your R3 house style appears here'}
@@ -92,7 +95,7 @@ export function HouseStyleAvatarPanel({ id, sourceUrl, currentUrl, needsUpload, 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 16 }}>
         {resultUrl ? (
           <>
-            <button type="button" onClick={onApply} disabled={applying || resultMock} aria-describedby={resultMock ? noteId : undefined} style={{ ...primary, opacity: resultMock ? 0.45 : 1, cursor: applying ? 'wait' : resultMock ? 'not-allowed' : 'pointer' }}>{applying ? 'Saving…' : 'Use this avatar'}</button>
+            <button type="button" onClick={onApply} disabled={applying || resultMock} aria-describedby={resultMock ? noteId : undefined} style={{ ...primary, opacity: resultMock ? 0.45 : 1, cursor: applying ? 'wait' : resultMock ? 'not-allowed' : 'pointer' }}>{applying ? 'Adding…' : 'Add to profile'}</button>
             <button type="button" onClick={onCreate} disabled={busy} style={{ ...secondary, cursor: converting ? 'wait' : 'pointer' }}>{converting ? 'Creating…' : 'Try again'}</button>
             <button type="button" onClick={onCancel} disabled={applying} style={{ ...secondary, border: 0, color: muted, padding: '0 6px', cursor: 'pointer' }}>Cancel</button>
           </>

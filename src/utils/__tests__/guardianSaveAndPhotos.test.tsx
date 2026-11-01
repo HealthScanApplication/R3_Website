@@ -30,21 +30,26 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const setup = (name = 'Test Guide', avatar: string | null = ACCOUNT_AVATAR) => render(<Onboarding userId="owner" accessToken="t" name={name} email="guide@example.com" accountAvatarUrl={avatar} onDone={() => {}} />);
-const photos = () => screen.getByRole('region', { name: 'Your photos' });
+const photos = () => screen.getByRole('figure', { name: 'Your photos' });
 
 describe('photo grid', () => {
-  it('lives inside the profile image card, directly under its actions and above the collapsed style reference', async () => {
+  it('sits at the top of the profile image card as a two-by-two block beside the house style, above the actions and the collapsed style reference', async () => {
     setup();
     await screen.findByDisplayValue('Test Guide');
     const card = screen.getByRole('region', { name: 'R3 house style profile image' });
     expect(card.contains(photos())).toBe(true);
-    const order = [...card.querySelectorAll('button, section[aria-label="Your photos"], details')];
+    const quad = photos();
+    expect(quad.hasAttribute('data-photo-quad')).toBe(true);
+    // The photos and the house-style slot are the two cells of the top row.
+    const slot = within(card).getByLabelText('Your R3 house style will appear here');
+    expect(quad.parentElement).toBe(slot.closest('figure')!.parentElement);
+    const order = [...card.querySelectorAll('button, figure[aria-label="Your photos"], details')];
     const createIndex = order.findIndex((el) => /Create my R3 house style/.test(el.textContent || '') && el.tagName === 'BUTTON');
-    const gridIndex = order.indexOf(card.querySelector('section[aria-label="Your photos"]')!);
+    const gridIndex = order.indexOf(quad);
     const referenceIndex = order.indexOf(card.querySelector('details')!);
     expect(createIndex).toBeGreaterThanOrEqual(0);
-    expect(gridIndex).toBeGreaterThan(createIndex);
-    expect(referenceIndex).toBeGreaterThan(gridIndex);
+    expect(gridIndex).toBeLessThan(createIndex);
+    expect(referenceIndex).toBeGreaterThan(createIndex);
     expect((card.querySelector('details') as HTMLDetailsElement).open).toBe(false); // the style reference is collapsed
   });
 
@@ -52,10 +57,9 @@ describe('photo grid', () => {
     setup();
     await screen.findByDisplayValue('Test Guide');
     const grid = photos();
-    expect(within(grid).getByText(/add 2 to 4/i)).toBeTruthy();
+    expect(within(grid).getByText(/1 of 4/)).toBeTruthy();
     const first = within(grid).getByAltText('Your account photo') as HTMLImageElement;
     expect(first.getAttribute('src')).toBe(ACCOUNT_AVATAR);
-    expect(within(grid).getByText('From your account')).toBeTruthy();
     for (const n of [2, 3, 4]) expect(within(grid).getByLabelText(`Add photo ${n}`)).toBeTruthy();
     expect(within(grid).queryByLabelText('Add photo 1')).toBeNull();
     expect(within(grid).getByText(/Add at least 2 real photos/)).toBeTruthy(); // only one so far
@@ -72,7 +76,7 @@ describe('photo grid', () => {
     expect(mocks.upload).toHaveBeenCalledTimes(1);
     expect(within(photos()).getByText(/Add at least 2/)).toBeTruthy();
     fireEvent.change(within(photos()).getByLabelText('Add photo 2'), { target: { files: [new File(['y'], 'work.png', { type: 'image/png' })] } });
-    await waitFor(() => expect(within(photos()).getByText(/2 of 4 added/)).toBeTruthy());
+    await waitFor(() => expect(within(photos()).getByText(/2 of 4/)).toBeTruthy());
     fireEvent.click(within(photos()).getByRole('button', { name: 'Remove photo 2' }));
     await waitFor(() => expect(within(photos()).getByText(/Add at least 2/)).toBeTruthy());
   });
@@ -120,7 +124,7 @@ describe('save on every part of the flow', () => {
 
   it('will not save without a name, and says why', async () => {
     setup('', ACCOUNT_AVATAR);
-    await screen.findByRole('region', { name: 'Your photos' });
+    await screen.findByRole('figure', { name: 'Your photos' });
     fireEvent.click(within(photos()).getByRole('button', { name: 'Save photos' }));
     expect((await within(photos()).findByRole('alert')).textContent).toMatch(/Add the name people should call you/);
     expect(mocks.save).not.toHaveBeenCalled();
