@@ -158,6 +158,8 @@ describe('the public page of each brand', () => {
     // The address as people read it, a short description under each name, and the R³ mark last in the row.
     const tre = tiles[1];
     expect(tre.querySelector('[data-brand-website]')!.textContent).toMatch(/^www\.trelune\.com\.au/);
+    expect(tre.querySelector('[data-brand-website]')!.querySelector('svg')).toBeNull(); // the address alone, no arrow icon
+    for (const tile of tiles) expect(tile.style.transform).toMatch(/perspective/); // tilts under the pointer like the review cards
     expect(tre.querySelector('strong')!.textContent).toBe('Tre Lune');
     expect(tre.querySelector('[data-brand-blurb]')!.textContent).toBe('Natural products');
     expect(tiles[2].querySelector('strong')!.textContent).toBe('Misty Mountain'); // the name, then the grey descriptor under it
