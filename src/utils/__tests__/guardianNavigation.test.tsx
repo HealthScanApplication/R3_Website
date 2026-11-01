@@ -4,6 +4,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Workspace, GuardianWebsite, GuardianHeader } from '../../components/guides/GuidePortal';
 import { useGuardianPage } from '../../components/guides/useGuardianPage';
+import { openSiteBuilder } from '../guardianSiteRoute';
+
+vi.mock('../guardianSiteRoute', () => ({ SITE_BUILDER_HREF: '/guardians/workspace?step=5', openSiteBuilder: vi.fn() }));
 
 // Each test renders the whole workspace or public page; on a busy machine that outruns the 5s default.
 vi.setConfig({ testTimeout: 30000 });
@@ -27,13 +30,17 @@ const workspace = () => render(<Workspace profile={fixtures.profile as any} onPr
 
 it('keeps sidebar navigation in the URL so reload opens the selected page', async()=>{
   workspace();
+  fireEvent.click(screen.getAllByRole('link',{name:'Offer paths'})[0]);
+  expect(window.location.search).toBe('?tab=value_ramps');
+});
+it('sends the old Profile tab to the Build your site page', async()=>{
+  workspace();
   fireEvent.click(screen.getByRole('button',{name:'Profile',exact:true}));
-  expect(screen.getByRole('heading',{name:'Site builder'})).toBeTruthy();
-  expect(window.location.search).toBe('?tab=profile');
+  expect(openSiteBuilder).toHaveBeenCalled();
 });
 it('restores the page on browser history navigation', async()=>{
   workspace();
-  fireEvent.click(screen.getByRole('button',{name:'Profile',exact:true}));
+  fireEvent.click(screen.getAllByRole('link',{name:'Offer paths'})[0]);
   window.history.replaceState({},'','/guardians/workspace?tab=leads');
   fireEvent(window,new PopStateEvent('popstate'));
   expect(screen.getByRole('heading',{name:'Leads',exact:true})).toBeTruthy();

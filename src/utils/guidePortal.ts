@@ -714,7 +714,7 @@ export async function getCommunityChannelByRoute(guardianSlug: string, channelSl
 }
 
 export async function joinGuideCommunity(channelId: string, userId: string): Promise<void> {
-  const { error } = await db().from('guide_community_members').upsert({ channel_id: channelId, user_id: userId }, { onConflict: 'channel_id,user_id' });
+  const { error } = await db().from('guide_community_members').upsert({ channel_id: channelId, user_id: userId }, { onConflict: 'channel_id,user_id', ignoreDuplicates: true });
   if (error) throw error;
 }
 

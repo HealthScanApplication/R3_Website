@@ -54,6 +54,7 @@ import { YouTubeClipBackground } from './YouTubeClipBackground';
 import { ProduceVideoBackdrop } from './ProduceVideoBackdrop';
 import { HeroGlassOverlay, heroGlassOn } from './HeroGlassOverlay';
 import { GUARDIAN_SCENES, guardianTypeClipUrl } from '../../utils/guardianTypeClip';
+import { openSiteBuilder } from '../../utils/guardianSiteRoute';
 import { countryForPlace, mapQueryFor } from '../../utils/placeCountry';
 import { YouTubeClipFields } from './YouTubeClipFields';
 import { clipsFromLinks, clipsToLinks, type YtClip } from '../../utils/youtubeClip';
@@ -1559,6 +1560,9 @@ function ReviewsPanel({ userId, slug }: { userId: string; slug: string }) {
 export function ownBackground(url?: string | null): string | null {
   return url && !/^\/images\/guides\/templates\//.test(url) ? url : null;
 }
+
+/** Brings the live hero preview into view after a background pick, when the layout has stacked it below the picker. */
+const showSitePreview = () => { try { const el = document.getElementById('profile-site-preview'); const r = el?.getBoundingClientRect(); if (el && r && (r.top > window.innerHeight * 0.6 || r.bottom < 0)) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch { /* the preview is a convenience */ } };
 
 const prefersReducedMotionNow = () => { try { return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
 
@@ -3625,20 +3629,12 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
             {siteStyleStage === 2 && <>
             <label style={label}>Choose a scene <span style={{ color: acid }}>· clips and photos</span></label>
             <div data-scene-picker style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 7, maxHeight: 340, overflowY: 'auto', marginBottom: 14 }}>
-              <button type="button" onClick={() => { setBackgroundClips([]); setBackgroundUrl(''); setBackgroundType('image'); }} aria-pressed={!ownBackground(backgroundUrl) && backgroundClips.length === 0} style={{ minHeight: 70, padding: 8, border: `1px solid ${!ownBackground(backgroundUrl) && backgroundClips.length === 0 ? acid : line}`, background: 'transparent', color: ink, fontFamily: sans, fontSize: 9, fontWeight: 700, cursor: 'pointer', textAlign: 'left' }}>Match my type<span style={{ display: 'block', marginTop: 4, color: muted, fontWeight: 500 }}>Automatic</span></button>
-              {GUARDIAN_SCENES.map((scene) => { const active = backgroundUrl === scene.url && backgroundClips.length === 0; return <button type="button" key={scene.id} data-scene={scene.id} onClick={() => { setBackgroundClips([]); setBackgroundUrl(scene.url); setBackgroundType(scene.video ? 'video' : 'image'); }} aria-pressed={active} aria-label={`${scene.label}${scene.video ? ' (video)' : ''}`} style={{ position: 'relative', padding: 0, overflow: 'hidden', border: `1px solid ${active ? acid : line}`, background: 'transparent', cursor: 'pointer' }}>
+              <button type="button" onClick={() => { setBackgroundClips([]); setBackgroundUrl(''); setBackgroundType('image'); showSitePreview(); }} aria-pressed={!ownBackground(backgroundUrl) && backgroundClips.length === 0} style={{ minHeight: 70, padding: 8, border: `1px solid ${!ownBackground(backgroundUrl) && backgroundClips.length === 0 ? acid : line}`, background: 'transparent', color: ink, fontFamily: sans, fontSize: 9, fontWeight: 700, cursor: 'pointer', textAlign: 'left' }}>Match my type<span style={{ display: 'block', marginTop: 4, color: muted, fontWeight: 500 }}>Automatic</span></button>
+              {GUARDIAN_SCENES.map((scene) => { const active = backgroundUrl === scene.url && backgroundClips.length === 0; return <button type="button" key={scene.id} data-scene={scene.id} onClick={() => { setBackgroundClips([]); setBackgroundUrl(scene.url); setBackgroundType(scene.video ? 'video' : 'image'); showSitePreview(); }} aria-pressed={active} aria-label={`${scene.label}${scene.video ? ' (video)' : ''}`} style={{ position: 'relative', padding: 0, overflow: 'hidden', border: `1px solid ${active ? acid : line}`, background: 'transparent', cursor: 'pointer' }}>
                 <img src={scene.image} alt="" loading="lazy" style={{ display: 'block', width: '100%', aspectRatio: '16 / 9', objectFit: 'cover' }} />
                 {scene.video && <span style={{ position: 'absolute', top: 4, left: 4, padding: '2px 5px', background: 'rgba(0,0,0,.65)', color: '#fff', fontFamily: sans, fontSize: 7, fontWeight: 800, letterSpacing: '.08em' }}>VIDEO</span>}
                 {active && <span style={{ position: 'absolute', top: 4, right: 4, width: 16, height: 16, display: 'grid', placeItems: 'center', background: black, color: acid }}><Check size={10} /></span>}
                 <span style={{ display: 'block', padding: '4px 6px', color: ink, fontFamily: sans, fontSize: 9, fontWeight: 700, textAlign: 'left' }}>{scene.label}</span>
-              </button>; })}
-            </div>
-            <label style={label}>Choose a story template</label>
-            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 10, marginBottom: 14, scrollSnapType: 'x mandatory' }}>
-              {storyTemplates.map((template) => { const active = storyTemplate === template.id && !backgroundUrl; return <button className="guardian-card" type="button" key={template.id} onClick={() => applyStoryTemplate(template.id)} aria-pressed={active} style={{ position: 'relative', width: 180, flex: '0 0 180px', scrollSnapAlign: 'start', padding: 0, overflow: 'hidden', border: `1px solid ${active ? acid : line}`, background: active ? acid : '#0D0E0C', color: active ? black : ink, textAlign: 'left', cursor: 'pointer', fontFamily: sans }}>
-                <img src={template.image} alt="" loading="lazy" style={{ display: 'block', width: '100%', aspectRatio: '16 / 9', objectFit: 'cover', objectPosition: 'center' }} />
-                {active && <span style={{ position: 'absolute', top: 7, right: 7, width: 19, height: 19, display: 'grid', placeItems: 'center', background: black, color: acid }}><Check size={11} /></span>}
-                <span style={{ display: 'block', padding: '10px 11px 11px' }}><span style={{ display: 'block', color: active ? 'rgba(9,10,8,.62)' : acid, fontSize: 7, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 5 }}>{template.style}</span><strong style={{ display: 'block', fontSize: 11 }}>{template.name}</strong><span style={{ display: 'block', marginTop: 5, color: active ? 'rgba(9,10,8,.65)' : muted, fontSize: 8, lineHeight: 1.4 }}>{template.description}</span></span>
               </button>; })}
             </div>
             <label style={{ ...label, color: ink }}>Use your own background</label>
@@ -4765,6 +4761,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
   // Sections folded by hand while on their branch; cleared on navigation so the new page's branch opens.
   const [navClosed, setNavClosed] = useState<string[]>([]);
   useEffect(() => { setNavClosed([]); }, [tab]);
+  useEffect(() => { if (tab === 'profile') openSiteBuilder(); }, [tab]);
   const [leads, setLeads] = useState<GuideLead[]>([]);
   const [offers, setOffers] = useState<GuideOffer[]>([]);
   const [productsCount, setProductsCount] = useState(0);
@@ -4911,8 +4908,8 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
         {createError && <p role="alert" style={{ color: '#E8B86A' }}>{createError}</p>}
         {tab === 'admin' && isAdminUser && <GuardianAdminPanel />}
         {tab === 'home' && <SiteBuilderOverview profile={profile} valueRamps={valueRamps} />}
-        {/* Site builder: the same profile and brand fields as setup step 01. */}
-        {tab === 'profile' && user && <><h1 style={{ fontFamily: serif, fontSize: 52, fontWeight: 350 }}>Site builder</h1><SiteProfileForm userId={user.id} profile={profile} onProfile={onProfile} /></>}
+        {/* Site builder is the setup step 05 page: this tab only forwards there. */}
+        {tab === 'profile' && <p style={{ color: muted }}>Opening Build your site…</p>}
         {tab === 'events' && user && <WorkspaceEvents guideId={user.id} />}
         {tab === 'community' && user && <WorkspaceCommunity profile={profile} userId={user.id} />}
         {tab === 'library' && user && <GuideLibrary guideId={user.id} selectedIds={selectedLibraryIds} onSelectedIds={setSelectedLibraryIds} onUse={(destination, sources) => { setBuilderLibrarySources(sources); setTab(destination === 'protocol' ? 'protocols' : 'offer_builder'); }} />}
