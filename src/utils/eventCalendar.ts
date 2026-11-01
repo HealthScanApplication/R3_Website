@@ -81,9 +81,7 @@ export function eventsInRange<T extends CalendarEvent>(events: T[], range: DayRa
 
 /** A click on a day: the first starts a choice, the second completes a range, the next begins again; the same single day again clears it. */
 export function pickDay(range: DayRange | null, key: string): DayRange | null {
-  if (!range) return { from: key, to: key };
-  if (range.from === range.to) return key === range.from ? null : { from: key < range.from ? key : range.from, to: key < range.from ? range.from : key };
-  return { from: key, to: key };
+  return range && range.from === key && range.to === key ? null : { from: key, to: key };
 }
 
 /** The month to open the calendar on: the month of the first event day from today on (or its first day if today is inside it); the last month when everything is past. */

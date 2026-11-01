@@ -114,12 +114,10 @@ describe('openingMonth', () => {
 });
 
 describe('pickDay', () => {
-  it('first click chooses a day, second completes a range in either direction, third starts again', () => {
+  it('a click chooses that one day, and another click moves to the new day', () => {
     const one = pickDay(null, '2026-11-10');
     expect(one).toEqual({ from: '2026-11-10', to: '2026-11-10' });
-    expect(pickDay(one, '2026-11-14')).toEqual({ from: '2026-11-10', to: '2026-11-14' });
-    expect(pickDay(one, '2026-11-02')).toEqual({ from: '2026-11-02', to: '2026-11-10' });
-    expect(pickDay({ from: '2026-11-02', to: '2026-11-10' }, '2026-11-20')).toEqual({ from: '2026-11-20', to: '2026-11-20' });
+    expect(pickDay(one, '2026-11-14')).toEqual({ from: '2026-11-14', to: '2026-11-14' });
   });
   it('clicking the single chosen day again clears the choice', () => {
     expect(pickDay({ from: '2026-11-10', to: '2026-11-10' }, '2026-11-10')).toBeNull();

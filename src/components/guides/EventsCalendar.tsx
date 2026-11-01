@@ -1,6 +1,6 @@
 /*
  * A line-drawn month calendar for a Guardian's events. Days with something on are filled; days an event is simply under
- * way are tinted. Choosing a day, or two days for a range, narrows the event cards below to the ones that fit.
+ * way are tinted. Choosing a day narrows the event cards below to the ones that fit.
  * Presentational: the page owns the chosen range (see eventCalendar for the date logic).
  */
 import { useEffect, useMemo, useState } from 'react';
@@ -8,7 +8,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { dayMarks, monthBounds, monthCells, monthOf, openingMonth, pickDay, shiftMonth, type CalendarEvent, type DayRange } from '../../utils/eventCalendar';
 
 /** Days inside an event (not its first day): fine diagonal lines. The day it starts is solid. */
-const HATCH = 'repeating-linear-gradient(135deg, transparent 0 5px, rgba(242,239,231,.38) 5px 6px)';
+const HATCH = 'repeating-linear-gradient(135deg, transparent 0 5px, rgba(242,239,231,.16) 5px 6px)';
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const sans = '"EuclidCircularA", "DM Sans", "Helvetica Neue", Arial, sans-serif';
 const longDay = (key: string) => new Date(`${key}T00:00:00Z`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -59,7 +59,7 @@ export function EventsCalendar({ events, range, onChange, ink = '#F2EFE7', surfa
       <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 9, color: 'rgba(242,239,231,.7)', flexWrap: 'wrap' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><i aria-hidden="true" style={{ width: 9, height: 9, background: accent, display: 'inline-block' }} />Event starts</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><i aria-hidden="true" style={{ width: 9, height: 9, backgroundImage: HATCH, border: `1px solid ${line}`, display: 'inline-block' }} />Days of the event</span>
-        <span style={{ marginLeft: 'auto' }}>Choose a day, or two for a range</span>
+        <span style={{ marginLeft: 'auto' }}>Choose a day to see what is on</span>
       </div>
       {range && <p data-calendar-range role="status" style={{ margin: '8px 0 0', fontSize: 11 }}>{range.from === range.to ? shortDay(range.from) : `${shortDay(range.from)} – ${shortDay(range.to)}`} · <button type="button" onClick={() => onChange(null)} style={{ border: 0, background: 'transparent', color: ink, padding: 0, font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>Clear dates</button></p>}
     </div>
