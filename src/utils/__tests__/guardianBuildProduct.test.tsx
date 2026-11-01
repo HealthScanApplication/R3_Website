@@ -27,7 +27,12 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const setup = () => render(<Onboarding userId="owner" accessToken="t" name="Test Guide" email="guide@example.com" accountAvatarUrl={null} onDone={() => {}} />);
-const group = async (id: 'free' | 'paid') => { await screen.findByText(/Add what you already sell/); return document.querySelector(`[data-upload-group="${id}"]`) as HTMLElement; };
+const group = async (id: 'free' | 'paid') => {
+  await screen.findByText(/Add what you already sell/);
+  fireEvent.click(screen.getByRole('tab', { name: id === 'free' ? /^Lead magnets/ : /^Paid products/ }));
+  return document.querySelector(`[data-upload-group="${id}"]`) as HTMLElement;
+};
+const built = (el: HTMLElement) => el.querySelectorAll('[data-built-card] .r3-pcard');
 
 describe('reading a pasted link', () => {
   it('guesses the type and a name from the address', () => {
@@ -45,10 +50,12 @@ describe('Upload your products (setup step 04)', () => {
   it('keeps lead magnets and paid products apart, each with a link, name, type and (for paid) price per row', async () => {
     setup();
     const free = await group('free');
-    const paid = await group('paid');
     expect(within(free).getByRole('heading', { name: 'Lead magnets' })).toBeTruthy();
-    expect(within(paid).getByRole('heading', { name: 'Paid products' })).toBeTruthy();
     expect(within(free).queryByLabelText(/price/i)).toBeNull(); // free means no price
+    expect(screen.getAllByRole('tab').map((tab) => tab.getAttribute('aria-selected'))).toEqual(['true', 'false']);
+    const paid = await group('paid');
+    expect(within(paid).getByRole('heading', { name: 'Paid products' })).toBeTruthy();
+    expect((document.querySelector('[data-upload-group="free"]') as HTMLElement).closest('[role="tabpanel"]')!.hasAttribute('hidden')).toBe(true); // one tab shown at a time
     expect(within(paid).getByLabelText('Paid products price 1')).toBeTruthy();
     const options = [...(within(paid).getByLabelText('Paid products type 1') as HTMLSelectElement).options].map((option) => option.text);
     expect(options).toEqual(expect.arrayContaining(['PDF guide', 'Video course', 'Protocol', 'Protocol + call', 'Community or membership', 'Retreat', 'Physical product']));
@@ -88,19 +95,23 @@ describe('Upload your products (setup step 04)', () => {
     fireEvent.change(within(paid).getByLabelText('Paid products price 2'), { target: { value: '99' } });
     fireEvent.click(within(paid).getByRole('button', { name: /^Save 2 paid products/i }));
     await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(paid.querySelectorAll('.r3-pcard').length).toBe(2));
+    await waitFor(() => expect(built(paid).length).toBe(2));
   });
 
-  it('every type has a "build a new one" link to its own builder', async () => {
+  it('every type has a "build a new one" link that opens the builder that makes it', async () => {
     setup();
     const paid = await group('paid');
     const href = (type: string) => paid.querySelector(`[data-build-type="${type}"]`)?.getAttribute('href');
+    // made by the Offer builder: it opens with that type picked out
+    for (const type of ['ebook', 'course', 'one_to_one_call', 'group_call', 'in_person', 'community']) expect(href(type)).toBe(`/guardians/workspace?tab=offer_builder&type=${type}`);
+    // made elsewhere
     expect(href('routine')).toBe('/guardians/workspace?tab=protocols');
+    expect(href('routine_guidance')).toBe('/guardians/workspace?tab=protocols');
     expect(href('recipe_book')).toBe('/guardians/workspace?tab=recipes');
-    expect(href('course')).toBe('/guardians/workspace?tab=offer_builder');
-    expect(href('community')).toBe('/guardians/workspace?tab=community');
     expect(href('festival')).toBe('/guardians/workspace?tab=events');
     expect(href('product')).toBe('/guardians/workspace?tab=products');
+    // the dotted cards link the same way
+    expect(paid.querySelector('[data-suggestion="course"] [data-suggestion-build]')?.getAttribute('href')).toBe('/guardians/workspace?tab=offer_builder&type=course');
   });
 
   it('Delete works without the browser dialog: it asks in the page, then deletes', async () => {
@@ -113,7 +124,7 @@ describe('Upload your products (setup step 04)', () => {
     const dialog = await screen.findByRole('alertdialog');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(mocks.del).toHaveBeenCalledWith('owner', 'o1'));
-    await waitFor(() => expect(free.querySelectorAll('.r3-pcard').length).toBe(0));
+    await waitFor(() => expect(built(free).length).toBe(0));
     expect(nativeConfirm).not.toHaveBeenCalled();
   });
 
@@ -161,5 +172,24 @@ describe('Upload your products (setup step 04)', () => {
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(paid.querySelector('[data-suggestion="ebook"]')).toBeTruthy());
     expect(paid.querySelector('[data-add-empty]')).toBeTruthy();
+  });
+
+  it('the suggestion cards carry a colour for their type, and the cards sit three to a row', async () => {
+    setup();
+    const paid = await group('paid');
+    const colours = [...paid.querySelectorAll('[data-suggestion]')].map((card) => (card as HTMLElement).style.getPropertyValue('--type'));
+    expect(colours.every((colour) => /^#[0-9A-F]{6}$/i.test(colour))).toBe(true);
+    expect(new Set(colours).size).toBe(colours.length); // a different colour for each type
+    const grid = paid.querySelector('.r3-pcard')!.closest('[style*="grid-template-columns"]') as HTMLElement;
+    expect(grid.style.gridTemplateColumns).toMatch(/minmax\(240px/);
+  });
+
+  it('switching tabs keeps what was typed in the other tab', async () => {
+    setup();
+    const free = await group('free');
+    fireEvent.change(within(free).getByLabelText('Lead magnets link 1'), { target: { value: 'https://example.com/a-checklist.pdf' } });
+    await group('paid');
+    const back = await group('free');
+    expect((within(back).getByLabelText('Lead magnets link 1') as HTMLInputElement).value).toBe('https://example.com/a-checklist.pdf');
   });
 });
