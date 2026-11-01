@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { existsSync } from 'node:fs';
 import { guardianScene, guardianSceneHasClip, guardianTypeClipUrl } from '../guardianTypeClip';
 
-const SPECIALTIES = [
-  'Nutrition', 'Fitness', 'Wellness', 'Yoga', 'Somatic work', 'Sleep', 'Skin', 'Gut health', 'Family health', 'Longevity', 'Breathwork',
-  'Psychology', 'Stress', 'Focus', 'Habits', 'Confidence', 'Relationships', 'Emotional wellbeing', 'Mindfulness', 'Coaching',
-  'Human Design', 'Astrology', 'Tarot', 'Numerology', 'Meditation', 'Spiritual practice', 'Reiki', 'Energy work', 'Sound healing',
-  'Purpose', 'Journaling', 'Rituals', 'Life transitions',
-];
+const EXPECTED_SCENE: Record<string, string> = {
+  Nutrition: 'nutrition', Fitness: 'fitness', Wellness: 'wellness-herbalist', Yoga: 'yoga', 'Somatic work': 'somatic', Sleep: 'sleep',
+  Skin: 'skin', 'Gut health': 'gut-health', 'Family health': 'family-health', Longevity: 'longevity', Breathwork: 'breathwork',
+  Psychology: 'psychology', Stress: 'stress', Focus: 'focus', Habits: 'habits', Confidence: 'confidence', Relationships: 'relationships',
+  'Emotional wellbeing': 'emotional-wellbeing', Mindfulness: 'mindfulness', Coaching: 'coaching', 'Human Design': 'human-design',
+  Astrology: 'astrology', Tarot: 'tarot', Numerology: 'numerology', Meditation: 'meditation', 'Spiritual practice': 'spiritual-practice',
+  Reiki: 'reiki', 'Energy work': 'energy-work', 'Sound healing': 'sound-healing', Purpose: 'purpose', Journaling: 'journaling',
+  Rituals: 'rituals', 'Life transitions': 'life-transitions',
+};
 
 describe('guardianTypeClip', () => {
   it('maps a Guardian type to its scene', () => {
@@ -26,8 +29,9 @@ describe('guardianTypeClip', () => {
     expect(guardianScene(['constructor', 'toString'])).toBe('yoga'); // inherited object keys are not specialties
   });
   it('gives all 33 specialties a scene whose file exists: the clip when there is one, else the still', () => {
-    for (const s of SPECIALTIES) {
+    for (const [s, expected] of Object.entries(EXPECTED_SCENE)) {
       const scene = guardianScene([s]);
+      expect(scene, s).toBe(expected);
       const url = guardianTypeClipUrl([s]);
       expect(existsSync(`public${url}`), url).toBe(true);
       expect(url.endsWith('.mp4'), url).toBe(guardianSceneHasClip(scene));
