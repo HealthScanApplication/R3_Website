@@ -3,7 +3,7 @@ import {
   ArrowRight, ChevronRight, FileText, HeartPulse, LogOut,
   Mail, Package, Plus, Salad, Sparkles, Users, Globe2, Loader2,
   Upload, Check, Instagram, Facebook, Youtube, Link2, AtSign, Route, CalendarDays, Download,
-  MoreHorizontal, Droplets, Activity, Bath, Sparkle, HeartHandshake, Hourglass, ChefHat, Wheat, ListChecks, CookingPot, FolderOpen, Trash2, ExternalLink, Hammer, PencilRuler, Blocks, LayoutDashboard, Grid2X2, List, Play, Clock, ShieldCheck, Utensils, Dumbbell, Combine, Clapperboard, BookOpen, Podcast, GraduationCap, AudioLines, ShoppingBag, CalendarDays, Mountain } from 'lucide-react';
+  MoreHorizontal, Droplets, Activity, Bath, Sparkle, HeartHandshake, Hourglass, ChefHat, Wheat, ListChecks, CookingPot, FolderOpen, Trash2, ExternalLink, Hammer, PencilRuler, Blocks, LayoutDashboard, Grid2X2, List, Play, Clock, ShieldCheck, Utensils, Dumbbell, Combine, Clapperboard, BookOpen, Podcast, GraduationCap, AudioLines, ShoppingBag, Mountain } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ProtocolEditor } from '../admin/ProtocolEditor';
 import { RoutineMark } from '../Header';
@@ -53,6 +53,7 @@ import { removeGreenBackground } from '../../utils/chromaKey';
 import { YouTubeClipBackground } from './YouTubeClipBackground';
 import { ProduceVideoBackdrop } from './ProduceVideoBackdrop';
 import { HeroGlassOverlay, heroGlassOn } from './HeroGlassOverlay';
+import { guardianTypeClipUrl } from '../../utils/guardianTypeClip';
 import { countryForPlace, mapQueryFor } from '../../utils/placeCountry';
 import { YouTubeClipFields } from './YouTubeClipFields';
 import { clipsFromLinks, clipsToLinks, type YtClip } from '../../utils/youtubeClip';
@@ -505,8 +506,11 @@ export function GuardianHeader({ isSignedIn, activeTab, displayName, avatarUrl, 
   // 31px matches the ROUTINE³ logo box (RoutineMark size 31) so the logo and builder bar line up.
   const builderLink: React.CSSProperties = { height: '100%', display: 'inline-flex', alignItems: 'center', gap: 7, padding: '0 10px', color: ink, textDecoration: 'none', fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 600, fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', boxSizing: 'border-box' };
   return (
-    <header className="g-header" style={{ position: 'sticky', top: 0, zIndex: 50, background: transparent ? 'rgba(9,10,8,.42)' : black, backdropFilter: transparent ? 'blur(12px)' : undefined, borderBottom: `1px solid ${transparent ? 'rgba(255,255,255,.22)' : line}` }}>
-      <div className="g-header-row" style={{ minHeight: 64 }}>
+    <header className="g-header" style={{ position: 'sticky', top: 0, zIndex: 50, paddingTop: 14, background: 'transparent', pointerEvents: 'none', marginBottom: transparent ? -80 : 0 }}>
+      {/* The same floating capsule as the site header (Header.tsx): hero-width container, 16px corners, 64px row. */}
+      <div style={{ maxWidth: 1440, margin: '0 auto', paddingLeft: 'clamp(20px, 5vw, 72px)', paddingRight: 'clamp(20px, 5vw, 72px)' }}>
+      <div style={{ pointerEvents: 'auto', borderRadius: 16, background: transparent ? 'rgba(9,10,8,.42)' : black, backdropFilter: transparent ? 'blur(12px) saturate(1.3)' : undefined, WebkitBackdropFilter: transparent ? 'blur(12px) saturate(1.3)' : undefined, border: `1px solid ${transparent ? 'rgba(255,255,255,.22)' : line}`, boxShadow: '0 12px 40px -24px rgba(0,0,0,0.5)' }}>
+      <div className="g-header-row" style={{ minHeight: 64, paddingLeft: 'clamp(16px, 2vw, 28px)', paddingRight: 'clamp(16px, 2vw, 28px)' }}>
         <div className="g-brand">
           <span className="g-brand-full"><Brand /></span>
           {/* Phones get the short square R³ mark so the row fits. */}
@@ -537,6 +541,8 @@ export function GuardianHeader({ isSignedIn, activeTab, displayName, avatarUrl, 
           </> : <button type="button" onClick={onSignIn} style={{ ...builderLink, height: 31, border: `1px solid ${ink}`, borderRadius: 2, padding: '0 16px', background: 'transparent' }}>Sign in</button>}
         </div>
       </div>
+      </div>
+      </div>
     </header>
   );
 }
@@ -559,13 +565,13 @@ const input: React.CSSProperties = {
 };
 const label: React.CSSProperties = { display: 'block', color: muted, fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8, lineHeight: 1.35 };
 // Homepage-style CTA: a label cell joined to a solid button on one shared seam.
-function CtaLockup({ href, label, action, dark = false }: { href: string; label: string; action: string; dark?: boolean }) {
+function CtaLockup({ href, label, action, dark = false, avatar = null, arrow = true }: { href: string; label: string; action: string; dark?: boolean; avatar?: React.ReactNode; arrow?: boolean }) {
   const edge = dark ? '#11120F' : '#FFFFFF';
   const cell: React.CSSProperties = { height: 42, boxSizing: 'border-box', display: 'inline-flex', alignItems: 'center', fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 11, fontWeight: 600, border: `1px solid ${edge}` };
   return (
     <a href={href} style={{ display: 'inline-flex', marginTop: 26, textDecoration: 'none', maxWidth: '100%' }}>
-      <span style={{ ...cell, padding: '0 14px', letterSpacing: '0.04em', color: edge, background: dark ? 'rgba(17,18,15,0.06)' : 'rgba(255,255,255,0.16)', borderRight: 'none', borderRadius: '2px 0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
-      <span style={{ ...cell, padding: '0 16px', gap: 8, textTransform: 'uppercase', letterSpacing: '0.1em', color: dark ? '#FFFFFF' : '#16140F', background: edge, borderRadius: '0 2px 2px 0', whiteSpace: 'nowrap' }}>{action} <ArrowRight size={13} /></span>
+      <span style={{ ...cell, padding: '0 14px', letterSpacing: '0.04em', color: edge, background: dark ? 'rgba(17,18,15,0.06)' : 'rgba(255,255,255,0.16)', borderRight: 'none', borderRadius: '2px 0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', gap: 9 }}>{avatar}<span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span></span>
+      <span style={{ ...cell, padding: '0 16px', gap: 8, textTransform: 'uppercase', letterSpacing: '0.1em', color: dark ? '#FFFFFF' : '#16140F', background: edge, borderRadius: '0 2px 2px 0', whiteSpace: 'nowrap' }}>{action}{arrow && <> <ArrowRight size={13} /></>}</span>
     </a>
   );
 }
@@ -886,7 +892,19 @@ function SuggestGuardianModal({ type, onClose }: { type: string; onClose: () => 
 }
 
 function PublicGuidePage({ isSignedIn }: { isSignedIn: boolean }) {
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
+  // Who is signed in: their Guardian profile's name and photo, else the account's.
+  const [ownProfile, setOwnProfile] = useState<GuideProfile | null>(null);
+  useEffect(() => {
+    setOwnProfile(null);
+    if (!isSignedIn || !user?.id) return undefined;
+    let live = true;
+    getGuideProfile(user.id).then((found) => { if (live) setOwnProfile(found); }).catch(() => { if (live) setOwnProfile(null); });
+    return () => { live = false; };
+  }, [isSignedIn, user?.id]);
+  const accountMeta = (user?.user_metadata ?? {}) as { full_name?: string; name?: string; avatar_url?: string; picture?: string };
+  const signedInName = ownProfile?.display_name || accountMeta.full_name || accountMeta.name || (user?.email ? user.email.split('@')[0] : '');
+  const signedInAvatar = useGuardianAvatarUrl(user?.id, ownProfile?.avatar_url, accountMeta.avatar_url, accountMeta.picture);
   const [authMode, setAuthMode] = useState<'login' | 'signup' | null>(null);
   const [heroEmail, setHeroEmail] = useState('');
   useEffect(() => {
@@ -915,19 +933,22 @@ function PublicGuidePage({ isSignedIn }: { isSignedIn: boolean }) {
   const suggestTypes = activeType === 'All' ? guardianDirectoryTypes.map((type) => type.label) : [activeType];
   return (
     <div style={{ minHeight: '100vh', background: black, color: ink, fontFamily: sans }}>
-      <GuardianHeader transparent isSignedIn={isSignedIn} onSignIn={() => setAuthMode('login')} onSignOut={() => signOut()} />
+      <GuardianHeader transparent isSignedIn={isSignedIn} displayName={signedInName} avatarUrl={signedInAvatar} onSignIn={() => setAuthMode('login')} onSignOut={() => signOut()} />
       {authMode && <AuthPanel key={authMode} initialMode={authMode} initialEmail={heroEmail.trim()} onModalClose={() => setAuthMode(null)} />}
       <main>
-        <section style={{ position: 'relative', minHeight: 'calc(100svh - 65px)', display: 'grid', alignItems: 'center', overflow: 'hidden' }}>
+        <section style={{ position: 'relative', minHeight: '100svh', display: 'grid', alignItems: 'center', overflow: 'hidden' }}>
           <GuardianHeroBackdrop />
+          {/* The issue line under the header, as on Home and Wearables: a hairline with the tagline, not part of the headline block. */}
+          <div style={{ position: 'absolute', zIndex: 1, top: 80, left: 0, right: 0, maxWidth: 1440, margin: '0 auto', boxSizing: 'border-box', paddingLeft: 'clamp(20px, 5vw, 72px)', paddingRight: 'clamp(20px, 5vw, 72px)' }}>
+            <p style={{ margin: 0, borderTop: '1px solid rgba(245,242,234,.22)', paddingTop: 14, paddingLeft: 'clamp(16px, 2vw, 28px)', fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(245,242,234,.7)' }}>Learn · Build · Guide</p>
+          </div>
           <div style={{ position: 'relative', zIndex: 1, width: '100%', boxSizing: 'border-box', padding: 'clamp(54px,8vh,90px) clamp(20px,6vw,90px)' }}>
             <div style={{ maxWidth: 860 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', color: acid, marginBottom: 28 }}>LEARN · BUILD · GUIDE</div>
               <h1 style={{ margin: 0, fontFamily: serif, fontWeight: 300, fontSize: 'clamp(64px,10vw,142px)', lineHeight: .84, letterSpacing: '-0.055em' }}>Become a Guardian.</h1>
               <p style={{ maxWidth: 650, margin: '30px 0 10px', fontSize: 'clamp(18px,2vw,25px)', lineHeight: 1.4, fontWeight: 600 }}>Turn what you know into guidance people can follow.</p>
               <p style={{ maxWidth: 650, margin: 0, color: 'rgba(245,242,234,.72)', fontSize: 14, lineHeight: 1.7 }}>Create your public page, build your offers, collect leads, and publish guides, recipes and interactive Protocols with ROUTINE³.</p>
               {isSignedIn
-                ? <CtaLockup href={guardianCta} label="Your Guardian workspace" action="Open workspace" />
+                ? <CtaLockup href={guardianCta} label={signedInName || 'Your Guardian workspace'} avatar={<GuardianAvatar url={signedInAvatar} name={signedInName} size={24} line="rgba(255,255,255,.5)" />} action="Workspace" arrow={false} />
                 : /* Email capture is the first sign-up field: it opens the sign-up modal pre-filled. */
                   <form onSubmit={(event) => { event.preventDefault(); setAuthMode('signup'); }} style={{ display: 'flex', marginTop: 26, maxWidth: 480 }}>
                     <input type="email" required value={heroEmail} onChange={(event) => setHeroEmail(event.target.value)} placeholder="you@email.com" aria-label="Your email" style={{ flex: 1, minWidth: 0, height: 42, boxSizing: 'border-box', padding: '0 14px', border: '1px solid #FFFFFF', borderRight: 'none', borderRadius: '2px 0 0 2px', background: 'rgba(255,255,255,0.16)', color: '#FFFFFF', fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 13, fontWeight: 600, outline: 'none' }} />
@@ -1539,10 +1560,35 @@ export function ownBackground(url?: string | null): string | null {
   return url && !/^\/images\/guides\/templates\//.test(url) ? url : null;
 }
 
-function HeroBackdrop({ heroMedia: chosenMedia, backgroundIsVideo = false, clips = [], glass = false, greyscale = false }: { heroMedia: string | null; backgroundIsVideo?: boolean; clips?: YtClip[]; glass?: boolean; greyscale?: boolean }) {
+const prefersReducedMotionNow = () => { try { return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
+
+/** The Guardian-type clip behind the hero. It stops for people who ask for reduced motion, including when they switch it on while the page is open. */
+function TypeVideo({ src, greyscale }: { src: string; greyscale: boolean }) {
+  const ref = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const query = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+    if (!query) return undefined;
+    const apply = () => {
+      const video = ref.current;
+      if (!video) return;
+      try {
+        if (query.matches) video.pause();
+        else Promise.resolve(video.play()).catch(() => {});
+      } catch { /* a player that cannot be controlled just keeps its initial state */ }
+    };
+    query.addEventListener?.('change', apply);
+    return () => query.removeEventListener?.('change', apply);
+  }, [src]);
+  return <video ref={ref} src={src} data-type-video autoPlay={!prefersReducedMotionNow()} muted loop playsInline preload="metadata" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />;
+}
+
+function HeroBackdrop({ heroMedia: chosenMedia, backgroundIsVideo = false, clips = [], typeVideo = null, glass = false, greyscale = false }: { heroMedia: string | null; backgroundIsVideo?: boolean; clips?: YtClip[]; typeVideo?: string | null; glass?: boolean; greyscale?: boolean }) {
   const heroMedia = ownBackground(chosenMedia);
   return <>
-    {!clips.length && !heroMedia && <ProduceVideoBackdrop greyscale={greyscale} />}
+    {/* No background of their own: the clip for their Guardian type, else the produce footage. */}
+    {!clips.length && !heroMedia && (typeVideo
+      ? <TypeVideo key={typeVideo} src={typeVideo} greyscale={greyscale} />
+      : <ProduceVideoBackdrop greyscale={greyscale} />)}
     {clips.length > 0 && <YouTubeClipBackground clips={clips} greyscale={greyscale} />}
     {!clips.length && heroMedia && !backgroundIsVideo && <img src={heroMedia} alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />}
     {!clips.length && heroMedia && backgroundIsVideo && <video src={heroMedia} autoPlay muted loop playsInline aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />}
@@ -1568,7 +1614,7 @@ function MountNearViewport({ children, margin = '500px' }: { children: React.Rea
 const HERO_ICONS: Record<string, React.ComponentType<{ size?: number; 'aria-hidden'?: boolean }>> = { catalog: ListChecks, shop: ShoppingBag, events: CalendarDays, retreats: Mountain, treats: Sparkle, talks: GraduationCap };
 const HERO_SECTIONS: Array<[string, string]> = [['catalog', 'Routines'], ['shop', 'Products'], ['events', 'Events'], ['retreats', 'Retreats']];
 
-function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, accent, headingFont, background, backgroundIsVideo = false, clips = [], glass = false, sections = HERO_SECTIONS, greyscale = false, cards, headlineStyle = 'editorial', guideId, sourceOfferId }: { audience?: string; reviewSummary?: { rating?: number; reviewCount?: number }; headlineStyle?: HeadlineStyle; name: string; avatarUrl?: string | null; specialties: string[]; headline: string; tags: string[]; bio: string; accent: string; headingFont: string; background?: string | null; backgroundIsVideo?: boolean; clips?: YtClip[]; glass?: boolean; sections?: Array<[string, string]>; greyscale?: boolean; cards: SiteHeroCard[]; guideId?: string; sourceOfferId?: string | null }) {
+function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, accent, headingFont, background, backgroundIsVideo = false, clips = [], typeVideo = null, glass = false, sections = HERO_SECTIONS, greyscale = false, cards, headlineStyle = 'editorial', guideId, sourceOfferId }: { audience?: string; reviewSummary?: { rating?: number; reviewCount?: number }; headlineStyle?: HeadlineStyle; name: string; avatarUrl?: string | null; specialties: string[]; headline: string; tags: string[]; bio: string; accent: string; headingFont: string; background?: string | null; backgroundIsVideo?: boolean; clips?: YtClip[]; typeVideo?: string | null; glass?: boolean; sections?: Array<[string, string]>; greyscale?: boolean; cards: SiteHeroCard[]; guideId?: string; sourceOfferId?: string | null }) {
   const [email, setEmail] = useState('');
   const [captureState, setCaptureState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
   const heroMedia = ownBackground(background);
@@ -1589,7 +1635,7 @@ function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, a
     window.history.replaceState(null, '', `#${id}`);
   };
   return <section style={{ position: 'relative', overflow: 'clip', minHeight: 'calc(100svh - 64px)', display: 'grid', alignItems: 'center', background: '#151A12', color: '#FFF' }}>
-    <HeroBackdrop heroMedia={heroMedia} backgroundIsVideo={backgroundIsVideo} clips={clips} glass={glass} greyscale={greyscale} />
+    <HeroBackdrop heroMedia={heroMedia} backgroundIsVideo={backgroundIsVideo} clips={clips} typeVideo={typeVideo} glass={glass} greyscale={greyscale} />
     <span aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,rgba(8,10,7,.88) 0%,rgba(8,10,7,.62) 48%,rgba(8,10,7,.18) 100%),linear-gradient(0deg,rgba(8,10,7,.72),transparent 55%)' }} />
     <div style={{ position: 'relative', zIndex: 2, width: '100%', maxWidth: 1240, margin: '0 auto', boxSizing: 'border-box', padding: 'clamp(76px,10vh,120px) clamp(24px,6vw,84px)', display: 'grid', gridTemplateColumns: 'minmax(0,720px)', alignItems: 'center' }}>
       <div>
@@ -1983,6 +2029,8 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   // An offer path ("Better sleep") is its own page. Its hero speaks about that path (the offer, who it is for, the problem),
   // not about the Guardian in general, and its card is that path's offer; the profile site keeps the Guardian's own hero.
   const onOfferPath = !!(pathSlug && selectedRamp);
+  // No chosen background, template or clips: their Guardian type's clip plays behind the glass.
+  const publicTypeVideo = !ownBackground(socials.theme_background) && clipsFromLinks(socials.theme_background_clips).length === 0 ? guardianTypeClipUrl(profile.specialties) : null;
   const pathOffer = onOfferPath ? publishedOffers.find((offer) => offer.id === selectedRamp!.offer_ids[0]) : undefined;
   const heroAudience = onOfferPath ? selectedRamp!.audience : audienceLabel(profile.social_links?.audience_details);
   const heroHeadline = onOfferPath ? customerFacingOfferTitle(pathOffer?.title || selectedRamp!.name) : profile.headline || profile.display_name;
@@ -1992,8 +2040,8 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   const heroSourceOfferId = (onOfferPath ? pathOffer?.id : undefined) || freeOffers[0]?.id || null;
   // The email section at the end of the page has the hero's background and glass behind it too, when the Guardian has a video clip or the glass on.
   const publicClips = clipsFromLinks(socials.theme_background_clips);
-  const publicGlass = heroGlassOn(socials.theme_glass, publicClips.length > 0);
-  const emailBackdrop = <MountNearViewport><HeroBackdrop heroMedia={socials.theme_background || null} backgroundIsVideo={publicBackgroundIsVideo} clips={publicClips} glass={publicGlass} greyscale={publicGreyscale} /></MountNearViewport>;
+  const publicGlass = heroGlassOn(socials.theme_glass, publicClips.length > 0 || !!publicTypeVideo);
+  const emailBackdrop = <MountNearViewport><HeroBackdrop heroMedia={socials.theme_background || null} backgroundIsVideo={publicBackgroundIsVideo} clips={publicClips} typeVideo={publicTypeVideo} glass={publicGlass} greyscale={publicGreyscale} /></MountNearViewport>;
   return <div className="guardian-public-site" lang={publicLanguage} dir={publicLanguage === 'ar' ? 'rtl' : 'ltr'} style={{ minHeight: '100vh', background: publicPageColor, color: '#11120F', fontFamily: publicBodyFont }}>
     <style>{`.guardian-public-site button,.guardian-public-site input,.guardian-public-site select,.guardian-public-site textarea{font-family:${sans}}.guardian-public-site a{font-family:inherit}.guardian-public-site h1,.guardian-public-site h2,.guardian-public-site h3{font-synthesis:none}@media(max-width:760px){.guardian-header-socials{display:none!important}}`}</style>
     {publicHeaderStyle !== 'hidden' && <header style={{ position: 'fixed', inset: '0 0 auto', zIndex: 100, minHeight: 64, background: publicHeaderBackground, color: publicHeaderText, borderBottom: '1px solid rgba(17,18,15,.2)', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', alignItems: 'center', gap: 8, padding: '0 clamp(8px,4vw,84px)' }}>
@@ -2006,7 +2054,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
     </header>}
     <main style={{ paddingTop: publicHeaderStyle === 'hidden' ? 0 : 64 }}>
       {/* Shared with the builder preview, so what Guardians build is what they publish. */}
-      <GuardianSiteHero audience={heroAudience} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={profile.display_name} avatarUrl={profile.avatar_url} specialties={heroSpecialties} headline={heroHeadline} tags={heroTags} bio={heroBio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} clips={clipsFromLinks(socials.theme_background_clips)} glass={heroGlassOn(socials.theme_glass, clipsFromLinks(socials.theme_background_clips).length > 0)} sections={[...HERO_SECTIONS.slice(0, 3), ...(publishedOffers.some((offer) => offer.kind === 'talk') ? [['talks', 'Talks'] as [string, string]] : []), ...(publishedOffers.some((offer) => offer.kind === 'treat') ? [['treats', 'Treats'] as [string, string]] : []), HERO_SECTIONS[3]]} greyscale={publicGreyscale}
+      <GuardianSiteHero audience={heroAudience} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={profile.display_name} avatarUrl={profile.avatar_url} specialties={heroSpecialties} headline={heroHeadline} tags={heroTags} bio={heroBio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} clips={clipsFromLinks(socials.theme_background_clips)} typeVideo={publicTypeVideo} glass={publicGlass} sections={[...HERO_SECTIONS.slice(0, 3), ...(publishedOffers.some((offer) => offer.kind === 'talk') ? [['talks', 'Talks'] as [string, string]] : []), ...(publishedOffers.some((offer) => offer.kind === 'treat') ? [['treats', 'Treats'] as [string, string]] : []), HERO_SECTIONS[3]]} greyscale={publicGreyscale}
         guideId={profile.user_id} sourceOfferId={heroSourceOfferId}
         cards={publishedRamps.length ? (onOfferPath ? [selectedRamp!] : publishedRamps).slice(0, 1).map((ramp) => { const offer = publishedOffers.find((item) => item.id === ramp.offer_ids[0]); return { key: ramp.id, offerTitle: offer?.title || ramp.name, eyebrow: ramp.problem || undefined, title: customerFacingOfferTitle(offer?.title || ramp.name), copy: offer?.description || '', kind: offer?.kind, price: offer?.access_model === 'free' ? 'Free' : undefined, imageUrl: offer?.cover_url, href: pathSlug === encodeURIComponent(ramp.slug) ? '#offers' : `/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}` }; }) : freeOffers.slice(0, 1).map((offer) => ({ key: offer.id, offerTitle: offer.title, eyebrow: profile.specialties.slice(0, 2).join(' · '), title: customerFacingOfferTitle(offer.title), copy: offer.description || '', kind: offer.kind, price: 'Free', imageUrl: offer.cover_url, href: '#start' }))} />
       {publicBrands.filter((brand) => brand.kind === 'business').length > 0 && <section aria-labelledby="guardian-brands-title" style={{ padding: `clamp(54px,7vw,100px) ${PAGE_X}`, background: '#11120F', color: ink }}>
@@ -2184,6 +2232,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       if (typeof saved.onboarding_step === 'number') setSavedStep(saved.onboarding_step);
       if (saved.slug) setSavedSlug(saved.slug);
       if (links.roles) setRoles(String(links.roles).split(',').filter(Boolean));
+      if (saved.specialties?.length) setChosen(saved.specialties);
     }).catch(() => {});
   }, [userId]);
   // Saved brands come back (they were written on publish but never read): the personal brand stays active and
@@ -2292,6 +2341,8 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const [savedSlug, setSavedSlug] = useState<string | null>(null);
   const [savedPrimaryId, setSavedPrimaryId] = useState('personal');
   const activeStoryTemplate = storyTemplates.find((template) => template.id === storyTemplate) || storyTemplates[0];
+  // No background of their own (a template's sample picture does not count) and no clips: the page plays the clip for their Guardian type.
+  const typeBackground = !ownBackground(backgroundUrl) && backgroundClips.length === 0 ? guardianTypeClipUrl(chosen) : null;
   const effectiveBackground = backgroundUrl || activeStoryTemplate.image;
   const previewHeaderBackground = '#FFFFFF';
   const previewHeaderText = '#11120F';
@@ -3141,7 +3192,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         <span aria-hidden="true" style={{ width: 1, height: 14, background: line }} />
       </>} />
     </div>
-    <div className="g-workspace-shell" style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr)', height: 'calc(100vh - 63px)', margin: '0 calc(-1 * clamp(20px,6vw,90px)) -30px', maxWidth: 'none' }}>
+    <div className="g-workspace-shell" style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr)', height: 'calc(100vh - 78px)', margin: '0 calc(-1 * clamp(20px,6vw,90px)) -30px', maxWidth: 'none' }}>
       <div className="g-railwrap">
         <aside className="g-rail" aria-label="Guardian workspace and setup sections">
           <div className="g-rlabel" style={{ padding: '12px 20px 6px', color: acid, fontSize: 8, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>Set up your Guardian</div>
@@ -3613,7 +3664,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           </div>
           <div id="profile-site-preview" className="g-sticky" style={{ scrollMarginTop: 20 }}><span style={{ ...label, display: 'block', color: acid, marginBottom: 7 }}>Profile site preview <span style={{ color: muted }}>· shows every published offer path</span></span><PreviewFrame device={previewDevice}><div style={{ flex: '1 0 auto', background: pageColor, fontFamily: sans }}>
             {headerStyle !== 'hidden' && <GuardianSiteHeader brandName={brandName.trim()} path={`routine3.com/${displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-') || 'your-name'}`} />}
-            <GuardianSiteHero audience={audienceLabel(audienceDetails, audience)} reviewSummary={reviewStats(guardianReviews)} headlineStyle={headlineStyle} name={displayName} avatarUrl={avatarUrl} specialties={chosen} headline={generatedHeadline} tags={expertiseTags} bio={intro || `A practical ${chosen.slice(0, 2).join(' and ').toLowerCase() || 'guidance'} path shaped for ${audience.join(' and ').toLowerCase()}.`} accent={accentColor} headingFont={serif} background={effectiveBackground} backgroundIsVideo={backgroundType === 'video'} clips={backgroundClips} glass={heroGlassOn(heroGlassSetting, backgroundClips.length > 0)} greyscale={imageTreatment === 'greyscale'}
+            <GuardianSiteHero audience={audienceLabel(audienceDetails, audience)} reviewSummary={reviewStats(guardianReviews)} headlineStyle={headlineStyle} name={displayName} avatarUrl={avatarUrl} specialties={chosen} headline={generatedHeadline} tags={expertiseTags} bio={intro || `A practical ${chosen.slice(0, 2).join(' and ').toLowerCase() || 'guidance'} path shaped for ${audience.join(' and ').toLowerCase()}.`} accent={accentColor} headingFont={serif} background={effectiveBackground} backgroundIsVideo={backgroundType === 'video'} clips={backgroundClips} typeVideo={typeBackground} glass={heroGlassOn(heroGlassSetting, backgroundClips.length > 0 || !!typeBackground)} greyscale={imageTreatment === 'greyscale'}
               cards={[{ key: 'first', eyebrow: rampTargetProblem, title: customerFacingOfferTitle(leadMagnetTitle || suggestedFreeOffer.title), copy: freeAudienceValue, kind: freeOfferType, price: 'Free', imageUrl: effectiveBackground, onClick: () => document.getElementById('value-ramp-funnel-preview')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }]} />
             <GuardianOfferCatalog profile={{ user_id: userId, slug: displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-') || 'your-name', display_name: displayName || 'Your name', headline: generatedHeadline, bio: intro, avatar_url: avatarUrl, contact_email: contactEmail, whatsapp_phone: whatsappPhone, social_links: { audience_details: JSON.stringify(Object.fromEntries(audience.filter((group) => audienceDetails[group]).map((group) => [group, audienceDetails[group]]))) }, specialties: chosen, status: savedStatus || 'draft', commission_percent: 0, onboarding_step: 5 }} offers={related.offers.filter((offer) => offer.status === 'published')} ramps={related.ramps.filter((ramp) => ramp.status === 'published')} reviews={guardianReviews} accent={accentColor} protocols={related.protocols} />
             <GuardianShop guideId={userId} guardianSlug={displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-') || 'your-name'} guardianName={displayName || 'Your name'} pagePadding={PAGE_X} protocols={related.protocols} localePreference={{ region: pricingRegion, locale: languageOptions.find((option) => option.name === mainLanguage)?.code || 'en', currency }} />
@@ -4804,7 +4855,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
   async function removeRecipe(row: GuideRecipe) { if (!user || !window.confirm(`Delete ${row.title}?`)) return; await deleteGuideRecipe(user.id, row.id); setRecipes((current) => current.filter((item) => item.id !== row.id)); }
   return <div style={{ minHeight: '100vh', background: black, color: ink, fontFamily: sans }}>
     <GuardianHeader isSignedIn activeTab={tab} displayName={profile.display_name} avatarUrl={navAvatarUrl} onNavigate={(next) => { setTab(next); setProtocolId(null); setRecipeId(null); setChildPlanId(null); setParentContext(null); }} onSignOut={signOut} />
-    <div className="g-workspace-shell" style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr)', height: 'calc(100vh - 63px)' }}>
+    <div className="g-workspace-shell" style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr)', height: 'calc(100vh - 78px)' }}>
       <div className="g-railwrap">
         <aside className="g-rail" aria-label="Guardian sections">
           <div className="g-rlabel" style={{ padding: '12px 20px 6px', color: acid, fontSize: 8, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>Set up your Guardian</div>

@@ -1,9 +1,9 @@
-// Early-bird and regular prices, set against Oura (ring from $349 plus membership) and Pebble (e-paper watch $149-225).
+// Regular prices follow Oura's ring ($349, plus a monthly membership); the first batch is 40% off, rounded to the dollar.
 // Keep in step with PRICES in supabase/functions/hardware-preorders/index.ts.
 export const PRODUCTS = {
-  ring:   { key: 'ring'   as const, name: 'R³ Ring',        priceCents: 14900, regPriceCents: 19900 },
-  clip:   { key: 'clip'   as const, name: 'R³ Clip',        priceCents: 19900, regPriceCents: 24900 },
-  bundle: { key: 'bundle' as const, name: 'R³ Ring + Clip', priceCents: 29900, regPriceCents: 39900 },
+  ring:   { key: 'ring'   as const, name: 'R³ Ring',        priceCents: 20900, regPriceCents: 34900 },
+  clip:   { key: 'clip'   as const, name: 'R³ Clip',        priceCents: 26900, regPriceCents: 44900 },
+  bundle: { key: 'bundle' as const, name: 'R³ Ring + Clip', priceCents: 38900, regPriceCents: 64900 },
 };
 export type ProductKey = keyof typeof PRODUCTS;
 export const BATCH_GOAL = 250;
@@ -16,7 +16,7 @@ export function formatUsd(cents: number): string {
 
 /** The hero's rotating word and the background clip that plays while it shows, in order. */
 export const HERO_MOMENTS = [
-  { word: 'meals', clip: 'meal' },
+  { word: 'nutrition', clip: 'meal' },
   { word: 'workouts', clip: 'activity' },
   { word: 'thoughts', clip: 'journal' },
   { word: 'moments', clip: 'reel' },

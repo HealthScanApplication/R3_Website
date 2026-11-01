@@ -5,7 +5,7 @@ describe('hardware copy', () => {
   it('sells the ring, the clip and the ring + clip, in that order, priced in cents', () => {
     expect(Object.keys(PRODUCTS)).toEqual(['ring', 'clip', 'bundle']);
     expect([PRODUCTS.ring, PRODUCTS.clip, PRODUCTS.bundle].map(p => [p.name, p.priceCents, p.regPriceCents])).toEqual([
-      ['R³ Ring', 14900, 19900], ['R³ Clip', 19900, 24900], ['R³ Ring + Clip', 29900, 39900],
+      ['R³ Ring', 20900, 34900], ['R³ Clip', 26900, 44900], ['R³ Ring + Clip', 38900, 64900],
     ]);
   });
   it('keeps the page prices in step with the checkout function', async () => {
@@ -19,8 +19,8 @@ describe('hardware copy', () => {
     expect(SHIP_WINDOW).toMatch(/\w/);
   });
   it('formats cents as USD', () => {
-    expect(formatUsd(14900)).toBe('$149');
-    expect(formatUsd(29900)).toBe('$299');
+    expect(formatUsd(20900)).toBe('$209');
+    expect(formatUsd(38900)).toBe('$389');
   });
   it('shares one terms line with the ship window and the refund promise', () => {
     expect(PREORDER_TERMS).toContain(SHIP_WINDOW);

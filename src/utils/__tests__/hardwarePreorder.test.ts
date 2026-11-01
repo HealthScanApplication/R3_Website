@@ -18,7 +18,7 @@ describe('hardware preorder client', () => {
     await expect(createPreorderIntent('ring', 'a@b.co')).rejects.toThrow('nope');
   });
   it('posts an intent body that can never carry a price', async () => {
-    (globalThis.fetch as any).mockResolvedValue({ ok: true, json: async () => ({ purchase_id: 'p', client_secret: 'cs', amount_cents: 29900, currency: 'usd' }) });
+    (globalThis.fetch as any).mockResolvedValue({ ok: true, json: async () => ({ purchase_id: 'p', client_secret: 'cs', amount_cents: 38900, currency: 'usd' }) });
     await createPreorderIntent('bundle', 'a@b.co', 'Ann');
     const [url, opts] = (globalThis.fetch as any).mock.calls[0];
     expect(url).toBe('https://proj.supabase.co/functions/v1/hardware-preorders');

@@ -19,7 +19,7 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') ?? '', { apiVersion:
 const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
 // Keep in step with PRODUCTS in src/components/hardware/copy.ts.
-const PRICES: Record<string, number> = { ring: 14900, clip: 19900, bundle: 29900 };
+const PRICES: Record<string, number> = { ring: 20900, clip: 26900, bundle: 38900 };
 const CURRENCY = 'usd';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BATCH = 'first-run';
