@@ -173,7 +173,7 @@ describe('photos belong to the selected brand', () => {
 describe('a draft save cannot change who they publish as', () => {
   it('keeps the live public url and status when the name is edited, and saves the photos', async () => {
     mocks.profile.mockReturnValue(LIVE_PROFILE);
-    setup('Renamed Guide');
+    setup('Renamed Guide', null); // no account photo: the profile keeps a house avatar, which a live page requires
     await waitFor(() => expect(screen.getByDisplayValue('Renamed Guide')).toBeTruthy());
     await new Promise((resolve) => setTimeout(resolve, 20));
     fireEvent.click(within(photos()).getByRole('button', { name: 'Save photos' }));
@@ -181,6 +181,16 @@ describe('a draft save cannot change who they publish as', () => {
     const row = mocks.save.mock.calls[0][0];
     expect(row.slug).toBe('test-guide'); // not renamed to "renamed-guide"
     expect(row.status).toBe('approved'); // a save never un-publishes
+  });
+
+  it('a live page will not save a profile image that is not in the R³ house style, and says why', async () => {
+    mocks.profile.mockReturnValue(LIVE_PROFILE);
+    setup('Test Guide'); // the account photo is a plain photo
+    await waitFor(() => expect(screen.getByDisplayValue('Test Guide')).toBeTruthy());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    fireEvent.click(within(photos()).getByRole('button', { name: 'Save photos' }));
+    expect((await screen.findAllByText(/must be in the R³ house style/)).length).toBeGreaterThan(0);
+    expect(mocks.save).not.toHaveBeenCalled();
   });
 
   it('saving while a business brand is open leaves the profile row alone and keeps the personal brand primary', async () => {

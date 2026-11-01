@@ -11,13 +11,13 @@ export function useHeroBackground({ produce = true }: { produce?: boolean } = {}
   const [backgroundVideos, setBackgroundVideos] = useState<string[]>([]);
 
   useEffect(() => {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     setReduceMotion(reduce);
     const conn = (navigator as any).connection;
     const eff = conn?.effectiveType || "";
     const slow = conn?.saveData === true || /(^|-)2g$/.test(eff) || (typeof conn?.downlink === "number" && conn.downlink < 1.5);
     let videoTimer: ReturnType<typeof setTimeout> | undefined;
-    if (!reduce && !conn?.saveData && !(window.matchMedia("(max-width: 600px)").matches && slow) && !/(^|-)2g$/.test(eff)) {
+    if (!reduce && !conn?.saveData && !(window.matchMedia?.("(max-width: 600px)").matches && slow) && !/(^|-)2g$/.test(eff)) {
       videoTimer = setTimeout(() => setAllowVideo(true), 600);
     }
     return () => { if (videoTimer) clearTimeout(videoTimer); };

@@ -2273,7 +2273,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   }
 
   function loadBrand(brand: BrandDraft) {
-    setActiveBrandId(brand.localId); setDisplayName(brand.name); setLogoUrl(brand.logo_url); setAvatarUrl(brand.logo_url); setAvatarSourceUrl(brand.logo_url); setHouseSource(null);
+    setActiveBrandId(brand.localId); setDisplayName(brand.name); setLogoUrl(brand.logo_url); setAvatarUrl(brand.logo_url); setAvatarSourceUrl(brand.logo_url); setAvatarPreviewUrl(null);
     setContactEmail(brand.contact_email); setWhatsappPhone(brand.whatsapp_phone); setWebsiteUrl(brand.website_url);
     setInstagramUrl(brand.social_links.instagram || ''); setFacebookUrl(brand.social_links.facebook || ''); setTiktokUrl(brand.social_links.tiktok || '');
     setYoutubeUrl(brand.social_links.youtube || ''); setLinktreeUrl(brand.social_links.linktree || '');
@@ -2496,7 +2496,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       setImportedProfile(imported);
       if (imported.name) setDisplayName(imported.name);
       if (imported.bio) setIntro(imported.bio);
-      if (imported.avatarUrl) { setAvatarUrl(imported.avatarUrl); setAvatarSourceUrl(imported.avatarUrl); setHouseSource(null); setLogoUrl(imported.avatarUrl); }
+      if (imported.avatarUrl) { setAvatarUrl(imported.avatarUrl); setAvatarSourceUrl(imported.avatarUrl); setAvatarPreviewUrl(null); setLogoUrl(imported.avatarUrl); }
       const searchable = `${imported.headline} ${imported.bio} ${imported.topics.join(' ')}`.toLowerCase();
       const inferred = specialties.filter((specialty) => imported.topics.includes(specialty) || searchable.includes(specialty.toLowerCase().replace(' health', '')));
       if (inferred.length) {
@@ -2520,6 +2520,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       const url = await uploadGuideImage(userId, file);
       setAvatarUrl(url);
       setAvatarSourceUrl(url);
+      setAvatarPreviewUrl(null);
       setLogoUrl(url);
       setImportMessage('Profile image uploaded. Create your R³ house style to publish it.');
     } catch (e: any) {
@@ -3517,7 +3518,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
             </div>
             <label style={label}>Choose an avatar</label>
             <div style={{ display: 'flex', gap: 7, overflowX: 'auto', paddingBottom: 8, marginBottom: 12 }}>
-              {defaultAvatars.map((avatar) => { const active = avatarUrl === avatar.image; return <button className="guardian-card" type="button" key={avatar.name} onClick={() => { setAvatarUrl(avatar.image); setAvatarSourceUrl(avatar.image); setHouseSource(null); }} aria-pressed={active} style={{ position: 'relative', width: 100, flex: '0 0 100px', minHeight: 94, padding: '8px 6px 7px', border: `1px solid ${active ? acid : line}`, background: active ? acid : 'transparent', color: active ? black : ink, cursor: 'pointer', fontFamily: sans }}>
+              {defaultAvatars.map((avatar) => { const active = avatarUrl === avatar.image; return <button className="guardian-card" type="button" key={avatar.name} onClick={() => { setAvatarUrl(avatar.image); setAvatarSourceUrl(avatar.image); setAvatarPreviewUrl(null); }} aria-pressed={active} style={{ position: 'relative', width: 100, flex: '0 0 100px', minHeight: 94, padding: '8px 6px 7px', border: `1px solid ${active ? acid : line}`, background: active ? acid : 'transparent', color: active ? black : ink, cursor: 'pointer', fontFamily: sans }}>
                 {active && <span style={{ position: 'absolute', top: 5, right: 5, width: 17, height: 17, display: 'grid', placeItems: 'center', background: black, color: acid }}><Check size={10} /></span>}
                 <img src={avatar.image} alt="" style={{ display: 'block', width: 58, height: 58, maxWidth: '100%', objectFit: 'contain', margin: '0 auto 5px', filter: active ? 'grayscale(1) brightness(.25)' : 'grayscale(1) contrast(.95) brightness(.9)' }} />
                 <span style={{ display: 'block', fontSize: 8, fontWeight: 700, lineHeight: 1.2, textAlign: 'center' }}>{avatar.name}</span>
