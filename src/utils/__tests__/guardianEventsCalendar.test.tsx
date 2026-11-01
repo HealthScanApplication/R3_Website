@@ -54,8 +54,14 @@ describe('events calendar', () => {
   it('highlights only the days an event starts, not the days one is under way, and stacks the cards beside the calendar', async () => {
     visit();
     const root = await section();
-    expect(day(root, '2099-03-05').style.background).toMatch(/rgb\(242, 239, 231\)/); // an event starts: filled
-    expect(day(root, '2099-03-09').style.background).toMatch(/rgb\(17, 21, 15\)/); // under way: no highlight (the day number still shows)
+    expect(day(root, '2099-03-05').style.background).toMatch(/rgb\(199, 216, 163\)/); // an event starts: green
+    expect(day(root, '2099-03-09').style.background).toMatch(/rgb\(17, 21, 15\)/); // under way: plain, the day number still shows in white
+    expect(day(root, '2099-03-09').style.color).toMatch(/rgb\(242, 239, 231\)/);
+    // Days of the neighbouring months are ordinary days: nothing disabled, dimmed or greyed.
+    const outside = day(root, '2099-02-27');
+    expect(outside.disabled).toBe(false);
+    expect(outside.style.opacity).toBe('');
+    expect(outside.style.color).toMatch(/rgb\(242, 239, 231\)/);
     expect(day(root, '2099-03-09').getAttribute('data-has-event')).toBe('true');
     const layout = root.querySelector('.g-events-layout') as HTMLElement;
     expect(layout.querySelector('.g-events-calendar [data-events-calendar]')).not.toBeNull();
