@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Check, Copy, Download, ExternalLink, Grid2X2, List, Loader2, Pencil, Plus, ShoppingBag, Smartphone, Trash2, X } from 'lucide-react';
 import { CoverImageActions } from './CoverImageActions';
 import { useBrandScope } from './BrandScopeBar';
+import { LogoBadge } from './LogoBadge';
 import { ALL_BRANDS, PERSONAL_BRAND, inBrandScope } from '../../utils/brandScope';
 import { deleteGuideProduct, listGuideProducts, listPublicGuideProducts, saveGuideProduct, type GuideProduct } from '../../utils/guidePortal';
 import {
@@ -322,7 +323,7 @@ const publicProductCardStyle: React.CSSProperties = {
 };
 
 /** Public "Shop" block on a Guardian's site. Renders nothing until there are published products. */
-export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding, protocols = [], localePreference, categoryOrder, owns, brandId }: { /** The brand whose products to fetch: its id, null for the Guardian's own page, omitted for all. */ brandId?: string | null; /** Which products belong on this page: a brand's page shows only its own. Omitted, the page shows them all. */ owns?: (brandId: string | null | undefined) => boolean; guideId: string; guardianSlug: string; guardianName: string; pagePadding: string; protocols?: AdminProtocol[]; localePreference?: GuardianLocalePreference; categoryOrder?: string }) {
+export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding, protocols = [], localePreference, categoryOrder, owns, brandId, logoUrl }: { /** The brand's logo (or the Guardian's portrait): shown as a badge across the edge of each product's picture. */ logoUrl?: string | null; /** The brand whose products to fetch: its id, null for the Guardian's own page, omitted for all. */ brandId?: string | null; /** Which products belong on this page: a brand's page shows only its own. Omitted, the page shows them all. */ owns?: (brandId: string | null | undefined) => boolean; guideId: string; guardianSlug: string; guardianName: string; pagePadding: string; protocols?: AdminProtocol[]; localePreference?: GuardianLocalePreference; categoryOrder?: string }) {
   const [products, setProducts] = useState<GuideProduct[]>([]);
   const [usage, setUsage] = useState<Record<string, string[]>>({});
   const [downloading, setDownloading] = useState('');
@@ -384,7 +385,7 @@ export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding,
     {message && <p role="alert" style={{ color: '#8A3D2F', fontSize: 12 }}>{message}</p>}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,280px),1fr))', gap: 18 }}>
       {shownProducts.map(({ source: product, regional }) => { const linkedIds = [...new Set([...product.protocol_ids, ...(product.catalog_product_id ? usage[product.catalog_product_id] || [] : [])])]; const linked = linkedIds.map((id) => protocols.find((protocol) => protocol.id === id)).filter((protocol): protocol is AdminProtocol => !!protocol); return <article key={product.id} {...publicProductCardMotion} style={publicProductCardStyle} onPointerDown={(event) => { if (event.pointerType !== 'mouse') event.currentTarget.style.setProperty('--product-lift', '-2px'); }} onPointerUp={(event) => { if (event.pointerType !== 'mouse') event.currentTarget.style.setProperty('--product-lift', '0px'); }}>
-        <PublicProductImage product={product} regional={regional} />
+        <div style={{ position: 'relative' }}><PublicProductImage product={product} regional={regional} />{logoUrl ? <LogoBadge url={logoUrl} name={guardianName} surface="#FFFFFF" onDark={false} /> : null}</div>
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
           <span style={{ color: APP.greenDark, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Product · {regional.shop_domain}</span>
           <h3 style={{ fontFamily: serif, fontSize: 27, fontWeight: 300, margin: 0, lineHeight: 1.08 }}>{product.title}</h3>

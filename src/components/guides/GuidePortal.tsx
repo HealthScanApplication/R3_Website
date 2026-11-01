@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
-  ArrowRight, ChevronRight, FileText, HeartPulse, LogOut,
+  ArrowRight, ArrowUp, ArrowDown, ChevronRight, FileText, HeartPulse, LogOut,
   Mail, Package, Plus, Salad, Sparkles, Users, Globe2, Loader2,
   Upload, Check, Instagram, Facebook, Youtube, Link2, AtSign, Route, CalendarDays, Download,
   MoreHorizontal, Droplets, Activity, Bath, Sparkle, HeartHandshake, Hourglass, ChefHat, Wheat, ListChecks, CookingPot, FolderOpen, Trash2, ExternalLink, Hammer, PencilRuler, Blocks, LayoutDashboard, Grid2X2, List, Play, Clock, ShieldCheck, Utensils, Dumbbell, Combine, Clapperboard, BookOpen, Podcast, GraduationCap, AudioLines, ShoppingBag, Mountain } from 'lucide-react';
@@ -20,6 +20,8 @@ import { IMAGE_ACCEPT, describeRejections, quickImageProblem, validateImageFile,
 import { createMonoLogo, isMonoLogoUrl, logoImageStyle } from '../../utils/brandLogo';
 import { PullFromLink } from './PullFromLink';
 import { eventDay } from '../../utils/eventDates';
+import { LogoBadge } from './LogoBadge';
+import { DEFAULT_SECTION_ORDER, PAGE_SECTIONS, moveSection, orderPageSections, serializeSectionOrder, type PageSectionKey } from '../../utils/pageSections';
 import { BrandScopeBar, useBrandScope } from './BrandScopeBar';
 import { brandSiteProfile, brandSitePath, brandSlugFromPath, savedBrandId, savedBrandMoves, siteOwns } from '../../utils/brandSite';
 import { inBrandScope } from '../../utils/brandScope';
@@ -1920,9 +1922,7 @@ function DestinationHeader({ profile, place, lines = [place], kind, virtual = fa
     </a>
     <span style={{ position: 'absolute', right: 96, bottom: 12, padding: '6px 8px', color: '#F5F2EA', background: 'rgba(17,18,15,.52)', backdropFilter: 'blur(10px)', fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', pointerEvents: 'none' }}>{profile.display_name}</span>
   </div>
-  <span data-destination-badge style={{ position: 'absolute', right: 18, bottom: -34, width: 68, height: 68, boxSizing: 'border-box', borderRadius: '50%', overflow: 'hidden', background: surface, boxShadow: `0 0 0 4px ${surface}`, display: 'grid', placeItems: 'center', pointerEvents: 'none' }}>{profile.avatar_url
-    ? <img src={profile.avatar_url} alt="" style={isMonoLogoUrl(profile.avatar_url) ? { width: '100%', height: '100%', objectFit: 'contain', ...(onDark ? { filter: 'invert(1)' } : {}) } : { width: '100%', height: '100%', objectFit: 'cover' }} />
-    : <span style={{ color: onDark ? '#F5F2EA' : '#11120F', fontFamily: serif, fontSize: 26 }}>{profile.display_name.charAt(0)}</span>}</span>
+  <LogoBadge url={profile.avatar_url} name={profile.display_name} surface={surface} onDark={onDark} />
   </div>;
 }
 
@@ -2132,6 +2132,33 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   const publicClips = clipsFromLinks(socials.theme_background_clips);
   const publicGlass = heroGlassOn(socials.theme_glass, publicClips.length > 0 || !!publicTypeVideo || isSceneBackground(socials.theme_background));
   const emailBackdrop = <MountNearViewport><HeroBackdrop heroMedia={socials.theme_background || null} backgroundIsVideo={publicBackgroundIsVideo} clips={publicClips} typeVideo={publicTypeVideo} glass={publicGlass} greyscale={publicGreyscale} /></MountNearViewport>;
+  const ownerName = ownerProfile?.display_name || profile.display_name;
+  const ownerLinks = (ownerProfile?.social_links || {}) as Record<string, string>;
+  const brandTiles = publicBrands.map((brand) => brand.kind === 'personal'
+    ? { key: brand.id || 'personal', name: ownerName, logo: ownerProfile?.avatar_url || brand.logo_url, website: ownerLinks.website || '', links: ownerLinks, href: brandSitePath(profile.slug, null), here: !brandSlug }
+    : { key: brand.id || brand.name, name: brand.name, logo: brand.logo_url, website: brand.website_url, links: (brand.social_links || {}) as Record<string, string>, href: brandSitePath(profile.slug, brand), here: brand.id === activeBrand?.id });
+  // The sections between the hero and the footer, in the order the owner chose (see pageSections). Each is a whole section that draws nothing when it has nothing to show.
+  const sectionNodes: Record<PageSectionKey, React.ReactNode> = {
+    offers: <GuardianOfferCatalog profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} categoryOrder={socials.protocol_filter_order} />,
+    shop: <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} protocols={guardianProtocols} owns={onSite} brandId={brandSlug ? activeBrand?.id : null} logoUrl={profile.avatar_url} localePreference={localePreference} categoryOrder={socials.product_filter_order} />,
+    events: <GuardianEvents profile={profile} events={siteEvents} sourceUrl={eventSource} canEditSource={isSignedIn && user?.id === profile.user_id} onImported={setEvents} onSourceChanged={setEventSource} />,
+    talks: <GuardianOfferShelf kind="talk" profile={profile} offers={offers.filter((offer) => onSite(offer.brand_id))} pagePadding={PAGE_X} />,
+    treats: <GuardianOfferShelf kind="treat" profile={profile} offers={offers.filter((offer) => onSite(offer.brand_id))} pagePadding={PAGE_X} />,
+    forum: <GuardianForumTeaser profile={profile} pagePadding={PAGE_X} />,
+    retreats: <GuardianRetreats profile={profile} retreats={siteRetreats} />,
+    funnel: <>{reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}{isOwner && <ProfileSectionSkeleton sections={profileSections} />}<GuardianFunnel key={selectedRamp?.id || 'default'} backdrop={emailBackdrop} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} /></>,
+    brands: brandTiles.length > 1 && publicBrands.some((brand) => brand.kind === 'business') ? <section aria-labelledby="guardian-brands-title" data-page-section="brands" style={{ padding: `clamp(54px,7vw,100px) ${PAGE_X}`, background: '#11120F', color: ink }}>
+      <span style={{ color: publicAccent, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Official brands</span>
+      <h2 id="guardian-brands-title" style={{ margin: '12px 0 28px', fontFamily: publicHeadingFont, fontWeight: 300, fontSize: 'clamp(42px,6vw,78px)', lineHeight: .95 }}>More from {ownerName}.</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 14 }}>{brandTiles.map((tile) => <article key={tile.key} data-brand-tile style={{ border: '1px solid rgba(17,18,15,.14)', background: '#FFFFFF', color: '#11120F', padding: 22, display: 'grid', gap: 18 }}>
+        <span style={{ display: 'flex', gap: 12, alignItems: 'center' }}>{tile.logo ? <img src={tile.logo} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: '50%', ...logoImageStyle(tile.logo, false) }} /> : <span style={{ width: 48, height: 48, border: '1px solid rgba(17,18,15,.2)', borderRadius: '50%', display: 'grid', placeItems: 'center', fontFamily: publicHeadingFont, fontSize: 20 }}>{tile.name.charAt(0)}</span>}<strong style={{ fontSize: 18 }}>{tile.name}</strong></span>
+        <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+          <a href={tile.href} data-r3-icon aria-label={`${tile.name} on R³ Guardians`} aria-current={tile.here ? 'page' : undefined} title="Open on R³ Guardians" style={{ color: '#11120F', display: 'inline-grid', placeItems: 'center', width: 26, height: 26, border: '1px solid #11120F', fontFamily: sans, fontSize: 10, fontWeight: 800, letterSpacing: '-.02em', textDecoration: 'none', background: tile.here ? '#11120F' : 'transparent', ...(tile.here ? { color: '#FFFFFF' } : {}) }}>R<sup style={{ fontSize: 7, lineHeight: 1 }}>3</sup></a>
+          {tile.website && <a href={tile.website} target="_blank" rel="noopener noreferrer" style={{ color: '#11120F', display: 'inline-flex', alignItems: 'center', gap: 6 }}>Website <ExternalLink size={13} /></a>}{tile.links.instagram && <a href={tile.links.instagram} aria-label={`${tile.name} on Instagram`} style={{ color: '#11120F' }}><Instagram size={17} /></a>}{tile.links.facebook && <a href={tile.links.facebook} aria-label={`${tile.name} on Facebook`} style={{ color: '#11120F' }}><Facebook size={17} /></a>}{tile.links.tiktok && <a href={tile.links.tiktok} aria-label={`${tile.name} on TikTok`} style={{ color: '#11120F' }}><AtSign size={17} /></a>}
+        </span>
+      </article>)}</div>
+    </section> : null,
+  };
   return <div className="guardian-public-site" lang={publicLanguage} dir={publicLanguage === 'ar' ? 'rtl' : 'ltr'} style={{ minHeight: '100vh', background: publicPageColor, color: '#11120F', fontFamily: publicBodyFont }}>
     <style>{`.guardian-public-site button,.guardian-public-site input,.guardian-public-site select,.guardian-public-site textarea{font-family:${sans}}.guardian-public-site a{font-family:inherit}.guardian-public-site h1,.guardian-public-site h2,.guardian-public-site h3{font-synthesis:none}@media(max-width:760px){.guardian-header-socials{display:none!important}}`}</style>
     {publicHeaderStyle !== 'hidden' && <header style={{ position: 'fixed', inset: '0 0 auto', zIndex: 100, minHeight: 64, background: publicHeaderBackground, color: publicHeaderText, borderBottom: '1px solid rgba(17,18,15,.2)', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', alignItems: 'center', gap: 8, padding: '0 clamp(8px,4vw,84px)' }}>
@@ -2147,24 +2174,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
       <GuardianSiteHero audience={heroAudience} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={profile.display_name} avatarUrl={profile.avatar_url} specialties={heroSpecialties} headline={heroHeadline} tags={heroTags} bio={heroBio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} clips={clipsFromLinks(socials.theme_background_clips)} typeVideo={publicTypeVideo} glass={publicGlass} sections={sectionTags} greyscale={publicGreyscale}
         guideId={profile.user_id} sourceOfferId={heroSourceOfferId}
         cards={publishedRamps.length ? (onOfferPath ? [selectedRamp!] : publishedRamps).slice(0, 1).map((ramp) => { const offer = publishedOffers.find((item) => item.id === ramp.offer_ids[0]); return { key: ramp.id, offerTitle: offer?.title || ramp.name, eyebrow: ramp.problem || undefined, title: customerFacingOfferTitle(offer?.title || ramp.name), copy: offer?.description || '', kind: offer?.kind, price: offer?.access_model === 'free' ? 'Free' : undefined, imageUrl: offer?.cover_url, href: pathSlug === encodeURIComponent(ramp.slug) ? '#offers' : `/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}` }; }) : freeOffers.slice(0, 1).map((offer) => ({ key: offer.id, offerTitle: offer.title, eyebrow: profile.specialties.slice(0, 2).join(' · '), title: customerFacingOfferTitle(offer.title), copy: offer.description || '', kind: offer.kind, price: 'Free', imageUrl: offer.cover_url, href: '#start' }))} />
-      <GuardianOfferCatalog profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} categoryOrder={socials.protocol_filter_order} />
-      <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} protocols={guardianProtocols} owns={onSite} brandId={brandSlug ? activeBrand?.id : null} localePreference={localePreference} categoryOrder={socials.product_filter_order} />
-      <GuardianEvents profile={profile} events={siteEvents} sourceUrl={eventSource} canEditSource={isSignedIn && user?.id === profile.user_id} onImported={setEvents} onSourceChanged={setEventSource} />
-      <GuardianOfferShelf kind="talk" profile={profile} offers={offers.filter((offer) => onSite(offer.brand_id))} pagePadding={PAGE_X} />
-      <GuardianOfferShelf kind="treat" profile={profile} offers={offers.filter((offer) => onSite(offer.brand_id))} pagePadding={PAGE_X} />
-      <GuardianForumTeaser profile={profile} pagePadding={PAGE_X} />
-      <GuardianRetreats profile={profile} retreats={siteRetreats} />
-      {reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}
-      {isOwner && <ProfileSectionSkeleton sections={profileSections} />}
-      <GuardianFunnel key={selectedRamp?.id || 'default'} backdrop={emailBackdrop} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} />
-      {publicBrands.filter((brand) => brand.kind === 'business').length > 0 && <section aria-labelledby="guardian-brands-title" style={{ padding: `clamp(54px,7vw,100px) ${PAGE_X}`, background: '#11120F', color: ink }}>
-        <span style={{ color: publicAccent, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Official brands</span>
-        <h2 id="guardian-brands-title" style={{ margin: '12px 0 28px', fontFamily: publicHeadingFont, fontWeight: 300, fontSize: 'clamp(42px,6vw,78px)', lineHeight: .95 }}>More from {profile.display_name}.</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 14 }}>{publicBrands.filter((brand) => brand.kind === 'business').map((brand) => <article key={brand.id || brand.name} data-brand-tile style={{ border: '1px solid rgba(17,18,15,.14)', background: '#FFFFFF', color: '#11120F', padding: 22, display: 'grid', gap: 18 }}>
-          <span style={{ display: 'flex', gap: 12, alignItems: 'center' }}>{brand.logo_url ? <img src={brand.logo_url} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: '50%', ...logoImageStyle(brand.logo_url, false) }} /> : <span style={{ width: 48, height: 48, border: '1px solid rgba(17,18,15,.2)', borderRadius: '50%', display: 'grid', placeItems: 'center', fontFamily: publicHeadingFont, fontSize: 20 }}>{brand.name.charAt(0)}</span>}<strong style={{ fontSize: 18 }}>{brand.name}</strong></span>
-          <span style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>{brand.website_url && <a href={brand.website_url} target="_blank" rel="noopener noreferrer" style={{ color: '#11120F', display: 'inline-flex', alignItems: 'center', gap: 6 }}>Website <ExternalLink size={13} /></a>}{brand.social_links.instagram && <a href={brand.social_links.instagram} aria-label={`${brand.name} on Instagram`} style={{ color: '#11120F' }}><Instagram size={17} /></a>}{brand.social_links.facebook && <a href={brand.social_links.facebook} aria-label={`${brand.name} on Facebook`} style={{ color: '#11120F' }}><Facebook size={17} /></a>}{brand.social_links.tiktok && <a href={brand.social_links.tiktok} aria-label={`${brand.name} on TikTok`} style={{ color: '#11120F' }}><AtSign size={17} /></a>}</span>
-        </article>)}</div>
-      </section>}
+      {orderPageSections(socials.section_order).map((key) => <Fragment key={key}>{sectionNodes[key]}</Fragment>)}
       <footer style={{ padding: `28px ${PAGE_X}`, borderTop: '1px solid rgba(17,18,15,.2)', color: '#66645F', fontSize: 11, lineHeight: 1.6 }}>
         {profile.display_name} shares general wellbeing guidance, not medical advice. Speak to your GP or doctor before changing medication, diet or exercise, and about any health concern. Individual results vary.
       </footer>
@@ -2285,6 +2295,8 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const [brandName, setBrandName] = useState('');
   const [storyTemplate, setStoryTemplate] = useState<StoryTemplateId>('editorial');
   const [siteStyleStage, setSiteStyleStage] = useState(0);
+  // The order of the sections on the page being edited (the selected brand's page): saved with that brand.
+  const [sectionOrder, setSectionOrder] = useState<PageSectionKey[]>(DEFAULT_SECTION_ORDER);
   const [offerEditStage, setOfferEditStage] = useState(0);
   const [pageColor, setPageColor] = useState('#F2EFE7');
   const [accentColor, setAccentColor] = useState('#667245');
@@ -2330,6 +2342,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       if (links.theme_glass === 'on' || links.theme_glass === 'off') setHeroGlassSetting(links.theme_glass);
       if (links.theme_background_type === 'image' || links.theme_background_type === 'video') setBackgroundType(links.theme_background_type);
       if (links.theme_image_treatment === 'color' || links.theme_image_treatment === 'greyscale') setImageTreatment(links.theme_image_treatment);
+      setSectionOrder(orderPageSections(links.section_order));
       setHeadlineStyle(headlineStyleOf(links.theme_headline_style));
       if (links.theme_header_style === 'white' || links.theme_header_style === 'hidden') setHeaderStyle(links.theme_header_style as HeaderStyle);
       if (links.theme_page_color) setPageColor(links.theme_page_color);
@@ -2475,7 +2488,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       contact_email: contactEmail.trim(),
       whatsapp_phone: whatsappPhone.trim(),
       website_url: websiteUrl.trim(),
-      social_links: { instagram: instagramUrl.trim(), facebook: facebookUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), photos: JSON.stringify(sitePhotos), avatar_house_url: houseAvatarFlag(logoOverride ?? logoUrl, houses), ...brandKitLinks(brandKit) },
+      social_links: { ...(brandProfiles.find((brand) => brand.localId === activeBrandId)?.social_links || {}), instagram: instagramUrl.trim(), facebook: facebookUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), photos: JSON.stringify(sitePhotos), avatar_house_url: houseAvatarFlag(logoOverride ?? logoUrl, houses), ...brandKitLinks(brandKit), section_order: serializeSectionOrder(sectionOrder) },
       language: mainLanguage,
       pricing_region: pricingRegion,
       currency,
@@ -2489,6 +2502,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     setYoutubeUrl(brand.social_links.youtube || ''); setLinktreeUrl(brand.social_links.linktree || '');
     setMainLanguage(brand.language); setPricingRegion(brand.pricing_region); setCurrency(brand.currency);
     setBrandKit(brandKitOf(brand.social_links));
+    setSectionOrder(orderPageSections(brand.social_links.section_order));
     // Photos belong to the brand. Only the personal brand starts with the photo that comes with the account email.
     const brandPhotos = parsePhotos(brand.social_links.photos);
     setSitePhotos(brand.localId === 'personal' ? (brandPhotos.length ? brandPhotos : accountAvatarUrl ? [accountAvatarUrl] : []) : brandPhotos);
@@ -2971,7 +2985,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     const audienceText = audience.join(', ').toLowerCase();
     const headline = generatedHeadline;
     const bio = intro.trim() || `I help ${audienceText} with ${chosen.join(', ').toLowerCase()} through ${format.join(', ').toLowerCase()}.`;
-    return { user_id: userId, slug, display_name: displayName, headline, bio, avatar_url: avatarOverride ?? avatarUrl, contact_email: contactEmail.trim(), whatsapp_phone: whatsappPhone.trim(), social_links: { ...savedLinksRef.current, instagram: instagramUrl.trim(), facebook: facebookUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), website: websiteUrl.trim(), language: mainLanguage, pricing_region: pricingRegion, currency, site_goal: websiteGoal, booking_provider: bookingProvider, booking_url: bookingUrl.trim(), brand_name: brandName.trim() || displayName.trim(), logo_url: avatarOverride ?? logoUrl ?? '', avatar_house_url: houseAvatarFlag(avatarOverride ?? avatarUrl, houses), expertise_tags: expertiseTags.join(','), offer_videos: JSON.stringify(offerVideos), photos: JSON.stringify(sitePhotos), roles: roles.join(','), audience_details: JSON.stringify(Object.fromEntries(audience.filter((g) => audienceDetails[g]).map((g) => [g, audienceDetails[g]]))), theme_template: storyTemplate, theme_background: effectiveBackground, theme_background_type: backgroundType, theme_background_clips: clipsToLinks(backgroundClips), theme_glass: heroGlassSetting, theme_image_treatment: imageTreatment, theme_header_style: headerStyle, theme_headline_style: headlineStyle, theme_heading: 'Canela', theme_body: 'Euclid', theme_page_color: pageColor, theme_accent_color: accentColor }, specialties: chosen, status, onboarding_step: onboardingStep };
+    return { user_id: userId, slug, display_name: displayName, headline, bio, avatar_url: avatarOverride ?? avatarUrl, contact_email: contactEmail.trim(), whatsapp_phone: whatsappPhone.trim(), social_links: { ...savedLinksRef.current, instagram: instagramUrl.trim(), facebook: facebookUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), website: websiteUrl.trim(), language: mainLanguage, pricing_region: pricingRegion, currency, site_goal: websiteGoal, booking_provider: bookingProvider, booking_url: bookingUrl.trim(), brand_name: brandName.trim() || displayName.trim(), logo_url: avatarOverride ?? logoUrl ?? '', avatar_house_url: houseAvatarFlag(avatarOverride ?? avatarUrl, houses), expertise_tags: expertiseTags.join(','), offer_videos: JSON.stringify(offerVideos), photos: JSON.stringify(sitePhotos), roles: roles.join(','), audience_details: JSON.stringify(Object.fromEntries(audience.filter((g) => audienceDetails[g]).map((g) => [g, audienceDetails[g]]))), theme_template: storyTemplate, theme_background: effectiveBackground, theme_background_type: backgroundType, theme_background_clips: clipsToLinks(backgroundClips), theme_glass: heroGlassSetting, theme_image_treatment: imageTreatment, theme_header_style: headerStyle, theme_headline_style: headlineStyle, theme_heading: 'Canela', theme_body: 'Euclid', theme_page_color: pageColor, theme_accent_color: accentColor, section_order: serializeSectionOrder(sectionOrder) }, specialties: chosen, status, onboarding_step: onboardingStep };
   };
 
   /** Save this part of the setup as a draft: the profile (photos, avatar, brand look, audience…) and, once they have loaded, the brands. Never publishes or changes approval. */
@@ -3797,8 +3811,8 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           <div className="g-split" style={{ border: `1px solid ${line}`, background: panel, padding: 16 }}>
           <div>
             <label style={{ ...label, color: ink }}>Style your page</label>
-            <div role="tablist" aria-label="Site style steps" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', border: `1px solid ${line}`, marginBottom: 16 }}>
-              {['Story', 'Identity', 'Background', 'Colors'].map((title, index) => <button type="button" role="tab" aria-selected={siteStyleStage === index} key={title} onClick={() => setSiteStyleStage(index)} style={{ minHeight: 44, border: 0, borderLeft: index ? `1px solid ${line}` : 0, background: siteStyleStage === index ? ink : 'transparent', color: siteStyleStage === index ? black : index < siteStyleStage ? acid : muted, fontFamily: sans, fontSize: 8, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{String(index + 1).padStart(2, '0')} · {title}</button>)}
+            <div role="tablist" aria-label="Site style steps" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', border: `1px solid ${line}`, marginBottom: 16 }}>
+              {['Story', 'Identity', 'Background', 'Colors', 'Order'].map((title, index) => <button type="button" role="tab" aria-selected={siteStyleStage === index} key={title} onClick={() => setSiteStyleStage(index)} style={{ minHeight: 44, border: 0, borderLeft: index ? `1px solid ${line}` : 0, background: siteStyleStage === index ? ink : 'transparent', color: siteStyleStage === index ? black : index < siteStyleStage ? acid : muted, fontFamily: sans, fontSize: 8, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{String(index + 1).padStart(2, '0')} · {title}</button>)}
             </div>
             {siteStyleStage === 0 && <>
             <div style={{ marginBottom: 14 }}>
@@ -3885,6 +3899,18 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
               )}
             </PhotoDropzone>
             </>}
+            {siteStyleStage === 4 && <div data-page-order>
+              <label style={label}>Order of the sections</label>
+              <p style={{ color: muted, fontSize: 11, lineHeight: 1.5, margin: '0 0 12px' }}>{displayName || 'Your'}'s page starts with the introduction and ends with the footer. Move the sections in between up or down. A section with nothing in it is not shown.</p>
+              <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }}>
+                {sectionOrder.map((key, index) => { const name = PAGE_SECTIONS.find((section) => section.key === key)!.label; return <li key={key} data-section-row={key} style={{ display: 'grid', gridTemplateColumns: '28px minmax(0,1fr) auto auto', alignItems: 'center', gap: 8, border: `1px solid ${line}`, padding: '6px 8px' }}>
+                  <span style={{ color: muted, fontSize: 10, fontWeight: 700 }}>{index + 1}</span><strong style={{ fontSize: 12 }}>{name}</strong>
+                  <button type="button" aria-label={`Move ${name} up`} disabled={index === 0} onClick={() => setSectionOrder((current) => moveSection(current, key, -1))} style={{ ...btn, minHeight: 32, width: 36, padding: 0, background: 'transparent', color: ink, opacity: index === 0 ? .35 : 1 }}><ArrowUp size={14} /></button>
+                  <button type="button" aria-label={`Move ${name} down`} disabled={index === sectionOrder.length - 1} onClick={() => setSectionOrder((current) => moveSection(current, key, 1))} style={{ ...btn, minHeight: 32, width: 36, padding: 0, background: 'transparent', color: ink, opacity: index === sectionOrder.length - 1 ? .35 : 1 }}><ArrowDown size={14} /></button>
+                </li>; })}
+              </ol>
+              <button type="button" onClick={() => setSectionOrder(DEFAULT_SECTION_ORDER)} disabled={serializeSectionOrder(sectionOrder) === ''} style={{ ...btn, minHeight: 34, marginTop: 10, background: 'transparent', color: ink }}>Reset order</button>
+            </div>}
           </div>
           <div id="profile-site-preview" className="g-sticky" style={{ scrollMarginTop: 20 }}><span style={{ ...label, display: 'block', color: acid, marginBottom: 7 }}>Profile site preview <span style={{ color: muted }}>· shows every published offer path</span></span><PreviewFrame device={previewDevice}><div style={{ flex: '1 0 auto', background: pageColor, fontFamily: sans }}>
             {headerStyle !== 'hidden' && <GuardianSiteHeader brandName={brandName.trim()} path={`routine3.com/${displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-') || 'your-name'}`} />}
