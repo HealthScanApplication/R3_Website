@@ -661,7 +661,7 @@ function ChoiceText({ title, description, footer, active, center = false }: { ti
   </span>;
 }
 
-function TagChoice({ text, description, active, art, onClick, badge, photo }: { text: string; description?: string; active: boolean; art: TagArt; onClick: () => void; compact?: boolean; largeText?: boolean; badge?: string; tone?: 'accent' | 'free'; checkRight?: number; showCheck?: boolean; /** The picture the public site uses; adds a drop-down under the card. */ photo?: string }) {
+function TagChoice({ text, description, active, art, onClick, badge, photo, footer }: { footer?: string; text: string; description?: string; active: boolean; art: TagArt; onClick: () => void; compact?: boolean; largeText?: boolean; badge?: string; tone?: 'accent' | 'free'; checkRight?: number; showCheck?: boolean; /** The picture the public site uses; adds a drop-down under the card. */ photo?: string }) {
   const col = art.index % art.cols;
   const row = Math.floor(art.index / art.cols);
   // The photo opens by itself when the card is selected; the arrow opens or closes it either way.
@@ -671,7 +671,7 @@ function TagChoice({ text, description, active, art, onClick, badge, photo }: { 
     {active && <ChoiceCheck />}
     {badge && <span data-realm-tag style={{ position: 'absolute', top: 9, right: 10, color: badge === 'FREE' ? acid : '#C88A66', fontSize: 8, fontWeight: 700, letterSpacing: '.14em' }}>{badge}</span>}
     <span role="img" aria-label="" style={{ width: 72, height: 72, flex: '0 0 72px', backgroundImage: `url(${art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${art.cols * 100}% ${art.rows * 100}%`, backgroundPosition: `${art.cols === 1 ? 0 : col * 100 / (art.cols - 1)}% ${art.rows === 1 ? 0 : row * 100 / (art.rows - 1)}%`, filter: 'grayscale(1) contrast(.92)' }} />
-    <ChoiceText title={text} description={description} active={active} center />
+    <ChoiceText title={text} description={description} footer={footer} active={active} center />
   </button>;
   if (!photo) return card;
   return <div style={{ minWidth: 0, alignSelf: 'start' }}>
@@ -3328,6 +3328,9 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
             <img src={activeStepImage} alt="" style={{ display: 'block', width: 138, height: 138, objectFit: 'contain', filter: 'grayscale(1) contrast(.92) brightness(.86)', margin: '18px auto 14px' }} />
             <h1 style={{ color: ink, fontFamily: serif, fontSize: 'clamp(44px,7vw,76px)', fontWeight: 300, lineHeight: .98, margin: 0 }}>{perspectiveTitle}</h1>
             <p style={{ color: muted, fontSize: 14, lineHeight: 1.6, margin: '14px auto 0', maxWidth: 600 }}>{activeStep.copy}</p>
+            {step === 5 && <ol data-offer-steps aria-label="Three steps to completion" style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 8, listStyle: 'none', padding: 0, margin: '22px 0 0' }}>
+              {['Business goal', 'Lead magnets', 'Build offers'].map((name, index) => <li key={name}><button type="button" aria-current={offerPlanStage === index ? 'step' : undefined} disabled={index > offerPlanStage} onClick={() => setOfferPlanStage(index)} style={{ minHeight: 36, padding: '0 14px', border: `1px solid ${offerPlanStage === index ? ink : index < offerPlanStage ? acid : line}`, background: offerPlanStage === index ? ink : 'transparent', color: offerPlanStage === index ? black : index < offerPlanStage ? acid : muted, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', cursor: index > offerPlanStage ? 'default' : 'pointer' }}>{index < offerPlanStage ? '✓ ' : ''}{`0${index + 1}`} · {name}</button></li>)}
+            </ol>}
           </header>
 
       {step === 1 && <>
@@ -3455,14 +3458,19 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           ][offerPlanStage]; return <div style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr)', gap: 12, alignItems: 'center', marginBottom: 16 }}><img src={['/images/guides/offer-plate.png', '/images/guides/lead-plate.png', '/images/guides/build-plate.png'][offerPlanStage]} alt="" style={{ width: 52, height: 52, objectFit: 'contain', filter: 'grayscale(1) contrast(.94)' }} /><span><strong style={{ display: 'block', color: ink, fontFamily: serif, fontSize: 22, fontWeight: 400, lineHeight: 1.15 }}>{stageCopy.title}</strong><span style={{ display: 'block', maxWidth: 650, marginTop: 5, color: muted, fontSize: 9, lineHeight: 1.5 }}>{stageCopy.copy}</span></span></div>; })()}
           {offerPlanStage === 0 && <div>
           <label style={{ ...label, color: acid }}>Business goal</label>
-          <div style={CHOICE_GRID}>
-            {([
-              { value: 'basic', eyebrow: 'Basic', title: 'Start simple', copy: 'One free Protocol that leads to one paid Protocol. Nothing to schedule.', image: '/images/guides/build-plate.png', flow: ['Free Protocol', 'Paid Protocol'] },
+          {(() => {
+            const goals = [
+              { value: 'basic', eyebrow: 'Simple', title: 'Start simple', copy: 'One free Protocol that leads to one paid Protocol. Nothing to schedule.', image: '/images/guides/build-plate.png', flow: ['Free Protocol', 'Paid Protocol'] },
+              { value: 'audience', eyebrow: 'Build', title: 'Build your audience', copy: 'Lead with generous free value and recurring reasons to come back.', image: '/images/guides/lead-plate.png', flow: ['Free resource', 'Group call', 'Community'] },
               { value: 'sell', eyebrow: 'Convert', title: 'Convert your audience', copy: 'Move from a useful free win into paid knowledge and personal support.', image: '/images/guides/offer-plate.png', flow: ['Free value', 'Paid Protocol', 'Personal support'] },
-              { value: 'audience', eyebrow: 'Grow', title: 'Build your audience', copy: 'Lead with generous free value and recurring reasons to come back.', image: '/images/guides/lead-plate.png', flow: ['Free resource', 'Group call', 'Community'] },
-            ] as const).map((goal) => <CreatorChoiceCard key={goal.value} creator={displayName || 'Your Guardian'} avatarUrl={avatarUrl} badge={goal.eyebrow} byline="Business goal" title={goal.title} description={goal.copy} footer={goal.flow.join(' → ')} active={offerGoal === goal.value} image={goal.image} onClick={() => applyOfferGoal(goal.value)} />)}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12, marginTop: 18 }}><button type="button" onClick={() => setStep(3)} style={{ ...btn, width: '100%', background: 'transparent', color: ink }}>← Back to audience</button><button type="button" onClick={() => setOfferPlanStage(1)} style={{ ...btn, width: '100%' }}>Continue <ArrowRight size={14} /></button></div>
+            ] as const;
+            const card = (goal: typeof goals[number]) => <TagChoice key={goal.value} text={goal.title} description={goal.copy} badge={goal.eyebrow.toUpperCase()} footer={goal.flow.join(' → ')} active={offerGoal === goal.value} art={{ src: goal.image, cols: 1, rows: 1, index: 0, cellAspect: 1 }} onClick={() => applyOfferGoal(goal.value)} />;
+            return <div data-goal-cards style={{ display: 'grid', gap: 12 }}>
+              <div data-goal-row="simple" style={{ width: 'min(100%, 380px)', margin: '0 auto' }}>{card(goals[0])}</div>
+              <div data-goal-row="build-convert" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12 }}>{card(goals[1])}{card(goals[2])}</div>
+            </div>;
+          })()}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12, marginTop: 18 }}><button type="button" onClick={() => setStep(4)} style={{ ...btn, width: '100%', background: 'transparent', color: ink }}>← Back to products</button><button type="button" onClick={() => setOfferPlanStage(1)} style={{ ...btn, width: '100%' }}>Continue <ArrowRight size={14} /></button></div>
           </div>}
           {offerPlanStage === 1 && <div>
             <div style={{ border: `1px solid ${line}`, padding: 11, marginBottom: 16, display: 'grid', gridTemplateColumns: '46px minmax(0,1fr) auto', gap: 11, alignItems: 'center' }}><img src={offerGoal === 'sell' ? '/images/guides/offer-plate.png' : offerGoal === 'basic' ? '/images/guides/build-plate.png' : '/images/guides/lead-plate.png'} alt="" style={{ width: 46, height: 46, objectFit: 'contain', filter: 'grayscale(1) contrast(.94)' }} /><span><span style={{ display: 'block', color: muted, fontSize: 8, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase' }}>Selected business goal</span><strong style={{ display: 'block', color: ink, fontSize: 12, marginTop: 4 }}>{offerGoal === 'sell' ? 'Convert your audience' : offerGoal === 'basic' ? 'Start simple' : 'Build your audience'}</strong><span style={{ display: 'block', color: muted, fontSize: 8, marginTop: 3 }}>{offerGoal === 'sell' ? 'Free value → paid Protocol → personal support' : offerGoal === 'basic' ? 'Free Protocol → paid Protocol' : 'Free resource → group call → community'}</span></span><button type="button" onClick={() => setOfferPlanStage(0)} style={{ ...btn, minHeight: 34, height: 34, background: 'transparent', color: ink, padding: '0 11px', fontSize: 8 }}>Edit</button></div>
