@@ -2283,6 +2283,8 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     ]).then(([leads, offers, ramps, protocols]) => setRelated({ leads, offers, ramps, protocols }));
   }, [userId, accessToken]);
   const [offerPlanStage, setOfferPlanStage] = useState(0);
+  // Paid offers are built one at a time: the next appears when the Guardian asks for it (progressive disclosure under Step 3).
+  const [paidStepsOpen, setPaidStepsOpen] = useState(1);
   const [showProtocolInfo, setShowProtocolInfo] = useState(false);
   const [summaryView, setSummaryView] = useState<'offers' | 'sites' | null>(null);
   const [inventoryMenu, setInventoryMenu] = useState<string | null>(null);
@@ -3010,6 +3012,9 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     const accessOrder = Number(offerAccess[a] === 'paid') - Number(offerAccess[b] === 'paid');
     return accessOrder || Number(upsellDrafts[a].price || 0) - Number(upsellDrafts[b].price || 0);
   });
+  // An upsell the Guardian just added opens its own step straight away.
+  const upsellCount = useRef(selectedUpsells.length);
+  useEffect(() => { if (selectedUpsells.length > upsellCount.current) setPaidStepsOpen(selectedUpsells.length); upsellCount.current = selectedUpsells.length; }, [selectedUpsells.length]);
   const offerCards = [...upsellSuggestions]
     .sort((a, b) => Number(offerAccess[a.kind] === 'paid') - Number(offerAccess[b.kind] === 'paid') || Number(upsellDrafts[a.kind].price || 0) - Number(upsellDrafts[b.kind].price || 0));
   const funnelStages = [
@@ -3435,6 +3440,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           </div>}
           {offerPlanStage === 2 && <div>
             <div style={{ border: `1px solid ${line}`, background: panel, padding: 14, marginBottom: 16 }}>
+              <span data-offer-step="1" style={{ display: 'block', color: ink, fontFamily: sans, fontSize: 10, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>Step 1 · Who these offers are for</span>
               <label style={{ ...label, color: acid }}>Create these offers for</label>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(165px,1fr))', gap: 9 }}>
                 <div><label style={{ ...label, marginBottom: 5 }}>Audience</label><select aria-label="Audience" value={picked('audience') ? rampTargetAudience : ''} onChange={(event) => { const nextAudience = event.target.value; pickUseCase('audience'); setRampAudience(nextAudience); setRampProblem((audienceProblemsByGroup[nextAudience] || [])[0] || ''); }} style={{ ...input, paddingRight: 38 }}>{!picked('audience') && <option value="" disabled>Choose an audience</option>}{rampAudienceOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
@@ -3450,7 +3456,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
                 <button type="button" onClick={addUseCase} style={{ ...btn, justifySelf: 'start' }}>Add this use case</button>
               </div>}
             </div>
-            {useCaseReady && <><label style={{ ...label, color: ink }}>Your offers <span style={{ color: acid }}>· value rises at every step</span></label>
+            {useCaseReady && <><span data-offer-step="2" style={{ display: 'block', color: ink, fontFamily: sans, fontSize: 10, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>Step 2 · Arrange your offers</span><label style={{ ...label, color: ink }}>Your offers <span style={{ color: acid }}>· value rises at every step</span></label>
             <p style={{ color: muted, fontSize: 9, lineHeight: 1.5, margin: '-1px 0 12px' }}>Add or remove steps in one continuous customer journey.</p>
             <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'stretch', gap: 0, minWidth: 'max-content' }}>
@@ -3474,7 +3480,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           </div>}
         </div>
         {offerPlanStage === 2 && useCaseReady && <>
-        <div id="offer-builder-entry" style={{ scrollMarginTop: 20 }}><FunnelStage number="01" eyebrow="Free · Build trust" title="Give your audience one useful win." copy="Choose one useful result, name it clearly, then decide how people receive it." art={freeOfferArt[freeOfferType]} aside={leadMagnetCard()}>
+        <div id="offer-builder-entry" style={{ scrollMarginTop: 20 }}><FunnelStage number="03" eyebrow="Step 3 · Free · Build trust" title="Give your audience one useful win." copy="Choose one useful result, name it clearly, then decide how people receive it." art={freeOfferArt[freeOfferType]} aside={leadMagnetCard()}>
           {freeOfferSetupStage > 0 && <div style={{ border: `1px solid ${line}`, padding: '12px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span><span style={{ ...label, marginBottom: 3 }}>Entry offer</span><strong style={{ color: ink, fontSize: 12, fontWeight: 600 }}>{freeOfferTypes.find((offer) => offer.value === freeOfferType)?.label}</strong></span></div>}
           {freeOfferSetupStage > 1 && <div style={{ border: `1px solid ${line}`, padding: '12px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span><span style={{ ...label, marginBottom: 3 }}>Offer</span><strong style={{ color: ink, fontSize: 12, fontWeight: 600 }}>{leadMagnetTitle}</strong><span style={{ display: 'block', color: muted, fontSize: 9, marginTop: 3 }}>{freeAudienceValue}</span></span><button type="button" onClick={() => setFreeOfferSetupStage(1)} style={{ ...btn, minHeight: 36, height: 36, background: 'transparent', color: ink, fontSize: 9 }}>Edit</button></div>}
           {freeOfferSetupStage === 1 && <div>
@@ -3503,6 +3509,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           </div>}
         </FunnelStage></div>
         {orderedUpsells.map((kind, index) => {
+          if (index >= paidStepsOpen) return null;
           const offer = upsellSuggestions.find((item) => item.kind === kind);
           const draft = upsellDrafts[kind];
           const access = offerAccess[kind];
@@ -3514,7 +3521,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           const offerImage = offerTypeArt[kind];
           const offerImageCol = offerImage.index % offerImage.cols;
           const offerImageRow = Math.floor(offerImage.index / offerImage.cols);
-          return <div id={`offer-builder-${kind}`} key={kind} style={{ scrollMarginTop: 20 }}><FunnelStage number={String(index + 2).padStart(2, '0')} eyebrow={`Value · ${offer.value.split(' · ')[0]} · ${access === 'free' ? 'Free' : `${formatMoney(draft.price, currency)}${billingLabels[draft.billingModel].suffix}`} · ${pricingRegion}`} title={draft.audienceValue || 'Define the result they receive.'} copy={`${draft.title || offer.label} · ${offer.why}`} art={offerImage} aside={paidOfferCard(offer)}>
+          return <div id={`offer-builder-${kind}`} key={kind} style={{ scrollMarginTop: 20 }}><FunnelStage number={String(index + 4).padStart(2, '0')} eyebrow={`Step ${index + 4} · Value · ${offer.value.split(' · ')[0]} · ${access === 'free' ? 'Free' : `${formatMoney(draft.price, currency)}${billingLabels[draft.billingModel].suffix}`} · ${pricingRegion}`} title={draft.audienceValue || 'Define the result they receive.'} copy={`${draft.title || offer.label} · ${offer.why}`} art={offerImage} aside={paidOfferCard(offer)}>
             <div style={{ marginBottom: 12 }}><CustomerValueStars score={offerValueScores[kind]} /></div>
             {offerSetupStage > 0 && <div style={{ border: `1px solid ${line}`, padding: '12px 14px', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span><span style={{ ...label, marginBottom: 3 }}>Offer</span><strong style={{ color: ink, fontSize: 12 }}>{draft.title} · {access === 'free' ? 'Free' : formatMoney(draft.price, currency)}</strong></span><button type="button" onClick={() => setOfferSetupStage(0)} style={{ ...btn, ...compactControl, minHeight: 40, background: 'transparent', color: ink }}>Edit</button></div>}
             {offerSetupStage === 0 && <div>
@@ -3583,6 +3590,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
             </div>
           </FunnelStage></div>;
         })}
+        {paidStepsOpen < orderedUpsells.length && <div style={{ marginTop: 18 }}><button type="button" data-next-offer-step onClick={() => { const next = paidStepsOpen; setPaidStepsOpen(next + 1); window.setTimeout(() => document.getElementById(`offer-builder-${orderedUpsells[next]}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); }} style={{ ...btn, width: '100%' }}>Next · Step {paidStepsOpen + 4}: {upsellDrafts[orderedUpsells[paidStepsOpen]]?.title || 'Build your next offer'} <ArrowRight size={14} /></button></div>}
         </>}
       </>}
 
@@ -3862,7 +3870,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         </section>
       </div>
     </form>}
-    {!summaryView && <StepRelated step={step} profileStatus={savedStatus} guardianSlug={savedSlug || guardianSlug} displayName={displayName} brands={brandProfiles.map((brand) => ({ id: brand.localId, name: (brand.localId === activeBrandId ? displayName : brand.name) || 'Untitled brand', kind: brand.kind, logo: brand.localId === activeBrandId ? avatarUrl || brand.logo_url : brand.logo_url }))} activeBrandId={activeBrandId} related={related} audience={audienceLabel(audienceDetails, audience)} userId={userId} onOfferDeleted={(offerId) => setRelated((current) => ({ ...current, offers: current.offers.filter((offer) => offer.id !== offerId) }))} />}
+    {!summaryView && <StepRelated step={step} profileStatus={savedStatus} guardianSlug={savedSlug || guardianSlug} displayName={displayName} brands={brandProfiles.map((brand) => ({ id: brand.localId, name: (brand.localId === activeBrandId ? displayName : brand.name) || 'Untitled brand', kind: brand.kind, logo: brand.localId === activeBrandId ? avatarUrl || brand.logo_url : brand.logo_url }))} activeBrandId={activeBrandId} related={related} audience={audienceLabel(audienceDetails, audience)} audiences={audience.map((group) => ({ group, ages: audienceDetails[group] ? `${audienceDetails[group].min}–${audienceDetails[group].max}` : '', stages: audienceDetails[group]?.stages || [], problems: audienceProblemsByGroup[group] || [] }))} onEditAudience={() => { setAudienceSetupStage(0); window.scrollTo({ top: 0, behavior: 'smooth' }); }} onRemoveAudience={(group) => toggleAudience(group)} accessToken={accessToken} onProtocolRemoved={(protocolId) => setRelated((current) => ({ ...current, protocols: current.protocols.filter((protocol) => protocol.id !== protocolId) }))} userId={userId} onOfferDeleted={(offerId) => setRelated((current) => ({ ...current, offers: current.offers.filter((offer) => offer.id !== offerId) }))} />}
       </div>
     </div>
   </div>;
@@ -3886,10 +3894,12 @@ function WideCard({ row, onOpen }: { row: RelatedRow; onOpen: () => void }) {
 }
 
 /** Below the fold of each setup step: the Guardian's existing items for that stage, as wide cards two to a row. */
-export function StepRelated({ step, guardianSlug, displayName, related, audience = '', brands = [], activeBrandId = 'personal', profileStatus = null, userId, onOfferDeleted }: { userId?: string; onOfferDeleted?: (offerId: string) => void; audience?: string; profileStatus?: GuideProfile['status'] | null;  step: number; guardianSlug: string; displayName: string; related: { leads: GuideLead[]; offers: GuideOffer[]; ramps: GuideValueRamp[]; protocols: AdminProtocol[] }; brands?: RelatedBrand[]; activeBrandId?: string }) {
+export function StepRelated({ step, guardianSlug, displayName, related, audience = '', brands = [], activeBrandId = 'personal', profileStatus = null, userId, onOfferDeleted, audiences = [], onEditAudience, onRemoveAudience, accessToken, onProtocolRemoved }: { accessToken?: string; onProtocolRemoved?: (protocolId: string) => void; audiences?: Array<{ group: string; ages: string; stages: string[]; problems: string[] }>; onEditAudience?: (group: string) => void; onRemoveAudience?: (group: string) => void; userId?: string; onOfferDeleted?: (offerId: string) => void; audience?: string; profileStatus?: GuideProfile['status'] | null;  step: number; guardianSlug: string; displayName: string; related: { leads: GuideLead[]; offers: GuideOffer[]; ramps: GuideValueRamp[]; protocols: AdminProtocol[] }; brands?: RelatedBrand[]; activeBrandId?: string }) {
   const [brandFilter, setBrandFilter] = useState<string>('all');
+  const [siteKind, setSiteKind] = useState<'all' | 'profile' | 'offer'>('all');
   const [siteMenu, setSiteMenu] = useState<string | null>(null);
   const open = (href: string) => () => { window.location.href = href; };
+  const [removingProtocol, setRemovingProtocol] = useState<{ id: string; name: string } | null>(null);
   const offerImage = (offer: GuideOffer) => offer.access_model === 'free' ? '/images/guides/lead-plate.png' : '/images/guides/offer-plate.png';
   // Offer paths and offers are not tied to a brand in the data, so they belong to the whole Guardian and show under every filter.
   const rampRows: RelatedRow[] = related.ramps.map((ramp) => ({ key: ramp.id, title: ramp.name, meta: `${[ramp.audience, ramp.problem].filter(Boolean).join(' · ')} · ${ramp.offer_ids.length} offers · ${ramp.status}`, image: '/images/guides/offer-plate.png', href: `/guardians/${guardianSlug}/value-ramp/${ramp.slug}`, kind: 'offer', rampStatus: ramp.status }));
@@ -3902,25 +3912,46 @@ export function StepRelated({ step, guardianSlug, displayName, related, audience
   const sections: Record<number, { title: string; tab: string; rows: RelatedRow[] }> = {
     1: { title: 'Your sites', tab: 'value_ramps', rows: siteRows },
     2: { title: 'Your Protocols', tab: 'protocols', rows: related.protocols.map((protocol) => ({ key: protocol.id, title: protocol.name, meta: `${protocol.total_days || 1} days · ${protocol.is_public ? 'Published' : 'Draft'}`, image: protocol.image_url, href: '/guardians/workspace?tab=protocols' })) },
-    3: { title: 'Your leads', tab: 'leads', rows: related.leads.map((lead) => ({ key: lead.id, title: lead.name, meta: `${lead.email} · ${lead.goal || 'No goal yet'} · ${lead.stage}`, href: '/guardians/workspace?tab=leads' })) },
+    3: { title: audiences.length ? 'Your audiences' : 'Your leads', tab: audiences.length ? 'value_ramps' : 'leads', rows: audiences.length ? audiences.map((a) => ({ key: a.group, title: a.group, meta: a.ages, href: '/guardians/workspace?step=3' })) : related.leads.map((lead) => ({ key: lead.id, title: lead.name, meta: `${lead.email} · ${lead.goal || 'No goal yet'} · ${lead.stage}`, href: '/guardians/workspace?tab=leads' })) },
     4: { title: 'Your offers', tab: 'offer_builder', rows: related.offers.map((offer) => ({ key: offer.id, title: offer.title, meta: [APP_PLAN_KINDS.includes(offer.kind) ? 'PDF + ROUTINE³' : OTHER_FORMATS[offer.kind] || offer.kind.replaceAll('_', ' '), offer.access_model === 'free' ? 'Free' : offer.price_cents ? formatMoney(offer.price_cents / 100, offer.currency || 'GBP') : 'Paid', audience, offer.status].filter(Boolean).join(' · '), image: offerImage(offer), href: '/guardians/workspace?tab=offer_builder' })) },
-    5: { title: 'Your offer paths', tab: 'value_ramps', rows: rampRows },
+    5: { title: 'Your sites', tab: 'value_ramps', rows: siteRows },
   };
   const section = sections[step];
   if (!section) return null;
-  const filterable = step === 1 && brandList.length > 1;
+  const siteStep = step === 1 || step === 5;
+  const filterable = siteStep && brandList.length > 1;
+  const kindTabs = siteStep && section.rows.some((row) => row.kind === 'profile') && section.rows.some((row) => row.kind === 'offer');
   const filterIds = ['all', ...[...brandList].sort((a, b) => Number(b.id === activeBrandId) - Number(a.id === activeBrandId)).map((brand) => brand.id)];
-  const rows = filterable && brandFilter !== 'all' ? section.rows.filter((row) => !row.brandId || row.brandId === brandFilter) : section.rows;
+  const byBrand = filterable && brandFilter !== 'all' ? section.rows.filter((row) => !row.brandId || row.brandId === brandFilter) : section.rows;
+  const rows = kindTabs && siteKind !== 'all' ? byBrand.filter((row) => (siteKind === 'profile') === (row.kind === 'profile')) : byBrand;
   const chipLabel = (id: string) => id === 'all' ? 'All' : `${id === activeBrandId ? 'Current · ' : ''}${brandList.find((brand) => brand.id === id)?.name || 'Brand'}`;
   return <section aria-label={section.title} style={{ maxWidth: 1100, margin: '0 auto 80px', borderTop: `1px solid ${line}`, paddingTop: 28 }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
       <span style={{ ...label, color: acid, marginBottom: 0 }}>In your workspace · {section.title} · {rows.length}</span>
       <a href={`/guardians/workspace?tab=${section.tab}`} style={{ color: muted, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', textDecoration: 'none' }}>Open all →</a>
     </div>
+    {kindTabs && <div role="group" aria-label="Filter sites by type" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+      {([['all', 'All sites'], ['profile', 'Profile sites'], ['offer', 'Offer path sites']] as const).map(([id, text]) => <button key={id} type="button" aria-pressed={siteKind === id} onClick={() => setSiteKind(id)} style={{ minHeight: 30, padding: '0 12px', border: `1px solid ${siteKind === id ? ink : line}`, background: siteKind === id ? ink : 'transparent', color: siteKind === id ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{text}</button>)}
+    </div>}
     {filterable && <div role="group" aria-label="Filter sites by brand" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
       {filterIds.map((id) => <button key={id} type="button" aria-pressed={brandFilter === id} onClick={() => setBrandFilter(id)} style={{ minHeight: 30, padding: '0 12px', border: `1px solid ${brandFilter === id ? ink : line}`, background: brandFilter === id ? ink : 'transparent', color: brandFilter === id ? black : ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{chipLabel(id)}</button>)}
     </div>}
-    {step === 4 && related.offers.length ? <ProtocolCardGrid>{related.offers.slice(0, 8).map((offer) => {
+    {step === 2 && related.protocols.length ? <ProtocolCardGrid>{related.protocols.slice(0, 8).map((protocol) => (
+      <ProtocolCard key={protocol.id} kicker={[daysLabel(protocol.total_days), protocol.is_public ? 'Published' : 'Draft'].join(' · ')} tags={completeProtocolTags(protocol)}
+        title={protocol.name.replace(/^R3 Protocol\s*>\s*/i, '')} imageUrl={protocol.image_url} copy={clipCopy(protocol.description)} by={displayName}
+        cta="Open R3 builder" onClick={() => open('/guardians/workspace?tab=protocols')()} owned visibility={protocol.is_public ? 'public' : 'private'}
+        onEdit={() => open('/guardians/workspace?tab=protocols')()}
+        onDelete={accessToken ? () => setRemovingProtocol({ id: protocol.id, name: protocol.name }) : undefined} />
+    ))}</ProtocolCardGrid> : step === 3 && audiences.length ? <ProtocolCardGrid>{audiences.map((a) => {
+      const art = (audienceArt as Record<string, TagArt>)[a.group];
+      const name = a.group === 'Busy families' ? 'Families' : a.group;
+      return <ProtocolCard key={a.group} kicker={['Audience', a.ages].filter(Boolean).join(' · ')} title={name}
+        tags={a.stages.length ? a.stages.slice(0, 3).map((label) => ({ label, kind: 'audience' as const })) : undefined}
+        copy={a.problems.length ? `Helps with ${a.problems.slice(0, 4).join(', ').toLowerCase()}${a.problems.length > 4 ? ` and ${a.problems.length - 4} more` : ''}.` : 'Choose the problems you help this audience with.'}
+        plate={art ? <span aria-hidden="true" style={{ display: 'block', width: 116 * art.cellAspect, height: 116, backgroundImage: `url(${art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${art.cols * 100}% ${art.rows * 100}%`, backgroundPosition: `${art.cols === 1 ? 0 : (art.index % art.cols) * 100 / (art.cols - 1)}% ${art.rows === 1 ? 0 : Math.floor(art.index / art.cols) * 100 / (art.rows - 1)}%` }} /> : undefined}
+        by={displayName} owned inert onEdit={onEditAudience ? () => onEditAudience(a.group) : undefined}
+        onDelete={onRemoveAudience ? () => { if (window.confirm(`Remove ${name} from the people you help?`)) onRemoveAudience(a.group); } : undefined} />;
+    })}</ProtocolCardGrid> : step === 4 && related.offers.length ? <ProtocolCardGrid>{related.offers.slice(0, 8).map((offer) => {
       const free = offer.access_model === 'free';
       return <ProductCard key={offer.id} kind={offer.kind} imageUrl={offer.cover_url}
         eyebrow={[audience || 'Everyone', offer.status === 'published' ? 'Published' : 'Draft'].join(' · ')}
@@ -3943,6 +3974,7 @@ export function StepRelated({ step, guardianSlug, displayName, related, audience
     /> : rows.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,440px),1fr))', gap: 14 }}>
       {rows.slice(0, 8).map((row) => <WideCard key={row.key} row={row} onOpen={open(row.href)} />)}
     </div> : <p style={{ color: muted, fontSize: 12 }}>Nothing here yet. What you create in this step will appear here.</p>}
+    {removingProtocol && accessToken && <ProtocolRemovalDialog accessToken={accessToken} protocol={removingProtocol} onClose={() => setRemovingProtocol(null)} onDone={(removal) => { setRemovingProtocol(null); onProtocolRemoved?.(removal.id); }} />}
   </section>;
 }
 
