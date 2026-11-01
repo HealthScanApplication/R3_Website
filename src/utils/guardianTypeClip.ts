@@ -34,3 +34,12 @@ export function guardianTypeClipUrl(specialties: readonly string[] | null | unde
   const scene = guardianScene(specialties);
   return guardianSceneHasClip(scene) ? `/videos/guardians/scenes/${scene}.mp4` : `/images/guides/scenes/${scene}.jpg`;
 }
+
+const titleCase = (id: string) => id.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase());
+
+/** Every scene a Guardian can pick for their background, in a stable order. `video` scenes play their clip. */
+export const GUARDIAN_SCENES: ReadonlyArray<{ id: string; label: string; video: boolean; image: string; url: string }> =
+  [...new Set(Object.values(SCENE_BY_SPECIALTY))].map((id) => {
+    const video = SCENES_WITH_CLIP.has(id);
+    return { id, label: titleCase(id === 'wellness-herbalist' ? 'wellness' : id), video, image: `/images/guides/scenes/${id}.jpg`, url: video ? `/videos/guardians/scenes/${id}.mp4` : `/images/guides/scenes/${id}.jpg` };
+  });

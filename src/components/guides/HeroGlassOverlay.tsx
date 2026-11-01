@@ -7,16 +7,13 @@
  * Decorative: aria-hidden, no pointer events. Sits between the background media and the hero's own text overlay.
  */
 const RIBS: Array<{ left: number; width: number; blur: number; delay: number }> = [
-  { left: 14, width: 7, blur: 7, delay: 0 },
-  { left: 26, width: 10, blur: 4, delay: -4 },
-  { left: 41, width: 6, blur: 9, delay: -9 },
-  { left: 52, width: 11, blur: 5, delay: -2 },
-  { left: 68, width: 8, blur: 8, delay: -7 },
-  { left: 80, width: 9, blur: 4, delay: -11 },
+  { left: 22, width: 4, blur: 2, delay: 0 },
+  { left: 46, width: 5, blur: 2.5, delay: -7 },
+  { left: 70, width: 4, blur: 2, delay: -12 },
 ];
 
 const CSS = `
-.g-glass-rib{position:absolute;top:-25%;height:150%;transform:skewX(-32deg);background:linear-gradient(90deg,rgba(255,255,255,.2) 0%,rgba(255,255,255,.03) 38%,rgba(255,255,255,.12) 100%);border-left:1px solid rgba(255,255,255,.34);box-shadow:-1px 0 0 rgba(120,170,255,.28),1px 0 0 rgba(255,110,140,.22),inset 0 0 46px rgba(255,255,255,.07);animation:g-glass-drift 22s ease-in-out infinite alternate}
+.g-glass-rib{position:absolute;top:-25%;height:150%;transform:skewX(-32deg);background:linear-gradient(90deg,rgba(255,255,255,.1) 0%,rgba(255,255,255,0) 40%,rgba(255,255,255,.05) 100%);border-left:1px solid rgba(255,255,255,.34);box-shadow:-1px 0 0 rgba(120,170,255,.28),1px 0 0 rgba(255,110,140,.22),inset 0 0 30px rgba(255,255,255,.03);animation:g-glass-drift 22s ease-in-out infinite alternate}
 @keyframes g-glass-drift{from{transform:skewX(-32deg) translateX(-18px)}to{transform:skewX(-32deg) translateX(22px)}}
 @media (prefers-reduced-motion:reduce){.g-glass-rib{animation:none}}
 `;
@@ -26,9 +23,9 @@ export function HeroGlassOverlay() {
     <div aria-hidden="true" data-hero-glass style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
       <style>{CSS}</style>
       {RIBS.map((rib) => (
-        <span key={rib.left} className="g-glass-rib" data-glass-rib style={{ left: `${rib.left}%`, width: `${rib.width}%`, backdropFilter: `blur(${rib.blur}px) saturate(1.25) brightness(1.05)`, WebkitBackdropFilter: `blur(${rib.blur}px) saturate(1.25) brightness(1.05)`, animationDelay: `${rib.delay}s` }} />
+        <span key={rib.left} className="g-glass-rib" data-glass-rib style={{ left: `${rib.left}%`, width: `${rib.width}%`, backdropFilter: `blur(${rib.blur}px)`, WebkitBackdropFilter: `blur(${rib.blur}px)`, animationDelay: `${rib.delay}s` }} />
       ))}
-      <span data-hero-vignette style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 46%, rgba(0,0,0,0) 42%, rgba(0,0,0,.42) 78%, rgba(0,0,0,.66) 100%)' }} />
+      <span data-hero-vignette style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 46%, rgba(0,0,0,0) 50%, rgba(0,0,0,.28) 82%, rgba(0,0,0,.45) 100%)' }} />
     </div>
   );
 }

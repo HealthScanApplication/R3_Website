@@ -53,7 +53,7 @@ import { removeGreenBackground } from '../../utils/chromaKey';
 import { YouTubeClipBackground } from './YouTubeClipBackground';
 import { ProduceVideoBackdrop } from './ProduceVideoBackdrop';
 import { HeroGlassOverlay, heroGlassOn } from './HeroGlassOverlay';
-import { guardianTypeClipUrl } from '../../utils/guardianTypeClip';
+import { GUARDIAN_SCENES, guardianTypeClipUrl } from '../../utils/guardianTypeClip';
 import { countryForPlace, mapQueryFor } from '../../utils/placeCountry';
 import { YouTubeClipFields } from './YouTubeClipFields';
 import { clipsFromLinks, clipsToLinks, type YtClip } from '../../utils/youtubeClip';
@@ -3623,6 +3623,16 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><button type="button" onClick={() => setSiteStyleStage(0)} style={{ ...btn, background: 'transparent', color: ink }}>← Back</button><button type="button" onClick={() => setSiteStyleStage(2)} style={btn}>Continue <ArrowRight size={14} /></button></div>
             </>}
             {siteStyleStage === 2 && <>
+            <label style={label}>Choose a scene <span style={{ color: acid }}>· clips and photos</span></label>
+            <div data-scene-picker style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 7, maxHeight: 340, overflowY: 'auto', marginBottom: 14 }}>
+              <button type="button" onClick={() => { setBackgroundUrl(''); setBackgroundType('image'); }} aria-pressed={!ownBackground(backgroundUrl)} style={{ minHeight: 70, padding: 8, border: `1px solid ${!ownBackground(backgroundUrl) ? acid : line}`, background: 'transparent', color: ink, fontFamily: sans, fontSize: 9, fontWeight: 700, cursor: 'pointer', textAlign: 'left' }}>Match my type<span style={{ display: 'block', marginTop: 4, color: muted, fontWeight: 500 }}>Automatic</span></button>
+              {GUARDIAN_SCENES.map((scene) => { const active = backgroundUrl === scene.url; return <button type="button" key={scene.id} data-scene={scene.id} onClick={() => { setBackgroundUrl(scene.url); setBackgroundType(scene.video ? 'video' : 'image'); }} aria-pressed={active} aria-label={`${scene.label}${scene.video ? ' (video)' : ''}`} style={{ position: 'relative', padding: 0, overflow: 'hidden', border: `1px solid ${active ? acid : line}`, background: 'transparent', cursor: 'pointer' }}>
+                <img src={scene.image} alt="" loading="lazy" style={{ display: 'block', width: '100%', aspectRatio: '16 / 9', objectFit: 'cover' }} />
+                {scene.video && <span style={{ position: 'absolute', top: 4, left: 4, padding: '2px 5px', background: 'rgba(0,0,0,.65)', color: '#fff', fontFamily: sans, fontSize: 7, fontWeight: 800, letterSpacing: '.08em' }}>VIDEO</span>}
+                {active && <span style={{ position: 'absolute', top: 4, right: 4, width: 16, height: 16, display: 'grid', placeItems: 'center', background: black, color: acid }}><Check size={10} /></span>}
+                <span style={{ display: 'block', padding: '4px 6px', color: ink, fontFamily: sans, fontSize: 9, fontWeight: 700, textAlign: 'left' }}>{scene.label}</span>
+              </button>; })}
+            </div>
             <label style={label}>Choose a story template</label>
             <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 10, marginBottom: 14, scrollSnapType: 'x mandatory' }}>
               {storyTemplates.map((template) => { const active = storyTemplate === template.id && !backgroundUrl; return <button className="guardian-card" type="button" key={template.id} onClick={() => applyStoryTemplate(template.id)} aria-pressed={active} style={{ position: 'relative', width: 180, flex: '0 0 180px', scrollSnapAlign: 'start', padding: 0, overflow: 'hidden', border: `1px solid ${active ? acid : line}`, background: active ? acid : '#0D0E0C', color: active ? black : ink, textAlign: 'left', cursor: 'pointer', fontFamily: sans }}>
