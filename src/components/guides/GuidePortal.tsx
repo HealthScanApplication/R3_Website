@@ -662,7 +662,9 @@ function ChoiceText({ title, description, footer, active }: { title: string; des
 function TagChoice({ text, description, active, art, onClick, badge, photo }: { text: string; description?: string; active: boolean; art: TagArt; onClick: () => void; compact?: boolean; largeText?: boolean; badge?: string; tone?: 'accent' | 'free'; checkRight?: number; showCheck?: boolean; /** The picture the public site uses; adds a drop-down under the card. */ photo?: string }) {
   const col = art.index % art.cols;
   const row = Math.floor(art.index / art.cols);
-  const [showPhoto, setShowPhoto] = useState(false);
+  // The photo opens by itself when the card is selected; the arrow opens or closes it either way.
+  const [photoToggle, setPhotoToggle] = useState<boolean | null>(null);
+  const showPhoto = photoToggle ?? active;
   const card = <button className="guardian-card" type="button" onClick={onClick} aria-pressed={active} style={choiceCardStyle(active)}>
     {active && <ChoiceCheck />}
     {badge && <span style={{ position: 'absolute', top: 9, right: 10, color: badge === 'FREE' ? acid : '#C88A66', fontSize: 8, fontWeight: 700, letterSpacing: '.14em' }}>{badge}</span>}
@@ -674,7 +676,7 @@ function TagChoice({ text, description, active, art, onClick, badge, photo }: { 
   return <div style={{ minWidth: 0, alignSelf: 'start' }}>
     <div style={{ position: 'relative', minWidth: 0 }}>
     {card}
-    <button type="button" onClick={() => setShowPhoto((open) => !open)} aria-expanded={showPhoto} aria-label={`${showPhoto ? 'Hide' : 'Show'} the website photo for ${text}`} style={{ position: 'absolute', right: 8, bottom: 8, width: 26, height: 26, display: 'grid', placeItems: 'center', border: `1px solid ${line}`, background: 'rgba(9,10,8,.7)', color: ink, cursor: 'pointer', padding: 0 }}><ChevronRight size={13} style={{ transform: showPhoto ? 'rotate(-90deg)' : 'rotate(90deg)', transition: 'transform .15s' }} /></button>
+    <button type="button" onClick={() => setPhotoToggle(!showPhoto)} aria-expanded={showPhoto} aria-label={`${showPhoto ? 'Hide' : 'Show'} the website photo for ${text}`} style={{ position: 'absolute', right: 8, bottom: 8, width: 26, height: 26, display: 'grid', placeItems: 'center', border: `1px solid ${line}`, background: 'rgba(9,10,8,.7)', color: ink, cursor: 'pointer', padding: 0 }}><ChevronRight size={13} style={{ transform: showPhoto ? 'rotate(-90deg)' : 'rotate(90deg)', transition: 'transform .15s' }} /></button>
     </div>
     {showPhoto && <figure data-problem-photo style={{ margin: '6px 0 0', border: `1px solid ${line}` }}><img src={photo} alt="" loading="lazy" style={{ display: 'block', width: '100%', aspectRatio: '16 / 9', objectFit: 'cover' }} /><figcaption style={{ padding: '6px 9px', color: muted, fontSize: 9, letterSpacing: '.08em', textTransform: 'uppercase' }}>Used on your website</figcaption></figure>}
   </div>;
