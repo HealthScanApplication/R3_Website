@@ -1903,11 +1903,14 @@ function WorkspaceEvents({ guideId }: { guideId: string }) {
  * place we have (location, venue, title), because the venue alone often has no city or country; the map is asked for all of it.
  */
 function DestinationHeader({ profile, place, lines = [place], kind, virtual = false }: { profile: GuideProfile; place: string; lines?: Array<string | null | undefined>; kind: 'event' | 'retreat'; virtual?: boolean }) {
+  // The card under the map: dark for an event, light for a retreat. The logo badge is cut from the same surface, so it reads as part of the card.
+  const surface = kind === 'retreat' ? '#F2EFE7' : '#171B14';
+  const onDark = kind !== 'retreat';
   const query = mapQueryFor(...lines) || place;
   const online = virtual || /^online$/i.test(place.trim()) || /to be announced/i.test(place); // nothing to put on a map
   const country = online ? null : countryForPlace(...lines);
   const mapHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-  return <div data-destination-header style={{ position: 'relative', height: 210, overflow: 'hidden', background: kind === 'retreat' ? '#D7D0C2' : '#263024' }}>
+  return <div data-destination style={{ position: 'relative' }}><div data-destination-header style={{ position: 'relative', height: 210, overflow: 'hidden', background: kind === 'retreat' ? '#D7D0C2' : '#263024' }}>
     {!online && <iframe data-place-map src={`https://maps.google.com/maps?q=${encodeURIComponent(query)}&z=12&output=embed`} title={`Map of ${query}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" tabIndex={-1} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, filter: 'invert(.92) hue-rotate(180deg) brightness(.72) contrast(.92) saturate(.55)' }} />}
     <a href={mapHref} target="_blank" rel="noreferrer" aria-label={`Open ${query} in maps`} style={{ position: 'absolute', inset: 0, color: '#F5F2EA', textDecoration: 'none' }}>
       <span data-place-tag style={{ position: 'absolute', left: 18, top: 18, maxWidth: '68%', display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: '1px solid rgba(245,242,234,.42)', background: 'rgba(17,18,15,.72)', backdropFilter: 'blur(10px)', fontSize: 9, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>
@@ -1915,7 +1918,11 @@ function DestinationHeader({ profile, place, lines = [place], kind, virtual = fa
         <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{place}</span>
       </span>
     </a>
-    <span style={{ position: 'absolute', right: 18, bottom: 16, display: 'flex', alignItems: 'end', gap: 9, pointerEvents: 'none' }}><span style={{ padding: '6px 8px', color: '#F5F2EA', background: 'rgba(17,18,15,.52)', backdropFilter: 'blur(10px)', fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{profile.display_name}</span>{profile.avatar_url ? <img src={profile.avatar_url} alt="" style={{ width: 68, height: 68, borderRadius: '50%', objectFit: 'cover', border: '3px solid #F5F2EA', boxShadow: '0 8px 22px rgba(0,0,0,.28)' }} /> : <span style={{ width: 68, height: 68, borderRadius: '50%', display: 'grid', placeItems: 'center', background: '#F5F2EA', color: '#11120F', fontFamily: serif, fontSize: 26 }}>{profile.display_name.charAt(0)}</span>}</span>
+    <span style={{ position: 'absolute', right: 96, bottom: 12, padding: '6px 8px', color: '#F5F2EA', background: 'rgba(17,18,15,.52)', backdropFilter: 'blur(10px)', fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', pointerEvents: 'none' }}>{profile.display_name}</span>
+  </div>
+  <span data-destination-badge style={{ position: 'absolute', right: 18, bottom: -34, width: 68, height: 68, boxSizing: 'border-box', borderRadius: '50%', overflow: 'hidden', background: surface, boxShadow: `0 0 0 4px ${surface}`, display: 'grid', placeItems: 'center', pointerEvents: 'none' }}>{profile.avatar_url
+    ? <img src={profile.avatar_url} alt="" style={isMonoLogoUrl(profile.avatar_url) ? { width: '100%', height: '100%', objectFit: 'contain', ...(onDark ? { filter: 'invert(1)' } : {}) } : { width: '100%', height: '100%', objectFit: 'cover' }} />
+    : <span style={{ color: onDark ? '#F5F2EA' : '#11120F', fontFamily: serif, fontSize: 26 }}>{profile.display_name.charAt(0)}</span>}</span>
   </div>;
 }
 
@@ -1974,10 +1981,10 @@ function GuardianEvents({ profile, events, sourceUrl, canEditSource, onImported,
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap', marginBottom: 34 }}>
         <div style={{ maxWidth: 700 }}><span style={{ color: '#C7D8A3', fontSize: 11, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase' }}>Meet in person · {upcoming.length} upcoming</span><h2 style={{ fontFamily: serif, fontSize: 'clamp(46px,7vw,82px)', fontWeight: 300, lineHeight: .96, letterSpacing: '-.04em', margin: '12px 0 0' }}>Upcoming events.</h2></div>
-        {(sourceUrl || canEditSource) && <div style={{ width: 'min(100%,520px)', display: 'grid', gridTemplateColumns: canEditSource ? 'minmax(0,1fr) auto' : 'auto', justifyItems: canEditSource ? 'stretch' : 'end' }}>
+        {canEditSource && <div style={{ width: 'min(100%,520px)', display: 'grid', gridTemplateColumns: canEditSource ? 'minmax(0,1fr) auto' : 'auto', justifyItems: canEditSource ? 'stretch' : 'end' }}>
           {canEditSource && <><label htmlFor="event-source-url" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)' }}>Events page URL</label><input id="event-source-url" type="url" value={draftSourceUrl} onChange={(event) => setDraftSourceUrl(event.target.value)} placeholder="https://your-site.com/events" style={{ minWidth: 0, height: 46, boxSizing: 'border-box', border: '1px solid rgba(242,239,231,.45)', background: 'transparent', color: '#F2EFE7', padding: '0 12px', fontSize: 12, outline: 0 }} /></>}
           <button type="button" onClick={pull} disabled={state === 'loading'} style={{ height: 46, border: '1px solid #C7D8A3', background: '#C7D8A3', color: '#11150F', padding: '0 15px', fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', cursor: state === 'loading' ? 'wait' : 'pointer' }}>{state === 'loading' ? 'Refreshing…' : canEditSource ? 'Save & refresh events' : 'Refresh events'}</button>
-          {canEditSource && <span style={{ gridColumn: '1 / -1', color: '#9FA897', fontSize: 10, marginTop: 7 }}>Only you can change this source URL. Visitors can refresh its events.</span>}
+          {canEditSource && <span style={{ gridColumn: '1 / -1', color: '#9FA897', fontSize: 10, marginTop: 7 }}>Only you can change this source URL.</span>}
           {message && <span role={state === 'error' ? 'alert' : 'status'} style={{ gridColumn: '1 / -1', color: state === 'error' ? '#FFB4A8' : '#C7D8A3', fontSize: 11, marginTop: 8 }}>{message}</span>}
         </div>}
       </div>
