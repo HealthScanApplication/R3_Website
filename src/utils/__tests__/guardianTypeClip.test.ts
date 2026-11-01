@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync } from 'node:fs';
-import { guardianScene, guardianSceneHasClip, guardianTypeClipUrl } from '../guardianTypeClip';
+import { GUARDIAN_SCENES, guardianScene, guardianSceneHasClip, guardianTypeClipUrl } from '../guardianTypeClip';
 
 const EXPECTED_SCENE: Record<string, string> = {
   Nutrition: 'nutrition', Fitness: 'fitness', Wellness: 'wellness-herbalist', Yoga: 'yoga', 'Somatic work': 'somatic', Sleep: 'sleep',
@@ -41,5 +41,14 @@ describe('guardianTypeClip', () => {
   it('shows the still for scenes without a clip', () => {
     expect(guardianTypeClipUrl(['Nutrition'])).toBe('/images/guides/scenes/nutrition.jpg');
     expect(guardianTypeClipUrl(['Breathwork'])).toBe('/videos/guardians/scenes/breathwork.mp4');
+  });
+  it('lists every pickable scene once, with a thumbnail and the file the hero will play', () => {
+    expect(GUARDIAN_SCENES).toHaveLength(33);
+    expect(new Set(GUARDIAN_SCENES.map((x) => x.id)).size).toBe(33);
+    for (const scene of GUARDIAN_SCENES) {
+      expect(existsSync(`public${scene.image}`), scene.image).toBe(true);
+      expect(existsSync(`public${scene.url}`), scene.url).toBe(true);
+      expect(scene.url.endsWith('.mp4')).toBe(scene.video);
+    }
   });
 });

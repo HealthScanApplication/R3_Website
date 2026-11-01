@@ -13,7 +13,7 @@ describe('HeroGlassOverlay', () => {
     expect(root.getAttribute('aria-hidden')).toBe('true');
     expect(root.style.pointerEvents).toBe('none');
     const ribs = [...container.querySelectorAll('[data-glass-rib]')] as HTMLElement[];
-    expect(ribs.length).toBeGreaterThanOrEqual(5);
+    expect(ribs.length).toBe(3);
     for (const rib of ribs) { const left = parseFloat(rib.style.left); expect(left).toBeGreaterThan(8); expect(left).toBeLessThan(90); } // the middle, not the edges
     expect(container.querySelector('[data-hero-vignette]')).toBeTruthy();
     expect(container.querySelector('style')!.textContent).toMatch(/prefers-reduced-motion/); // the slow drift stops for reduced motion

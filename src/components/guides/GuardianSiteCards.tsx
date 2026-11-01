@@ -22,7 +22,9 @@ export function SiteStatusTag({ status }: { status: SiteStatus }) {
  * Status and the publish action at the top of a site in the site build. The button is a submit button: it lives inside
  * the setup form, so it runs the same publish path as the Publishing panel at the bottom.
  */
-export function SitePublishBar({ site, status, action, busy, error, liveHref }: {
+export function SitePublishBar({ site, status, action, busy, error, liveHref, onPublish }: {
+  /** Publishes only this site; without it the button submits the whole setup form (offers and offer path included). */
+  onPublish?: () => void;
   site: string;
   status: SiteStatus;
   action: SitePublishAction;
@@ -34,7 +36,7 @@ export function SitePublishBar({ site, status, action, busy, error, liveHref }: 
     <SiteStatusTag status={status} />
     <span style={{ flex: '1 1 220px', minWidth: 0, color: MUTED, fontFamily: sans, fontSize: 11, lineHeight: 1.5 }}>{action.hint}</span>
     {status.live && liveHref && <a href={liveHref} target="_blank" rel="noopener noreferrer" aria-label={`View ${site} live`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 36, color: INK, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', textDecoration: 'none', borderBottom: `1px solid ${LINE}` }}>View live <ExternalLink size={12} aria-hidden="true" /></a>}
-    <button type="submit" disabled={busy} style={{ minHeight: 36, padding: '0 14px', border: `1px solid ${LINE}`, borderRadius: 4, background: INK, color: BLACK, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.07em', textTransform: 'uppercase', cursor: busy ? 'default' : 'pointer', opacity: busy ? .6 : 1, display: 'inline-flex', alignItems: 'center', gap: 8 }}>{busy ? `${action.busyLabel}…` : action.label} <ArrowRight size={13} aria-hidden="true" /></button>
+    <button type={onPublish ? 'button' : 'submit'} onClick={onPublish} disabled={busy} style={{ minHeight: 36, padding: '0 14px', border: `1px solid ${LINE}`, borderRadius: 4, background: INK, color: BLACK, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.07em', textTransform: 'uppercase', cursor: busy ? 'default' : 'pointer', opacity: busy ? .6 : 1, display: 'inline-flex', alignItems: 'center', gap: 8 }}>{busy ? `${action.busyLabel}…` : action.label} <ArrowRight size={13} aria-hidden="true" /></button>
     {error && <p role="alert" style={{ flex: '1 0 100%', margin: 0, color: '#F0A7A7', fontFamily: sans, fontSize: 12 }}>{error}</p>}
   </div>;
 }

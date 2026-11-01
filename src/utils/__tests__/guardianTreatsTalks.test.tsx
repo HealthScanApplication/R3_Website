@@ -153,8 +153,8 @@ describe('Treats and Talks in the Guardian admin', () => {
     expect(mocks.update.mock.calls[0].slice(0, 2)).toEqual(['owner', 't1']);
     expect(mocks.update.mock.calls[0][2]).toMatchObject({ price_cents: 14000, status: 'published', description: 'Massage · 60 min\nStones.' });
     expect((await within(row).findByRole('status')).textContent).toBe('Saved.');
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     fireEvent.click(within(row).getByRole('button', { name: 'Delete Hot Stone Massage' }));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(mocks.remove).toHaveBeenCalledWith('owner', 't1'));
     await waitFor(() => expect(onChange.mock.calls.at(-1)![0].map((o: any) => o.id)).toEqual(['x']));
   });
