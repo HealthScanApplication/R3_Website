@@ -38,7 +38,8 @@ import { GuardianModal } from './GuardianModal';
 import { GuardianHeroBackdrop } from './GuardianHeroBackdrop';
 import { BrandKitFields } from './BrandKitFields';
 import { AGE_RANGES, LIFE_STAGES } from '../../utils/audienceTaxonomy';
-import { convertGuardianAvatar, generatedImageFile } from '../../utils/guardianImages';
+import { HOUSE_AVATARS, HOUSE_STYLE_REQUIRED, houseAvatarFlag, isHouseStyleAvatar } from '../../utils/guardianHouseStyle';
+import { HouseAvatarReview } from './HouseAvatarReview';
 import { brandKitLinks, brandKitOf, defaultBrandKit, type BrandKit } from '../../utils/brandKit';
 import { GuardianProducts, GuardianShop, type GuardianLocalePreference } from './GuardianProducts';
 import { ActivitiesLibrary } from './ActivitiesLibrary';
@@ -235,13 +236,7 @@ const storyTemplates: { id: StoryTemplateId; name: string; style: string; descri
 /** A portrait is an image: the upload helper also accepts videos (for page backgrounds), which make no sense here. */
 const portraitProblem = (file: File) => (/^image\/(?:jpeg|png|webp|gif)$/.test(file.type) ? null : 'Choose a JPG, PNG, WebP or GIF image.');
 const PORTRAIT_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
-const defaultAvatars = [
-  { name: 'Guardian', image: '/images/guides/avatars/guardian.png' },
-  { name: 'Woman', image: '/images/guides/avatars/woman.png' },
-  { name: 'Man', image: '/images/guides/avatars/man.png' },
-  { name: 'Grandmother', image: '/images/guides/avatars/grandmother.png' },
-  { name: 'Grandfather', image: '/images/guides/avatars/grandfather.png' },
-];
+const defaultAvatars = HOUSE_AVATARS;
 
 const bookingProviders: { value: BookingProvider; label: string; placeholder: string }[] = [
   { value: 'ROUTINE³ Booking', label: 'R3 Booking', placeholder: 'https://routine3.com/book/yourname' },
@@ -1978,9 +1973,10 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const [intro, setIntro] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(accountAvatarUrl || defaultAvatars[0].image);
   const [avatarSourceUrl, setAvatarSourceUrl] = useState<string | null>(accountAvatarUrl || defaultAvatars[0].image);
-  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
-  const [avatarConverting, setAvatarConverting] = useState(false);
-  const [avatarApplying, setAvatarApplying] = useState(false);
+  // The photo being converted to the R³ house style (opens the review), and the last converted upload.
+  const [houseSource, setHouseSource] = useState<string | null>(null);
+  const [houseAvatarUrl, setHouseAvatarUrl] = useState<string | null>(null);
+  const avatarIsHouseStyle = isHouseStyleAvatar(avatarUrl, houseAvatarUrl);
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null);
   const [backgroundType, setBackgroundType] = useState<'image' | 'video'>('image');
   const [uploadingBackground, setUploadingBackground] = useState(false);
@@ -2018,6 +2014,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       setSavedStatus(saved.status);
       if (saved.display_name) setDisplayName(saved.display_name);
       if (saved.avatar_url) { setAvatarUrl(saved.avatar_url); setAvatarSourceUrl(saved.avatar_url); }
+      if (links.avatar_house_url) setHouseAvatarUrl(links.avatar_house_url);
       if (saved.contact_email) setContactEmail(saved.contact_email);
       if (links.theme_background) setBackgroundUrl(links.theme_background);
       if (links.theme_background_type === 'image' || links.theme_background_type === 'video') setBackgroundType(links.theme_background_type);
@@ -2142,7 +2139,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   }
 
   function loadBrand(brand: BrandDraft) {
-    setActiveBrandId(brand.localId); setDisplayName(brand.name); setLogoUrl(brand.logo_url); setAvatarUrl(brand.logo_url); setAvatarSourceUrl(brand.logo_url); setAvatarPreviewUrl(null);
+    setActiveBrandId(brand.localId); setDisplayName(brand.name); setLogoUrl(brand.logo_url); setAvatarUrl(brand.logo_url); setAvatarSourceUrl(brand.logo_url); setHouseSource(null);
     setContactEmail(brand.contact_email); setWhatsappPhone(brand.whatsapp_phone); setWebsiteUrl(brand.website_url);
     setInstagramUrl(brand.social_links.instagram || ''); setFacebookUrl(brand.social_links.facebook || ''); setTiktokUrl(brand.social_links.tiktok || '');
     setYoutubeUrl(brand.social_links.youtube || ''); setLinktreeUrl(brand.social_links.linktree || '');
@@ -2362,7 +2359,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       setImportedProfile(imported);
       if (imported.name) setDisplayName(imported.name);
       if (imported.bio) setIntro(imported.bio);
-      if (imported.avatarUrl) { setAvatarUrl(imported.avatarUrl); setAvatarSourceUrl(imported.avatarUrl); setAvatarPreviewUrl(null); setLogoUrl(imported.avatarUrl); }
+      if (imported.avatarUrl) { setAvatarUrl(imported.avatarUrl); setAvatarSourceUrl(imported.avatarUrl); setHouseSource(null); setLogoUrl(imported.avatarUrl); }
       const searchable = `${imported.headline} ${imported.bio} ${imported.topics.join(' ')}`.toLowerCase();
       const inferred = specialties.filter((specialty) => imported.topics.includes(specialty) || searchable.includes(specialty.toLowerCase().replace(' health', '')));
       if (inferred.length) {
@@ -2386,37 +2383,18 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       const url = await uploadGuideImage(userId, file);
       setAvatarUrl(url);
       setAvatarSourceUrl(url);
-      setAvatarPreviewUrl(null);
       setLogoUrl(url);
-      setImportMessage('Profile image uploaded.');
+      // The house style is required, so a new photo goes straight to conversion.
+      setHouseSource(url);
+      setImportMessage('Profile image uploaded. Converting it to the R³ house style.');
     } catch (e: any) {
       setImportMessage(e.message || 'Could not upload that profile image.');
     } finally { setUploading(false); }
   }
 
-  async function convertAvatarToHouseStyle() {
-    const source = avatarSourceUrl || avatarUrl;
-    if (!source) { setImportMessage('Upload or choose a portrait first.'); return; }
-    setAvatarConverting(true); setImportMessage('');
-    try {
-      const result = await convertGuardianAvatar(source, displayName || 'Guardian');
-      setAvatarPreviewUrl(result.image);
-      setImportMessage(result.mock ? 'House-style preview ready. Live image generation is currently in test mode.' : 'House-style preview ready. Review it before applying.');
-    } catch (error) {
-      setImportMessage(error instanceof Error ? error.message : 'Could not convert that portrait.');
-    } finally { setAvatarConverting(false); }
-  }
-
-  async function applyConvertedAvatar() {
-    if (!avatarPreviewUrl) return;
-    setAvatarApplying(true); setImportMessage('');
-    try {
-      const url = await uploadGuideImage(userId, generatedImageFile(avatarPreviewUrl));
-      setAvatarUrl(url); setLogoUrl(url); setAvatarPreviewUrl(null);
-      setImportMessage('R³ house-style avatar applied.');
-    } catch (error) {
-      setImportMessage(error instanceof Error ? error.message : 'Could not save the converted avatar.');
-    } finally { setAvatarApplying(false); }
+  function applyHouseAvatar(url: string) {
+    setAvatarUrl(url); setLogoUrl(url); setHouseAvatarUrl(url); setHouseSource(null);
+    setImportMessage('R³ house-style avatar applied.');
   }
 
   async function uploadBackground(file?: File) {
@@ -2560,13 +2538,14 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       if (!displayName.trim()) throw new Error('Add the name people should call you.');
       if (!isValidContactEmail(contactEmail)) throw new Error('Add a valid contact email.');
       if (!chosen.length) throw new Error('Choose at least one area you can help with.');
+      if (!avatarIsHouseStyle) throw new Error(HOUSE_STYLE_REQUIRED);
       if (brandsLoaded === 'loading') throw new Error('Your saved brands are still loading. Try again in a moment.');
       if (brandsLoaded === 'failed') throw new Error('Your saved brands could not be loaded, so publishing is paused to avoid overwriting them. Reload the page to try again.');
       const slug = guardianSlug;
       const audienceText = audience.join(', ').toLowerCase();
       const headline = generatedHeadline;
       const bio = intro.trim() || `I help ${audienceText} with ${chosen.join(', ').toLowerCase()} through ${format.join(', ').toLowerCase()}.`;
-      const profile = await saveGuideProfile({ user_id: userId, slug, display_name: displayName, headline, bio, avatar_url: avatarUrl, contact_email: contactEmail.trim(), whatsapp_phone: whatsappPhone.trim(), social_links: { instagram: instagramUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), website: websiteUrl.trim(), language: mainLanguage, pricing_region: pricingRegion, currency, site_goal: websiteGoal, booking_provider: bookingProvider, booking_url: bookingUrl.trim(), brand_name: brandName.trim() || displayName.trim(), logo_url: logoUrl || '', expertise_tags: expertiseTags.join(','), offer_videos: JSON.stringify(offerVideos), roles: roles.join(','), audience_details: JSON.stringify(Object.fromEntries(audience.filter((g) => audienceDetails[g]).map((g) => [g, audienceDetails[g]]))), theme_template: storyTemplate, theme_background: effectiveBackground, theme_background_type: backgroundType, theme_image_treatment: imageTreatment, theme_header_style: headerStyle, theme_headline_style: headlineStyle, theme_heading: 'Canela', theme_body: 'Euclid', theme_page_color: pageColor, theme_accent_color: accentColor }, specialties: chosen, status: savedStatus === 'approved' ? 'approved' : 'submitted', onboarding_step: 5 });
+      const profile = await saveGuideProfile({ user_id: userId, slug, display_name: displayName, headline, bio, avatar_url: avatarUrl, contact_email: contactEmail.trim(), whatsapp_phone: whatsappPhone.trim(), social_links: { instagram: instagramUrl.trim(), tiktok: tiktokUrl.trim(), youtube: youtubeUrl.trim(), linktree: linktreeUrl.trim(), website: websiteUrl.trim(), language: mainLanguage, pricing_region: pricingRegion, currency, site_goal: websiteGoal, booking_provider: bookingProvider, booking_url: bookingUrl.trim(), brand_name: brandName.trim() || displayName.trim(), logo_url: logoUrl || '', avatar_house_url: houseAvatarFlag(avatarUrl, houseAvatarUrl), expertise_tags: expertiseTags.join(','), offer_videos: JSON.stringify(offerVideos), roles: roles.join(','), audience_details: JSON.stringify(Object.fromEntries(audience.filter((g) => audienceDetails[g]).map((g) => [g, audienceDetails[g]]))), theme_template: storyTemplate, theme_background: effectiveBackground, theme_background_type: backgroundType, theme_image_treatment: imageTreatment, theme_header_style: headerStyle, theme_headline_style: headlineStyle, theme_heading: 'Canela', theme_body: 'Euclid', theme_page_color: pageColor, theme_accent_color: accentColor }, specialties: chosen, status: savedStatus === 'approved' ? 'approved' : 'submitted', onboarding_step: 5 });
       const selectedBrand = currentBrandDraft();
       const brandsToSave = brandProfiles.map((brand) => brand.localId === activeBrandId ? selectedBrand : brand);
       await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, is_primary: localId === activeBrandId })));
@@ -2976,26 +2955,19 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         {({ open, dragging }) => (
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18, padding: dragging ? 6 : 0, outline: dragging ? `2px dashed ${ink}` : 'none' }}>
         {avatarUrl ? <img src={avatarUrl} alt="Profile" referrerPolicy="no-referrer" style={{ width: 36, height: 36, objectFit: 'cover', border: `1px solid ${line}` }} /> : <span aria-hidden="true" style={{ width: 36, height: 36, display: 'grid', placeItems: 'center', border: `1px solid ${line}`, color: muted, fontFamily: serif, fontSize: 16 }}>{displayName.trim().charAt(0) || 'B'}</span>}
-        <span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Profile image · optional</span>
+        <span style={{ color: avatarIsHouseStyle ? muted : '#E8B86A', fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Profile image · R³ house style {avatarIsHouseStyle ? <Check size={10} style={{ verticalAlign: '-1px' }} /> : 'required'}</span>
         <button type="button" onClick={open} disabled={uploading} aria-label={avatarUrl ? 'Replace profile image' : 'Upload profile image'} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer', background: 'transparent', border: 0, padding: 0 }}>
           {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}{uploading ? 'Uploading' : avatarUrl ? 'Replace' : 'Upload'}
         </button>
-        {avatarUrl && <button type="button" onClick={convertAvatarToHouseStyle} disabled={avatarConverting || avatarApplying} aria-label="Convert profile image to R3 house style" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 28, padding: '0 9px', border: `1px solid ${line}`, borderRadius: 2, color: ink, fontFamily: sans, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: avatarConverting ? 'wait' : 'pointer', background: 'rgba(245,242,234,.04)' }}>
-          {avatarConverting ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}{avatarConverting ? 'Converting' : 'R³ house style'}
+        {avatarUrl && !avatarIsHouseStyle && !houseSource && <button type="button" onClick={() => setHouseSource(avatarSourceUrl || avatarUrl)} aria-label="Convert profile image to R3 house style" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 28, padding: '0 9px', border: `1px solid ${line}`, borderRadius: 2, color: ink, fontFamily: sans, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer', background: 'rgba(245,242,234,.04)' }}>
+          <Sparkles size={12} />Convert to R³ house style
         </button>}
         <span style={{ color: muted, fontSize: 9 }}>{dragging ? 'Drop to upload' : 'or drag a photo here'}</span>
       </div>
         )}
       </PhotoDropzone>
-      {avatarPreviewUrl && <div aria-live="polite" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12, maxWidth: 430, marginTop: 14, padding: 12, border: `1px solid ${line}`, background: 'rgba(245,242,234,.025)' }}>
-        <figure style={{ margin: 0 }}><div style={{ aspectRatio: '1', overflow: 'hidden', background: panel }}><img src={avatarSourceUrl || avatarUrl || ''} alt="Original portrait" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div><figcaption style={{ ...label, marginTop: 7, marginBottom: 0 }}>Original</figcaption></figure>
-        <figure style={{ margin: 0 }}><div style={{ aspectRatio: '1', overflow: 'hidden', background: panel }}><img src={avatarPreviewUrl} alt="R3 house-style avatar preview" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'grayscale(1)' }} /></div><figcaption style={{ ...label, marginTop: 7, marginBottom: 0 }}>R³ house style</figcaption></figure>
-        <div style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-          <button type="button" onClick={applyConvertedAvatar} disabled={avatarApplying} style={{ minHeight: 36, padding: '0 14px', border: `1px solid ${ink}`, background: ink, color: black, fontFamily: sans, fontSize: 9, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase', cursor: avatarApplying ? 'wait' : 'pointer' }}>{avatarApplying ? 'Applying…' : 'Use this avatar'}</button>
-          <button type="button" onClick={convertAvatarToHouseStyle} disabled={avatarConverting || avatarApplying} style={{ minHeight: 36, padding: '0 14px', border: `1px solid ${line}`, background: 'transparent', color: ink, fontFamily: sans, fontSize: 9, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase', cursor: avatarConverting ? 'wait' : 'pointer' }}>Try again</button>
-          <button type="button" onClick={() => setAvatarPreviewUrl(null)} disabled={avatarApplying} style={{ minHeight: 36, padding: '0 6px', border: 0, background: 'transparent', color: muted, fontFamily: sans, fontSize: 9, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase', cursor: 'pointer' }}>Cancel</button>
-        </div>
-      </div>}
+      {houseSource && <HouseAvatarReview userId={userId} name={displayName} source={houseSource} onApplied={applyHouseAvatar} onCancel={() => setHouseSource(null)} />}
+      {!avatarIsHouseStyle && !houseSource && <p role="note" style={{ color: '#E8B86A', fontSize: 11, lineHeight: 1.5, margin: '10px 0 0' }}>{HOUSE_STYLE_REQUIRED}</p>}
       {importMessage && <p style={{ color: /applied|ready|imported|uploaded/i.test(importMessage) ? acid : muted, fontSize: 11, lineHeight: 1.5, margin: '10px 0 0' }}>{importMessage}</p>}
       <p style={{ color: muted, fontSize: 10, lineHeight: 1.5, margin: '9px 0 0' }}>Language applies to your page and content. Pricing region sets the currency for every paid stage.</p>
       <Disclosure id="profile-contact" title="Contact" required summary={contactEmail.trim() || 'Add your email'} open={profileOpen.contact} onToggle={() => setProfileOpen((o) => ({ ...o, contact: !o.contact }))}>
@@ -3314,7 +3286,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
             </div>
             <label style={label}>Choose an avatar</label>
             <div style={{ display: 'flex', gap: 7, overflowX: 'auto', paddingBottom: 8, marginBottom: 12 }}>
-              {defaultAvatars.map((avatar) => { const active = avatarUrl === avatar.image; return <button className="guardian-card" type="button" key={avatar.name} onClick={() => { setAvatarUrl(avatar.image); setAvatarSourceUrl(avatar.image); setAvatarPreviewUrl(null); }} aria-pressed={active} style={{ position: 'relative', width: 100, flex: '0 0 100px', minHeight: 94, padding: '8px 6px 7px', border: `1px solid ${active ? acid : line}`, background: active ? acid : 'transparent', color: active ? black : ink, cursor: 'pointer', fontFamily: sans }}>
+              {defaultAvatars.map((avatar) => { const active = avatarUrl === avatar.image; return <button className="guardian-card" type="button" key={avatar.name} onClick={() => { setAvatarUrl(avatar.image); setAvatarSourceUrl(avatar.image); setHouseSource(null); }} aria-pressed={active} style={{ position: 'relative', width: 100, flex: '0 0 100px', minHeight: 94, padding: '8px 6px 7px', border: `1px solid ${active ? acid : line}`, background: active ? acid : 'transparent', color: active ? black : ink, cursor: 'pointer', fontFamily: sans }}>
                 {active && <span style={{ position: 'absolute', top: 5, right: 5, width: 17, height: 17, display: 'grid', placeItems: 'center', background: black, color: acid }}><Check size={10} /></span>}
                 <img src={avatar.image} alt="" style={{ display: 'block', width: 58, height: 58, maxWidth: '100%', objectFit: 'contain', margin: '0 auto 5px', filter: active ? 'grayscale(1) brightness(.25)' : 'grayscale(1) contrast(.95) brightness(.9)' }} />
                 <span style={{ display: 'block', fontSize: 8, fontWeight: 700, lineHeight: 1.2, textAlign: 'center' }}>{avatar.name}</span>
@@ -4686,6 +4658,16 @@ export function SiteProfileForm({ userId, profile, onProfile }: { userId: string
   const [stage, setStage] = useState(0);
   const [open, setOpen] = useState({ contact: true, links: false, booking: false, about: false, catalog: false });
   const [stageError, setStageError] = useState('');
+  // The profile image must be in the R³ house style (see guardianHouseStyle); a new photo opens the conversion.
+  const [houseSource, setHouseSource] = useState<string | null>(null);
+  const personalIsHouseStyle = isHouseStyleAvatar(profile.avatar_url, links.avatar_house_url);
+  const latestProfile = useRef(profile);
+  latestProfile.current = profile;
+  const applyHouseAvatar = (url: string) => {
+    const current = latestProfile.current;
+    onProfile({ ...current, avatar_url: url, social_links: { ...(current.social_links || {}), avatar_house_url: url } });
+    setHouseSource(null);
+  };
   // Saving replaces every brand row, so it waits until the saved brands have loaded; a failed load blocks it.
   const [brandsLoaded, setBrandsLoaded] = useState<'loading' | 'ok' | 'failed'>('loading');
   useEffect(() => {
@@ -4726,10 +4708,15 @@ export function SiteProfileForm({ userId, profile, onProfile }: { userId: string
   const uploadImage = async (file?: File) => {
     if (!file) return;
     setBusy('upload'); setMessage('');
-    try { set.image(await uploadGuideImage(userId, file)); } catch (e) { setMessage((e as Error).message || 'Upload failed.'); } finally { setBusy(null); }
+    try {
+      const url = await uploadGuideImage(userId, file);
+      set.image(url);
+      if (!biz) setHouseSource(url);
+    } catch (e) { setMessage((e as Error).message || 'Upload failed.'); } finally { setBusy(null); }
   };
   const save = async () => {
     if (brandsLoaded !== 'ok') return; // never overwrite brands that were not loaded
+    if (!personalIsHouseStyle) { setActive('personal'); setStage(0); setMessage(HOUSE_STYLE_REQUIRED); return; }
     setBusy('save'); setMessage('');
     try {
       const saved = await saveGuideProfile(profile);
@@ -4774,12 +4761,20 @@ export function SiteProfileForm({ userId, profile, onProfile }: { userId: string
     </div>
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18 }}>
       {v.image ? <img src={v.image} alt="Profile" referrerPolicy="no-referrer" style={{ width: 36, height: 36, objectFit: 'cover', border: `1px solid ${line}` }} /> : <span aria-hidden="true" style={{ width: 36, height: 36, border: `1px solid ${line}` }} />}
-      <span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{isPersonal ? 'Profile image' : 'Brand image'} · optional</span>
+      {isPersonal
+        ? <span style={{ color: personalIsHouseStyle ? muted : '#E8B86A', fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Profile image · R³ house style {personalIsHouseStyle ? <Check size={10} style={{ verticalAlign: '-1px' }} /> : 'required'}</span>
+        : <span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Brand image · optional</span>}
       <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>
         {busy === 'upload' ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}{busy === 'upload' ? 'Uploading' : v.image ? 'Replace' : 'Upload'}
         <input type="file" aria-label={isPersonal ? 'Upload profile image' : 'Upload brand image'} accept="image/jpeg,image/png,image/webp" onChange={(e) => uploadImage(e.target.files?.[0])} style={{ display: 'none' }} />
       </label>
+      {isPersonal && profile.avatar_url && !personalIsHouseStyle && !houseSource && <button type="button" onClick={() => setHouseSource(profile.avatar_url)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 28, padding: '0 9px', border: `1px solid ${line}`, borderRadius: 2, color: ink, fontFamily: sans, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer', background: 'rgba(245,242,234,.04)' }}><Sparkles size={12} />Convert to R³ house style</button>}
     </div>
+    {isPersonal && houseSource && <HouseAvatarReview userId={userId} name={profile.display_name} source={houseSource} onApplied={applyHouseAvatar} onCancel={() => setHouseSource(null)} />}
+    {isPersonal && !personalIsHouseStyle && !houseSource && <div style={{ marginTop: 10 }}>
+      <p role="note" style={{ color: '#E8B86A', fontSize: 11, lineHeight: 1.5, margin: '0 0 8px' }}>{HOUSE_STYLE_REQUIRED}</p>
+      <div aria-label="House avatars" style={{ display: 'flex', gap: 7, overflowX: 'auto' }}>{HOUSE_AVATARS.map((avatar) => <button type="button" key={avatar.name} onClick={() => set.image(avatar.image)} style={{ flex: '0 0 72px', padding: '6px 4px', border: `1px solid ${line}`, background: 'transparent', color: ink, fontFamily: sans, fontSize: 8, fontWeight: 700, cursor: 'pointer' }}><img src={avatar.image} alt="" style={{ display: 'block', width: 44, height: 44, objectFit: 'contain', margin: '0 auto 4px', filter: 'grayscale(1) contrast(.95) brightness(.9)' }} />{avatar.name}</button>)}</div>
+    </div>}
     <p style={{ color: muted, fontSize: 10, lineHeight: 1.5, margin: '9px 0 0' }}>Language applies to your page and content. Pricing region sets the currency for every paid stage.</p>
     {isPersonal && <Disclosure id="site-catalog-filters" title="Catalog filters" summary="Choose and order the Product and Protocol tabs on your public site" open={open.catalog} onToggle={() => setOpen((x) => ({ ...x, catalog: !x.catalog }))}>
       <p style={{ color: muted, fontSize: 11, lineHeight: 1.55, margin: '18px 0 8px' }}>Visitors always get an All tab. Turn categories on or off below; their order here becomes the order on your site.</p>
