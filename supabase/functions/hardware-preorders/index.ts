@@ -93,7 +93,9 @@ Deno.serve(async (req) => {
       const customer = found.data[0] ?? await stripe.customers.create({ email, name: name || undefined });
       const pi = await stripe.paymentIntents.create({
         amount, currency: CURRENCY, customer: customer.id,
-        automatic_payment_methods: { enabled: true },
+        // Only methods that confirm in place: the preorder form keeps its state in the page, so a redirect away and back
+        // would show a fresh form to someone who has already paid.
+        automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
         description: `R³ preorder (${product})`, receipt_email: email,
         metadata: { product, batch_id: batch.id },
       });

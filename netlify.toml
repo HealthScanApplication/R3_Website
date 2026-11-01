@@ -181,10 +181,16 @@
   to = "/images/:splat"
   status = 200
 
-# Clips in public/videos (the /wearables hero and use-case cards, the /guardians hero): same reason as /images/*.
+# Clips in public/videos (the /wearables hero and use-case cards, the /guardians hero) and the 3D device models in
+# public/models: same reason as /images/*.
 [[redirects]]
   from = "/videos/*"
   to = "/videos/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/models/*"
+  to = "/models/:splat"
   status = 200
 
 [[redirects]]

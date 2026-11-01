@@ -84,6 +84,8 @@ describe('hardware-preorders count', () => {
     expect(data.client_secret).toBe('sec');
     expect(piCreates).toHaveLength(1);
     expect(piCreates[0]).toMatchObject({ amount: 14900, currency: 'usd', metadata: { product: 'ring' } });
+    // No redirect-based methods: the form keeps its state in the page and has no return handling.
+    expect(piCreates[0]).toMatchObject({ automatic_payment_methods: { enabled: true, allow_redirects: 'never' } });
     const row = orders.find(o => o.id === data.purchase_id);
     expect(row).toMatchObject({
       status: 'pending', email: 'qa@example.com', product: 'ring', amount_cents: 14900, currency: 'USD',

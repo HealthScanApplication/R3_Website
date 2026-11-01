@@ -49,12 +49,14 @@ describe('netlify.toml', () => {
     expect(blocks[images]).not.toMatch(/force\s*=\s*true/);
   });
 
-  it('serves the clips under /videos as files too, not the app shell', () => {
-    const videos = find('/videos/*');
-    expect(videos).toBeGreaterThan(-1);
-    expect(find('/*')).toBeGreaterThan(videos);
-    expect(blocks[videos]).toMatch(/to\s*=\s*"\/videos\/:splat"/);
-    expect(blocks[videos]).not.toMatch(/force\s*=\s*true/);
+  it('serves the clips under /videos and the 3D models under /models as files too, not the app shell', () => {
+    for (const dir of ['videos', 'models']) {
+      const rule = find(`/${dir}/*`);
+      expect(rule).toBeGreaterThan(-1);
+      expect(find('/*')).toBeGreaterThan(rule);
+      expect(blocks[rule]).toMatch(new RegExp(`to\\s*=\\s*"\\/${dir}\\/:splat"`));
+      expect(blocks[rule]).not.toMatch(/force\s*=\s*true/);
+    }
   });
 
   it('lets browsers keep /images for a day and refresh in the background, not revalidate every file on every visit', () => {

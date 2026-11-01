@@ -29,6 +29,14 @@ describe('the R³ house-style rule', () => {
     expect(isHouseStyleAvatar('https://cdn.example/raw-photo.jpg', null)).toBe(false);
   });
 
+  it('keeps every converted image, so converting one brand does not undo another', () => {
+    const brandA = 'https://cdn.example/a.webp', brandB = 'https://cdn.example/b.webp';
+    expect(isHouseStyleAvatar(brandA, [brandA, brandB])).toBe(true);
+    expect(isHouseStyleAvatar(brandB, [brandA, brandB])).toBe(true);
+    expect(isHouseStyleAvatar('https://cdn.example/raw.jpg', [brandA, brandB])).toBe(false);
+    expect(houseAvatarFlag(brandA, [brandB, brandA])).toBe(brandA);
+  });
+
   it('a missing image is not house style', () => {
     expect(isHouseStyleAvatar(null, null)).toBe(false);
     expect(isHouseStyleAvatar('', '')).toBe(false);
