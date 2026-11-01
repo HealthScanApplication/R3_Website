@@ -3435,11 +3435,11 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
         <div role="tablist" aria-label="Product kind" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', border: `1px solid ${line}`, marginBottom: 14 }}>
           {PRODUCT_UPLOAD_GROUPS.map((group, index) => { const active = productTab === group.id; const count = related.offers.filter((offer) => offer.access_model === group.id).length; return <button key={group.id} type="button" role="tab" aria-selected={active} onClick={() => setProductTab(group.id)} style={{ minHeight: 48, border: 0, borderLeft: index ? `1px solid ${line}` : 0, background: active ? ink : 'transparent', color: active ? black : ink, fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', cursor: 'pointer' }}>{group.title}{count ? ` · ${count}` : ''}</button>; })}
         </div>
-        {PRODUCT_UPLOAD_GROUPS.filter((group) => group.id === productTab).map((group) => <ProductUploadSection key={group.id} group={group} userId={userId} currency={currency}
+        {PRODUCT_UPLOAD_GROUPS.map((group) => <div key={group.id} role="tabpanel" aria-label={group.title} hidden={group.id !== productTab}><ProductUploadSection group={group} userId={userId} currency={currency}
           offers={related.offers.filter((offer) => offer.access_model === group.id)}
           onSaved={(created) => setRelated((current) => ({ ...current, offers: [...current.offers, ...created] }))}
           onDeleted={(offerId) => setRelated((current) => ({ ...current, offers: current.offers.filter((offer) => offer.id !== offerId) }))}
-          displayName={displayName} />)}
+          displayName={displayName} /></div>)}
         {related.products.length > 0 && <section data-shop-products aria-label="Shop products" style={{ marginTop: 28 }}>
           <span style={{ ...label, color: acid }}>Shop products · {related.products.length} · by value</span>
           <ProtocolCardGrid>{valueSortedProducts(related.products).map((product, index) => <ProtocolCard key={product.id} badge={product.price_cents ? formatMoney(product.price_cents / 100, product.currency || 'GBP') : undefined} kicker={`#${String(index + 1).padStart(2, '0')} by value`} title={product.title} imageUrl={product.image_url} copy={clipCopy(product.description || '')} by={displayName} cta="Manage products" onClick={() => { window.location.href = '/guardians/workspace?tab=products'; }} owned />)}</ProtocolCardGrid>

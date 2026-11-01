@@ -55,7 +55,7 @@ describe('Upload your products (setup step 04)', () => {
     expect(screen.getAllByRole('tab').map((tab) => tab.getAttribute('aria-selected'))).toEqual(['true', 'false']);
     const paid = await group('paid');
     expect(within(paid).getByRole('heading', { name: 'Paid products' })).toBeTruthy();
-    expect(document.querySelector('[data-upload-group="free"]')).toBeNull(); // one tab at a time
+    expect((document.querySelector('[data-upload-group="free"]') as HTMLElement).closest('[role="tabpanel"]')!.hasAttribute('hidden')).toBe(true); // one tab shown at a time
     expect(within(paid).getByLabelText('Paid products price 1')).toBeTruthy();
     const options = [...(within(paid).getByLabelText('Paid products type 1') as HTMLSelectElement).options].map((option) => option.text);
     expect(options).toEqual(expect.arrayContaining(['PDF guide', 'Video course', 'Protocol', 'Protocol + call', 'Community or membership', 'Retreat', 'Physical product']));
@@ -178,5 +178,14 @@ describe('Upload your products (setup step 04)', () => {
     expect(new Set(colours).size).toBe(colours.length); // a different colour for each type
     const grid = paid.querySelector('.r3-pcard')!.closest('[style*="grid-template-columns"]') as HTMLElement;
     expect(grid.style.gridTemplateColumns).toMatch(/minmax\(240px/);
+  });
+
+  it('switching tabs keeps what was typed in the other tab', async () => {
+    setup();
+    const free = await group('free');
+    fireEvent.change(within(free).getByLabelText('Lead magnets link 1'), { target: { value: 'https://example.com/a-checklist.pdf' } });
+    await group('paid');
+    const back = await group('free');
+    expect((within(back).getByLabelText('Lead magnets link 1') as HTMLInputElement).value).toBe('https://example.com/a-checklist.pdf');
   });
 });
