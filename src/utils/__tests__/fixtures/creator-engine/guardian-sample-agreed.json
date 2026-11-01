@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "exportedAt": "2026-11-01T18:00:00.000Z",
+  "consent": { "status": "agreed", "at": "2026-10-31T09:30:00.000Z" },
+  "creator": {
+    "handle": "example_wellness",
+    "platform": "instagram",
+    "displayName": "Example Wellness",
+    "website": "https://example.com",
+    "avatarUrl": "https://example.com/avatar.jpg",
+    "country": "US",
+    "language": "en",
+    "niche": "Gut health"
+  },
+  "pocket": {
+    "title": "Women with gut problems",
+    "audienceTotal": 480000,
+    "audienceAverage": 32000,
+    "creatorsOnFile": 15,
+    "creatorsInPlay": 6,
+    "openings": 4,
+    "reachable": 9
+  },
+  "problems": [
+    {
+      "statement": "Bloating after meals with no clear cause",
+      "evidenceQuote": "Sample quote from a public post, as it appeared.",
+      "evidenceUrl": "https://example.com/post/1",
+      "recurrence": 12,
+      "confirmed": true
+    }
+  ],
+  "products": [
+    { "title": "Example 4-week gut reset", "priceCents": 14900, "currency": "USD", "url": "https://example.com/reset" },
+    { "title": "Example free guide", "priceCents": null, "currency": null, "url": "https://example.com/guide" }
+  ],
+  "sources": [{ "kind": "website", "url": "https://example.com", "title": "Example Wellness" }]
+}
