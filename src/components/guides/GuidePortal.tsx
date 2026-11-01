@@ -3,7 +3,7 @@ import {
   ArrowRight, ChevronRight, FileText, HeartPulse, LogOut,
   Mail, Package, Plus, Salad, Sparkles, Users, Globe2, Loader2,
   Upload, Check, Instagram, Facebook, Youtube, Link2, AtSign, Route, CalendarDays, Download,
-  MoreHorizontal, Droplets, Activity, Bath, Sparkle, HeartHandshake, Hourglass, ChefHat, Wheat, ListChecks, CookingPot, FolderOpen, Trash2, ExternalLink, Hammer, PencilRuler, Blocks, LayoutDashboard, Grid2X2, List, Play, Clock, ShieldCheck, Utensils, Dumbbell, Combine, Clapperboard, BookOpen, Podcast, GraduationCap, AudioLines } from 'lucide-react';
+  MoreHorizontal, Droplets, Activity, Bath, Sparkle, HeartHandshake, Hourglass, ChefHat, Wheat, ListChecks, CookingPot, FolderOpen, Trash2, ExternalLink, Hammer, PencilRuler, Blocks, LayoutDashboard, Grid2X2, List, Play, Clock, ShieldCheck, Utensils, Dumbbell, Combine, Clapperboard, BookOpen, Podcast, GraduationCap, AudioLines, ShoppingBag, CalendarDays, Mountain } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ProtocolEditor } from '../admin/ProtocolEditor';
 import { RoutineMark } from '../Header';
@@ -48,6 +48,7 @@ import { TreatsTalksManager } from './TreatsTalksManager';
 import { isTreatKind } from '../../utils/treatOffers';
 import { removeGreenBackground } from '../../utils/chromaKey';
 import { YouTubeClipBackground } from './YouTubeClipBackground';
+import { ProduceVideoBackdrop } from './ProduceVideoBackdrop';
 import { HeroGlassOverlay, heroGlassOn } from './HeroGlassOverlay';
 import { countryForPlace, mapQueryFor } from '../../utils/placeCountry';
 import { YouTubeClipFields } from './YouTubeClipFields';
@@ -1232,7 +1233,7 @@ export function OfferCheckout({ offer, upsells, profile, accent, onClose, onFres
       {message && stage !== 'done' && <p role="alert" style={{ color: '#EF4444', fontSize: 12, margin: '0 20px 16px', textAlign: 'left' }}>{message}</p>}
   </GuardianModal>;
 }
-function GuardianFunnel({ profile, offers, ramp, accent, headingFont, reviews = [], headlineStyle = 'editorial' }: { headlineStyle?: HeadlineStyle; reviews?: GuardianReview[]; profile: GuideProfile; offers: GuideOffer[]; ramp: GuideValueRamp | null; accent: string; headingFont: string }) {
+function GuardianFunnel({ profile, offers, ramp, accent, headingFont, reviews = [], headlineStyle = 'editorial', backdrop = null }: { backdrop?: React.ReactNode; headlineStyle?: HeadlineStyle; reviews?: GuardianReview[]; profile: GuideProfile; offers: GuideOffer[]; ramp: GuideValueRamp | null; accent: string; headingFont: string }) {
   const ordered = orderFunnelOffers(offers, ramp);
   const entry = ordered.find((offer) => offer.access_model === 'free') || null;
   const nextPaid = ordered.find((offer) => offer.access_model === 'paid' && !SUPPORT_KINDS.includes(offer.kind)) || null;
@@ -1295,13 +1296,14 @@ function GuardianFunnel({ profile, offers, ramp, accent, headingFont, reviews = 
   return <>
     {checkoutOffer && <OfferCheckout key={checkoutOffer.id} offer={checkoutOffer} upsells={paidAfter(checkoutOffer)} profile={profile} accent={accent} reviews={reviews} videos={offerVideos} onFreshCheckout={setCheckoutOffer} onClose={() => setCheckoutOffer(null)} />}
     {!stripeConfig.enabled && ordered.some(offer => offer.access_model === 'paid' && offer.price_cents > 0 && !offer.booking_url) && <p role="status" style={{ padding: '16px 24px', textAlign: 'center', color: accent }}>{stripeConfig.error}</p>}
-    {entry && <section id="start" style={{ padding: `clamp(60px,9vw,120px) ${PAGE_X}`, background: '#F2EFE7', color: '#11120F', borderTop: '1px solid rgba(17,18,15,.2)' }}>
-      <div style={{ maxWidth: 720, margin: '0 auto 26px', textAlign: 'center', fontFamily: APP.font }}>
-        <span style={{ color: APP.greenDark, fontSize: 12, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Follow {profile.display_name}</span>
+    {entry && <section id="start" data-email-section style={{ position: 'relative', overflow: 'clip', minHeight: '80vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: `clamp(60px,9vw,120px) ${PAGE_X}`, background: backdrop ? '#151A12' : '#F2EFE7', color: backdrop ? '#FFF' : '#11120F', borderTop: '1px solid rgba(17,18,15,.2)' }}>
+      {backdrop && <><div aria-hidden="true" data-email-backdrop style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>{backdrop}</div><span aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(0deg,rgba(8,10,7,.62),rgba(8,10,7,.38) 55%,rgba(8,10,7,.5))', pointerEvents: 'none' }} /></>}
+      <div style={{ position: 'relative', zIndex: 2, maxWidth: 720, width: '100%', margin: '0 auto 26px', textAlign: 'center', fontFamily: APP.font }}>
+        <span style={{ color: backdrop ? '#D6E7A8' : APP.greenDark, fontSize: 12, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Follow {profile.display_name}</span>
         <h2 style={{ ...HEADLINE_STYLES[headlineStyle].section, margin: '10px 0 8px' }}>Get new guidance in your inbox.</h2>
-        <p style={{ color: APP.muted, fontSize: 15, fontWeight: 600, margin: 0 }}>Subscribe once and receive {customerFacingOfferTitle(entry.title)} free.</p>
+        <p style={{ color: backdrop ? 'rgba(255,255,255,.86)' : APP.muted, fontSize: 15, fontWeight: 600, margin: 0 }}>Subscribe once and receive {customerFacingOfferTitle(entry.title)} free.</p>
       </div>
-      <div {...tiltHandlers(3)} style={tiltStyle({ position: 'relative', maxWidth: 620, margin: '0 auto', background: APP.bg, color: APP.text, fontFamily: APP.font, borderRadius: 24, overflow: 'hidden', boxShadow: '0 20px 50px rgba(17,24,39,.14)' })}><GlowLayer />
+      <div {...tiltHandlers(3)} style={tiltStyle({ position: 'relative', zIndex: 2, width: '100%', maxWidth: 620, margin: '0 auto', background: APP.bg, color: APP.text, fontFamily: APP.font, borderRadius: 24, overflow: 'hidden', boxShadow: '0 20px 50px rgba(17,24,39,.14)' })}><GlowLayer />
         {leadVideo && state !== 'done' && <video src={leadVideo} controls playsInline style={{ width: '100%', aspectRatio: '16 / 9', objectFit: 'cover', background: '#000' }} />}
         <div {...tiltHandlers(6)} style={tiltStyle({ minWidth: 0, margin: 16, justifyContent: 'center', padding: '24px 22px 20px', background: APP.surface, borderRadius: 16, boxShadow: '0 2px 8px rgba(17,24,39,.08)', display: 'flex', flexDirection: 'column', gap: 12 })}><GlowLayer />
           {state === 'done' ? <>
@@ -1530,13 +1532,48 @@ function ReviewsPanel({ userId, slug }: { userId: string; slug: string }) {
     {reviews.length > 0 && <div style={{ display: 'grid', gap: 6, marginTop: 14 }}><span style={label}>Received</span>{reviews.map((r) => <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, borderTop: `1px solid ${line}`, paddingTop: 8, fontSize: 11, opacity: r.status === 'hidden' ? .5 : 1 }}><span style={{ color: acid }}>{'★'.repeat(r.rating)}</span><span style={{ flex: 1, color: ink }}>{r.body} <span style={{ color: muted }}>· {r.reviewer_name}</span></span><button type="button" onClick={() => toggle(r)} style={small}>{r.status === 'published' ? 'Hide' : 'Show'}</button></div>)}</div>}
   </section>;
 }
+/**
+ * A hero's moving background: the video clip, or the uploaded image or video, with the refracted glass and vignette over it when on.
+ * Shared by the hero and the email section at the end of the page, so both have the same look.
+ */
+/** A background the Guardian chose themselves. The theme's own sample picture (and an offer's card picture) is not one: those sites start on the produce footage. */
+export function ownBackground(url?: string | null): string | null {
+  return url && !/^\/images\/guides\/templates\//.test(url) ? url : null;
+}
+
+function HeroBackdrop({ heroMedia: chosenMedia, backgroundIsVideo = false, clips = [], glass = false, greyscale = false }: { heroMedia: string | null; backgroundIsVideo?: boolean; clips?: YtClip[]; glass?: boolean; greyscale?: boolean }) {
+  const heroMedia = ownBackground(chosenMedia);
+  return <>
+    {!clips.length && !heroMedia && <ProduceVideoBackdrop greyscale={greyscale} />}
+    {clips.length > 0 && <YouTubeClipBackground clips={clips} greyscale={greyscale} />}
+    {!clips.length && heroMedia && !backgroundIsVideo && <img src={heroMedia} alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />}
+    {!clips.length && heroMedia && backgroundIsVideo && <video src={heroMedia} autoPlay muted loop playsInline aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />}
+    {glass && <HeroGlassOverlay />}
+  </>;
+}
+
+/** Mounts its children only once it is near the screen, so a second video player does not start until it is wanted. */
+function MountNearViewport({ children, margin = '500px' }: { children: React.ReactNode; margin?: string }) {
+  const holder = useRef<HTMLDivElement | null>(null);
+  const [near, setNear] = useState(typeof IntersectionObserver === 'undefined');
+  useEffect(() => {
+    const element = holder.current;
+    if (near || !element) return;
+    const observer = new IntersectionObserver((entries) => { if (entries.some((entry) => entry.isIntersecting)) { setNear(true); observer.disconnect(); } }, { rootMargin: margin });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [near, margin]);
+  return <div ref={holder} data-near-viewport={near ? 'true' : 'false'} style={{ position: 'absolute', inset: 0 }}>{near ? children : null}</div>;
+}
+
 /** The section links under the hero's sign-up. Treats and Talks join them when the Guardian has published some. */
+const HERO_ICONS: Record<string, React.ComponentType<{ size?: number; 'aria-hidden'?: boolean }>> = { catalog: ListChecks, shop: ShoppingBag, events: CalendarDays, retreats: Mountain, treats: Sparkle, talks: GraduationCap };
 const HERO_SECTIONS: Array<[string, string]> = [['catalog', 'Routines'], ['shop', 'Products'], ['events', 'Events'], ['retreats', 'Retreats']];
 
 function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, accent, headingFont, background, backgroundIsVideo = false, clips = [], glass = false, sections = HERO_SECTIONS, greyscale = false, cards, headlineStyle = 'editorial', guideId, sourceOfferId }: { audience?: string; reviewSummary?: { rating?: number; reviewCount?: number }; headlineStyle?: HeadlineStyle; name: string; avatarUrl?: string | null; specialties: string[]; headline: string; tags: string[]; bio: string; accent: string; headingFont: string; background?: string | null; backgroundIsVideo?: boolean; clips?: YtClip[]; glass?: boolean; sections?: Array<[string, string]>; greyscale?: boolean; cards: SiteHeroCard[]; guideId?: string; sourceOfferId?: string | null }) {
   const [email, setEmail] = useState('');
   const [captureState, setCaptureState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
-  const heroMedia = background || cards.find((card) => card.imageUrl)?.imageUrl || null;
+  const heroMedia = ownBackground(background);
   async function capture(event: React.FormEvent) {
     event.preventDefault();
     if (!guideId) { document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' }); return; }
@@ -1554,10 +1591,7 @@ function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, a
     window.history.replaceState(null, '', `#${id}`);
   };
   return <section style={{ position: 'relative', overflow: 'clip', minHeight: 'calc(100svh - 64px)', display: 'grid', alignItems: 'center', background: '#151A12', color: '#FFF' }}>
-    {clips.length > 0 && <YouTubeClipBackground clips={clips} greyscale={greyscale} />}
-    {glass && <HeroGlassOverlay />}
-    {!clips.length && heroMedia && !backgroundIsVideo && <img src={heroMedia} alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />}
-    {!clips.length && heroMedia && backgroundIsVideo && <video src={heroMedia} autoPlay muted loop playsInline aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />}
+    <HeroBackdrop heroMedia={heroMedia} backgroundIsVideo={backgroundIsVideo} clips={clips} glass={glass} greyscale={greyscale} />
     <span aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,rgba(8,10,7,.88) 0%,rgba(8,10,7,.62) 48%,rgba(8,10,7,.18) 100%),linear-gradient(0deg,rgba(8,10,7,.72),transparent 55%)' }} />
     <div style={{ position: 'relative', zIndex: 2, width: '100%', maxWidth: 1240, margin: '0 auto', boxSizing: 'border-box', padding: 'clamp(76px,10vh,120px) clamp(24px,6vw,84px)', display: 'grid', gridTemplateColumns: 'minmax(0,720px)', alignItems: 'center' }}>
       <div>
@@ -1575,7 +1609,7 @@ function GuardianSiteHero({ name, avatarUrl, specialties, headline, tags, bio, a
         </form>
         {captureState === 'error' && <span role="alert" style={{ display: 'block', color: '#FFD0C8', fontFamily: APP.font, fontSize: 12, marginTop: 8 }}>We could not add your email. Please try again.</span>}
         <nav aria-label={`${name} profile sections`} style={{ display: 'flex', gap: 0, flexWrap: 'wrap', marginTop: 14, fontFamily: APP.font }}>
-          {sections.map(([id, text]) => <a key={id} href={`#${id}`} onClick={goTo(id)} style={{ minHeight: 44, padding: '0 16px', background: 'rgba(8,10,7,.24)', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)', color: '#FFF', border: '1px solid rgba(255,255,255,.72)', marginLeft: -1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{text}</a>)}
+          {sections.map(([id, text]) => <a key={id} href={`#${id}`} onClick={goTo(id)} style={{ minHeight: 44, padding: '0 16px', background: 'rgba(8,10,7,.24)', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)', color: '#FFF', border: '1px solid rgba(255,255,255,.72)', marginLeft: -1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', gap: 7 }}>{(() => { const Icon = HERO_ICONS[id]; return Icon ? <Icon size={14} aria-hidden /> : null; })()}{text}</a>)}
         </nav>
       </div>
     </div>
@@ -1761,7 +1795,7 @@ function DestinationHeader({ profile, place, lines = [place], kind, virtual = fa
   const country = online ? null : countryForPlace(...lines);
   const mapHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
   return <div data-destination-header style={{ position: 'relative', height: 210, overflow: 'hidden', background: kind === 'retreat' ? '#D7D0C2' : '#263024' }}>
-    {!online && <iframe data-place-map src={`https://maps.google.com/maps?q=${encodeURIComponent(query)}&z=12&output=embed`} title={`Map of ${query}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" tabIndex={-1} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, filter: 'saturate(.85) contrast(1.02)' }} />}
+    {!online && <iframe data-place-map src={`https://maps.google.com/maps?q=${encodeURIComponent(query)}&z=12&output=embed`} title={`Map of ${query}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" tabIndex={-1} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, filter: 'invert(.92) hue-rotate(180deg) brightness(.72) contrast(.92) saturate(.55)' }} />}
     <a href={mapHref} target="_blank" rel="noreferrer" aria-label={`Open ${query} in maps`} style={{ position: 'absolute', inset: 0, color: '#F5F2EA', textDecoration: 'none' }}>
       <span data-place-tag style={{ position: 'absolute', left: 18, top: 18, maxWidth: '68%', display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: '1px solid rgba(245,242,234,.42)', background: 'rgba(17,18,15,.72)', backdropFilter: 'blur(10px)', fontSize: 9, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>
         {country && <span role="img" aria-label={country.name} title={country.name} data-place-flag style={{ fontSize: 15, lineHeight: 1, letterSpacing: 0 }}>{country.flag}</span>}
@@ -1862,8 +1896,8 @@ function GuardianSiteHeader({ brandName, path, right }: { brandName?: string; pa
 }
 
 function PublicLocaleBar({ value, onChange }: { value: GuardianLocalePreference; onChange: (value: GuardianLocalePreference) => void }) {
-  const field: React.CSSProperties = { border: 0, background: 'transparent', color: '#11120F', fontFamily: APP.font, fontSize: 10, lineHeight: 1, fontWeight: 800, letterSpacing: '.02em', outline: 0, cursor: 'pointer', padding: 0 };
-  return <div aria-label="Location, language and currency" title="Location, language and currency" style={{ maxWidth: '100%', display: 'flex', alignItems: 'center', gap: 2, minHeight: 36, padding: '0 5px', boxSizing: 'border-box', border: '1px solid rgba(17,18,15,.16)', borderRadius: 3, background: '#FFF', color: '#11120F', fontFamily: APP.font, boxShadow: '0 3px 12px rgba(0,0,0,.06)' }}>
+  const field: React.CSSProperties = { border: 0, background: 'transparent', color: '#16140F', fontFamily: '"Archivo", "Inter", sans-serif', fontSize: 10, lineHeight: 1, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', outline: 0, cursor: 'pointer', padding: 0 };
+  return <div aria-label="Location, language and currency" title="Location, language and currency" style={{ maxWidth: '100%', display: 'flex', alignItems: 'center', gap: 2, height: 32, padding: '0 8px', boxSizing: 'border-box', border: '1px solid #16140F', borderRadius: 2, background: '#FFF', color: '#16140F', fontFamily: '"Archivo", "Inter", sans-serif' }}>
     <select aria-label="Store region" title={value.region} value={value.region} onChange={(event) => { const option = pricingRegions.find((item) => item.region === event.target.value) || pricingRegions[0]; onChange({ ...value, region: option.region, currency: option.currency }); }} style={{ ...field, width: 62 }}>{pricingRegions.map((option) => <option key={option.region} value={option.region}>{pricingRegionFlags[option.region] || '🌐'} {pricingRegionCodes[option.region] || option.region}</option>)}</select>
     <span aria-hidden="true" style={{ color: 'rgba(17,18,15,.3)' }}>·</span>
     <select aria-label="Page language" title={languageOptions.find((option) => option.code === value.locale)?.name} value={value.locale} onChange={(event) => onChange({ ...value, locale: event.target.value })} style={{ ...field, width: 48 }}>{languageOptions.map((option) => <option key={option.code} value={option.code}>{option.code === 'en' ? 'ENG' : option.code.toUpperCase()}</option>)}</select>
@@ -1958,12 +1992,16 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
   const heroSpecialties = onOfferPath ? [selectedRamp!.problem].filter(Boolean) : profile.specialties;
   const heroTags = onOfferPath ? [selectedRamp!.audience, selectedRamp!.problem].filter(Boolean) : publicExpertiseTags;
   const heroSourceOfferId = (onOfferPath ? pathOffer?.id : undefined) || freeOffers[0]?.id || null;
+  // The email section at the end of the page has the hero's background and glass behind it too, when the Guardian has a video clip or the glass on.
+  const publicClips = clipsFromLinks(socials.theme_background_clips);
+  const publicGlass = heroGlassOn(socials.theme_glass, publicClips.length > 0);
+  const emailBackdrop = <MountNearViewport><HeroBackdrop heroMedia={socials.theme_background || null} backgroundIsVideo={publicBackgroundIsVideo} clips={publicClips} glass={publicGlass} greyscale={publicGreyscale} /></MountNearViewport>;
   return <div className="guardian-public-site" lang={publicLanguage} dir={publicLanguage === 'ar' ? 'rtl' : 'ltr'} style={{ minHeight: '100vh', background: publicPageColor, color: '#11120F', fontFamily: publicBodyFont }}>
     <style>{`.guardian-public-site button,.guardian-public-site input,.guardian-public-site select,.guardian-public-site textarea{font-family:${sans}}.guardian-public-site a{font-family:inherit}.guardian-public-site h1,.guardian-public-site h2,.guardian-public-site h3{font-synthesis:none}@media(max-width:760px){.guardian-header-socials{display:none!important}}`}</style>
-    {publicHeaderStyle !== 'hidden' && <header style={{ position: 'fixed', inset: '0 0 auto', zIndex: 100, minHeight: 64, background: publicHeaderBackground, color: publicHeaderText, borderBottom: '1px solid rgba(17,18,15,.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '0 clamp(8px,4vw,84px)' }}>
-      <a href="/" aria-label="ROUTINE³" style={{ color: publicHeaderText, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 12 }}><RoutineMark size={32} textColor="#16140F" hairline="#16140F" />{socials.brand_name && <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.12em' }}>{socials.brand_name}</span>}</a>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0, marginLeft: 'auto' }}>
-        <PublicLocaleBar value={localePreference} onChange={updateLocalePreference} />
+    {publicHeaderStyle !== 'hidden' && <header style={{ position: 'fixed', inset: '0 0 auto', zIndex: 100, minHeight: 64, background: publicHeaderBackground, color: publicHeaderText, borderBottom: '1px solid rgba(17,18,15,.2)', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', alignItems: 'center', gap: 8, padding: '0 clamp(8px,4vw,84px)' }}>
+      <a href="/" aria-label="R³ Guardian" style={{ color: publicHeaderText, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 12, justifySelf: 'start' }}><RoutineMark size={32} textColor="#16140F" hairline="#16140F" wordmark="R³" suffix="Guardian" />{socials.brand_name && <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.12em' }}>{socials.brand_name}</span>}</a>
+      <div data-header-locale style={{ display: 'flex', justifyContent: 'center', minWidth: 0 }}><PublicLocaleBar value={localePreference} onChange={updateLocalePreference} /></div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0, justifySelf: 'end' }}>
         <span className="guardian-header-socials" style={{ display: 'flex', gap: 11, alignItems: 'center' }}>{socials.instagram && <a href={socials.instagram} aria-label="Instagram" title="Instagram" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><Instagram size={15} /></a>}{socials.facebook && <a href={socials.facebook} aria-label="Facebook" title="Facebook" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><Facebook size={15} /></a>}{socials.tiktok && <a href={socials.tiktok} aria-label="TikTok" title="TikTok" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><AtSign size={15} /></a>}{socials.youtube && <a href={socials.youtube} aria-label="YouTube" title="YouTube" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><Youtube size={16} /></a>}{socials.linktree && <a href={socials.linktree} aria-label="Linktree" title="Linktree" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><Link2 size={15} /></a>}{socials.website && <a href={socials.website} aria-label="Website" title="Website" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><Globe2 size={15} /></a>}</span>
         {isSignedIn && <span style={{ display: 'flex', alignItems: 'center', paddingLeft: 2 }}><a href="/guardians/workspace?tab=profile" aria-label="Open Guardian profile" title="Profile" style={{ position: 'relative', zIndex: 2, color: publicHeaderText, display: 'grid', placeItems: 'center', width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', border: '2px solid #FFF', boxShadow: '0 0 0 1px rgba(17,18,15,.22)', textDecoration: 'none' }}>{profile.avatar_url ? <img src={profile.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontFamily: serif, fontSize: 16 }}>{profile.display_name.charAt(0)}</span>}</a><a href="/guardians/workspace" aria-label="Open Guardian workspace" title="Guardian workspace" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center', width: 38, height: 38, marginLeft: -6, paddingLeft: 5, boxSizing: 'border-box', border: '1px solid rgba(17,18,15,.24)', borderRadius: 4, background: '#FFF', textDecoration: 'none' }}><ShieldCheck size={17} /></a></span>}
       </div>
@@ -1988,7 +2026,7 @@ export function GuardianWebsite({ slug, isSignedIn }: { slug: string; isSignedIn
       <GuardianOfferShelf kind="treat" profile={profile} offers={offers} pagePadding={PAGE_X} />
       <GuardianRetreats profile={profile} retreats={retreats} />
       {reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}
-      <GuardianFunnel key={selectedRamp?.id || 'default'} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} />
+      <GuardianFunnel key={selectedRamp?.id || 'default'} backdrop={emailBackdrop} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} />
       <footer style={{ padding: `28px ${PAGE_X}`, borderTop: '1px solid rgba(17,18,15,.2)', color: '#66645F', fontSize: 11, lineHeight: 1.6 }}>
         {profile.display_name} shares general wellbeing guidance, not medical advice. Speak to your GP or doctor before changing medication, diet or exercise, and about any health concern. Individual results vary.
       </footer>
@@ -3040,7 +3078,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
                     {offerVideoField('free')}<span style={{ ...btn, ...compactControl, width: '100%', minHeight: 40, gridColumn: '1 / -1', boxSizing: 'border-box', background: 'transparent', color: acid, borderColor: line, cursor: 'default' }}>Lead magnet · Step 01</span>
                   </div>
                 </div>; })();
-  // The lead magnet, with a dashed "Add another" beside it. Once there are two they sit together and join into the upsell.
+  // The lead magnet. A white "+" on the arrow after it adds a second free way in; once there are two they sit together and join into the upsell.
   const extraLeadMagnets = selectedLeadMagnets.filter((kind) => kind !== freeOfferType);
   const leadMagnetOptions = freeOfferTypes.filter((offer) => offer.value !== freeOfferType && !selectedLeadMagnets.includes(offer.value));
   const leadMagnetCluster = () => <div role="group" aria-label="Lead magnets" style={{ display: 'flex', alignItems: 'stretch', gap: 12, flex: '0 0 auto' }}>
@@ -3049,12 +3087,6 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       <FreeOfferCard eyebrow="LEAD MAGNET · FREE · #2" title={type?.label || kind} copy={type?.copy || ''} active art={freeOfferArt[kind]} onClick={() => {}} />
       <button type="button" onClick={() => setSelectedLeadMagnets((current) => current.filter((item) => item !== kind))} aria-label={`Remove ${type?.label || kind}`} style={{ ...btn, minHeight: 36, height: 36, background: 'transparent', color: ink, fontSize: 9 }}>Remove</button>
     </div>; })}
-    {extraLeadMagnets.length < 1 && <div style={{ width: 200, flex: '0 0 200px', border: `1px dashed ${line}`, display: 'flex', flexDirection: 'column' }}>
-      <button type="button" onClick={() => setShowLeadMagnetPicker((current) => !current)} aria-expanded={showLeadMagnetPicker} aria-label="Add another lead magnet" style={{ flex: '1 1 auto', minHeight: 190, border: 0, background: 'transparent', color: ink, fontFamily: sans, cursor: 'pointer', display: 'grid', placeItems: 'center', textAlign: 'center', padding: 14 }}>
-        <span><span style={{ display: 'block', fontSize: 26, fontWeight: 300, marginBottom: 6 }}>+</span><strong style={{ display: 'block', fontSize: 13, letterSpacing: '.04em' }}>Add another</strong><span style={{ display: 'block', color: muted, fontSize: 10, lineHeight: 1.4, marginTop: 4 }}>A second free way in. Both lead into your upsell.</span></span>
-      </button>
-      {showLeadMagnetPicker && <div style={{ display: 'grid', gap: 6, padding: '0 10px 10px' }}>{leadMagnetOptions.map((offer) => <button key={offer.value} type="button" onClick={() => { setSelectedLeadMagnets((current) => current.includes(offer.value) ? current : [...current, offer.value]); setShowLeadMagnetPicker(false); }} style={{ ...btn, minHeight: 36, height: 'auto', padding: '8px 10px', background: 'transparent', color: ink, fontSize: 10, textAlign: 'left' }}>{offer.label}</button>)}</div>}
-    </div>}
     {extraLeadMagnets.length >= 1 && <span role="img" aria-label="Both lead magnets join into your upsell" title="Both lead magnets join into your upsell" style={{ width: 26, flex: '0 0 26px', alignSelf: 'stretch', margin: '44px 0', borderTop: `1px solid ${acid}`, borderRight: `1px solid ${acid}`, borderBottom: `1px solid ${acid}` }} />}
   </div>;
   const paidOfferCard = (offer: (typeof offerCards)[number]) => {
@@ -3343,7 +3375,15 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
             <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'stretch', gap: 0, minWidth: 'max-content' }}>
                 {leadMagnetCluster()}
-                {offerCards.filter((offer) => selectedUpsells.includes(offer.kind)).map((offer) => <Fragment key={offer.kind}><span aria-hidden="true" style={{ width: 34, flex: '0 0 34px', alignSelf: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: acid }}><ArrowRight size={22} strokeWidth={1.4} /></span>{paidOfferCard(offer)}</Fragment>)}
+                {offerCards.filter((offer) => selectedUpsells.includes(offer.kind)).map((offer, position) => <Fragment key={offer.kind}>{position === 0 && extraLeadMagnets.length < 1
+                  ? <span data-journey-plus="free" style={{ width: 64, flex: '0 0 64px', alignSelf: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, position: 'relative' }}>
+                    <ArrowRight aria-hidden="true" size={22} strokeWidth={1.4} color={acid} />
+                    <button type="button" onClick={() => setShowLeadMagnetPicker((current) => !current)} aria-expanded={showLeadMagnetPicker} aria-label="Add another lead magnet" title="Add a second free way in" style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid #FFF', background: '#FFF', color: black, cursor: 'pointer', display: 'grid', placeItems: 'center', fontSize: 18, lineHeight: 1, fontFamily: sans, padding: 0 }}>+</button>
+                    {showLeadMagnetPicker && <div style={{ position: 'absolute', top: '100%', marginTop: 8, zIndex: 5, width: 200, display: 'grid', gap: 6, padding: 10, background: panel, border: `1px solid ${line}` }}><span style={{ color: muted, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>Second free way in</span>{leadMagnetOptions.map((option) => <button key={option.value} type="button" onClick={() => { setSelectedLeadMagnets((current) => current.includes(option.value) ? current : [...current, option.value]); setShowLeadMagnetPicker(false); }} style={{ ...btn, minHeight: 36, height: 'auto', padding: '8px 10px', background: 'transparent', color: ink, fontSize: 10, textAlign: 'left' }}>{option.label}</button>)}</div>}
+                  </span>
+                  : <span aria-hidden="true" style={{ width: 34, flex: '0 0 34px', alignSelf: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: acid }}><ArrowRight size={22} strokeWidth={1.4} /></span>}{paidOfferCard(offer)}{position === 0 && offerCards.some((card) => !selectedUpsells.includes(card.kind)) && <span data-journey-plus="upsell" style={{ width: 64, flex: '0 0 64px', alignSelf: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                    <button type="button" onClick={() => setShowAddOfferOptions(true)} aria-label="Add an upsell" title="Add an upsell" style={{ width: 28, height: 28, borderRadius: '50%', border: `1px solid ${acid}`, background: 'transparent', color: acid, cursor: 'pointer', display: 'grid', placeItems: 'center', fontSize: 18, lineHeight: 1, fontFamily: sans, padding: 0 }}>+</button>
+                  </span>}</Fragment>)}
                 {offerCards.some((offer) => !selectedUpsells.includes(offer.kind)) && <Fragment><span aria-hidden="true" style={{ width: 34, flex: '0 0 34px', alignSelf: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: line }}><ArrowRight size={22} strokeWidth={1.4} /></span><div style={{ width: 320, flex: '0 0 320px', border: `1px dashed ${muted}`, background: 'transparent', display: 'flex', flexDirection: 'column' }}>
                   <button type="button" onClick={() => setShowAddOfferOptions((current) => !current)} aria-expanded={showAddOfferOptions} style={{ minHeight: 190, flex: '1 1 auto', border: 0, background: 'transparent', color: ink, fontFamily: sans, cursor: 'pointer', display: 'grid', placeItems: 'center', textAlign: 'center', padding: '38px 20px 24px' }}><span><span style={{ width: 48, height: 48, margin: '0 auto 14px', border: `1px solid ${ink}`, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 25, fontWeight: 300 }}>+</span><strong style={{ display: 'block', fontSize: 16 }}>Add next offer</strong><span style={{ display: 'block', color: muted, fontSize: 10, marginTop: 7 }}>{offerCards.filter((offer) => !selectedUpsells.includes(offer.kind)).length} options available</span></span></button>
                   {showAddOfferOptions && <div style={{ display: 'grid', gap: 6, padding: '0 10px 10px' }}>{offerCards.filter((offer) => !selectedUpsells.includes(offer.kind)).map((offer) => { const art = offerTypeArt[offer.kind]; return <button type="button" key={offer.kind} onClick={() => addValuePathOffer(offer.kind)} style={{ minHeight: 58, border: `1px solid ${line}`, background: panel, color: ink, padding: '8px 10px', fontFamily: sans, cursor: 'pointer', display: 'grid', gridTemplateColumns: '42px minmax(0,1fr) auto', alignItems: 'center', gap: 9, textAlign: 'left' }}><span aria-hidden="true" style={{ width: 38, height: 38, backgroundImage: `url(${art.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${art.cols * 100}% ${art.rows * 100}%`, backgroundPosition: `${(art.index % art.cols) * 100 / Math.max(1, art.cols - 1)}% ${Math.floor(art.index / art.cols) * 100 / Math.max(1, art.rows - 1)}%`, filter: 'grayscale(1) contrast(.98)' }} /><span><strong style={{ display: 'block', fontSize: 10 }}>{offer.label}</strong><span style={{ display: 'block', color: muted, fontSize: 8, marginTop: 3 }}>{offerAccess[offer.kind] === 'free' ? 'Free' : `${formatMoney(upsellDrafts[offer.kind].price, currency)}${billingLabels[upsellDrafts[offer.kind].billingModel].suffix}`}</span></span><Plus size={14} /></button>; })}</div>}

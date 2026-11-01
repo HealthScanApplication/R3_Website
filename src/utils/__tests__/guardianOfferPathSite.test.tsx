@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { GuardianWebsite } from '../../components/guides/GuidePortal';
 
 const CLIPS = JSON.stringify([{ id: 'c7rNVcYU_-s', start: 1980, end: 1988, zoom: 1.4 }]);
@@ -76,5 +76,47 @@ describe('the hero on the public page', () => {
     socialExtras = { theme_glass: 'on' };
     visit('/guardians/john-ferreira');
     await waitFor(() => expect(document.querySelector('[data-hero-glass]')).toBeTruthy());
+  });
+});
+
+describe('the email section at the end of the page', () => {
+  const emailSection = () => document.querySelector('[data-email-section]') as HTMLElement;
+  it('is 80% of the screen tall, with its content centred', async () => {
+    visit('/guardians/john-ferreira');
+    await waitFor(() => expect(emailSection()).toBeTruthy());
+    expect(emailSection().style.minHeight).toBe('80vh');
+    expect(emailSection().style.justifyContent).toBe('center');
+    // a plain profile starts on the same fruit and vegetable footage as the hero
+    await waitFor(() => expect(emailSection().querySelector('[data-produce-backdrop]')).toBeTruthy());
+  });
+
+  it('has the hero\'s video and glass behind it, once it is near the screen, with light text over it', async () => {
+    socialExtras = { theme_background_clips: CLIPS };
+    visit('/guardians/john-ferreira');
+    await waitFor(() => expect(emailSection()?.querySelector('[data-email-backdrop]')).toBeTruthy());
+    const holder = emailSection().querySelector('[data-near-viewport]') as HTMLElement;
+    expect(holder).toBeTruthy();
+    // The test environment has no IntersectionObserver, so it mounts straight away, like an old browser would.
+    await waitFor(() => expect(emailSection().querySelector('[data-youtube-clip]')).toBeTruthy());
+    expect(emailSection().querySelector('[data-hero-glass]')).toBeTruthy();
+    expect(emailSection().style.minHeight).toBe('80vh');
+    const heading = within(emailSection()).getByRole('heading', { name: 'Get new guidance in your inbox.' });
+    expect(heading).toBeTruthy();
+    expect((within(emailSection()).getByText(/^Follow /) as HTMLElement).style.color).toMatch(/214, 231, 168|#D6E7A8/i); // light, not the dark green of the plain page
+    // the form card sits above the backdrop
+    expect(Number((emailSection().querySelector('form') as HTMLElement).closest('div[style*="z-index"]') ? 1 : 0)).toBe(1);
+  });
+
+  it('waits until it is near the screen before it starts a second video player', async () => {
+    const observed: Array<() => void> = [];
+    vi.stubGlobal('IntersectionObserver', class { constructor(private callback: (entries: Array<{ isIntersecting: boolean }>) => void) { observed.push(() => this.callback([{ isIntersecting: true }])); } observe() {} disconnect() {} });
+    socialExtras = { theme_background_clips: CLIPS };
+    visit('/guardians/john-ferreira');
+    await waitFor(() => expect(emailSection()?.querySelector('[data-near-viewport]')).toBeTruthy());
+    const holder = emailSection().querySelector('[data-near-viewport]') as HTMLElement;
+    expect(holder.getAttribute('data-near-viewport')).toBe('false');
+    expect(emailSection().querySelector('[data-youtube-clip]')).toBeNull(); // not yet
+    observed.forEach((fire) => fire());
+    await waitFor(() => expect(emailSection().querySelector('[data-youtube-clip]')).toBeTruthy());
   });
 });

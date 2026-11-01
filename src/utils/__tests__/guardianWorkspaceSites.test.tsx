@@ -22,7 +22,7 @@ describe('workspace sites as tall website cards', () => {
     const section = screen.getByRole('region', { name: 'Your sites' });
     const grid = section.querySelector('.g-sitecards') as HTMLElement;
     expect(grid.style.gridTemplateColumns).toMatch(/minmax\(min\(440px,\s*100%\)/); // 2 x 440 fits the 1100px column, 3 do not
-    expect((section.querySelector('[data-site-hero]') as HTMLElement).style.aspectRatio).toBe('4 / 5'); // tall
+    expect((section.querySelector('[data-site-hero]') as HTMLElement).style.aspectRatio).toBe('16 / 9'); // website ratio
     expect(open(section, 'John Ferreira profile site')).toBeTruthy();
     expect(open(section, 'Better sleep')).toBeTruthy();
     expect(within(section).getByText('/guardians/john-ferreira')).toBeTruthy();
