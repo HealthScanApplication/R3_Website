@@ -20,7 +20,7 @@ import { IMAGE_ACCEPT, describeRejections, quickImageProblem, validateImageFile,
 import { createMonoLogo, isMonoLogoUrl, logoImageStyle } from '../../utils/brandLogo';
 import { PullFromLink } from './PullFromLink';
 import { BrandScopeBar, useBrandScope } from './BrandScopeBar';
-import { brandSiteProfile, brandSitePath, brandSlugFromPath, siteOwns } from '../../utils/brandSite';
+import { brandSiteProfile, brandSitePath, brandSlugFromPath, savedBrandId, savedBrandMoves, siteOwns } from '../../utils/brandSite';
 import { inBrandScope } from '../../utils/brandScope';
 import { GuardianAvatar, useGuardianAvatarUrl } from './GuardianAvatar';
 import { ProtocolChildrenPanel } from './ProtocolChildrenPanel';
@@ -267,9 +267,6 @@ const storyTemplates: { id: StoryTemplateId; name: string; style: string; descri
 /** A portrait is an image: the upload helper also accepts videos (for page backgrounds), which make no sense here. */
 const portraitProblem = (file: File) => quickImageProblem(file);
 const PORTRAIT_ACCEPT = IMAGE_ACCEPT;
-
-/** A saved brand's local id is `brand-<uuid>`; a brand added this session has `brand-<time>` and no saved id yet. */
-const savedBrandId = (localId: string): string | undefined => (/^brand-[0-9a-f]{8}-[0-9a-f]{4}-/.test(localId) ? localId.slice('brand-'.length) : undefined);
 
 /** Copies a picture found on another site into a File. Most sites allow it for their public images; when one does not, the person is told what to do instead. */
 async function copyRemoteImage(url: string): Promise<File> {
@@ -2089,7 +2086,8 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   const publishedRamps = valueRamps.filter(ramp => ramp.status === 'published');
   const selectedRamp = pathSlug ? publishedRamps.find(ramp => encodeURIComponent(ramp.slug) === pathSlug) : publishedRamps[0];
   if (!profile || (pathSlug && !selectedRamp) || (brandSlug && !activeBrand)) return <div style={{ minHeight: '100vh', background: black, color: ink, display: 'grid', placeItems: 'center', padding: 24, fontFamily: sans, textAlign: 'center' }}><div><Brand /><h1 style={{ fontFamily: serif, fontSize: 48, fontWeight: 300, margin: '48px 0 12px' }}>This page is not published yet.</h1><a href="/guardians" style={{ color: acid }}>Return to Guardians</a></div></div>;
-  const publishedOffers = offers.filter((offer) => offer.status === 'published' && onSite(offer.brand_id));
+  // A value-ramp page (/value-ramp/<slug>) shows the offers that path names, whichever brand they belong to.
+  const publishedOffers = offers.filter((offer) => offer.status === 'published' && (pathSlug || onSite(offer.brand_id)));
   // Every section of the page in value-ramp order. A section with something in it is a tag under the call to action; the owner also sees the empty ones.
   const isOwner = isSignedIn && user?.id === profile.user_id;
   const siteEvents = events.filter((event) => onSite(event.brand_id));
@@ -2967,6 +2965,14 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   };
 
   /** Save this part of the setup as a draft: the profile (photos, avatar, brand look, audience…) and, once they have loaded, the brands. Never publishes or changes approval. */
+  /** After a save, brands added this session get their saved ids, so a later rename keeps them (and their content and page address). */
+  function adoptSavedBrands(saved: GuideBrand[], saving: BrandDraft[]) {
+    const moves = savedBrandMoves(saving, saved);
+    if (!moves.size) return;
+    setBrandProfiles((current) => current.map((draft) => { const move = moves.get(draft.localId); return move ? { ...draft, localId: move.localId, slug: move.slug } : draft; }));
+    setActiveBrandId((current) => moves.get(current)?.localId ?? current);
+  }
+
   async function saveProgress(override?: { avatarUrl?: string; houseAvatarUrl?: string }): Promise<boolean> {
     const freshAvatar = typeof override?.avatarUrl === 'string' ? override.avatarUrl : undefined; // state set a moment ago is not in this closure yet
     const houses = override?.houseAvatarUrl ? [...houseAvatarUrls, override.houseAvatarUrl] : houseAvatarUrls; // likewise for a just-converted image
@@ -2988,7 +2994,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       // Brands are only replaced once they have loaded, so a failed load can never wipe saved business brands.
       if (brandsLoaded === 'ok') {
         const brandsToSave = brandProfiles.map((brand) => brand.localId === activeBrandId ? currentBrandDraft(freshAvatar, houses) : brand);
-        await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, id: savedBrandId(localId), is_primary: localId === (writesProfile && !savedStatus ? activeBrandId : savedPrimaryId) })));
+        adoptSavedBrands(await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, id: savedBrandId(localId), is_primary: localId === (writesProfile && !savedStatus ? activeBrandId : savedPrimaryId) }))), brandsToSave);
       }
       setSaveState({ status: 'saved', at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
       return true;
@@ -3023,7 +3029,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       const profile = await saveGuideProfile(profileRow(savedStatus === 'approved' ? 'approved' : 'submitted', 6));
       const selectedBrand = currentBrandDraft();
       const brandsToSave = brandProfiles.map((brand) => brand.localId === activeBrandId ? selectedBrand : brand);
-      await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, id: savedBrandId(localId), is_primary: localId === activeBrandId })));
+      adoptSavedBrands(await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, id: savedBrandId(localId), is_primary: localId === activeBrandId }))), brandsToSave);
       if (profile.status !== 'approved') await requestGuardianReview().catch(() => null);
       setSavedStatus(profile.status);
     } catch (e: any) { setError(e.message?.includes('guide_profiles') ? 'Guardian database is not installed yet. Apply the portal migration first.' : e.message); }
@@ -3045,7 +3051,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
       const profile = await saveGuideProfile(profileRow(savedStatus === 'approved' ? 'approved' : 'submitted', 6));
       const selectedBrand = currentBrandDraft();
       const brandsToSave = brandProfiles.map((brand) => brand.localId === activeBrandId ? selectedBrand : brand);
-      await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, id: savedBrandId(localId), is_primary: localId === activeBrandId })));
+      adoptSavedBrands(await replaceGuideBrands(userId, brandsToSave.map(({ localId, ...brand }) => ({ ...brand, id: savedBrandId(localId), is_primary: localId === activeBrandId }))), brandsToSave);
       // Republishing updates the offers saved last time (matched by type + free/paid) instead of duplicating them.
       const [existingOffers, existingRecipes] = await Promise.all([listGuideOffers(userId).catch(() => [] as GuideOffer[]), listGuideRecipes(userId).catch(() => [] as GuideRecipe[])]);
       const claimed = new Set<string>();
@@ -5607,7 +5613,9 @@ export function SiteProfileForm({ userId, profile, onProfile }: { userId: string
         : { name: saved.display_name, kind: 'personal' as const, logo_url: l.logo_url || saved.avatar_url || null, contact_email: saved.contact_email || '', whatsapp_phone: saved.whatsapp_phone || '', website_url: l.website || '',
           social_links: { instagram: l.instagram || '', facebook: l.facebook || '', tiktok: l.tiktok || '', youtube: l.youtube || '', linktree: l.linktree || '', ...brandKitLinks(personalKit) },
           language: l.language || 'English', pricing_region: l.pricing_region || 'United Kingdom', currency: l.currency || 'GBP', is_primary: !brands.some((b) => b.is_primary) };
-      await replaceGuideBrands(userId, [personal, ...brands.map(({ key, ...b }) => ({ ...b, id: savedBrandId(key) }))]);
+      const savedBrands = await replaceGuideBrands(userId, [personal, ...brands.map(({ key, ...b }) => ({ ...b, id: savedBrandId(key) }))]);
+      const moves = savedBrandMoves(brands.map((b) => ({ localId: b.key, name: b.name, kind: b.kind })), savedBrands);
+      if (moves.size) { setBrands((list) => list.map((b) => { const move = moves.get(b.key); return move ? { ...b, key: move.localId, slug: move.slug } : b; })); setActive((current) => moves.get(current)?.localId ?? current); }
       setMessage('Saved.');
     } catch (e) { setMessage(`Could not save: ${(e as Error).message || 'try again'}`); }
     finally { setBusy(null); }

@@ -40,3 +40,21 @@ export function brandSiteProfile(profile: GuideProfile | null, brand?: GuideBran
     social_links: { ...profile.social_links, ...links, ...(brand.website_url ? { website: brand.website_url } : {}) },
   };
 }
+
+/** A saved brand's local id is `brand-<uuid>`; a brand added this session has `brand-<time>` and no saved id yet. */
+export const savedBrandId = (localId: string): string | undefined => (/^brand-[0-9a-f]{8}-[0-9a-f]{4}-/.test(localId) ? localId.slice('brand-'.length) : undefined);
+
+/**
+ * After a save, a brand that was only known by a temporary local id now has a real one. This says which local ids to swap
+ * for which saved ones (and the page address the brand was given), so the next save names the brand by id: a rename then
+ * keeps its products, offers and page address instead of looking like a new brand.
+ */
+export function savedBrandMoves(drafts: { localId: string; name: string; kind: string }[], saved: Pick<GuideBrand, 'id' | 'name' | 'kind' | 'slug'>[]): Map<string, { localId: string; slug: string | null }> {
+  const moves = new Map<string, { localId: string; slug: string | null }>();
+  for (const draft of drafts) {
+    if (draft.kind === 'personal' || savedBrandId(draft.localId)) continue;
+    const hit = saved.find((item) => item.kind !== 'personal' && item.name.trim().toLowerCase() === draft.name.trim().toLowerCase());
+    if (hit?.id) moves.set(draft.localId, { localId: `brand-${hit.id}`, slug: hit.slug ?? null });
+  }
+  return moves;
+}

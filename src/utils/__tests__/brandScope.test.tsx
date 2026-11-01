@@ -58,3 +58,18 @@ describe('BrandScopeBar', () => {
     expect(screen.queryByRole('group', { name: 'Show brand' })).toBeNull();
   });
 });
+
+describe('a remembered scope that is not one of this Guardian\'s brands', () => {
+  it('is reset to All, so nothing is hidden by a choice from another account or a removed brand', async () => {
+    localStorage.setItem('r3-brand-scope', 'someone-elses-brand');
+    render(<><BrandScopeBar userId="g" /><Probe /></>);
+    await waitFor(() => expect(screen.getByTestId('scope').textContent).toBe('all'));
+    expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true');
+  });
+  it('is also reset when the Guardian has only one brand', async () => {
+    mocks.brands.mockReturnValue([BRANDS[0]]);
+    localStorage.setItem('r3-brand-scope', 'b-tre');
+    render(<><BrandScopeBar userId="g" /><Probe /></>);
+    await waitFor(() => expect(screen.getByTestId('scope').textContent).toBe('all'));
+  });
+});

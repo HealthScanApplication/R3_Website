@@ -6,6 +6,7 @@ import { GuardianWebsite } from '../../components/guides/GuidePortal';
 
 const CLIPS = JSON.stringify([{ id: 'c7rNVcYU_-s', start: 1980, end: 1988, zoom: 1.4 }]);
 let socialExtras: Record<string, string> = {};
+let offerBrand: string | null = null;
 const PROFILE = { user_id: 'owner', slug: 'john-ferreira', display_name: 'John Ferreira', headline: 'Feel better in your everyday life.', bio: 'I help everyone with through protocol.', avatar_url: null, specialties: ['Sleep'], status: 'approved', onboarding_step: 5, contact_email: 'j@example.com', whatsapp_phone: '', commission_percent: 0,
   social_links: { audience_details: JSON.stringify({ Everyone: { min: 18, max: 80, stages: [] } }) } };
 const OFFER = { id: 'o1', guide_id: 'owner', title: '7-day menopause sleep challenge for women', description: 'A free week to sleep through the night again.', kind: 'routine', access_model: 'free', status: 'published', price_cents: 0, currency: 'GBP', cover_url: null };
@@ -16,11 +17,12 @@ vi.mock('../supabase/client', async (importOriginal) => ({ ...await importOrigin
 vi.mock('../guidePortal', async (importOriginal) => ({
   ...await importOriginal<any>(),
   getGuideProfileBySlug: async () => ({ ...PROFILE, social_links: { ...PROFILE.social_links, ...socialExtras } }),
-  listGuideOffers: async () => [OFFER],
+  listGuideOffers: async () => [{ ...OFFER, brand_id: offerBrand }],
+  listPublicGuideBrands: async () => [{ id: 'b-personal', guide_id: 'owner', name: 'John Ferreira', kind: 'personal', slug: null, logo_url: null, website_url: '', social_links: {}, is_primary: true }, { id: 'b-calm', guide_id: 'owner', name: 'Calm Co', kind: 'business', slug: 'calm-co', logo_url: null, website_url: '', social_links: {}, is_primary: false }],
   listGuideValueRamps: async () => [RAMP],
 }));
 
-beforeEach(() => { socialExtras = {}; vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => [], text: async () => '[]' }) as Response)); });
+beforeEach(() => { socialExtras = {}; offerBrand = null; vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => [], text: async () => '[]' }) as Response)); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const visit = (path: string) => { window.history.replaceState({}, '', path); return render(<GuardianWebsite slug="john-ferreira" isSignedIn={false} />); };
@@ -41,6 +43,13 @@ describe('an offer path is its own page', () => {
     expect(document.body.textContent).toMatch(/Women/);
     expect(document.body.textContent).toMatch(/Sleep problems/);
     expect(document.body.textContent).not.toMatch(/I help everyone with through protocol/); // the Guardian's general bio is not this page's pitch
+  });
+
+  it('keeps the path\'s own offer even when that offer belongs to a brand', async () => {
+    offerBrand = 'b-calm'; // the offer is Calm Co's: the path names it, so the path's page still shows it
+    visit('/guardians/john-ferreira/value-ramp/better-sleep');
+    expect((await heroHeading()).textContent).toMatch(/7-day menopause sleep challenge for women/i);
+    expect(document.body.textContent).toMatch(/A free week to sleep through the night again\./);
   });
 
   it('an offer path that does not exist is not the profile page in disguise', async () => {
