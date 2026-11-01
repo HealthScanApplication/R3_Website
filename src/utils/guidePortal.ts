@@ -56,6 +56,8 @@ export interface GuideEvent {
   guide_id: string;
   /** The brand this belongs to; empty means the Guardian's own (personal) page. */
   brand_id?: string | null;
+  /** Further brands whose pages also show it (see brandSite.itemBrandIds). */
+  brand_ids?: string[] | null;
   title: string;
   description: string | null;
   start_at: string;
@@ -151,7 +153,7 @@ export async function deleteGuideEvent(guideId: string, eventId: string): Promis
   if (error) throw error;
 }
 
-export type GuideRetreat = { id: string; guide_id: string; brand_id?: string | null; /** Room choices with a price per guest count (see retreatRooms); empty for a retreat with one price. */ options?: unknown; title: string; description: string | null; location: string | null; image_url: string | null; booking_url: string | null; source_url: string; source_external_id: string; status: string; duration_days?: number | null; price_from_cents?: number | null; currency?: string | null; price_label?: string | null };
+export type GuideRetreat = { id: string; guide_id: string; brand_id?: string | null; brand_ids?: string[] | null; /** Room choices with a price per guest count (see retreatRooms); empty for a retreat with one price. */ options?: unknown; title: string; description: string | null; location: string | null; image_url: string | null; booking_url: string | null; source_url: string; source_external_id: string; status: string; duration_days?: number | null; price_from_cents?: number | null; currency?: string | null; price_label?: string | null };
 export async function listGuideRetreats(guideId: string): Promise<GuideRetreat[]> {
   const { data, error } = await db().from('guide_retreats').select('*').eq('guide_id', guideId).eq('status', 'published').order('title');
   if (error) throw error;
@@ -181,6 +183,8 @@ export interface GuideOffer {
   guide_id: string;
   /** The brand this belongs to; empty means the Guardian's own (personal) page. */
   brand_id?: string | null;
+  /** Further brands whose pages also show it (see brandSite.itemBrandIds). */
+  brand_ids?: string[] | null;
   kind: 'lead_magnet' | 'ebook' | 'recipe_book' | 'routine' | 'routine_guidance' | 'one_to_one_call' | 'group_call' | 'community' | 'course' | 'in_person' | 'journey' | 'festival' | 'team_program' | 'product' | 'program' | 'treat' | 'talk';
   title: string;
   description: string | null;
@@ -586,6 +590,15 @@ export async function listRoutineOwners(userId: string, mainName: string, mainAv
     owners.set(row.protocol_id, { name: profile?.name || mainName, avatarUrl: webUrl(profile?.avatar_url) || (row.profile_id ? null : webUrl(mainAvatar)), relation: row.profile_id ? (profile?.is_main_user ? 'self' : profile?.relation || 'family') : 'self', gender: profile?.gender ?? null, age: typeof profile?.age === 'number' ? profile.age : null });
   }
   return owners;
+}
+
+export type ItemBrandTable = 'guide_offers' | 'guide_products' | 'guide_events' | 'guide_retreats';
+
+/** Puts an offer, product, event or retreat on the given brands' pages. `brand_ids` needs the multi-brand migration. */
+export async function setItemBrands(table: ItemBrandTable, guideId: string, id: string, brands: { brand_id: string | null; brand_ids: string[] }): Promise<{ brand_id: string | null; brand_ids: string[] }> {
+  const { error } = await db().from(table).update(brands).eq('id', id).eq('guide_id', guideId);
+  if (error) throw error;
+  return brands;
 }
 
 export async function listGuideOffers(userId: string): Promise<GuideOffer[]> {
@@ -1180,6 +1193,8 @@ export interface GuideProduct {
   guide_id: string;
   /** The brand this belongs to; empty means the Guardian's own (personal) page. */
   brand_id?: string | null;
+  /** Further brands whose pages also show it (see brandSite.itemBrandIds). */
+  brand_ids?: string[] | null;
   shop_domain: string;
   myshopify_domain: string | null;
   product_handle: string;
@@ -1229,10 +1244,14 @@ export async function listGuideProducts(guideId: string): Promise<GuideProduct[]
 /** Published products for a Guardian's public site. RLS also requires the Guardian to be approved. */
 /** `brandId`: a brand's id for its own page, null for the Guardian's own page (products with no brand), undefined for all of them. Filtered in the query so a page's products are never crowded out by another brand's. */
 export async function listPublicGuideProducts(guideId: string, brandId?: string | null): Promise<GuideProduct[]> {
-  let query = db().from('guide_products').select('*, guide_product_protocols(protocol_id, position)').eq('guide_id', guideId).eq('status', 'published');
-  if (brandId === null) query = query.is('brand_id', null);
-  else if (brandId) query = query.eq('brand_id', brandId);
-  const { data, error, status } = await query.order('sort_order').limit(60);
+  const base = () => db().from('guide_products').select('*, guide_product_protocols(protocol_id, position)').eq('guide_id', guideId).eq('status', 'published');
+  const run = (query: ReturnType<typeof base>) => query.order('sort_order').limit(60);
+  if (brandId === null) { const { data, error, status } = await run(base().is('brand_id', null)); if (error) throw productsError(error, status); return (data || []).map(withProtocolIds); }
+  if (!brandId) { const { data, error, status } = await run(base()); if (error) throw productsError(error, status); return (data || []).map(withProtocolIds); }
+  // A brand's page shows its own products and those that list it among their further brands. Before the brand_ids column exists, only its own.
+  const withExtra = await run(base().or(`brand_id.eq.${brandId},brand_ids.cs.{${brandId}}`));
+  if (!withExtra.error) return (withExtra.data || []).map(withProtocolIds);
+  const { data, error, status } = await run(base().eq('brand_id', brandId));
   if (error) throw productsError(error, status);
   return (data || []).map(withProtocolIds);
 }
