@@ -84,4 +84,14 @@ describe('Build a product (setup step 04)', () => {
     await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(1));
     expect(mocks.create.mock.calls[0][1]).toMatchObject({ kind: 'one_to_one_call', booking_url: 'https://cal.com/guide/intro', affiliate_url: null });
   });
+
+  it('numbers the types by value, lowest first, with a suggested price on each', async () => {
+    setup();
+    const panel = await screen.findByRole('region', { name: 'Build a product' });
+    const cards = [...panel.querySelectorAll('[data-product-type]')];
+    expect(cards.map((card) => card.querySelector('[data-value-rank]')?.textContent)).toEqual(['#01', '#02', '#03', '#04', '#05', '#06', '#07', '#08']);
+    expect(cards[0].getAttribute('data-product-type')).toBe('recipe_book'); // £24, the cheapest
+    expect(cards[cards.length - 1].getAttribute('data-product-type')).toBe('festival'); // £1,500, the dearest
+    for (const card of cards) expect(card.querySelector('[data-suggested-price]')?.textContent).toMatch(/^Suggested \D?\d/);
+  });
 });
