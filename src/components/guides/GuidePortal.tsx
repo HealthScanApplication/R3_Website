@@ -3,7 +3,7 @@ import {
   ArrowRight, ChevronRight, FileText, HeartPulse, LogOut,
   Mail, Package, Plus, Salad, Sparkles, Users, Globe2, Loader2,
   Upload, Check, Instagram, Facebook, Youtube, Link2, AtSign, Route, CalendarDays, Download,
-  MoreHorizontal, Droplets, Activity, Bath, Sparkle, HeartHandshake, Hourglass, ChefHat, Wheat, ListChecks, CookingPot, FolderOpen, Trash2, ExternalLink, Hammer, PencilRuler, Blocks, LayoutDashboard, Grid2X2, List, Play, Clock, ShieldCheck, Utensils, Dumbbell, Combine, Clapperboard, BookOpen, Podcast, GraduationCap, AudioLines, ShoppingBag, CalendarDays, Mountain } from 'lucide-react';
+  MoreHorizontal, Droplets, Activity, Bath, Sparkle, HeartHandshake, Hourglass, ChefHat, Wheat, ListChecks, CookingPot, FolderOpen, Trash2, ExternalLink, Hammer, PencilRuler, Blocks, LayoutDashboard, Grid2X2, List, Play, Clock, ShieldCheck, Utensils, Dumbbell, Combine, Clapperboard, BookOpen, Podcast, GraduationCap, AudioLines, ShoppingBag, Mountain } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ProtocolEditor } from '../admin/ProtocolEditor';
 import { RoutineMark } from '../Header';
@@ -533,10 +533,10 @@ export function GuardianHeader({ isSignedIn, activeTab, displayName, avatarUrl, 
         <div className="g-header-account" style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 'none' }}>
           {extra}
           {isSignedIn ? <>
-            {displayName && <span className="g-header-name" title={displayName} style={{ color: muted, fontSize: 11, whiteSpace: 'nowrap' }}>{displayName}</span>}
             {(avatarUrl || displayName) && <a href={avatarLocked ? undefined : profileLink?.href ?? href('profile')} onClick={profileLink ? (event) => { event.preventDefault(); profileLink.onOpen(); } : go('profile')} aria-label={avatarLocked ? `Your profile · ${locked}` : 'Your profile'} aria-disabled={avatarLocked ? true : undefined} title={avatarLocked ? locked : 'Your profile'} style={{ display: 'inline-flex', borderRadius: '50%', cursor: avatarLocked ? 'default' : 'pointer', flexShrink: 0 }}>
               <GuardianAvatar url={avatarUrl} name={displayName} line={line} />
             </a>}
+            {displayName && <span className="g-header-name" title={displayName} style={{ color: muted, fontSize: 11, whiteSpace: 'nowrap' }}>{displayName}</span>}
             <button type="button" onClick={onSignOut} title="Sign out" aria-label="Sign out" style={{ border: `1px solid ${line}`, background: 'transparent', color: ink, width: 31, height: 31, flexShrink: 0, boxSizing: 'border-box', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><LogOut size={13} /></button>
           </> : <button type="button" onClick={onSignIn} style={{ ...builderLink, height: 31, border: `1px solid ${ink}`, borderRadius: 2, padding: '0 16px', background: 'transparent' }}>Sign in</button>}
         </div>

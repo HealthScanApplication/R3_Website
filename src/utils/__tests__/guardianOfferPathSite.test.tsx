@@ -68,14 +68,16 @@ describe('the hero on the public page', () => {
     expect(document.querySelector('[data-hero-glass]')).toBeNull();
   });
 
-  it('has no glass over a plain background unless the Guardian turns it on', async () => {
+  it('plays the Guardian type\'s clip behind the glass by default, and the Guardian can switch the glass off', async () => {
     visit('/guardians/john-ferreira');
     await waitFor(() => expect(screen.getAllByText('Feel better in your everyday life.').length).toBeGreaterThan(0));
-    expect(document.querySelector('[data-hero-glass]')).toBeNull();
+    expect(document.querySelector('[data-type-video]')).toBeTruthy();
+    expect(document.querySelector('[data-hero-glass]')).toBeTruthy();
     cleanup();
-    socialExtras = { theme_glass: 'on' };
+    socialExtras = { theme_glass: 'off' };
     visit('/guardians/john-ferreira');
-    await waitFor(() => expect(document.querySelector('[data-hero-glass]')).toBeTruthy());
+    await waitFor(() => expect(document.querySelector('[data-type-video]')).toBeTruthy());
+    expect(document.querySelector('[data-hero-glass]')).toBeNull();
   });
 });
 
@@ -86,8 +88,8 @@ describe('the email section at the end of the page', () => {
     await waitFor(() => expect(emailSection()).toBeTruthy());
     expect(emailSection().style.minHeight).toBe('80vh');
     expect(emailSection().style.justifyContent).toBe('center');
-    // a plain profile starts on the same fruit and vegetable footage as the hero
-    await waitFor(() => expect(emailSection().querySelector('[data-produce-backdrop]')).toBeTruthy());
+    // a plain profile starts on the same Guardian-type clip as the hero
+    await waitFor(() => expect(emailSection().querySelector('[data-type-video]')).toBeTruthy());
   });
 
   it('has the hero\'s video and glass behind it, once it is near the screen, with light text over it', async () => {
