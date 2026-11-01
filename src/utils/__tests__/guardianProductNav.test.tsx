@@ -41,5 +41,8 @@ describe('Product builder in the top nav', () => {
     header({ activeTab: 'products' });
     const style = (name: string) => (screen.getAllByRole('link', { name })[0] as HTMLElement).style.color;
     expect(style('Overview')).not.toBe(style('Shop products'));
+    const background = (name: string) => (screen.getAllByRole('link', { name })[0] as HTMLElement).style.background;
+    expect(background('Overview')).not.toBe(background('Shop products'));
+    expect(background('Shop products')).not.toBe('transparent');
   });
 });
