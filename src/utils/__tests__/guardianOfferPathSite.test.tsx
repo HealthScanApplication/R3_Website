@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { GuardianWebsite } from '../../components/guides/GuidePortal';
 
 const CLIPS = JSON.stringify([{ id: 'c7rNVcYU_-s', start: 1980, end: 1988, zoom: 1.4 }]);
@@ -92,6 +92,19 @@ describe('the hero on the public page', () => {
   });
 });
 
+describe('a backdrop video keeps playing', () => {
+  it('is muted and started by the page itself, so a video mounted later does not stay on its first frame', async () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(() => Promise.resolve());
+    visit('/guardians/john-ferreira');
+    await waitFor(() => expect(document.querySelector('[data-type-video]')).toBeTruthy());
+    const video = document.querySelector('[data-type-video]') as HTMLVideoElement;
+    await waitFor(() => expect(play).toHaveBeenCalled());
+    expect(video.muted).toBe(true);
+    fireEvent(video, new Event('canplay'));
+    play.mockRestore();
+  });
+});
+
 describe('the email section at the end of the page', () => {
   const emailSection = () => document.querySelector('[data-email-section]') as HTMLElement;
   it('is 80% of the screen tall, with its content centred', async () => {
@@ -115,7 +128,9 @@ describe('the email section at the end of the page', () => {
     expect(emailSection().style.minHeight).toBe('80vh');
     const heading = within(emailSection()).getByRole('heading', { name: 'Get new guidance in your inbox.' });
     expect(heading).toBeTruthy();
-    expect((within(emailSection()).getByText(/^Follow /) as HTMLElement).style.color).toMatch(/214, 231, 168|#D6E7A8/i); // light, not the dark green of the plain page
+    expect((within(emailSection()).getByText(/^Follow /) as HTMLElement).style.color).toMatch(/228, 241, 188|#E4F1BC/i); // light, not the dark green of the plain page
+    expect(heading.style.color).toMatch(/255, 255, 255|#FFFFFF/i); // the headline is white over the picture, not the dark ink of the plain page
+    expect(heading.style.textShadow).not.toBe('');
     // the form card sits above the backdrop
     expect(Number((emailSection().querySelector('form') as HTMLElement).closest('div[style*="z-index"]') ? 1 : 0)).toBe(1);
   });

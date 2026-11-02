@@ -1397,11 +1397,11 @@ function GuardianFunnel({ profile, offers, ramp, accent, headingFont, reviews = 
     {checkoutOffer && <OfferCheckout key={checkoutOffer.id} offer={checkoutOffer} upsells={paidAfter(checkoutOffer)} profile={profile} accent={accent} reviews={reviews} videos={offerVideos} onFreshCheckout={setCheckoutOffer} onClose={() => setCheckoutOffer(null)} />}
     {!stripeConfig.enabled && ordered.some(offer => offer.access_model === 'paid' && offer.price_cents > 0 && !offer.booking_url) && <p role="status" style={{ padding: '16px 24px', textAlign: 'center', color: accent }}>{stripeConfig.error}</p>}
     {entry && <section id="start" data-email-section style={{ position: 'relative', overflow: 'clip', minHeight: '80vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: `clamp(60px,9vw,120px) ${PAGE_X}`, background: backdrop ? '#151A12' : '#F2EFE7', color: backdrop ? '#FFF' : '#11120F', borderTop: '1px solid rgba(17,18,15,.2)' }}>
-      {backdrop && <><div aria-hidden="true" data-email-backdrop style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>{backdrop}</div><span aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(0deg,rgba(8,10,7,.62),rgba(8,10,7,.38) 55%,rgba(8,10,7,.5))', pointerEvents: 'none' }} /></>}
+      {backdrop && <><div aria-hidden="true" data-email-backdrop style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>{backdrop}</div><span aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(0deg,rgba(8,10,7,.7),rgba(8,10,7,.55) 55%,rgba(8,10,7,.62))', pointerEvents: 'none' }} /></>}
       <div style={{ position: 'relative', zIndex: 2, maxWidth: 720, width: '100%', margin: '0 auto 26px', textAlign: 'center', fontFamily: APP.font }}>
-        <span style={{ color: backdrop ? '#D6E7A8' : APP.greenDark, fontSize: 12, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Follow {profile.display_name}</span>
-        <h2 style={{ ...HEADLINE_STYLES[headlineStyle].section, margin: '10px 0 8px' }}>Get new guidance in your inbox.</h2>
-        <p style={{ color: backdrop ? 'rgba(255,255,255,.86)' : APP.muted, fontSize: 15, fontWeight: 600, margin: 0 }}>Subscribe once and receive {customerFacingOfferTitle(entry.title)} free.</p>
+        <span style={{ color: backdrop ? '#E4F1BC' : APP.greenDark, textShadow: backdrop ? '0 1px 10px rgba(0,0,0,.6)' : undefined, fontSize: 12, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Follow {profile.display_name}</span>
+        <h2 style={{ ...HEADLINE_STYLES[headlineStyle].section, margin: '10px 0 8px', ...(backdrop ? { color: '#FFFFFF', textShadow: '0 2px 18px rgba(0,0,0,.55)' } : {}) }}>Get new guidance in your inbox.</h2>
+        <p style={{ color: backdrop ? '#FFFFFF' : APP.muted, textShadow: backdrop ? '0 1px 12px rgba(0,0,0,.6)' : undefined, fontSize: 15, fontWeight: 600, margin: 0 }}>Subscribe once and receive {customerFacingOfferTitle(entry.title)} free.</p>
       </div>
       <div {...tiltHandlers(3)} style={tiltStyle({ position: 'relative', zIndex: 2, width: '100%', maxWidth: 620, margin: '0 auto', background: APP.bg, color: APP.text, fontFamily: APP.font, borderRadius: 24, overflow: 'hidden', boxShadow: '0 20px 50px rgba(17,24,39,.14)' })}><GlowLayer />
         {leadVideo && state !== 'done' && <video src={leadVideo} controls playsInline style={{ width: '100%', aspectRatio: '16 / 9', objectFit: 'cover', background: '#000' }} />}
@@ -1649,6 +1649,24 @@ const prefersReducedMotionNow = () => { try { return typeof window !== 'undefine
 /** The Guardian-type clip behind the hero. It stops for people who ask for reduced motion, including when they switch it on while the page is open. */
 function TypeVideo({ src, greyscale }: { src: string; greyscale: boolean }) {
   const ref = useRef<HTMLVideoElement | null>(null);
+  // A video React mounts later (the email section's copy mounts when it nears the screen) can stay on its first frame: the
+  // browser only autoplays a video that is muted at the moment it loads, and React sets `muted` as a property, not an
+  // attribute. So mute it ourselves and start it whenever it can play, and again when the tab or the section comes back.
+  useEffect(() => {
+    const video = ref.current;
+    if (!video || prefersReducedMotionNow()) return undefined;
+    video.muted = true;
+    const start = () => { if (video.paused) Promise.resolve(video.play()).catch(() => {}); };
+    start();
+    video.addEventListener('loadeddata', start);
+    video.addEventListener('canplay', start);
+    video.addEventListener('stalled', start);
+    const visible = () => { if (!document.hidden) start(); };
+    document.addEventListener('visibilitychange', visible);
+    const observer = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver((entries) => { if (entries.some((entry) => entry.isIntersecting)) start(); });
+    observer?.observe(video);
+    return () => { video.removeEventListener('loadeddata', start); video.removeEventListener('canplay', start); video.removeEventListener('stalled', start); document.removeEventListener('visibilitychange', visible); observer?.disconnect(); };
+  }, [src]);
   useEffect(() => {
     const query = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
     if (!query) return undefined;
@@ -1663,7 +1681,7 @@ function TypeVideo({ src, greyscale }: { src: string; greyscale: boolean }) {
     query.addEventListener?.('change', apply);
     return () => query.removeEventListener?.('change', apply);
   }, [src]);
-  return <video ref={ref} src={src} data-type-video autoPlay={!prefersReducedMotionNow()} muted loop playsInline preload="metadata" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />;
+  return <video ref={ref} src={src} data-type-video autoPlay={!prefersReducedMotionNow()} muted loop playsInline preload="auto" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: greyscale ? 'grayscale(1)' : 'saturate(.9) contrast(1.05)' }} />;
 }
 
 function HeroBackdrop({ heroMedia: chosenMedia, backgroundIsVideo = false, clips = [], typeVideo = null, glass = false, greyscale = false }: { heroMedia: string | null; backgroundIsVideo?: boolean; clips?: YtClip[]; typeVideo?: string | null; glass?: boolean; greyscale?: boolean }) {
