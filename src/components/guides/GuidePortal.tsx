@@ -3713,10 +3713,22 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
           openMenu={inventoryMenu}
           onOpenMenu={setInventoryMenu}
           sites={[
-            { key: 'profile-site', type: 'Profile site', title: `${displayName || 'Guardian'} profile`, path: `/guardians/${guardianSlug}`, status: profileSiteState, heroKicker: displayName || undefined, heroLine: generatedHeadline, avatarUrl: avatarUrl || null, previewId: 'profile-site-preview' },
+            // One profile site per brand (the Guardian's own page first), each on its real saved address.
+            ...(brandProfiles.length > 1 ? brandProfiles : [null]).map((brand, index) => {
+              const brandLinks = (brand?.social_links || {}) as Record<string, string>;
+              const personal = !brand || brand.kind === 'personal';
+              const name = personal ? displayName || 'Guardian' : brand!.name;
+              return {
+                key: brand ? `profile-site-${brand.localId}` : 'profile-site', type: 'Profile site', title: `${name} profile`,
+                path: brand ? brandSitePath(savedSlug || guardianSlug, personal ? null : { ...brand, slug: brand.slug ?? null } as GuideBrand) : `/guardians/${savedSlug || guardianSlug}`,
+                status: profileSiteState, heroKicker: name, heroLine: personal ? generatedHeadline : brandLinks.headline || generatedHeadline,
+                avatarUrl: (personal ? avatarUrl : brand!.logo_url) || avatarUrl || null, previewId: index === 0 ? 'profile-site-preview' : `profile-site-preview-${brand!.localId}`,
+                ...(!personal && brandLinks.theme_background ? { backgroundOverride: brandLinks.theme_background, backgroundOverrideIsVideo: brandLinks.theme_background_type === 'video' } : {}),
+              };
+            }),
             { key: 'funnel-site', type: 'Offer funnel', title: leadMagnetTitle || 'Offer site', path: publishedSitePath, status: funnelSiteState, heroKicker: displayName || undefined, heroLine: customerFacingOfferTitle(leadMagnetTitle || suggestedFreeOffer.title), avatarUrl: avatarUrl || null, previewId: 'value-ramp-funnel-preview' },
-          ].map((site): SiteCardData => ({ ...site, backgroundUrl: effectiveBackground, backgroundIsVideo: backgroundType === 'video', greyscale: imageTreatment === 'greyscale' }))}
-          onEdit={(site) => { setInventoryMenu(null); setSummaryView(null); setStep(5); setSiteStyleStage(site.key === 'profile-site' ? 0 : 2); }}
+          ].map(({ backgroundOverride, backgroundOverrideIsVideo, ...site }: any): SiteCardData => ({ ...site, backgroundUrl: backgroundOverride || effectiveBackground, backgroundIsVideo: backgroundOverride ? !!backgroundOverrideIsVideo : backgroundType === 'video', greyscale: imageTreatment === 'greyscale' }))}
+          onEdit={(site) => { setInventoryMenu(null); setSummaryView(null); setStep(5); const brandId = site.key.startsWith('profile-site-') ? site.key.slice('profile-site-'.length) : null; if (brandId && brandId !== activeBrandId && brandProfiles.some((brand) => brand.localId === brandId)) selectBrand(brandId); setSiteStyleStage(site.key.startsWith('profile-site') ? 0 : 2); }}
           onPreview={(site) => { setInventoryMenu(null); setSummaryView(null); setStep(5); window.setTimeout(() => document.getElementById(site.previewId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} />
       </div>}
     </section>}
