@@ -8,14 +8,15 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { dayMarks, monthBounds, monthCells, monthOf, openingMonth, pickDay, shiftMonth, type CalendarEvent, type DayRange } from '../../utils/eventCalendar';
 
 /** Days inside an event (not its first day): fine diagonal lines. The day it starts is solid. */
-const HATCH = 'repeating-linear-gradient(135deg, transparent 0 5px, rgba(242,239,231,.16) 5px 6px)';
+const hatch = (light: boolean) => `repeating-linear-gradient(135deg, transparent 0 5px, ${light ? 'rgba(17,18,15,.2)' : 'rgba(242,239,231,.16)'} 5px 6px)`;
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const sans = '"EuclidCircularA", "DM Sans", "Helvetica Neue", Arial, sans-serif';
 const longDay = (key: string) => new Date(`${key}T00:00:00Z`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 const shortDay = (key: string) => new Date(`${key}T00:00:00Z`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' });
 const monthName = (view: { year: number; month: number }) => new Date(Date.UTC(view.year, view.month - 1, 1)).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
-export function EventsCalendar({ events, range, onChange, ink = '#F2EFE7', surface = '#11150F', accent = '#C7D8A3', line = 'rgba(242,239,231,.55)' }: { events: CalendarEvent[]; range: DayRange | null; onChange: (range: DayRange | null) => void; ink?: string; surface?: string; accent?: string; line?: string }) {
+export function EventsCalendar({ events, range, onChange, ink = '#F2EFE7', surface = '#11150F', accent = '#C7D8A3', line = 'rgba(242,239,231,.55)', light = false }: { light?: boolean; events: CalendarEvent[]; range: DayRange | null; onChange: (range: DayRange | null) => void; ink?: string; surface?: string; accent?: string; line?: string }) {
+  const HATCH = hatch(light);
   const marks = useMemo(() => dayMarks(events), [events]);
   const bounds = useMemo(() => monthBounds(events), [events]);
   const eventsKey = useMemo(() => events.map((event) => `${event.id}:${event.start_at}:${event.end_at || ''}`).join('|'), [events]);
@@ -40,7 +41,7 @@ export function EventsCalendar({ events, range, onChange, ink = '#F2EFE7', surfa
         <button type="button" aria-label="Next month" disabled={!canNext} onClick={() => setView((current) => shiftMonth(current, 1))} style={{ ...nav, opacity: canNext ? 1 : .3, cursor: canNext ? 'pointer' : 'default' }}><ChevronRight size={14} /></button>
       </div>
       <div role="group" aria-label={`Events calendar, ${monthName(view)}`} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, background: line, border: `1px solid ${line}` }}>
-        {WEEKDAYS.map((name) => <span key={name} aria-hidden="true" style={{ background: surface, padding: '5px 0', textAlign: 'center', fontSize: 8, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'rgba(242,239,231,.6)' }}>{name}</span>)}
+        {WEEKDAYS.map((name) => <span key={name} aria-hidden="true" style={{ background: surface, padding: '5px 0', textAlign: 'center', fontSize: 8, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: light ? 'rgba(17,18,15,.6)' : 'rgba(242,239,231,.6)' }}>{name}</span>)}
         {cells.map((cell) => {
           const mark = marks.get(cell.key);
           const count = (mark?.starts || 0) + (mark?.ongoing || 0);
@@ -56,7 +57,7 @@ export function EventsCalendar({ events, range, onChange, ink = '#F2EFE7', surfa
           </button>;
         })}
       </div>
-      <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 9, color: 'rgba(242,239,231,.7)', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 9, color: light ? 'rgba(17,18,15,.7)' : 'rgba(242,239,231,.7)', flexWrap: 'wrap' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><i aria-hidden="true" style={{ width: 9, height: 9, background: accent, display: 'inline-block' }} />Event starts</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><i aria-hidden="true" style={{ width: 9, height: 9, backgroundImage: HATCH, border: `1px solid ${line}`, display: 'inline-block' }} />Days of the event</span>
         <span style={{ marginLeft: 'auto' }}>Choose a day to see what is on</span>

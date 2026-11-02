@@ -56,15 +56,15 @@ describe('events calendar', () => {
     const root = await section();
     expect(day(root, '2099-03-05').style.background).toMatch(/rgb\(199, 216, 163\)/); // an event starts: green
     expect(day(root, '2099-03-09').style.backgroundImage).toMatch(/repeating-linear-gradient/); // the days inside an event: diagonal lines, not a fill
-    expect(day(root, '2099-03-09').style.backgroundColor).toMatch(/rgb\(17, 21, 15\)/);
+    expect(day(root, '2099-03-09').style.backgroundColor).toMatch(/rgb\(231, 225, 213\)/); // the first section under the dark hero is light, and the calendar takes its surface
     expect(day(root, '2099-03-05').style.backgroundImage).toBe('none'); // the start day is solid
     expect(day(root, '2099-03-13').style.backgroundImage).toBe('none'); // a day with nothing on is plain
-    expect(day(root, '2099-03-09').style.color).toMatch(/rgb\(242, 239, 231\)/);
+    expect(day(root, '2099-03-09').style.color).toMatch(/rgb\(17, 18, 15\)/); // dark ink on the light surface
     // Days of the neighbouring months are ordinary days: nothing disabled, dimmed or greyed.
     const outside = day(root, '2099-02-27');
     expect(outside.disabled).toBe(false);
     expect(outside.style.opacity).toBe('');
-    expect(outside.style.color).toMatch(/rgb\(242, 239, 231\)/);
+    expect(outside.style.color).toMatch(/rgb\(17, 18, 15\)/);
     expect(day(root, '2099-03-09').getAttribute('data-has-event')).toBe('true');
     const layout = root.querySelector('.g-events-layout') as HTMLElement;
     expect(layout.querySelector('.g-events-calendar [data-events-calendar]')).not.toBeNull();

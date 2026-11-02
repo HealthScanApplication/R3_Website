@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import { getGuideForumTeaser, type GuideForumTeaser, type GuideProfile } from '../../utils/guidePortal';
 import { formatOfferPrice } from '../../utils/treatOffers';
+import { TONE_PALETTE, type Tone } from '../../utils/sectionTones';
 
 const serif = '"CanelaText", "Canela Text", Georgia, serif';
 const sans = '"EuclidCircularA", "DM Sans", "Helvetica Neue", Arial, sans-serif';
@@ -22,18 +23,21 @@ export function forumCta(teaser: GuideForumTeaser): { label: string; note: strin
   return { label: 'Join the challenge', note: `Membership ${formatOfferPrice(offer.price_cents, offer.currency, 'paid')}.` };
 }
 
-export function GuardianForumTeaser({ profile, pagePadding }: { profile: GuideProfile; pagePadding: string }) {
-  const [teaser, setTeaser] = useState<GuideForumTeaser | null>(null);
+export function GuardianForumTeaser({ profile, pagePadding, tone = 'light', teaser: given }: { profile: GuideProfile; pagePadding: string; tone?: Tone; /** Already loaded by the page (which needs to know whether this section shows to alternate its colours). */ teaser?: GuideForumTeaser | null }) {
+  const [fetched, setTeaser] = useState<GuideForumTeaser | null>(null);
+  const teaser = given !== undefined ? given : fetched;
   useEffect(() => {
+    if (given !== undefined) return undefined;
     let live = true;
     getGuideForumTeaser(profile.user_id).then((result) => { if (live) setTeaser(result); }).catch(() => {});
     return () => { live = false; };
-  }, [profile.user_id]);
+  }, [profile.user_id, given]);
   if (!teaser || (!teaser.questions.length && !teaser.membershipOffer)) return null;
   const cta = forumCta(teaser);
-  const ink = '#11120F', muted = '#5F5E57', line = 'rgba(17,18,15,.22)', accent = '#667245';
+  const P = TONE_PALETTE[tone];
+  const ink = P.ink, muted = P.muted, line = P.line, accent = P.accent;
   return (
-    <section id="ask" data-forum-teaser aria-label={`Ask ${profile.display_name}`} style={{ background: '#FFFFFF', color: ink, padding: `clamp(72px,10vw,124px) ${pagePadding}` }}>
+    <section id="ask" data-tone={tone} data-forum-teaser aria-label={`Ask ${profile.display_name}`} style={{ background: tone === 'light' ? '#FFFFFF' : P.bg, color: ink, padding: `clamp(72px,10vw,124px) ${pagePadding}` }}>
       <div style={{ maxWidth: 1240, margin: '0 auto' }}>
         <div style={{ color: accent, fontFamily: sans, fontSize: 11, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Questions and answers</div>
         <h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 'clamp(40px,6vw,72px)', lineHeight: 1, margin: '14px 0 12px' }}>Ask {profile.display_name}.</h2>
@@ -52,7 +56,7 @@ export function GuardianForumTeaser({ profile, pagePadding }: { profile: GuidePr
           <p data-forum-empty style={{ fontFamily: serif, fontSize: 24, margin: '0 0 28px' }}>Be the first to ask.</p>
         )}
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16 }}>
-          <a href={forumHref(profile.slug, teaser.channelSlug)} style={{ display: 'inline-flex', alignItems: 'center', minHeight: 46, padding: '0 22px', border: `1px solid ${ink}`, background: ink, color: '#FFFFFF', fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', textDecoration: 'none' }}>{cta.label}</a>
+          <a href={forumHref(profile.slug, teaser.channelSlug)} style={{ display: 'inline-flex', alignItems: 'center', minHeight: 46, padding: '0 22px', border: `1px solid ${ink}`, background: ink, color: tone === 'light' ? '#FFFFFF' : P.bg, fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', textDecoration: 'none' }}>{cta.label}</a>
           <span style={{ color: muted, fontFamily: sans, fontSize: 13 }}>{cta.note}</span>
         </div>
       </div>
