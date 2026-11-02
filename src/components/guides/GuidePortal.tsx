@@ -2331,7 +2331,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   // The main page also offers the company retreats (Misty Mountain); a brand's own page shows only its own.
   const siteProtocols = guardianProtocols.filter((protocol) => protocol.is_active !== false && protocolOnSite(activeBrand?.id, personalBrandId, protocolBrands[protocol.id]));
   const siteRetreats = activeBrand ? retreats.filter((retreat) => onSite(retreat)) : retreats;
-  const profileSections = profileSectionStates({ offers: publishedOffers, products: shopProducts.filter((product) => onSite(product)).length, events: siteEvents.length, retreats: siteRetreats.length });
+  const profileSections = profileSectionStates({ offers: publishedOffers, products: shopProducts.filter((product) => onSite(product)).length, events: siteEvents.length, retreats: siteRetreats.length, protocols: siteProtocols.length });
   const sectionTags: HeroSection[] = profileSections.filter((section) => section.filled || isOwner).map((section): HeroSection => section.filled ? [section.anchor, section.label, 'filled', section.category] : [`section-${section.id}`, section.label, 'empty']);
   const freeOffers = publishedOffers.filter((offer) => offer.access_model === 'free');
   const socials = profile.social_links || {};

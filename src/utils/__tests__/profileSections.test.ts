@@ -25,3 +25,16 @@ describe('profile sections', () => {
     expect(filled).toEqual(['talks', 'treats']);
   });
 });
+
+describe('protocols listed on the page', () => {
+  it('make the Protocols tag lead to the Protocols section, not the catalog tab', () => {
+    const states = profileSectionStates({ offers: [], protocols: 3 });
+    const tag = states.find((section) => section.id === 'protocols')!;
+    expect(tag.filled).toBe(true);
+    expect(tag.anchor).toBe('protocols');
+    expect(tag.category).toBeUndefined();
+    const none = profileSectionStates({ offers: [] }).find((section) => section.id === 'protocols')!;
+    expect(none.filled).toBe(false);
+    expect(none.anchor).toBe('catalog');
+  });
+});
