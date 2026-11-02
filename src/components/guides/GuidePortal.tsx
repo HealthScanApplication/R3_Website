@@ -1486,6 +1486,7 @@ const HEADLINE_STYLES: Record<HeadlineStyle, { label: string; hero: React.CSSPro
 };
 const headlineStyleOf = (value?: string | null): HeadlineStyle => value === 'app' || value === 'statement' ? value : 'editorial';
 // ROUTINE³ iOS app look (mobile repo: Paywall.tsx, SignUpScreen.tsx, designTokens.ts) for the sign-up and upsell pages.
+const TAB_TEXT: React.CSSProperties = { border: 0, background: 'transparent', padding: '0 2px', minHeight: 36, fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer' };
 const APP = { bg: '#F2F4F7', surface: '#FFFFFF', alt: '#F6F8FA', text: '#111827', muted: '#6B7280', faint: '#9CA3AF', border: '#E5E7EB', green: '#10B981', greenDark: '#047857', greenSoft: '#86EFAC', font: sans };
 const appButton: React.CSSProperties = { width: '100%', minHeight: 56, border: 0, borderRadius: 16, background: '#000', color: '#FFF', fontFamily: APP.font, cursor: 'pointer', display: 'grid', placeItems: 'center', padding: '8px 16px', boxSizing: 'border-box' };
 // Format tag for Protocol offers: printable PDF plus the interactive version in the ROUTINE³ app.
@@ -1778,22 +1779,56 @@ function useCardByline(item: { brand_id?: string | null; brand_ids?: string[] | 
   return cardByline(item, known?.brands || [], known?.activeId, { name: profile.display_name, avatarUrl: profile.avatar_url });
 }
 
+/** The filters on the Protocols section: what a protocol is for (its focus), who it is for, and their age. A protocol made for everyone fits every choice. */
+export const PROTOCOL_FILTERS = [
+  { key: 'category', label: 'Focus', any: null },
+  { key: 'gender', label: 'For', any: 'Everyone' },
+  { key: 'age', label: 'Age', any: 'All ages' },
+] as const;
+
+export function protocolFilterOptions(protocols: AdminProtocol[]) {
+  return PROTOCOL_FILTERS.map((group) => {
+    const values = protocols.flatMap((protocol) => completeProtocolTags(protocol).filter((tag) => tag.kind === group.key).map((tag) => tag.label));
+    return { ...group, options: [...new Set(values)].filter((value) => value !== group.any) };
+  }).filter((group) => group.options.length > 1 || (group.options.length === 1 && group.any && group.key !== 'category'));
+}
+
+export function protocolFits(protocol: AdminProtocol, chosen: Record<string, string>): boolean {
+  const tags = completeProtocolTags(protocol);
+  return PROTOCOL_FILTERS.every((group) => {
+    const want = chosen[group.key];
+    if (!want) return true;
+    const mine = tags.filter((tag) => tag.kind === group.key).map((tag) => tag.label);
+    return mine.includes(want) || (!!group.any && mine.includes(group.any));
+  });
+}
+
 /** The "Protocols" section of a public page: the routines selected for this page (the same records appear on every page that lists them). */
-function GuardianProtocols({ protocols, profile, pagePadding, tone, accent, headingFont, linkToOffers }: { protocols: AdminProtocol[]; profile: GuideProfile; pagePadding: string; tone: 'light' | 'dark'; accent: string; headingFont: string; linkToOffers: boolean }) {
+export function GuardianProtocols({ protocols, profile, pagePadding, tone, accent, headingFont, linkToOffers }: { protocols: AdminProtocol[]; profile: GuideProfile; pagePadding: string; tone: 'light' | 'dark'; accent: string; headingFont: string; linkToOffers: boolean }) {
   const known = useContext(CardBrandsContext);
+  const [chosen, setChosen] = useState<Record<string, string>>({});
   if (!protocols.length) return null;
-  const light = tone === 'light';
+  const P = TONE_PALETTE[tone];
+  const groups = protocolFilterOptions(protocols);
+  const shown = protocols.filter((protocol) => protocolFits(protocol, chosen));
   const byline = cardByline({ brand_id: known?.activeId }, known?.brands || [], known?.activeId, { name: profile.display_name, avatarUrl: profile.avatar_url });
-  return <section id="protocols" aria-labelledby="guardian-protocols-title" data-page-section="protocols" data-tone={tone} style={{ padding: `clamp(54px,7vw,100px) ${pagePadding}`, background: light ? '#E7E1D5' : '#11120F', color: light ? '#11120F' : '#F2EFE7' }}>
+  const tab = (active: boolean): React.CSSProperties => ({ ...TAB_TEXT, borderBottom: `2px solid ${active ? P.ink : 'transparent'}`, color: P.ink, opacity: active ? 1 : .62, fontFamily: APP.font });
+  return <section id="protocols" aria-labelledby="guardian-protocols-title" data-page-section="protocols" data-tone={tone} style={{ padding: `clamp(54px,7vw,100px) ${pagePadding}`, background: P.bg, color: P.ink }}>
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
-      <span style={{ color: TONE_PALETTE[tone].accent, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Routines · {protocols.length}</span>
-      <h2 id="guardian-protocols-title" style={{ margin: '12px 0 28px', fontFamily: headingFont, fontWeight: 300, fontSize: 'clamp(36px,5vw,60px)', lineHeight: 1 }}>Protocols.</h2>
-      <ProtocolCardGrid min={290}>{protocols.map((protocol) => <ProtocolCard key={protocol.id} kicker={daysLabel(protocol.total_days)} tags={completeProtocolTags(protocol)} title={protocol.name.replace(/^(R3 Protocol\s*>\s*|Barbara O'Neill\s*•\s*)/i, '')} imageUrl={protocol.image_url} copy={clipCopy(protocol.description)} by={byline.name} byAvatar={byline.avatarUrl ? <img src={byline.avatarUrl} alt="" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover', marginRight: 6, verticalAlign: 'middle' }} /> : undefined} corner={<ProtocolOutputTags />} cta="Get this routine" href={linkToOffers ? '#offers' : undefined} inert={!linkToOffers} />)}</ProtocolCardGrid>
+      <span style={{ color: P.accent, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Routines · {Object.keys(chosen).length ? `${shown.length} of ${protocols.length}` : protocols.length}</span>
+      <h2 id="guardian-protocols-title" style={{ margin: '12px 0 22px', fontFamily: headingFont, fontWeight: 300, fontSize: 'clamp(36px,5vw,60px)', lineHeight: 1 }}>Protocols.</h2>
+      {groups.length > 0 && <div data-protocol-filters style={{ display: 'grid', gap: 6, margin: '0 0 26px' }}>
+        {groups.map((group) => <div key={group.key} role="group" aria-label={`Filter by ${group.label.toLowerCase()}`} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 22 }}>
+          <span style={{ width: 54, color: P.muted, fontFamily: APP.font, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>{group.label}</span>
+          {['All', ...group.options].map((option) => { const active = option === 'All' ? !chosen[group.key] : chosen[group.key] === option; return <button key={option} type="button" aria-pressed={active} onClick={() => setChosen((current) => { const next = { ...current }; if (option === 'All') delete next[group.key]; else next[group.key] = option; return next; })} style={tab(active)}>{option}</button>; })}
+        </div>)}
+      </div>}
+      {shown.length ? <ProtocolCardGrid min={290}>{shown.map((protocol) => <ProtocolCard key={protocol.id} kicker={daysLabel(protocol.total_days)} tags={completeProtocolTags(protocol)} title={protocol.name.replace(/^(R3 Protocol\s*>\s*|Barbara O'Neill\s*•\s*)/i, '')} imageUrl={protocol.image_url} copy={clipCopy(protocol.description)} by={byline.name} byAvatar={byline.avatarUrl ? <img src={byline.avatarUrl} alt="" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover', marginRight: 6, verticalAlign: 'middle' }} /> : undefined} corner={<ProtocolOutputTags />} cta="Get this routine" href={linkToOffers ? '#offers' : undefined} inert={!linkToOffers} />)}</ProtocolCardGrid>
+        : <p style={{ color: P.accent, fontSize: 14 }}>No protocol fits all of those. <button type="button" onClick={() => setChosen({})} style={{ border: 0, background: 'transparent', color: P.accent, padding: 0, font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>Clear the filters</button>.</p>}
     </div>
   </section>;
 }
 
-/** Workspace: choose which of your pages (Barbara O'Neill, Misty Mountain, Tre Lune…) each published protocol appears on. */
 function ProtocolPages({ guideId, protocols }: { guideId: string; protocols: AdminProtocol[] }) {
   const [links, setLinks] = useState<Record<string, string[]>>({});
   useEffect(() => { let live = true; listProtocolBrands(guideId).then((map) => { if (live) setLinks(map); }).catch(() => {}); return () => { live = false; }; }, [guideId]);
@@ -1893,7 +1928,7 @@ function ProfileSectionSkeleton({ sections }: { sections: ProfileSectionState[] 
   </section>;
 }
 
-function GuardianOfferCatalog({ profile, offers, ramps, reviews, accent, protocols, categoryOrder, tone = 'light' }: { tone?: Tone; profile: GuideProfile; offers: GuideOffer[]; ramps: GuideValueRamp[]; reviews: GuardianReview[]; accent: string; protocols: AdminProtocol[]; categoryOrder?: string }) {
+function GuardianOfferCatalog({ profile, offers, ramps, reviews, accent, protocols, categoryOrder, tone = 'light', hiddenCategories = [] }: { /** Category tabs not to show (Protocols, when the page has its own Protocols section). */ hiddenCategories?: string[]; tone?: Tone; profile: GuideProfile; offers: GuideOffer[]; ramps: GuideValueRamp[]; reviews: GuardianReview[]; accent: string; protocols: AdminProtocol[]; categoryOrder?: string }) {
   const knownBrands = useContext(CardBrandsContext);
   const bylineOf = (item: GuideOffer) => cardByline(item, knownBrands?.brands || [], knownBrands?.activeId, { name: profile.display_name, avatarUrl: profile.avatar_url });
   const P = TONE_PALETTE[tone];
@@ -1916,7 +1951,7 @@ function GuardianOfferCatalog({ profile, offers, ramps, reviews, accent, protoco
   const money = useDisplayMoney(); // before the early return: hooks must run in the same order every render
   if (!offers.length) return null;
   const configured = (categoryOrder || '').split(',').map((value) => value.trim()).filter(Boolean);
-  const categories = ['All', ...(configured.length ? configured : DEFAULT_PROTOCOL_CATEGORIES.slice(1))].filter((category, index, all) => all.indexOf(category) === index && (category === 'All' || offers.some((offer) => offerCategory(offer) === category)));
+  const categories = ['All', ...(configured.length ? configured : DEFAULT_PROTOCOL_CATEGORIES.slice(1))].filter((category, index, all) => all.indexOf(category) === index && (category === 'All' || (!hiddenCategories.includes(category) && offers.some((offer) => offerCategory(offer) === category))));
   const visibleOffers = activeCategory === 'All' ? offers : offers.filter((offer) => offerCategory(offer) === activeCategory);
   const price = (offer: GuideOffer) => offer.access_model === 'free' ? 'Free' : offer.price_cents ? money(offer.price_cents, offer.currency || 'GBP') : 'Enquire';
   const href = (offer: GuideOffer) => {
@@ -1933,7 +1968,7 @@ function GuardianOfferCatalog({ profile, offers, ramps, reviews, accent, protoco
         <h2 style={{ fontFamily: serif, fontSize: 'clamp(36px,5vw,60px)', fontWeight: 300, lineHeight: 1, letterSpacing: '-.04em', margin: '0 0 18px' }}>Explore every way to work with {profile.display_name}.</h2>
         <p style={{ color: P.muted, fontFamily: APP.font, fontSize: 16, lineHeight: 1.55, maxWidth: 620, margin: 0 }}>Browse the full published collection—free resources, protocols, sessions, communities and programs.</p>
       </div>
-      <div role="tablist" aria-label="Offer categories" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '0 0 26px' }}>{categories.map((category) => <button key={category} type="button" role="tab" aria-selected={activeCategory === category} onClick={() => setActiveCategory(category)} style={{ minHeight: 38, padding: '0 14px', border: `1px solid ${activeCategory === category ? P.ink : P.line}`, background: activeCategory === category ? P.ink : 'transparent', color: activeCategory === category ? P.bg : P.ink, fontFamily: APP.font, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{category}</button>)}</div>
+      <div role="tablist" aria-label="Offer categories" style={{ display: 'flex', flexWrap: 'wrap', gap: 24, margin: '0 0 26px' }}>{categories.map((category) => <button key={category} type="button" role="tab" aria-selected={activeCategory === category} onClick={() => setActiveCategory(category)} style={{ ...TAB_TEXT, borderBottom: `2px solid ${activeCategory === category ? P.ink : 'transparent'}`, color: P.ink, opacity: activeCategory === category ? 1 : .62, fontFamily: APP.font }}>{category}</button>)}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,300px),1fr))', gap: 18 }}>
         {visibleOffers.map((offer) => {
           const wanted = offerProtocolKey(offer.title);
@@ -2416,7 +2451,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   const brandLinks: BrandLink[] = brandTiles.filter((tile) => tile.href).map((tile) => ({ key: tile.key, name: tile.title || tile.name, logo: tile.logo, href: tile.href, here: !!tile.here }));
   // The sections between the hero and the footer, in the order the owner chose (see pageSections). Each is a whole section that draws nothing when it has nothing to show.
   const sectionNodes: Record<PageSectionKey, React.ReactNode> = {
-    offers: <GuardianOfferCatalog tone={tones.offers || 'light'} profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} categoryOrder={socials.protocol_filter_order} />,
+    offers: <GuardianOfferCatalog tone={tones.offers || 'light'} hiddenCategories={siteProtocols.length ? ['Protocols'] : []} profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} categoryOrder={socials.protocol_filter_order} />,
     shop: <GuardianShop tone={tones.shop || 'dark'} guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} protocols={guardianProtocols} owns={onSite} brandId={brandSlug ? activeBrand?.id : null} logoUrl={profile.avatar_url} localePreference={localePreference} categoryOrder={socials.product_filter_order} />,
     events: <GuardianEvents tone={tones.events || 'dark'} retreats={siteRetreats} profile={profile} events={siteEvents} sourceUrl={eventSource} canEditSource={isSignedIn && user?.id === profile.user_id} onImported={setEvents} onSourceChanged={setEventSource} />,
     talks: <GuardianOfferShelf tone={tones.talks || 'light'} kind="talk" profile={profile} offers={offers.filter((offer) => onSite(offer))} pagePadding={PAGE_X} />,
