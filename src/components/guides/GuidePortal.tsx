@@ -1812,16 +1812,19 @@ export function GuardianProtocols({ protocols, profile, pagePadding, tone, accen
   const groups = protocolFilterOptions(protocols);
   const shown = protocols.filter((protocol) => protocolFits(protocol, chosen));
   const byline = cardByline({ brand_id: known?.activeId }, known?.brands || [], known?.activeId, { name: profile.display_name, avatarUrl: profile.avatar_url });
-  const tab = (active: boolean): React.CSSProperties => ({ ...TAB_TEXT, borderBottom: `2px solid ${active ? P.ink : 'transparent'}`, color: P.ink, opacity: active ? 1 : .62, fontFamily: APP.font });
-  return <section id="protocols" aria-labelledby="guardian-protocols-title" data-page-section="protocols" data-tone={tone} style={{ padding: `clamp(54px,7vw,100px) ${pagePadding}`, background: P.bg, color: P.ink }}>
+    return <section id="protocols" aria-labelledby="guardian-protocols-title" data-page-section="protocols" data-tone={tone} style={{ padding: `clamp(54px,7vw,100px) ${pagePadding}`, background: P.bg, color: P.ink }}>
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
       <span style={{ color: P.accent, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Routines · {Object.keys(chosen).length ? `${shown.length} of ${protocols.length}` : protocols.length}</span>
       <h2 id="guardian-protocols-title" style={{ margin: '12px 0 22px', fontFamily: headingFont, fontWeight: 300, fontSize: 'clamp(36px,5vw,60px)', lineHeight: 1 }}>Protocols.</h2>
-      {groups.length > 0 && <div data-protocol-filters style={{ display: 'grid', gap: 6, margin: '0 0 26px' }}>
-        {groups.map((group) => <div key={group.key} role="group" aria-label={`Filter by ${group.label.toLowerCase()}`} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 22 }}>
-          <span style={{ width: 54, color: P.muted, fontFamily: APP.font, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>{group.label}</span>
-          {['All', ...group.options].map((option) => { const active = option === 'All' ? !chosen[group.key] : chosen[group.key] === option; return <button key={option} type="button" aria-pressed={active} onClick={() => setChosen((current) => { const next = { ...current }; if (option === 'All') delete next[group.key]; else next[group.key] = option; return next; })} style={tab(active)}>{option}</button>; })}
-        </div>)}
+      {groups.length > 0 && <div data-protocol-filters role="group" aria-label="Filter protocols" style={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, margin: '0 0 26px', minHeight: 32, padding: '0 10px', boxSizing: 'border-box', border: `1px solid ${P.ink}`, fontFamily: APP.font }}>
+        {groups.map((group, index) => <Fragment key={group.key}>
+          {index > 0 && <span aria-hidden="true" style={{ color: P.line }}>·</span>}
+          <select aria-label={`Filter by ${group.label.toLowerCase()}`} value={chosen[group.key] || ''} onChange={(event) => setChosen((current) => { const next = { ...current }; if (event.target.value) next[group.key] = event.target.value; else delete next[group.key]; return next; })} style={{ border: 0, background: 'transparent', color: P.ink, fontFamily: APP.font, fontSize: 10, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', outline: 0, cursor: 'pointer', height: 30 }}>
+            <option value="">{group.label}: All</option>
+            {group.options.map((option) => <option key={option} value={option}>{group.label}: {option}</option>)}
+          </select>
+        </Fragment>)}
+        {Object.keys(chosen).length > 0 && <button type="button" onClick={() => setChosen({})} style={{ border: 0, background: 'transparent', color: P.ink, fontFamily: APP.font, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', textDecoration: 'underline', cursor: 'pointer', height: 30, padding: '0 4px' }}>Clear</button>}
       </div>}
       {shown.length ? <ProtocolCardGrid min={290}>{shown.map((protocol) => <ProtocolCard key={protocol.id} kicker={daysLabel(protocol.total_days)} tags={completeProtocolTags(protocol)} title={protocol.name.replace(/^(R3 Protocol\s*>\s*|Barbara O'Neill\s*•\s*)/i, '')} imageUrl={protocol.image_url} copy={clipCopy(protocol.description)} by={byline.name} byAvatar={byline.avatarUrl ? <img src={byline.avatarUrl} alt="" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover', marginRight: 6, verticalAlign: 'middle' }} /> : undefined} corner={<ProtocolOutputTags />} cta="Get this routine" href={linkToOffers ? '#offers' : undefined} inert={!linkToOffers} />)}</ProtocolCardGrid>
         : <p style={{ color: P.accent, fontSize: 14 }}>No protocol fits all of those. <button type="button" onClick={() => setChosen({})} style={{ border: 0, background: 'transparent', color: P.accent, padding: 0, font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>Clear the filters</button>.</p>}

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { GuardianProtocols, protocolFilterOptions, protocolFits } from '../../components/guides/GuidePortal';
 
 const proto = (id: string, name: string, extra: Record<string, unknown> = {}) => ({ id, name, description: '', category: 'Wellness', type: null, target_gender: null, creator: null, source: null, image_url: null, health_score: null, total_days: 14, is_suggested: true, is_active: true, is_public: true, start_time: null, sort_order: 0, ...extra }) as any;
@@ -28,22 +28,25 @@ describe('protocol filters', () => {
     expect(protocolFits(PROTOCOLS[2], { gender: 'Women' })).toBe(false);
     expect(protocolFits(PROTOCOLS[1], { gender: 'Women', category: 'Detox' })).toBe(false);
   });
-  it('narrow the cards when a choice is made, and All brings them back', () => {
+  it('narrow the cards when a choice is made in a drop-down, and All brings them back', () => {
     const { container } = show();
     const cards = () => container.querySelectorAll('.r3-pcard').length;
     expect(cards()).toBe(5);
-    const group = within(screen.getByRole('group', { name: 'Filter by for' }));
-    fireEvent.click(group.getByRole('button', { name: 'Men' }));
+    const forSelect = screen.getByLabelText('Filter by for') as HTMLSelectElement;
+    fireEvent.change(forSelect, { target: { value: 'Men' } });
     expect(container.textContent).toMatch(/Men's Daily Wellness/);
     expect(container.textContent).not.toMatch(/Women's Daily Wellness/);
-    expect(group.getByRole('button', { name: 'Men' }).getAttribute('aria-pressed')).toBe('true');
-    fireEvent.click(group.getByRole('button', { name: 'All' }));
+    expect(forSelect.value).toBe('Men');
+    fireEvent.change(forSelect, { target: { value: '' } });
     expect(cards()).toBe(5);
   });
-  it('say so, and offer to clear, when nothing fits', () => {
-    show();
-    fireEvent.click(within(screen.getByRole('group', { name: 'Filter by focus' })).getByRole('button', { name: 'Detox' }));
-    fireEvent.click(within(screen.getByRole('group', { name: 'Filter by for' })).getByRole('button', { name: 'Men' }));
+  it('sit in one boxed bar like the header pickers, and say so and offer to clear when nothing fits', () => {
+    const { container } = show();
+    const bar = container.querySelector('[data-protocol-filters]') as HTMLElement;
+    expect(bar.style.border).toMatch(/1px solid/);
+    expect(bar.querySelectorAll('select').length).toBe(3);
+    fireEvent.change(screen.getByLabelText('Filter by focus'), { target: { value: 'Detox' } });
+    fireEvent.change(screen.getByLabelText('Filter by for'), { target: { value: 'Men' } });
     expect(screen.getByText(/No protocol fits all of those/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Clear the filters' }));
     expect(screen.queryByText(/No protocol fits/)).toBeNull();
