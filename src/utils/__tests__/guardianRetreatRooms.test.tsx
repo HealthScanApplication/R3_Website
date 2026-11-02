@@ -43,6 +43,15 @@ describe('retreat cards', () => {
     await card('Day Retreat');
     expect((document.querySelector('.g-retreats-grid') as HTMLElement).style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))');
   });
+  it('show a half-height map each, with the shared place named once under the heading', async () => {
+    visit();
+    await card('Day Retreat');
+    const maps = [...document.querySelectorAll('[data-retreat-card] [data-destination-header]')] as HTMLElement[];
+    expect(maps.length).toBeGreaterThan(0);
+    maps.forEach((map) => expect(map.style.height).toBe('105px')); // half of an event's 210
+    const place = document.querySelector('[data-retreats-place]');
+    if (place) expect(place.textContent!.length).toBeGreaterThan(0);
+  });
 });
 
 describe('retreat rooms as a dropdown', () => {

@@ -45,6 +45,8 @@ describe('protocol filters', () => {
     const bar = container.querySelector('[data-protocol-filters]') as HTMLElement;
     expect(bar.style.border).toMatch(/1px solid/);
     expect(bar.querySelectorAll('select').length).toBe(3);
+    expect([...bar.querySelectorAll('option')].every((option) => !/:/.test(option.textContent || ''))).toBe(true); // no 'Focus:' prefix on the choices
+    expect((screen.getByLabelText('Filter by focus') as HTMLSelectElement).selectedOptions[0].textContent).toBe('All focus');
     fireEvent.change(screen.getByLabelText('Filter by focus'), { target: { value: 'Detox' } });
     fireEvent.change(screen.getByLabelText('Filter by for'), { target: { value: 'Men' } });
     expect(screen.getByText(/No protocol fits all of those/)).toBeTruthy();
