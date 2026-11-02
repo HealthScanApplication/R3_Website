@@ -121,6 +121,23 @@ describe('events calendar', () => {
     expect(root.querySelector('[data-calendar-range]')).toBeNull();
   });
 
+  it('links hover both ways: a day rings the cards on it, a card rings its days', async () => {
+    visit();
+    const root = await section();
+    const linked = () => [...root.querySelectorAll('.g-events-slide-item[data-linked="true"]')];
+    fireEvent.pointerEnter(day(root, '2099-03-09')); // only the week-long retreat is on
+    expect(linked().length).toBe(1);
+    expect(linked()[0].textContent).toMatch(/Lifestyle Retreat/);
+    fireEvent.pointerLeave(day(root, '2099-03-09'));
+    expect(linked().length).toBe(0);
+    const retreatCard = [...root.querySelectorAll('.g-events-slide-item')].find((card) => /Lifestyle Retreat/.test(card.textContent || '')) as HTMLElement;
+    fireEvent.pointerEnter(retreatCard);
+    expect(day(root, '2099-03-09').getAttribute('data-linked')).toBe('true');
+    expect(day(root, '2099-03-13').getAttribute('data-linked')).toBeNull();
+    fireEvent.pointerLeave(retreatCard);
+    expect(day(root, '2099-03-09').getAttribute('data-linked')).toBeNull();
+  });
+
   it('moves between months within the events\' span, and picks a day in another month', async () => {
     visit();
     const root = await section();

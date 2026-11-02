@@ -25,7 +25,7 @@ import { TONE_PALETTE, sectionTones, type Tone } from '../../utils/sectionTones'
 import { PublicLocaleContext, useDisplayMoney } from '../../utils/displayMoney';
 import { EventsCalendar } from './EventsCalendar';
 import { guestsLabel, parseRetreatOptions, roomPrice, type RetreatRoomOption } from '../../utils/retreatRooms';
-import { eventsInRange, type DayRange } from '../../utils/eventCalendar';
+import { eventDays, eventsInRange, type DayRange } from '../../utils/eventCalendar';
 import { DEFAULT_SECTION_ORDER, PAGE_SECTIONS, moveSection, orderPageSections, protocolsSecond, serializeSectionOrder, type PageSectionKey } from '../../utils/pageSections';
 import { BrandScopeCircles, useBrandScope } from './BrandScopeBar';
 import { brandSiteProfile, brandSitePath, brandSlugFromPath, cardByline, protocolOnSite, savedBrandId, savedBrandMoves, siteOwns } from '../../utils/brandSite';
@@ -2132,7 +2132,7 @@ function EventCommerceCard({ profile, event, rooms = [] }: { profile: GuideProfi
   const place = event.location || event.venue || (event.format === 'virtual' ? 'Online' : 'Location to be announced');
   return <article data-event-card {...tiltHandlers(4)} style={tiltStyle({ minHeight: 520, border: '1px solid rgba(242,239,231,.28)', display: 'flex', flexDirection: 'column', background: '#FFFFFF', color: '#11120F', overflow: 'hidden' })}>
     <DestinationHeader profile={profile} place={place} lines={[event.location, event.venue, event.title]} kind="event" virtual={event.format === 'virtual'} />
-    <div style={{ padding: 22, display: 'flex', flex: 1, flexDirection: 'column' }}><div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><span style={{ color: '#667245', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{eventDay(event.start_at, event.timezone, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span><span style={{ border: '1px solid rgba(102,114,69,.55)', borderRadius: 999, color: '#667245', padding: '4px 7px', fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{eventFormatLabel(event.format)}</span></div><h3 style={{ fontFamily: serif, fontSize: 31, fontWeight: 300, lineHeight: 1.05, margin: '11px 0 9px' }}>{event.title}</h3><p style={{ color: '#66645F', fontSize: 13, lineHeight: 1.5, margin: '0 0 8px' }}>{event.venue || place}</p>{event.description && <p style={{ color: '#66645F', fontSize: 12, lineHeight: 1.5, margin: '0 0 20px' }}>{clipCopy(event.description, 145)}</p>}<RoomSelectors title={event.title} rooms={rooms} choice={choice} /><div style={{ marginTop: choice.room ? 16 : 'auto', paddingTop: 18, borderTop: '1px solid rgba(17,18,15,.18)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}><RoomPrice choice={choice} fallback={event.price_label || 'See booking price'} />{href && <a href={href} target="_blank" rel="noreferrer" style={publicCommerceCardCta}>Book <ArrowRight size={13} /></a>}</div></div>
+    <div style={{ padding: 22, display: 'flex', flex: 1, flexDirection: 'column' }}><div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><span style={{ color: '#667245', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{eventDay(event.start_at, event.timezone, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span><span style={{ border: '1px solid rgba(102,114,69,.55)', borderRadius: 999, color: '#667245', padding: '4px 7px', fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{eventFormatLabel(event.format)}</span></div><h3 style={{ fontFamily: serif, fontSize: 31, fontWeight: 300, lineHeight: 1.05, margin: '11px 0 9px' }}>{event.title}</h3><p style={{ color: '#66645F', fontSize: 13, lineHeight: 1.5, margin: '0 0 8px' }}>{event.venue || place}</p>{event.description && <p style={{ color: '#66645F', fontSize: 12, lineHeight: 1.5, margin: '0 0 20px' }}>{clipCopy(event.description, 260)}</p>}<RoomSelectors title={event.title} rooms={rooms} choice={choice} /><div style={{ marginTop: choice.room ? 16 : 'auto', paddingTop: 18, borderTop: '1px solid rgba(17,18,15,.18)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}><RoomPrice choice={choice} fallback={event.price_label || 'See booking price'} />{href && <a href={href} target="_blank" rel="noreferrer" style={publicCommerceCardCta}>Book <ArrowRight size={13} /></a>}</div></div>
   </article>;
 }
 
@@ -2151,6 +2151,20 @@ function GuardianEvents({ retreats = [], profile, events, sourceUrl, canEditSour
   // The events are one horizontal slide; choosing a day scrolls it to the first event on that day instead of hiding the rest.
   const slide = useRef<HTMLDivElement | null>(null);
   const slideBy = (direction: -1 | 1) => { const el = slide.current; if (!el) return; const left = el.scrollLeft + direction * Math.max(280, el.clientWidth * .8); if (el.scrollTo) el.scrollTo({ left, behavior: prefersReducedMotionNow() ? 'auto' : 'smooth' }); else el.scrollLeft = left; };
+  // Hover links the calendar and the cards both ways: a day under the pointer rings the cards on it, a card under the pointer rings its days.
+  const [hoverDay, setHoverDay] = useState<string | null>(null);
+  const [hoverEvent, setHoverEvent] = useState<string | null>(null);
+  const cardsOnHoverDay = new Set(hoverDay ? eventsInRange(upcoming, { from: hoverDay, to: hoverDay }).map((event) => event.id) : []);
+  const daysOfHoverEvent = new Set(hoverEvent ? eventDays(upcoming.find((event) => event.id === hoverEvent) as GuideEvent) : []);
+  useEffect(() => {
+    const el = slide.current;
+    const first = [...cardsOnHoverDay][0];
+    if (!el || !first) return;
+    const card = el.querySelector<HTMLElement>(`[data-event-id="${first}"]`);
+    if (!card) return;
+    const left = card.offsetLeft - el.offsetLeft;
+    if (left < el.scrollLeft || left + card.offsetWidth > el.scrollLeft + el.clientWidth) { if (el.scrollTo) el.scrollTo({ left: left - 6, behavior: prefersReducedMotionNow() ? 'auto' : 'smooth' }); else el.scrollLeft = left - 6; }
+  }, [hoverDay]);
   const firstOnDay = range ? fitting[0]?.id : undefined;
   useEffect(() => {
     const el = slide.current;
@@ -2188,8 +2202,8 @@ function GuardianEvents({ retreats = [], profile, events, sourceUrl, canEditSour
         </div>}
       </div>
       {upcoming.length ? <div className="g-events-layout">
-        <style>{`.g-events-layout{display:grid;grid-template-columns:minmax(260px,300px) minmax(0,1fr);gap:36px;align-items:start}.g-events-calendar{position:sticky;top:84px}.g-events-slide{display:flex;gap:16px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scroll-padding-left:6px;padding:6px 6px 14px}.g-events-slide-item{flex:0 0 clamp(270px,47%,380px);scroll-snap-align:start;display:flex;flex-direction:column}.g-events-slide-item>article{flex:1 1 auto}.g-events-slide-item[data-on-day=true]>article{outline:2px solid #C7D8A3;outline-offset:3px}@media (max-width:860px){.g-events-layout{grid-template-columns:minmax(0,1fr)}.g-events-calendar{position:static}.g-events-slide-item{flex-basis:min(86%,380px)}}`}</style>
-        <div className="g-events-calendar"><EventsCalendar events={upcoming} range={range} onChange={setRange} ink={P.ink} surface={P.bg} line={tone === 'light' ? 'rgba(17,18,15,.5)' : 'rgba(242,239,231,.55)'} light={tone === 'light'} /></div>
+        <style>{`.g-events-layout{display:grid;grid-template-columns:minmax(260px,300px) minmax(0,1fr);gap:36px;align-items:start}.g-events-calendar{position:sticky;top:84px}.g-events-slide{display:flex;gap:16px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scroll-padding-left:6px;padding:6px 6px 14px}.g-events-slide-item{flex:0 0 clamp(270px,47%,380px);scroll-snap-align:start;display:flex;flex-direction:column}.g-events-slide-item>article{flex:1 1 auto}.g-events-slide-item[data-on-day=true]>article,.g-events-slide-item[data-linked=true]>article{outline:2px solid #C7D8A3;outline-offset:3px}@media (max-width:860px){.g-events-layout{grid-template-columns:minmax(0,1fr)}.g-events-calendar{position:static}.g-events-slide-item{flex-basis:min(86%,380px)}}`}</style>
+        <div className="g-events-calendar"><EventsCalendar events={upcoming} range={range} onChange={setRange} onHoverDay={setHoverDay} highlight={daysOfHoverEvent} ink={P.ink} surface={P.bg} line={tone === 'light' ? 'rgba(17,18,15,.5)' : 'rgba(242,239,231,.55)'} light={tone === 'light'} /></div>
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, margin: '0 0 14px' }}>
             <p data-events-count role="status" style={{ color: P.muted, fontSize: 12, margin: 0 }}>{range ? (fitting.length ? `${fitting.length} on your day${fitting.length === 1 ? '' : 's'} · ${upcoming.length} upcoming` : `Nothing on those days · ${upcoming.length} upcoming`) : `${upcoming.length} upcoming`}</p>
@@ -2197,7 +2211,7 @@ function GuardianEvents({ retreats = [], profile, events, sourceUrl, canEditSour
               {([-1, 1] as const).map((direction) => <button key={direction} type="button" aria-label={direction < 0 ? 'Previous events' : 'Next events'} onClick={() => slideBy(direction)} style={{ width: 30, height: 30, display: 'grid', placeItems: 'center', border: 0, padding: 0, background: 'transparent', color: P.ink, cursor: 'pointer' }}>{direction < 0 ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}</button>)}
             </span>
           </div>
-          <div ref={slide} className="g-events-slide" role="region" aria-label="Events" tabIndex={0}>{upcoming.map((event) => <div key={event.id} data-event-id={event.id} data-on-day={onDay.has(event.id) ? 'true' : undefined} className="g-events-slide-item"><EventCommerceCard profile={profile} event={event} rooms={roomsFor(event)} /></div>)}</div>
+          <div ref={slide} className="g-events-slide" role="region" aria-label="Events" tabIndex={0}>{upcoming.map((event) => <div key={event.id} data-event-id={event.id} data-on-day={onDay.has(event.id) ? 'true' : undefined} data-linked={cardsOnHoverDay.has(event.id) || hoverEvent === event.id ? 'true' : undefined} className="g-events-slide-item" onPointerEnter={() => setHoverEvent(event.id)} onPointerLeave={() => setHoverEvent(null)} onFocus={() => setHoverEvent(event.id)} onBlur={() => setHoverEvent(null)}><EventCommerceCard profile={profile} event={event} rooms={roomsFor(event)} /></div>)}</div>
           {range && !fitting.length && <p style={{ color: P.accent, fontSize: 14 }}>Nothing is on for those dates. Choose other days, or <button type="button" onClick={() => setRange(null)} style={{ border: 0, background: 'transparent', color: P.accent, padding: 0, font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>clear the dates</button>.</p>}
         </div>
       </div> : <div style={{ border: `1px dashed ${P.line}`, padding: 32, color: P.muted }}>No upcoming events yet, so visitors do not see this section. Add one in the Guardian workspace or pull from the official events page.</div>}

@@ -15,7 +15,7 @@ const longDay = (key: string) => new Date(`${key}T00:00:00Z`).toLocaleDateString
 const shortDay = (key: string) => new Date(`${key}T00:00:00Z`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' });
 const monthName = (view: { year: number; month: number }) => new Date(Date.UTC(view.year, view.month - 1, 1)).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
-export function EventsCalendar({ events, range, onChange, ink = '#F2EFE7', surface = '#11150F', accent = '#C7D8A3', line = 'rgba(242,239,231,.55)', light = false }: { light?: boolean; events: CalendarEvent[]; range: DayRange | null; onChange: (range: DayRange | null) => void; ink?: string; surface?: string; accent?: string; line?: string }) {
+export function EventsCalendar({ events, range, onChange, ink = '#F2EFE7', surface = '#11150F', accent = '#C7D8A3', line = 'rgba(242,239,231,.55)', light = false, onHoverDay, highlight }: { /** Called with the day under the pointer (or keyboard focus), and with null when it leaves. */ onHoverDay?: (key: string | null) => void; /** Days to ring (the days of the event card being hovered). */ highlight?: ReadonlySet<string>; light?: boolean; events: CalendarEvent[]; range: DayRange | null; onChange: (range: DayRange | null) => void; ink?: string; surface?: string; accent?: string; line?: string }) {
   const HATCH = hatch(light);
   const marks = useMemo(() => dayMarks(events), [events]);
   const bounds = useMemo(() => monthBounds(events), [events]);
@@ -50,8 +50,8 @@ export function EventsCalendar({ events, range, onChange, ink = '#F2EFE7', surfa
           const label = mark ? dayLabel(mark.days) : '';
           return <button key={cell.key} type="button" data-day={cell.key} data-has-event={count ? 'true' : undefined} aria-pressed={chosen}
             aria-label={`${longDay(cell.key)}${count ? `, ${count} ${count === 1 ? 'event' : 'events'}${mark!.days.length ? `, ${mark!.days.map((day) => `day ${day.n} of ${day.of}`).join(' and ')}` : ''}` : ', no events'}`}
-            onClick={() => onChange(pickDay(range, cell.key))}
-            style={{ position: 'relative', minHeight: 38, border: 0, padding: '3px 0 11px', backgroundColor: chosen ? accent : filled ? ink : surface, backgroundImage: underWay && !chosen ? HATCH : 'none', color: chosen ? '#11150F' : filled ? surface : ink, fontFamily: sans, fontSize: 11, fontWeight: filled || chosen ? 800 : 500, lineHeight: 1.2, cursor: 'pointer', boxShadow: 'none' }}>
+            onClick={() => onChange(pickDay(range, cell.key))} onPointerEnter={() => onHoverDay?.(cell.key)} onPointerLeave={() => onHoverDay?.(null)} onFocus={() => onHoverDay?.(cell.key)} onBlur={() => onHoverDay?.(null)} data-linked={highlight?.has(cell.key) ? 'true' : undefined}
+            style={{ position: 'relative', minHeight: 38, border: 0, padding: '3px 0 11px', backgroundColor: chosen ? accent : filled ? ink : surface, backgroundImage: underWay && !chosen ? HATCH : 'none', color: chosen ? '#11150F' : filled ? surface : ink, fontFamily: sans, fontSize: 11, fontWeight: filled || chosen ? 800 : 500, lineHeight: 1.2, cursor: 'pointer', boxShadow: highlight?.has(cell.key) ? `inset 0 0 0 2px ${accent}` : 'none' }}>
             {cell.day}
             {label ? <span data-day-label aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, bottom: 2, fontSize: 7, fontWeight: 700, letterSpacing: '.02em', whiteSpace: 'nowrap', opacity: .85 }}>{label}</span> : null}
           </button>;
