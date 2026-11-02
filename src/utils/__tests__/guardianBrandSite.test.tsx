@@ -98,6 +98,8 @@ describe('the public page of each brand', () => {
     await screen.findByRole('region', { name: "Misty Mountain Lifestyle Retreat's treats" });
     const header = await waitFor(() => { const el = container.querySelector('[data-brand-links="header"]'); if (!el) throw new Error('no header links'); return el as HTMLElement; });
     expect([...header.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['/guardians/barbara-oneill', '/guardians/barbara-oneill/tre-lune', '/guardians/barbara-oneill/misty-mountain']);
+    expect([...header.querySelectorAll('a')].every((a) => a.style.borderBottom === '' || a.style.borderBottomWidth === '0px' || /^0/.test(a.style.borderBottom))).toBe(true); // no underline in the header
+    expect(header.querySelector('a[aria-label="Tre Lune"]')).not.toBeNull(); // names are hover-only, so each link keeps its name for screen readers
     expect(header.querySelector('a[aria-current="page"]')!.getAttribute('href')).toBe('/guardians/barbara-oneill/misty-mountain');
     const footer = container.querySelector('[data-brand-links="footer"]') as HTMLElement;
     expect(footer.querySelectorAll('a').length).toBe(3);
