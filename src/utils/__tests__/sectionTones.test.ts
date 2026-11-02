@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sectionTones } from '../sectionTones';
-import { DEFAULT_SECTION_ORDER, orderPageSections } from '../pageSections';
+import { DEFAULT_SECTION_ORDER, orderPageSections, protocolsSecond } from '../pageSections';
 
 const shown = (...keys: string[]) => new Set(keys as any);
 
@@ -32,5 +32,23 @@ describe('sectionTones', () => {
     expect(tones.protocols).toBe('light');
     expect(tones.shop).toBe('dark');
     expect(tones.brands).toBe('light');
+  });
+});
+
+describe('protocolsSecond', () => {
+  const keys = (order: string[]) => order.filter((key) => ['offers', 'shop', 'protocols', 'events'].includes(key));
+  it('moves Protocols to just after the first shown section, whatever order was saved', () => {
+    const order = orderPageSections('events,shop,offers,protocols');
+    const shownKeys = new Set(['events', 'shop', 'offers', 'protocols'] as any);
+    expect(keys(protocolsSecond(order, shownKeys))).toEqual(['events', 'protocols', 'shop', 'offers']);
+  });
+  it('counts only the sections that show', () => {
+    const order = orderPageSections('offers,shop,protocols,events');
+    expect(keys(protocolsSecond(order, new Set(['shop', 'protocols', 'events'] as any)))).toEqual(['offers', 'shop', 'protocols', 'events']);
+    expect(protocolsSecond(order, new Set(['protocols'] as any))[0]).toBe('protocols');
+  });
+  it('leaves everything alone when Protocols do not show', () => {
+    const order = orderPageSections('events,shop');
+    expect(protocolsSecond(order, new Set(['events', 'shop'] as any))).toEqual(order);
   });
 });
