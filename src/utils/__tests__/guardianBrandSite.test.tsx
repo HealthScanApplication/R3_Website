@@ -101,6 +101,8 @@ describe('the public page of each brand', () => {
     expect(header.querySelector('a[aria-current="page"]')!.getAttribute('href')).toBe('/guardians/barbara-oneill/misty-mountain');
     const footer = container.querySelector('[data-brand-links="footer"]') as HTMLElement;
     expect(footer.querySelectorAll('a').length).toBe(3);
+    expect(footer.querySelectorAll('img').length).toBe(0); // the footer row is names only: the logos are in the row just above it
+    expect(header.querySelectorAll('img').length).toBeGreaterThan(0);
     expect(footer.parentElement!.lastChild).not.toBe(footer.parentElement!.querySelector('div')); // the disclaimer text comes after the brand row
   });
 
