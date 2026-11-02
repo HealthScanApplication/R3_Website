@@ -17,3 +17,6 @@ create policy "anyone reads guide_protocol_brands" on public.guide_protocol_bran
 drop policy if exists "guides manage own guide_protocol_brands" on public.guide_protocol_brands;
 create policy "guides manage own guide_protocol_brands" on public.guide_protocol_brands
   for all to authenticated using (guide_id = auth.uid()) with check (guide_id = auth.uid());
+
+grant select on public.guide_protocol_brands to anon, authenticated;
+grant insert, update, delete on public.guide_protocol_brands to authenticated;
