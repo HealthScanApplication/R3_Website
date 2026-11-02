@@ -51,7 +51,7 @@ describe('events calendar', () => {
     expect(day(root, '2099-03-13').getAttribute('aria-label')).toMatch(/no events/);
   });
 
-  it('highlights only the days an event starts, not the days one is under way, and stacks the cards beside the calendar', async () => {
+  it('highlights only the days an event starts, not the days one is under way, and puts the events in a slide beside the calendar', async () => {
     visit();
     const root = await section();
     expect(day(root, '2099-03-05').style.background).toMatch(/rgb\(17, 18, 15\)/); // an event starts: solid ink (black on the light surface, white on the dark)
@@ -68,13 +68,14 @@ describe('events calendar', () => {
     expect(day(root, '2099-03-09').getAttribute('data-has-event')).toBe('true');
     const layout = root.querySelector('.g-events-layout') as HTMLElement;
     expect(layout.querySelector('.g-events-calendar [data-events-calendar]')).not.toBeNull();
-    const stack = layout.querySelector('.g-events-stack') as HTMLElement;
+    const stack = layout.querySelector('.g-events-slide') as HTMLElement;
     expect(stack.getAttribute('aria-label')).toBe('Events');
     expect(stack.querySelectorAll('article').length).toBe(3);
-    expect(layout.querySelector('.g-events-calendar')!.nextElementSibling!.contains(stack)).toBe(true); // the stack is the column to the right of the calendar
+    expect(layout.querySelector('.g-events-calendar')!.nextElementSibling!.contains(stack)).toBe(true); // the slide is the column to the right of the calendar
     expect(root.textContent).toMatch(/Days of the event/); // the legend says what the lines are
     expect((root.querySelector('button[aria-label="Next month"]') as HTMLElement).style.border).toMatch(/^0|none/); // arrows only, no boxes
-    expect(stack.style.gridTemplateColumns).toMatch(/repeat\(auto-fill/); // as many cards across as fit, two in the wide column
+    expect(within(root).getByRole('button', { name: 'Next events' })).toBeTruthy(); // arrows slide through them
+    expect(within(root).getByRole('button', { name: 'Previous events' })).toBeTruthy();
     const card = stack.querySelector('article') as HTMLElement;
     fireEvent.pointerMove(card, { clientX: 10, clientY: 10, pointerType: 'mouse' });
     expect(card.style.getPropertyValue('--ry')).not.toBe(''); // the card tilts with the pointer
@@ -95,21 +96,28 @@ describe('events calendar', () => {
     expect(day(again, '2099-03-08').querySelector('[data-day-label]')!.textContent).toBe('D4 · D2'); // overlapping events: each one's day number
   });
 
-  it('choosing a day shows only the cards on that day, another day switches to it, and Clear brings everything back', async () => {
+  it('choosing a day scrolls the slide to that day\'s events and marks them, another day moves it, and Clear brings back the plain list', async () => {
     visit();
     const root = await section();
+    const slide = root.querySelector('.g-events-slide') as HTMLElement;
+    const scrolled: number[] = [];
+    (slide as any).scrollTo = (options: { left: number }) => { scrolled.push(options.left); };
     expect(root.querySelectorAll('article').length).toBe(3);
     fireEvent.click(day(root, '2099-03-09')); // only the week-long retreat is on
-    expect(root.querySelectorAll('article').length).toBe(1);
-    expect(root.querySelector('article')!.textContent).toMatch(/Lifestyle Retreat/);
-    expect(root.querySelector('[data-events-count]')!.textContent).toMatch(/1 of 3 events fit your dates/);
-    fireEvent.click(day(root, '2099-03-05')); // another day switches to that day alone
+    expect(root.querySelectorAll('article').length).toBe(3); // nothing is hidden: it is one slide
+    const marked = [...root.querySelectorAll('[data-on-day="true"]')];
+    expect(marked.length).toBe(1);
+    expect(marked[0].textContent).toMatch(/Lifestyle Retreat/);
+    expect(scrolled.length).toBeGreaterThan(0); // the slide moved to it
+    expect(root.querySelector('[data-events-count]')!.textContent).toMatch(/1 on your day/);
+    fireEvent.click(day(root, '2099-03-05')); // another day moves the marker
     expect(day(root, '2099-03-05').getAttribute('aria-pressed')).toBe('true');
     expect(day(root, '2099-03-09').getAttribute('aria-pressed')).not.toBe('true');
     expect(day(root, '2099-03-05').style.backgroundColor).toMatch(/rgb\(199, 216, 163\)/); // the chosen day is green, even where an event starts
     expect(day(root, '2099-03-05').style.backgroundImage).toBe('none');
+    expect(root.querySelector('[data-on-day="true"]')!.textContent).not.toMatch(/Lifestyle Retreat/);
     fireEvent.click(within(root).getByRole('button', { name: 'Clear dates' }));
-    expect(root.querySelectorAll('article').length).toBe(3);
+    expect(root.querySelectorAll('[data-on-day="true"]').length).toBe(0);
     expect(root.querySelector('[data-calendar-range]')).toBeNull();
   });
 
@@ -123,17 +131,18 @@ describe('events calendar', () => {
     expect(root.querySelector('[data-events-calendar] [role=heading]')!.textContent).toMatch(/April 2099/);
     expect(next.disabled).toBe(true); // nothing after April
     fireEvent.click(day(root, '2099-04-02'));
-    expect(root.querySelectorAll('article').length).toBe(1);
-    expect(root.querySelector('article')!.textContent).toMatch(/Spring Talk/);
+    expect(root.querySelectorAll('[data-on-day="true"]').length).toBe(1);
+    expect(root.querySelector('[data-on-day="true"]')!.textContent).toMatch(/Spring Talk/);
   });
 
   it('says so when nothing is on for the chosen dates, and offers to clear them', async () => {
     visit();
     const root = await section();
     fireEvent.click(day(root, '2099-03-20'));
-    expect(root.querySelectorAll('article').length).toBe(0);
+    expect(root.querySelectorAll('[data-on-day="true"]').length).toBe(0);
     expect(within(root).getByText(/Nothing is on for those dates/)).toBeTruthy();
     fireEvent.click(within(root).getAllByRole('button', { name: /clear/i })[0]);
+    expect(within(root).queryByText(/Nothing is on for those dates/)).toBeNull();
     expect(root.querySelectorAll('article').length).toBe(3);
   });
 

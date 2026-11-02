@@ -3,7 +3,7 @@ import {
   ArrowRight, ArrowUp, ArrowDown, ChevronRight, FileText, HeartPulse, LogOut,
   Mail, Package, Plus, Salad, Sparkles, Users, Globe2, Loader2,
   Upload, Check, Instagram, Facebook, Youtube, Link2, AtSign, Route, CalendarDays, Download,
-  MoreHorizontal, Droplets, Activity, Bath, Sparkle, HeartHandshake, Hourglass, ChefHat, Wheat, ListChecks, CookingPot, FolderOpen, Trash2, ExternalLink, Hammer, PencilRuler, Blocks, LayoutDashboard, Grid2X2, List, Play, Clock, ShieldCheck, Utensils, Dumbbell, Combine, Clapperboard, BookOpen, Podcast, GraduationCap, AudioLines, ShoppingBag, Mountain } from 'lucide-react';
+  ChevronLeft, MoreHorizontal, Droplets, Activity, Bath, Sparkle, HeartHandshake, Hourglass, ChefHat, Wheat, ListChecks, CookingPot, FolderOpen, Trash2, ExternalLink, Hammer, PencilRuler, Blocks, LayoutDashboard, Grid2X2, List, Play, Clock, ShieldCheck, Utensils, Dumbbell, Combine, Clapperboard, BookOpen, Podcast, GraduationCap, AudioLines, ShoppingBag, Mountain } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ProtocolEditor } from '../admin/ProtocolEditor';
 import { RoutineMark } from '../Header';
@@ -2108,6 +2108,19 @@ function GuardianEvents({ retreats = [], profile, events, sourceUrl, canEditSour
   const roomsFor = (event: GuideEvent) => parseRetreatOptions(retreats.find((retreat) => retreat.title.trim().toLowerCase() === event.title.trim().toLowerCase())?.options);
   const [range, setRange] = useState<DayRange | null>(null);
   const fitting = eventsInRange(upcoming, range);
+  const onDay = new Set(range ? fitting.map((event) => event.id) : []);
+  // The events are one horizontal slide; choosing a day scrolls it to the first event on that day instead of hiding the rest.
+  const slide = useRef<HTMLDivElement | null>(null);
+  const slideBy = (direction: -1 | 1) => { const el = slide.current; if (!el) return; const left = el.scrollLeft + direction * Math.max(280, el.clientWidth * .8); if (el.scrollTo) el.scrollTo({ left, behavior: prefersReducedMotionNow() ? 'auto' : 'smooth' }); else el.scrollLeft = left; };
+  const firstOnDay = range ? fitting[0]?.id : undefined;
+  useEffect(() => {
+    const el = slide.current;
+    if (!el || !firstOnDay) return;
+    const card = el.querySelector<HTMLElement>(`[data-event-id="${firstOnDay}"]`);
+    if (!card) return;
+    const left = card.offsetLeft - el.offsetLeft - 6;
+    if (el.scrollTo) el.scrollTo({ left, behavior: prefersReducedMotionNow() ? 'auto' : 'smooth' }); else el.scrollLeft = left;
+  }, [firstOnDay, range?.from, range?.to]);
   // Different events (another brand's page, or a fresh import) start without dates chosen from the old ones.
   const eventSet = upcoming.map((event) => event.id).join(',');
   useEffect(() => { setRange(null); }, [eventSet]);
@@ -2136,12 +2149,17 @@ function GuardianEvents({ retreats = [], profile, events, sourceUrl, canEditSour
         </div>}
       </div>
       {upcoming.length ? <div className="g-events-layout">
-        <style>{`.g-events-layout{display:grid;grid-template-columns:minmax(260px,300px) minmax(0,1fr);gap:36px;align-items:start}.g-events-calendar{position:sticky;top:84px}.g-events-stack{max-height:min(80vh,860px);overflow-y:auto;overscroll-behavior:contain;padding:6px}@media (max-width:860px){.g-events-layout{grid-template-columns:minmax(0,1fr)}.g-events-calendar{position:static}.g-events-stack{max-height:none;overflow:visible;padding-right:0}}`}</style>
+        <style>{`.g-events-layout{display:grid;grid-template-columns:minmax(260px,300px) minmax(0,1fr);gap:36px;align-items:start}.g-events-calendar{position:sticky;top:84px}.g-events-slide{display:flex;gap:16px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scroll-padding-left:6px;padding:6px 6px 14px}.g-events-slide-item{flex:0 0 clamp(270px,47%,380px);scroll-snap-align:start;display:flex;flex-direction:column}.g-events-slide-item>article{flex:1 1 auto}.g-events-slide-item[data-on-day=true]>article{outline:2px solid #C7D8A3;outline-offset:3px}@media (max-width:860px){.g-events-layout{grid-template-columns:minmax(0,1fr)}.g-events-calendar{position:static}.g-events-slide-item{flex-basis:min(86%,380px)}}`}</style>
         <div className="g-events-calendar"><EventsCalendar events={upcoming} range={range} onChange={setRange} ink={P.ink} surface={P.bg} line={tone === 'light' ? 'rgba(17,18,15,.5)' : 'rgba(242,239,231,.55)'} light={tone === 'light'} /></div>
         <div style={{ minWidth: 0 }}>
-          <p data-events-count role="status" style={{ color: P.muted, fontSize: 12, margin: '0 0 14px' }}>{range ? `${fitting.length} of ${upcoming.length} events fit your dates` : `${upcoming.length} upcoming`}</p>
-          {fitting.length ? <div className="g-events-stack" role="region" aria-label="Events" tabIndex={0} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,300px),1fr))', gap: 16, alignContent: 'start' }}>{fitting.map((event) => <EventCommerceCard key={event.id} profile={profile} event={event} rooms={roomsFor(event)} />)}</div>
-            : <p style={{ color: P.accent, fontSize: 14 }}>Nothing is on for those dates. Choose other days, or <button type="button" onClick={() => setRange(null)} style={{ border: 0, background: 'transparent', color: P.accent, padding: 0, font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>clear the dates</button>.</p>}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, margin: '0 0 14px' }}>
+            <p data-events-count role="status" style={{ color: P.muted, fontSize: 12, margin: 0 }}>{range ? (fitting.length ? `${fitting.length} on your day${fitting.length === 1 ? '' : 's'} · ${upcoming.length} upcoming` : `Nothing on those days · ${upcoming.length} upcoming`) : `${upcoming.length} upcoming`}</p>
+            <span style={{ display: 'inline-flex', gap: 6 }}>
+              {([-1, 1] as const).map((direction) => <button key={direction} type="button" aria-label={direction < 0 ? 'Previous events' : 'Next events'} onClick={() => slideBy(direction)} style={{ width: 30, height: 30, display: 'grid', placeItems: 'center', border: 0, padding: 0, background: 'transparent', color: P.ink, cursor: 'pointer' }}>{direction < 0 ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}</button>)}
+            </span>
+          </div>
+          <div ref={slide} className="g-events-slide" role="region" aria-label="Events" tabIndex={0}>{upcoming.map((event) => <div key={event.id} data-event-id={event.id} data-on-day={onDay.has(event.id) ? 'true' : undefined} className="g-events-slide-item"><EventCommerceCard profile={profile} event={event} rooms={roomsFor(event)} /></div>)}</div>
+          {range && !fitting.length && <p style={{ color: P.accent, fontSize: 14 }}>Nothing is on for those dates. Choose other days, or <button type="button" onClick={() => setRange(null)} style={{ border: 0, background: 'transparent', color: P.accent, padding: 0, font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>clear the dates</button>.</p>}
         </div>
       </div> : <div style={{ border: `1px dashed ${P.line}`, padding: 32, color: P.muted }}>No upcoming events yet, so visitors do not see this section. Add one in the Guardian workspace or pull from the official events page.</div>}
     </div>
