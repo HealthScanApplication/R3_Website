@@ -93,6 +93,17 @@ describe('the public page of each brand', () => {
     expect(within(section).queryByText('Misty Treat')).toBeNull();
   });
 
+  it('links the Guardian and each brand in the header after the logo and in the second-to-last footer row, marking the page you are on', async () => {
+    const { container } = visit('/guardians/misty-mountain'.replace('/guardians/misty-mountain', '/guardians/barbara-oneill/misty-mountain'), 'misty-mountain');
+    await screen.findByRole('region', { name: "Misty Mountain Lifestyle Retreat's treats" });
+    const header = await waitFor(() => { const el = container.querySelector('[data-brand-links="header"]'); if (!el) throw new Error('no header links'); return el as HTMLElement; });
+    expect([...header.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['/guardians/barbara-oneill', '/guardians/barbara-oneill/tre-lune', '/guardians/barbara-oneill/misty-mountain']);
+    expect(header.querySelector('a[aria-current="page"]')!.getAttribute('href')).toBe('/guardians/barbara-oneill/misty-mountain');
+    const footer = container.querySelector('[data-brand-links="footer"]') as HTMLElement;
+    expect(footer.querySelectorAll('a').length).toBe(3);
+    expect(footer.parentElement!.lastChild).not.toBe(footer.parentElement!.querySelector('div')); // the disclaimer text comes after the brand row
+  });
+
   it('a brand\'s page carries its name and shows only its own content', async () => {
     visit('/guardians/barbara-oneill/tre-lune', 'tre-lune');
     const section = await screen.findByRole('region', { name: "Tre Lune's treats" });
@@ -115,7 +126,7 @@ describe('the public page of each brand', () => {
   it('shows a brand\'s flat logo white on the dark hero, and a normal photo as it is', async () => {
     visit('/guardians/barbara-oneill/tre-lune', 'tre-lune');
     await screen.findByRole('region', { name: "Tre Lune's treats" });
-    const logo = document.querySelector('img[src="https://x/logo-mono-1.png"]') as HTMLImageElement;
+    const logo = document.querySelector('.guardian-public-site main img[src="https://x/logo-mono-1.png"]') as HTMLImageElement;
     expect(logo.style.filter).toBe('invert(1)');
     cleanup();
     visit('/guardians/barbara-oneill');

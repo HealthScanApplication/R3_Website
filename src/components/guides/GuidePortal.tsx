@@ -1791,6 +1791,25 @@ function ProtocolPages({ guideId, protocols }: { guideId: string; protocols: Adm
   </section>;
 }
 
+type BrandLink = { key: string; name: string; logo?: string | null; href: string; here: boolean };
+
+/**
+ * The Guardian's own photo and each of their brands, in page order, each linking to its page. Used in the header (after the
+ * R³ Guardian logo) and as the second-to-last row of the footer. Only the brands a visitor can open are listed: with a
+ * single page there is nothing to switch between, so nothing is drawn.
+ */
+function BrandLinks({ links, variant, color }: { links: BrandLink[]; variant: 'header' | 'footer'; color: string }) {
+  if (links.length < 2) return null;
+  const header = variant === 'header';
+  const size = header ? 26 : 34;
+  return <nav aria-label="Brand pages" data-brand-links={variant} style={{ display: 'flex', alignItems: 'center', flexWrap: header ? 'nowrap' : 'wrap', gap: header ? 8 : 18, minWidth: 0, overflow: header ? 'hidden' : undefined }}>
+    {links.map((link) => <a key={link.key} href={link.href} aria-current={link.here ? 'page' : undefined} title={link.name} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color, textDecoration: 'none', opacity: link.here || !header ? 1 : .72, fontSize: header ? 11 : 13, fontWeight: 700, whiteSpace: 'nowrap', borderBottom: link.here ? `1px solid ${color}` : '1px solid transparent', paddingBottom: 1 }}>
+      {link.logo ? <img src={link.logo} alt="" referrerPolicy="no-referrer" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', background: '#FFFFFF', border: '1px solid rgba(17,18,15,.16)', ...logoImageStyle(link.logo, false) }} /> : <span aria-hidden="true" style={{ width: size, height: size, borderRadius: '50%', border: `1px solid ${color}`, display: 'grid', placeItems: 'center', fontSize: 10 }}>{link.name.slice(0, 1)}</span>}
+      <span className={header ? 'guardian-header-brand-name' : undefined}>{link.name}</span>
+    </a>)}
+  </nav>;
+}
+
 function FreeOfferFlipCard({ profile, offer, protocol, reviews, accent, upsellRamp, onUnlocked }: { profile: GuideProfile; offer: GuideOffer; protocol?: AdminProtocol; reviews: GuardianReview[]; accent: string; upsellRamp?: GuideValueRamp; onUnlocked: (offer: GuideOffer, protocol: AdminProtocol | undefined, email: string) => void }) {
   const byline = useCardByline(offer, profile);
   const [flipped, setFlipped] = useState(false);
@@ -2348,6 +2367,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   const brandTiles = publicBrands.map((brand) => brand.kind === 'personal'
     ? { key: brand.id || 'personal', name: ownerName, title: ownerName, blurb: (brand.social_links as Record<string, string> | undefined)?.about_short || ownerProfile?.headline || '', logo: ownerProfile?.avatar_url || brand.logo_url, website: ownerLinks.website || '', links: ownerLinks, href: brandSitePath(profile.slug, null), here: !brandSlug }
     : { key: brand.id || brand.name, ...brandTileName(brand.name, (brand.social_links || {}) as Record<string, string>), logo: brand.logo_url, website: brand.website_url, links: (brand.social_links || {}) as Record<string, string>, href: brandSitePath(profile.slug, brand), here: brand.id === activeBrand?.id });
+  const brandLinks: BrandLink[] = brandTiles.filter((tile) => tile.href).map((tile) => ({ key: tile.key, name: tile.title || tile.name, logo: tile.logo, href: tile.href, here: !!tile.here }));
   // The sections between the hero and the footer, in the order the owner chose (see pageSections). Each is a whole section that draws nothing when it has nothing to show.
   const sectionNodes: Record<PageSectionKey, React.ReactNode> = {
     offers: <GuardianOfferCatalog profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} categoryOrder={socials.protocol_filter_order} />,
@@ -2372,9 +2392,9 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
     </section> : null,
   };
   return <PublicLocaleContext.Provider value={{ currency: localePreference.currency, locale: localePreference.locale }}><CardBrandsContext.Provider value={{ brands: publicBrands, activeId: activeBrand?.id || null }}><div className="guardian-public-site" lang={publicLanguage} dir={publicLanguage === 'ar' ? 'rtl' : 'ltr'} style={{ minHeight: '100vh', background: publicPageColor, color: '#11120F', fontFamily: publicBodyFont }}>
-    <style>{`.guardian-public-site button,.guardian-public-site input,.guardian-public-site select,.guardian-public-site textarea{font-family:${sans}}.guardian-public-site a{font-family:inherit}.guardian-public-site h1,.guardian-public-site h2,.guardian-public-site h3{font-synthesis:none}@media(max-width:760px){.guardian-header-socials{display:none!important}}`}</style>
+    <style>{`@media (max-width:1100px){.guardian-header-brand-name{display:none}}.guardian-public-site button,.guardian-public-site input,.guardian-public-site select,.guardian-public-site textarea{font-family:${sans}}.guardian-public-site a{font-family:inherit}.guardian-public-site h1,.guardian-public-site h2,.guardian-public-site h3{font-synthesis:none}@media(max-width:760px){.guardian-header-socials{display:none!important}}`}</style>
     {publicHeaderStyle !== 'hidden' && <header style={{ position: 'fixed', inset: '0 0 auto', zIndex: 100, minHeight: 64, background: publicHeaderBackground, color: publicHeaderText, borderBottom: '1px solid rgba(17,18,15,.2)', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', alignItems: 'center', gap: 8, padding: '0 clamp(8px,4vw,84px)' }}>
-      <a href="/" aria-label="R³ Guardian" style={{ color: publicHeaderText, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 12, justifySelf: 'start' }}><RoutineMark size={32} textColor="#16140F" hairline="#16140F" wordmark="R³" suffix="Guardian" />{socials.brand_name && <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.12em' }}>{socials.brand_name}</span>}</a>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18, justifySelf: 'start', minWidth: 0 }}><a href="/" aria-label="R³ Guardian" style={{ color: publicHeaderText, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 12, }}><RoutineMark size={32} textColor="#16140F" hairline="#16140F" wordmark="R³" suffix="Guardian" />{socials.brand_name && <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.12em' }}>{socials.brand_name}</span>}</a><BrandLinks links={brandLinks} variant="header" color={publicHeaderText} /></div>
       <div data-header-locale style={{ display: 'flex', justifyContent: 'center', minWidth: 0 }}><PublicLocaleBar value={localePreference} onChange={updateLocalePreference} /></div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0, justifySelf: 'end' }}>
         <span className="guardian-header-socials" style={{ display: 'flex', gap: 11, alignItems: 'center' }}>{socials.instagram && <a href={socials.instagram} aria-label="Instagram" title="Instagram" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><Instagram size={15} /></a>}{socials.facebook && <a href={socials.facebook} aria-label="Facebook" title="Facebook" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><Facebook size={15} /></a>}{socials.tiktok && <a href={socials.tiktok} aria-label="TikTok" title="TikTok" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><AtSign size={15} /></a>}{socials.youtube && <a href={socials.youtube} aria-label="YouTube" title="YouTube" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><Youtube size={16} /></a>}{socials.linktree && <a href={socials.linktree} aria-label="Linktree" title="Linktree" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><Link2 size={15} /></a>}{socials.website && <a href={socials.website} aria-label="Website" title="Website" style={{ color: publicHeaderText, display: 'grid', placeItems: 'center' }}><Globe2 size={15} /></a>}</span>
@@ -2388,6 +2408,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
         cards={publishedRamps.length ? (onOfferPath ? [selectedRamp!] : publishedRamps).slice(0, 1).map((ramp) => { const offer = publishedOffers.find((item) => item.id === ramp.offer_ids[0]); return { key: ramp.id, offerTitle: offer?.title || ramp.name, eyebrow: ramp.problem || undefined, title: customerFacingOfferTitle(offer?.title || ramp.name), copy: offer?.description || '', kind: offer?.kind, price: offer?.access_model === 'free' ? 'Free' : undefined, imageUrl: offer?.cover_url, href: pathSlug === encodeURIComponent(ramp.slug) ? '#offers' : `/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}` }; }) : freeOffers.slice(0, 1).map((offer) => ({ key: offer.id, offerTitle: offer.title, eyebrow: profile.specialties.slice(0, 2).join(' · '), title: customerFacingOfferTitle(offer.title), copy: offer.description || '', kind: offer.kind, price: 'Free', imageUrl: offer.cover_url, href: '#start' }))} />
       {orderPageSections(socials.section_order).map((key) => <Fragment key={key}>{sectionNodes[key]}</Fragment>)}
       <footer style={{ padding: `28px ${PAGE_X}`, borderTop: '1px solid rgba(17,18,15,.2)', color: '#66645F', fontSize: 11, lineHeight: 1.6 }}>
+        {brandLinks.length > 1 && <div style={{ marginBottom: 22 }}><BrandLinks links={brandLinks} variant="footer" color="#11120F" /></div>}
         {profile.display_name} shares general wellbeing guidance, not medical advice. Speak to your GP or doctor before changing medication, diet or exercise, and about any health concern. Individual results vary.
       </footer>
     </main>
