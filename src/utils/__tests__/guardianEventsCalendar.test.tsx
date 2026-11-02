@@ -73,6 +73,10 @@ describe('events calendar', () => {
     expect(stack.querySelectorAll('article').length).toBe(3);
     expect(layout.querySelector('.g-events-calendar')!.nextElementSibling!.contains(stack)).toBe(true); // the stack is the column to the right of the calendar
     expect(root.textContent).toMatch(/Days of the event/); // the legend says what the lines are
+    expect(stack.style.gridTemplateColumns).toMatch(/repeat\(auto-fill/); // as many cards across as fit, two in the wide column
+    const card = stack.querySelector('article') as HTMLElement;
+    fireEvent.pointerMove(card, { clientX: 10, clientY: 10, pointerType: 'mouse' });
+    expect(card.style.getPropertyValue('--ry')).not.toBe(''); // the card tilts with the pointer
   });
 
   it('numbers each day of a multi-day event inside the calendar, and leaves one-day events unnumbered', async () => {
