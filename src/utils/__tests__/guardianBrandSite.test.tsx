@@ -14,6 +14,7 @@ const BRANDS = [
   { id: 'b-mmh', guide_id: 'owner', name: 'Misty Mountain Lifestyle Retreat', kind: 'business', slug: 'misty-mountain', logo_url: null, website_url: 'https://www.mmh.com.au/', social_links: { section_order: 'treats,events', name_suffix: 'Lifestyle Retreat', email_capture: 'off' }, is_primary: false },
 ];
 const shopSpy = vi.hoisted(() => vi.fn());
+const shopRows = vi.hoisted(() => ({ rows: [] as any[] }));
 const optInSpy = vi.hoisted(() => vi.fn());
 const event = (id: string, title: string, brand_id: string | null) => ({ id, guide_id: 'owner', title, description: null, start_at: '2099-03-28T00:00:00.000Z', end_at: null, timezone: 'Australia/Sydney', venue: null, location: 'Bellbrook NSW', format: 'in_person', image_url: null, info_url: null, source_url: 'manual', source_name: null, source_external_id: id, status: 'published', brand_id });
 const EVENTS = [event('e1', 'Personal Talk', null), event('e2', 'Tre Lune Workshop', 'b-tre'), event('e3', 'Misty Weekend', 'b-mmh')];
@@ -29,10 +30,10 @@ vi.mock('../guidePortal', async (importOriginal) => ({
   listGuideEvents: async () => EVENTS,
   listPublicGuideBrands: async () => BRANDS,
   submitGuardianOptIn: async (...args: unknown[]) => { optInSpy(...args); },
-  listPublicGuideProducts: async (guide: string, brand?: string | null) => { shopSpy(guide, brand); return []; },
+  listPublicGuideProducts: async (guide: string, brand?: string | null) => { shopSpy(guide, brand); return shopRows.rows; },
 }));
 
-beforeEach(() => { optInSpy.mockReset(); shopSpy.mockReset(); vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => [], text: async () => '[]' }) as Response)); });
+beforeEach(() => { shopRows.rows = []; optInSpy.mockReset(); shopSpy.mockReset(); vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => [], text: async () => '[]' }) as Response)); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const visit = (path: string, brandSlug?: string) => { window.history.replaceState({}, '', path); return render(<GuardianWebsite slug="barbara-oneill" brandSlug={brandSlug} isSignedIn={false} />); };
@@ -106,6 +107,19 @@ describe('the public page of each brand', () => {
     expect(footer.querySelectorAll('img').length).toBe(0); // the footer row is names only: the logos are in the row just above it
     expect(header.querySelectorAll('img').length).toBeGreaterThan(0);
     expect(footer.parentElement!.lastChild).not.toBe(footer.parentElement!.querySelector('div')); // the disclaimer text comes after the brand row
+  });
+
+  it('keeps shop photos grey until the card is hovered, then in colour', async () => {
+    shopRows.rows = [{ id: 'p1', guide_id: 'owner', brand_id: null, brand_ids: [], shop_domain: 'shop.example', myshopify_domain: null, product_handle: 'tea', variant_id: null, variant_title: null, title: 'Herbal Tea', description: '', image_url: 'https://x/tea.jpg', price_cents: 1000, currency: 'AUD', status: 'published', protocol_ids: [], sort_order: 0 }];
+    visit('/guardians/barbara-oneill');
+    const img = await waitFor(() => { const el = document.querySelector('#shop article img') as HTMLImageElement | null; if (!el) throw new Error('no product photo'); return el; });
+    expect(img.style.filter).toContain('grayscale(var(--product-gray, 1))');
+    const card = img.closest('article') as HTMLElement;
+    vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
+    fireEvent.pointerMove(card, { clientX: 5, clientY: 5, pointerType: 'mouse' });
+    expect(card.style.getPropertyValue('--product-gray')).toBe('0');
+    fireEvent.pointerLeave(card);
+    expect(card.style.getPropertyValue('--product-gray')).toBe('1');
   });
 
   it('a brand\'s page carries its name and shows only its own content', async () => {

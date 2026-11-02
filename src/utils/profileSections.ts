@@ -39,6 +39,8 @@ export interface ProfileSectionContent {
   products?: number;
   events?: number;
   retreats?: number;
+  /** Protocols listed on this page (the Protocols section). */
+  protocols?: number;
 }
 
 export interface ProfileSectionState extends ProfileSectionDef { count: number; filled: boolean }
@@ -48,6 +50,8 @@ export function profileSectionStates(content: ProfileSectionContent): ProfileSec
   const extra: Record<string, number> = { shop: content.products || 0, events: content.events || 0, retreats: content.retreats || 0 };
   return PROFILE_SECTIONS.map((section) => {
     const count = byKind(section.kinds) + (extra[section.id] || 0);
+    // Protocols listed on the page have their own section: the tag goes there rather than to the catalog's Protocols tab.
+    if (section.id === 'protocols' && (content.protocols || 0) > 0) return { ...section, anchor: 'protocols', category: undefined, count: count + content.protocols!, filled: true };
     return { ...section, count, filled: count > 0 };
   });
 }

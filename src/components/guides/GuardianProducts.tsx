@@ -36,7 +36,7 @@ function PublicProductImage({ product, regional }: { product: GuideProduct; regi
   const [src, setSrc] = useState(initial);
   useEffect(() => setSrc(initial), [initial]);
   if (!src) return <div style={{ width: '100%', aspectRatio: '1', display: 'grid', placeItems: 'center', background: '#EEEAE2', color: APP.muted }}><ShoppingBag size={40} strokeWidth={1.2} /></div>;
-  return <div style={{ position: 'relative', width: '100%', aspectRatio: '1', overflow: 'hidden', background: '#EEEAE2' }}><img src={src} alt={product.title} loading="lazy" onError={() => { if (fallback && src !== fallback) setSrc(fallback); else setSrc(''); }} style={{ position: 'absolute', inset: -12, width: 'calc(100% + 24px)', height: 'calc(100% + 24px)', maxWidth: 'none', objectFit: 'cover', objectPosition: 'center', filter: 'grayscale(.18) contrast(1.02)', transform: 'translate3d(var(--product-px, 0px), var(--product-py, 0px), 0) scale(1.025)', transition: 'transform 500ms cubic-bezier(.16,1,.3,1), filter 500ms ease', willChange: 'transform' }} /></div>;
+  return <div style={{ position: 'relative', width: '100%', aspectRatio: '1', overflow: 'hidden', background: '#EEEAE2' }}><img src={src} alt={product.title} loading="lazy" onError={() => { if (fallback && src !== fallback) setSrc(fallback); else setSrc(''); }} style={{ position: 'absolute', inset: -12, width: 'calc(100% + 24px)', height: 'calc(100% + 24px)', maxWidth: 'none', objectFit: 'cover', objectPosition: 'center', filter: 'grayscale(var(--product-gray, 1)) contrast(1.02)', transform: 'translate3d(var(--product-px, 0px), var(--product-py, 0px), 0) scale(1.025)', transition: 'transform 500ms cubic-bezier(.16,1,.3,1), filter 500ms ease', willChange: 'transform' }} /></div>;
 }
 
 function productCategory(product: GuideProduct): string {
@@ -295,6 +295,7 @@ const publicProductCardMotion = {
     card.style.setProperty('--product-px', `${((.5 - x) * 16).toFixed(1)}px`);
     card.style.setProperty('--product-py', `${((.5 - y) * 16).toFixed(1)}px`);
     card.style.setProperty('--product-lift', '-5px');
+    card.style.setProperty('--product-gray', '0'); // the photo is grey until the card is hovered
     card.style.boxShadow = '0 24px 46px -22px rgba(17,18,15,.5)';
   },
   onPointerLeave: (event: React.PointerEvent<HTMLElement>) => {
@@ -304,6 +305,7 @@ const publicProductCardMotion = {
     card.style.setProperty('--product-px', '0px');
     card.style.setProperty('--product-py', '0px');
     card.style.setProperty('--product-lift', '0px');
+    card.style.setProperty('--product-gray', '1');
     card.style.boxShadow = 'none';
   },
 };
@@ -385,7 +387,7 @@ export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding,
     <div role="tablist" aria-label="Product categories" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '0 0 26px' }}>{categories.map((category) => <button key={category} type="button" role="tab" aria-selected={activeCategory === category} onClick={() => setActiveCategory(category)} style={{ border: `1px solid ${activeCategory === category ? '#F2EFE7' : 'rgba(242,239,231,.34)'}`, background: activeCategory === category ? '#F2EFE7' : 'transparent', color: activeCategory === category ? '#11120F' : '#F2EFE7', minHeight: 38, padding: '0 14px', fontFamily: APP.font, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{category}</button>)}</div>
     {message && <p role="alert" style={{ color: '#8A3D2F', fontSize: 12 }}>{message}</p>}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,280px),1fr))', gap: 18 }}>
-      {shownProducts.map(({ source: product, regional }) => { const linkedIds = [...new Set([...product.protocol_ids, ...(product.catalog_product_id ? usage[product.catalog_product_id] || [] : [])])]; const linked = linkedIds.map((id) => protocols.find((protocol) => protocol.id === id)).filter((protocol): protocol is AdminProtocol => !!protocol); return <article key={product.id} {...publicProductCardMotion} style={publicProductCardStyle} onPointerDown={(event) => { if (event.pointerType !== 'mouse') event.currentTarget.style.setProperty('--product-lift', '-2px'); }} onPointerUp={(event) => { if (event.pointerType !== 'mouse') event.currentTarget.style.setProperty('--product-lift', '0px'); }}>
+      {shownProducts.map(({ source: product, regional }) => { const linkedIds = [...new Set([...product.protocol_ids, ...(product.catalog_product_id ? usage[product.catalog_product_id] || [] : [])])]; const linked = linkedIds.map((id) => protocols.find((protocol) => protocol.id === id)).filter((protocol): protocol is AdminProtocol => !!protocol); return <article key={product.id} {...publicProductCardMotion} style={publicProductCardStyle} onPointerDown={(event) => { if (event.pointerType !== 'mouse') { event.currentTarget.style.setProperty('--product-lift', '-2px'); event.currentTarget.style.setProperty('--product-gray', '0'); } }} onPointerUp={(event) => { if (event.pointerType !== 'mouse') event.currentTarget.style.setProperty('--product-lift', '0px'); }}>
         <div style={{ position: 'relative' }}><PublicProductImage product={product} regional={regional} />{logoUrl ? <LogoBadge url={logoUrl} name={guardianName} surface="#FFFFFF" onDark={false} /> : null}</div>
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
           <span style={{ color: APP.greenDark, fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>Product · {regional.shop_domain}</span>

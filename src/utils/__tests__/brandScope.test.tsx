@@ -3,7 +3,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { inBrandScope, brandIdOf, readBrandScope } from '../brandScope';
-import { BrandScopeBar, useBrandScope } from '../../components/guides/BrandScopeBar';
+import { BrandScopeBar, BrandScopeCircles, useBrandScope } from '../../components/guides/BrandScopeBar';
 
 const mocks = vi.hoisted(() => ({ brands: vi.fn() }));
 vi.mock('../guidePortal', async (importOriginal) => ({ ...await importOriginal<any>(), listGuideBrands: async () => mocks.brands() }));
@@ -71,5 +71,25 @@ describe('a remembered scope that is not one of this Guardian\'s brands', () => 
     localStorage.setItem('r3-brand-scope', 'b-tre');
     render(<><BrandScopeBar userId="g" /><Probe /></>);
     await waitFor(() => expect(screen.getByTestId('scope').textContent).toBe('all'));
+  });
+});
+
+describe('BrandScopeCircles (the filter folded into the workspace header)', () => {
+  it('shows All, the photo and each brand as circles that set the same shared filter, with names only as labels', async () => {
+    render(<><BrandScopeCircles userId="g" personalName="Barbara O'Neill" personalAvatarUrl="https://x/b.jpg" /><Probe /></>);
+    const group = await screen.findByRole('group', { name: 'Show brand' });
+    expect([...group.querySelectorAll('button')].map((button) => button.getAttribute('aria-label'))).toEqual(['Show All brands', "Show Barbara O'Neill", 'Show Misty Mountain Lifestyle Retreat', 'Show Tre Lune']);
+    expect(group.querySelector('img')!.getAttribute('src')).toBe('https://x/b.jpg');
+    fireEvent.click(screen.getByRole('button', { name: 'Show Tre Lune' }));
+    await waitFor(() => expect(screen.getByTestId('scope').textContent).toBe('b-tre'));
+    expect(screen.getByRole('button', { name: 'Show Tre Lune' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Show All brands' }));
+    await waitFor(() => expect(screen.getByTestId('scope').textContent).toBe('all'));
+  });
+  it('draws nothing for a single brand', async () => {
+    mocks.brands.mockReturnValue([BRANDS[0]]);
+    render(<BrandScopeCircles userId="g" />);
+    await waitFor(() => expect(mocks.brands).toHaveBeenCalled());
+    expect(screen.queryByRole('group', { name: 'Show brand' })).toBeNull();
   });
 });

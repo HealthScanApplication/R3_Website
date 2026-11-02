@@ -27,7 +27,7 @@ import { EventsCalendar } from './EventsCalendar';
 import { guestsLabel, parseRetreatOptions, roomPrice, type RetreatRoomOption } from '../../utils/retreatRooms';
 import { eventsInRange, type DayRange } from '../../utils/eventCalendar';
 import { DEFAULT_SECTION_ORDER, PAGE_SECTIONS, moveSection, orderPageSections, serializeSectionOrder, type PageSectionKey } from '../../utils/pageSections';
-import { BrandScopeBar, useBrandScope } from './BrandScopeBar';
+import { BrandScopeCircles, useBrandScope } from './BrandScopeBar';
 import { brandSiteProfile, brandSitePath, brandSlugFromPath, cardByline, protocolOnSite, savedBrandId, savedBrandMoves, siteOwns } from '../../utils/brandSite';
 import { inBrandScope } from '../../utils/brandScope';
 import { GuardianAvatar, useGuardianAvatarUrl } from './GuardianAvatar';
@@ -503,8 +503,10 @@ export const GUARDIAN_BUILDERS_ORDER = GUARDIAN_BUILDERS.map((b) => b.label);
  * its translucent-over-hero look; `onNavigate` switches tabs in-app (workspace) instead of
  * following the href. When signed out, every link opens the sign-in modal via `onSignIn`.
  */
-export function GuardianHeader({ isSignedIn, activeTab, displayName, avatarUrl, profileLink, transparent, extra, locked, onNavigate, onSignIn, onSignOut }: {
+export function GuardianHeader({ isSignedIn, activeTab, displayName, avatarUrl, profileLink, transparent, extra, locked, brandScopeFor, onNavigate, onSignIn, onSignOut }: {
   isSignedIn: boolean;
+  /** The signed-in Guardian's id: shows their photo and brands as filter circles after the logo (the workspace and setup headers). */
+  brandScopeFor?: string;
   /** Why the builders can't open yet (e.g. setup not saved): links stay visible but don't navigate. */
   locked?: string;
   activeTab?: Tab;
@@ -542,6 +544,7 @@ export function GuardianHeader({ isSignedIn, activeTab, displayName, avatarUrl, 
       <div className="g-header-row" style={{ minHeight: 64, paddingLeft: 'clamp(16px, 2vw, 28px)', paddingRight: 'clamp(16px, 2vw, 28px)' }}>
         <div className="g-brand">
           <span className="g-brand-full"><Brand /></span>
+          {isSignedIn && brandScopeFor && <BrandScopeCircles userId={brandScopeFor} personalName={displayName} personalAvatarUrl={avatarUrl} />}
           {/* Phones get the short square R³ mark so the row fits. */}
           <a href="/" aria-label="ROUTINE³ Guardians" className="g-brand-r3" style={{ height: 31, minWidth: 31, padding: '0 7px', boxSizing: 'border-box', border: '1px solid rgba(245,242,234,0.58)', borderRadius: 2, placeItems: 'center', color: ink, textDecoration: 'none', fontFamily: '"Archivo", "Inter", sans-serif', fontWeight: 700, fontSize: 12, letterSpacing: '.06em' }}>R³</a>
         </div>
@@ -2328,7 +2331,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   // The main page also offers the company retreats (Misty Mountain); a brand's own page shows only its own.
   const siteProtocols = guardianProtocols.filter((protocol) => protocol.is_active !== false && protocolOnSite(activeBrand?.id, personalBrandId, protocolBrands[protocol.id]));
   const siteRetreats = activeBrand ? retreats.filter((retreat) => onSite(retreat)) : retreats;
-  const profileSections = profileSectionStates({ offers: publishedOffers, products: shopProducts.filter((product) => onSite(product)).length, events: siteEvents.length, retreats: siteRetreats.length });
+  const profileSections = profileSectionStates({ offers: publishedOffers, products: shopProducts.filter((product) => onSite(product)).length, events: siteEvents.length, retreats: siteRetreats.length, protocols: siteProtocols.length });
   const sectionTags: HeroSection[] = profileSections.filter((section) => section.filled || isOwner).map((section): HeroSection => section.filled ? [section.anchor, section.label, 'filled', section.category] : [`section-${section.id}`, section.label, 'empty']);
   const freeOffers = publishedOffers.filter((offer) => offer.access_model === 'free');
   const socials = profile.social_links || {};
@@ -3656,7 +3659,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
   const setupLock = hasProfile ? undefined : 'finish setup to open the builders';
   if (step === 0) return <div style={{ minHeight: '100vh', background: black, color: ink, padding: '30px clamp(20px,6vw,90px)', fontFamily: sans }}>
     <div style={{ position: 'sticky', top: 0, zIndex: 50, margin: '-30px calc(-1 * clamp(20px,6vw,90px)) 0', maxWidth: 'none' }}>
-      <GuardianHeader isSignedIn displayName={displayName} avatarUrl={navAvatarUrl} profileLink={profileLink} locked={setupLock} onSignOut={() => signOut()} />
+      <GuardianHeader isSignedIn brandScopeFor={userId} displayName={displayName} avatarUrl={navAvatarUrl} profileLink={profileLink} locked={setupLock} onSignOut={() => signOut()} />
     </div>
     <GuardianGetStarted onStart={() => setStep(1)} />
   </div>;
@@ -3666,7 +3669,7 @@ export function Onboarding({ userId, accessToken, name, email, accountAvatarUrl,
     {/* maxWidth none: the site CSS caps every element at 100% under 768px, which would undo the full bleed. */}
     <div style={{ position: 'sticky', top: 0, zIndex: 50, margin: '-30px calc(-1 * clamp(20px,6vw,90px)) 0', maxWidth: 'none' }}>
       {/* Until a profile is saved every ?tab= URL re-renders this setup, so builder links would just reload it and drop unsaved answers. */}
-      <GuardianHeader isSignedIn displayName={displayName} avatarUrl={navAvatarUrl} profileLink={profileLink} locked={setupLock} onSignOut={() => signOut()} extra={<>
+      <GuardianHeader isSignedIn brandScopeFor={userId} displayName={displayName} avatarUrl={navAvatarUrl} profileLink={profileLink} locked={setupLock} onSignOut={() => signOut()} extra={<>
         <button type="button" onClick={() => setSummaryView('offers')} style={{ padding: 0, border: 0, borderBottom: summaryView === 'offers' ? `1px solid ${ink}` : '1px solid transparent', background: 'transparent', color: summaryView === 'offers' ? ink : muted, cursor: 'pointer', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Offers <span style={{ color: acid }}>{builtOfferCount}/{totalOfferCount}</span></button>
         <button type="button" onClick={() => setSummaryView('sites')} style={{ padding: 0, border: 0, borderBottom: summaryView === 'sites' ? `1px solid ${ink}` : '1px solid transparent', background: 'transparent', color: summaryView === 'sites' ? ink : muted, cursor: 'pointer', fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Sites <span style={{ color: acid }}>2</span></button>
         <span aria-hidden="true" style={{ width: 1, height: 14, background: line }} />
@@ -5672,7 +5675,7 @@ export function Workspace({ profile, onProfile }: { profile: GuideProfile; onPro
   async function removeRamp(row: GuideValueRamp) { if (!user || !(await confirmInPage(`Delete ${row.name}?`))) return; await deleteGuideValueRamp(user.id, row.id); setValueRamps((current) => current.filter((item) => item.id !== row.id)); }
   async function removeRecipe(row: GuideRecipe) { if (!user || !(await confirmInPage(`Delete ${row.title}?`))) return; await deleteGuideRecipe(user.id, row.id); setRecipes((current) => current.filter((item) => item.id !== row.id)); }
   return <div style={{ minHeight: '100vh', background: black, color: ink, fontFamily: sans }}>
-    <GuardianHeader isSignedIn activeTab={tab} displayName={profile.display_name} avatarUrl={navAvatarUrl} onNavigate={(next) => { setTab(next); setProtocolId(null); setRecipeId(null); setChildPlanId(null); setParentContext(null); }} onSignOut={signOut} />
+    <GuardianHeader isSignedIn brandScopeFor={profile.user_id} activeTab={tab} displayName={profile.display_name} avatarUrl={navAvatarUrl} onNavigate={(next) => { setTab(next); setProtocolId(null); setRecipeId(null); setChildPlanId(null); setParentContext(null); }} onSignOut={signOut} />
     <div className="g-workspace-shell" style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr)', height: 'calc(100vh - 78px)' }}>
       <div className="g-railwrap">
         <aside className="g-rail" aria-label="Guardian sections">
@@ -6083,7 +6086,7 @@ export function GuidePortal() {
     @media (min-width:1200px){.g-fit-split.has-detail{grid-template-columns:minmax(0,1fr) 340px}.g-fit-split.has-detail>.g-fit-detail{position:sticky;top:80px}}
     /* Shared header: builder dropdowns reveal on hover/focus */
     .g-header-row{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:16px;padding:0 clamp(20px,5vw,72px)}
-    .g-brand{justify-self:start;display:flex}
+    .g-brand{justify-self:start;display:flex;align-items:center}
     /* The account side may shrink: a long name truncates, then hides, so Sign out never leaves the screen. */
     .g-header-account{justify-self:end;min-width:0;max-width:100%}
     .g-header-name{min-width:0;max-width:22ch;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis}
@@ -6142,7 +6145,7 @@ function GuidePortalRoutes() {
   // The step builder (Profile → Guidance → Audience → Offers → Site) is the Guardian dashboard.
   // The tool views (Library, Leads, Recipes…) open from its header via ?tab=.
   const wantsTool = new URLSearchParams(window.location.search).has('tab');
-  if (accessToken && (!profile || !wantsTool)) return <><BrandScopeBar userId={user.id} personalName={profile?.display_name} /><Onboarding userId={user.id} accessToken={accessToken} hasProfile={Boolean(profile)} name={user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Guardian'} email={user.email || ''} accountAvatarUrl={user.user_metadata?.avatar_url || user.user_metadata?.picture || null} onDone={(p) => { setProfile(p); window.location.assign('/guardians/workspace?tab=home'); }} /></>;
+  if (accessToken && (!profile || !wantsTool)) return <><Onboarding userId={user.id} accessToken={accessToken} hasProfile={Boolean(profile)} name={user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Guardian'} email={user.email || ''} accountAvatarUrl={user.user_metadata?.avatar_url || user.user_metadata?.picture || null} onDone={(p) => { setProfile(p); window.location.assign('/guardians/workspace?tab=home'); }} /></>;
   if (!profile) return <div style={{ minHeight: '100vh', background: black, color: ink, display: 'grid', placeItems: 'center', fontFamily: sans }}>Opening Guardian setup…</div>;
-  return <><BrandScopeBar userId={user.id} personalName={profile.display_name} /><Workspace profile={profile} onProfile={setProfile} /></>;
+  return <><Workspace profile={profile} onProfile={setProfile} /></>;
 }
