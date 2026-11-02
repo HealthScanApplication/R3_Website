@@ -2082,7 +2082,7 @@ const MAP_WITHOUT_CONTROLS: React.CSSProperties = {
   maskComposite: 'exclude',
 };
 
-function DestinationHeader({ profile, place, lines = [place], kind, virtual = false, height = 210 }: { profile: GuideProfile; place: string; lines?: Array<string | null | undefined>; kind: 'event' | 'retreat'; virtual?: boolean; /** The map's height: retreats show half. */ height?: number }) {
+function DestinationHeader({ profile, place, lines = [place], kind, virtual = false, height = 210, imageUrl = null }: { profile: GuideProfile; place: string; lines?: Array<string | null | undefined>; kind: 'event' | 'retreat'; virtual?: boolean; /** The header's height (the map is full size by default). */ height?: number; /** A picture of the place for the header: the map then becomes a small round clip that opens the map. */ imageUrl?: string | null }) {
   // The card under the map is white (events and retreats), so the logo badge is cut from it and shown black. The logo badge is cut from the same surface, so it reads as part of the card.
   const surface = '#FFFFFF';
   const onDark = false;
@@ -2091,7 +2091,9 @@ function DestinationHeader({ profile, place, lines = [place], kind, virtual = fa
   const country = online ? null : countryForPlace(...lines);
   const mapHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
   return <div data-destination style={{ position: 'relative' }}><div data-destination-header style={{ position: 'relative', height, overflow: 'hidden', background: '#E9E6DE' }}>
-    {!online && <iframe data-place-map src={`https://maps.google.com/maps?q=${encodeURIComponent(query)}&z=12&output=embed`} title={`Map of ${query}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" tabIndex={-1} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, filter: 'grayscale(.45) saturate(.7) contrast(.94) brightness(1.06)', pointerEvents: 'none', ...MAP_WITHOUT_CONTROLS }} />}
+    {imageUrl && <div data-place-image aria-hidden="true" style={{ position: 'absolute', inset: 0, backgroundImage: `url("${imageUrl}")`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'saturate(.92)' }} />}
+    {!online && !imageUrl && <iframe data-place-map src={`https://maps.google.com/maps?q=${encodeURIComponent(query)}&z=12&output=embed`} title={`Map of ${query}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" tabIndex={-1} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, filter: 'grayscale(.45) saturate(.7) contrast(.94) brightness(1.06)', pointerEvents: 'none', ...MAP_WITHOUT_CONTROLS }} />}
+    {!online && imageUrl && <a data-place-clip href={mapHref} target="_blank" rel="noreferrer" aria-label={`Open ${query} in Google Maps`} title="Open in Google Maps" style={{ position: 'absolute', left: 18, bottom: 14, zIndex: 2, width: 76, height: 76, borderRadius: '50%', overflow: 'hidden', border: '3px solid #FFFFFF', boxShadow: '0 4px 14px rgba(0,0,0,.25)', background: '#E9E6DE' }}><iframe data-place-map src={`https://maps.google.com/maps?q=${encodeURIComponent(query)}&z=11&output=embed`} title={`Map of ${query}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" tabIndex={-1} style={{ position: 'absolute', left: '50%', top: '50%', width: 260, height: 260, marginLeft: -130, marginTop: -130, border: 0, filter: 'grayscale(.45) saturate(.7) brightness(1.06)', pointerEvents: 'none' }} /></a>}
     <a href={mapHref} target="_blank" rel="noreferrer" aria-label={`Open ${query} in maps`} style={{ position: 'absolute', inset: 0, color: '#11120F', textDecoration: 'none' }}>
       <span data-place-tag style={{ position: 'absolute', left: 18, top: 18, maxWidth: '68%', display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: '1px solid rgba(17,18,15,.16)', background: 'rgba(255,255,255,.88)', backdropFilter: 'blur(10px)', fontSize: 9, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>
         {country && <span role="img" aria-label={country.name} title={country.name} data-place-flag style={{ fontSize: 15, lineHeight: 1, letterSpacing: 0 }}>{country.flag}</span>}
@@ -2280,9 +2282,14 @@ function RetreatCard({ profile, retreat, sessions = [] }: { profile: GuideProfil
   const choice = useRoomChoice(rooms);
   const locale = useContext(PublicLocaleContext)?.locale;
   const [sessionIndex, setSessionIndex] = useState(0);
+  // The header shows the retreat's own picture, else the picture of the brand it belongs to (Misty Mountain's), else the page's.
+  const knownBrands = useContext(CardBrandsContext);
+  const ownerBrand = knownBrands?.brands.find((brand) => brand.id === retreat.brand_id);
+  const picture = (links: unknown) => { const value = (links as Record<string, string> | null | undefined)?.theme_background; return value && !/\.(mp4|webm)(?:\?|$)/i.test(value) ? value : null; };
+  const retreatImage = retreat.image_url || picture(ownerBrand?.social_links) || picture(profile.social_links);
   const session = sessions[Math.min(sessionIndex, sessions.length - 1)];
-  return <article data-retreat-card {...tiltHandlers(4)} style={tiltStyle({ border: '1px solid rgba(17,18,15,.2)', background: '#FFFFFF', overflow: 'hidden', display: 'flex', flexDirection: 'column' })}>
-    <DestinationHeader profile={profile} place={retreat.location || 'Misty Mountain, Australia'} lines={[retreat.location, retreat.title]} kind="retreat" height={105} />
+  return <article data-retreat-card {...tiltHandlers(4)} style={tiltStyle({ border: '1px solid rgba(17,18,15,.2)', background: '#FFFFFF', color: '#11120F', overflow: 'hidden', display: 'flex', flexDirection: 'column' })}>
+    <DestinationHeader profile={profile} place={retreat.location || 'Misty Mountain, Australia'} lines={[retreat.location, retreat.title]} kind="retreat" imageUrl={retreatImage} />
     <div style={{ padding: 24, display: 'flex', flex: 1, flexDirection: 'column' }}><span style={{ color: '#667245', fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>{[retreat.duration_days && `${retreat.duration_days} days`, retreat.location || 'Retreat'].filter(Boolean).join(' · ')}</span><h3 style={{ fontFamily: serif, fontSize: 36, fontWeight: 300, lineHeight: 1.05, margin: '10px 0' }}>{retreat.title}</h3><p style={{ color: '#66645F', fontSize: 14, lineHeight: 1.55 }}>{retreat.description}</p>
       <RoomSelectors title={retreat.title} rooms={rooms} choice={choice} />
       <DatesSelect title={retreat.title} sessions={sessions} index={Math.min(sessionIndex, sessions.length - 1)} onChange={setSessionIndex} />

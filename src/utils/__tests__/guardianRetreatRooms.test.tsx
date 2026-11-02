@@ -43,14 +43,19 @@ describe('retreat cards', () => {
     await card('Day Retreat');
     expect((document.querySelector('.g-retreats-grid') as HTMLElement).style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))');
   });
-  it('show a half-height map each, with the shared place named once under the heading', async () => {
+  it('show a picture header at the full height with a small round map that opens Google Maps, and readable text', async () => {
+    RETREATS = RETREATS.map((item) => (item.id === 'plain' ? { ...item, image_url: 'https://x/retreat.jpg' } : item));
     visit();
-    await card('Day Retreat');
-    const maps = [...document.querySelectorAll('[data-retreat-card] [data-destination-header]')] as HTMLElement[];
-    expect(maps.length).toBeGreaterThan(0);
-    maps.forEach((map) => expect(map.style.height).toBe('105px')); // half of an event's 210
-    const place = document.querySelector('[data-retreats-place]');
-    if (place) expect(place.textContent!.length).toBeGreaterThan(0);
+    const article = await card('Day Retreat');
+    expect(article.style.color).toMatch(/17, 18, 15|#11120F/i); // dark text on the white card, whatever the section's tone
+    const header = article.querySelector('[data-destination-header]') as HTMLElement | null;
+    expect(header?.style.height).toBe('210px');
+    const clip = article.querySelector('[data-place-clip]') as HTMLAnchorElement | null;
+    expect(header!.querySelector('[data-place-image]')).not.toBeNull();
+    expect(header!.querySelector('iframe')).toBe(clip!.querySelector('iframe')); // the only map is the small clip
+    expect(clip!.getAttribute('target')).toBe('_blank');
+    expect(clip!.getAttribute('href')).toMatch(/google\.com\/maps/);
+    expect(clip!.style.borderRadius).toBe('50%');
   });
 });
 
