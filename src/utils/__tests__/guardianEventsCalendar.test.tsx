@@ -54,7 +54,7 @@ describe('events calendar', () => {
   it('highlights only the days an event starts, not the days one is under way, and stacks the cards beside the calendar', async () => {
     visit();
     const root = await section();
-    expect(day(root, '2099-03-05').style.background).toMatch(/rgb\(199, 216, 163\)/); // an event starts: green
+    expect(day(root, '2099-03-05').style.background).toMatch(/rgb\(17, 18, 15\)/); // an event starts: solid ink (black on the light surface, white on the dark)
     expect(day(root, '2099-03-09').style.backgroundImage).toMatch(/repeating-linear-gradient/); // the days inside an event: diagonal lines, not a fill
     expect(day(root, '2099-03-09').style.backgroundColor).toMatch(/rgb\(231, 225, 213\)/); // the first section under the dark hero is light, and the calendar takes its surface
     expect(day(root, '2099-03-05').style.backgroundImage).toBe('none'); // the start day is solid
@@ -105,6 +105,8 @@ describe('events calendar', () => {
     fireEvent.click(day(root, '2099-03-05')); // another day switches to that day alone
     expect(day(root, '2099-03-05').getAttribute('aria-pressed')).toBe('true');
     expect(day(root, '2099-03-09').getAttribute('aria-pressed')).not.toBe('true');
+    expect(day(root, '2099-03-05').style.backgroundColor).toMatch(/rgb\(199, 216, 163\)/); // the chosen day is green, even where an event starts
+    expect(day(root, '2099-03-05').style.backgroundImage).toBe('none');
     fireEvent.click(within(root).getByRole('button', { name: 'Clear dates' }));
     expect(root.querySelectorAll('article').length).toBe(3);
     expect(root.querySelector('[data-calendar-range]')).toBeNull();
