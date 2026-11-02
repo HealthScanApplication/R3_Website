@@ -25,7 +25,7 @@ import { TONE_PALETTE, sectionTones, type Tone } from '../../utils/sectionTones'
 import { PublicLocaleContext, useDisplayMoney } from '../../utils/displayMoney';
 import { EventsCalendar } from './EventsCalendar';
 import { guestsLabel, parseRetreatOptions, roomPrice, type RetreatRoomOption } from '../../utils/retreatRooms';
-import { eventsInRange, type DayRange } from '../../utils/eventCalendar';
+import { eventDays, eventsInRange, type DayRange } from '../../utils/eventCalendar';
 import { DEFAULT_SECTION_ORDER, PAGE_SECTIONS, moveSection, orderPageSections, protocolsSecond, serializeSectionOrder, type PageSectionKey } from '../../utils/pageSections';
 import { BrandScopeCircles, useBrandScope } from './BrandScopeBar';
 import { brandSiteProfile, brandSitePath, brandSlugFromPath, cardByline, protocolOnSite, savedBrandId, savedBrandMoves, siteOwns } from '../../utils/brandSite';
@@ -1781,9 +1781,9 @@ function useCardByline(item: { brand_id?: string | null; brand_ids?: string[] | 
 
 /** The filters on the Protocols section: what a protocol is for (its focus), who it is for, and their age. A protocol made for everyone fits every choice. */
 export const PROTOCOL_FILTERS = [
-  { key: 'category', label: 'Focus', any: null },
-  { key: 'gender', label: 'For', any: 'Everyone' },
-  { key: 'age', label: 'Age', any: 'All ages' },
+  { key: 'category', label: 'Focus', all: 'All focus', any: null },
+  { key: 'gender', label: 'For', all: 'Everyone', any: 'Everyone' },
+  { key: 'age', label: 'Age', all: 'All ages', any: 'All ages' },
 ] as const;
 
 export function protocolFilterOptions(protocols: AdminProtocol[]) {
@@ -1804,7 +1804,7 @@ export function protocolFits(protocol: AdminProtocol, chosen: Record<string, str
 }
 
 /** The "Protocols" section of a public page: the routines selected for this page (the same records appear on every page that lists them). */
-export function GuardianProtocols({ protocols, profile, pagePadding, tone, accent, headingFont, linkToOffers }: { protocols: AdminProtocol[]; profile: GuideProfile; pagePadding: string; tone: 'light' | 'dark'; accent: string; headingFont: string; linkToOffers: boolean }) {
+export function GuardianProtocols({ protocols, profile, pagePadding, tone, accent, headingFont, linkToOffers, catalogCount }: { /** How many offers the page has: the heading then reads as the complete catalog. */ catalogCount?: number; protocols: AdminProtocol[]; profile: GuideProfile; pagePadding: string; tone: 'light' | 'dark'; accent: string; headingFont: string; linkToOffers: boolean }) {
   const known = useContext(CardBrandsContext);
   const [chosen, setChosen] = useState<Record<string, string>>({});
   if (!protocols.length) return null;
@@ -1814,14 +1814,15 @@ export function GuardianProtocols({ protocols, profile, pagePadding, tone, accen
   const byline = cardByline({ brand_id: known?.activeId }, known?.brands || [], known?.activeId, { name: profile.display_name, avatarUrl: profile.avatar_url });
     return <section id="protocols" aria-labelledby="guardian-protocols-title" data-page-section="protocols" data-tone={tone} style={{ padding: `clamp(54px,7vw,100px) ${pagePadding}`, background: P.bg, color: P.ink }}>
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
-      <span style={{ color: P.accent, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Routines · {Object.keys(chosen).length ? `${shown.length} of ${protocols.length}` : protocols.length}</span>
-      <h2 id="guardian-protocols-title" style={{ margin: '12px 0 22px', fontFamily: headingFont, fontWeight: 300, fontSize: 'clamp(36px,5vw,60px)', lineHeight: 1 }}>Protocols.</h2>
-      {groups.length > 0 && <div data-protocol-filters role="group" aria-label="Filter protocols" style={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, margin: '0 0 26px', minHeight: 32, padding: '0 10px', boxSizing: 'border-box', border: `1px solid ${P.ink}`, fontFamily: APP.font }}>
+      <span style={{ display: 'block', color: P.accent, fontSize: 12, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 12 }}>Complete catalog · {catalogCount ?? protocols.length} {(catalogCount ?? protocols.length) === 1 ? 'offer' : 'offers'}{Object.keys(chosen).length ? ` · ${shown.length} of ${protocols.length} routines` : ''}</span>
+      <h2 id="guardian-protocols-title" style={{ margin: '0 0 18px', maxWidth: 760, fontFamily: headingFont, fontWeight: 300, fontSize: 'clamp(36px,5vw,60px)', lineHeight: 1, letterSpacing: '-.04em' }}>Explore every way to work with {profile.display_name}.</h2>
+      <p style={{ color: P.muted, fontFamily: APP.font, fontSize: 16, lineHeight: 1.55, maxWidth: 620, margin: '0 0 28px' }}>Browse the full published collection—free resources, protocols, sessions, communities and programs.</p>
+      {groups.length > 0 && <div data-protocol-filters role="group" aria-label="Filter protocols" style={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, margin: '0 0 26px', minHeight: 34, padding: '0 12px', boxSizing: 'border-box', border: `1px solid ${P.ink}`, fontFamily: APP.font }}>
         {groups.map((group, index) => <Fragment key={group.key}>
-          {index > 0 && <span aria-hidden="true" style={{ color: P.line }}>·</span>}
+          {index > 0 && <span aria-hidden="true" style={{ alignSelf: 'stretch', width: 1, background: P.ink, opacity: .35 }} />}
           <select aria-label={`Filter by ${group.label.toLowerCase()}`} value={chosen[group.key] || ''} onChange={(event) => setChosen((current) => { const next = { ...current }; if (event.target.value) next[group.key] = event.target.value; else delete next[group.key]; return next; })} style={{ border: 0, background: 'transparent', color: P.ink, fontFamily: APP.font, fontSize: 10, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', outline: 0, cursor: 'pointer', height: 30 }}>
-            <option value="">{group.label}: All</option>
-            {group.options.map((option) => <option key={option} value={option}>{group.label}: {option}</option>)}
+            <option value="">{group.all}</option>
+            {group.options.map((option) => <option key={option} value={option}>{option}</option>)}
           </select>
         </Fragment>)}
         {Object.keys(chosen).length > 0 && <button type="button" onClick={() => setChosen({})} style={{ border: 0, background: 'transparent', color: P.ink, fontFamily: APP.font, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', textDecoration: 'underline', cursor: 'pointer', height: 30, padding: '0 4px' }}>Clear</button>}
@@ -1966,11 +1967,11 @@ function GuardianOfferCatalog({ profile, offers, ramps, reviews, accent, protoco
   };
   return <section id="catalog" aria-label={`${profile.display_name}'s complete offer catalog`} data-tone={tone} style={{ background: P.bg, color: P.ink, padding: `clamp(72px,10vw,132px) ${PAGE_X}` }}>
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
-      <div style={{ maxWidth: 760, marginBottom: 'clamp(30px,5vw,52px)' }}>
+      {!hiddenCategories.includes('Protocols') && <div style={{ maxWidth: 760, marginBottom: 'clamp(30px,5vw,52px)' }}>
         <span style={{ display: 'block', color: P.accent, fontFamily: APP.font, fontSize: 12, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 12 }}>Complete catalog · {offers.length} {offers.length === 1 ? 'offer' : 'offers'}</span>
         <h2 style={{ fontFamily: serif, fontSize: 'clamp(36px,5vw,60px)', fontWeight: 300, lineHeight: 1, letterSpacing: '-.04em', margin: '0 0 18px' }}>Explore every way to work with {profile.display_name}.</h2>
         <p style={{ color: P.muted, fontFamily: APP.font, fontSize: 16, lineHeight: 1.55, maxWidth: 620, margin: 0 }}>Browse the full published collection—free resources, protocols, sessions, communities and programs.</p>
-      </div>
+      </div>}
       <div role="tablist" aria-label="Offer categories" style={{ display: 'flex', flexWrap: 'wrap', gap: 24, margin: '0 0 26px' }}>{categories.map((category) => <button key={category} type="button" role="tab" aria-selected={activeCategory === category} onClick={() => setActiveCategory(category)} style={{ ...TAB_TEXT, borderBottom: `2px solid ${activeCategory === category ? P.ink : 'transparent'}`, color: P.ink, opacity: activeCategory === category ? 1 : .62, fontFamily: APP.font }}>{category}</button>)}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,300px),1fr))', gap: 18 }}>
         {visibleOffers.map((offer) => {
@@ -2081,7 +2082,7 @@ const MAP_WITHOUT_CONTROLS: React.CSSProperties = {
   maskComposite: 'exclude',
 };
 
-function DestinationHeader({ profile, place, lines = [place], kind, virtual = false }: { profile: GuideProfile; place: string; lines?: Array<string | null | undefined>; kind: 'event' | 'retreat'; virtual?: boolean }) {
+function DestinationHeader({ profile, place, lines = [place], kind, virtual = false, height = 210 }: { profile: GuideProfile; place: string; lines?: Array<string | null | undefined>; kind: 'event' | 'retreat'; virtual?: boolean; /** The map's height: retreats show half. */ height?: number }) {
   // The card under the map is white (events and retreats), so the logo badge is cut from it and shown black. The logo badge is cut from the same surface, so it reads as part of the card.
   const surface = '#FFFFFF';
   const onDark = false;
@@ -2089,7 +2090,7 @@ function DestinationHeader({ profile, place, lines = [place], kind, virtual = fa
   const online = virtual || /^online$/i.test(place.trim()) || /to be announced/i.test(place); // nothing to put on a map
   const country = online ? null : countryForPlace(...lines);
   const mapHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-  return <div data-destination style={{ position: 'relative' }}><div data-destination-header style={{ position: 'relative', height: 210, overflow: 'hidden', background: '#E9E6DE' }}>
+  return <div data-destination style={{ position: 'relative' }}><div data-destination-header style={{ position: 'relative', height, overflow: 'hidden', background: '#E9E6DE' }}>
     {!online && <iframe data-place-map src={`https://maps.google.com/maps?q=${encodeURIComponent(query)}&z=12&output=embed`} title={`Map of ${query}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" tabIndex={-1} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, filter: 'grayscale(.45) saturate(.7) contrast(.94) brightness(1.06)', pointerEvents: 'none', ...MAP_WITHOUT_CONTROLS }} />}
     <a href={mapHref} target="_blank" rel="noreferrer" aria-label={`Open ${query} in maps`} style={{ position: 'absolute', inset: 0, color: '#11120F', textDecoration: 'none' }}>
       <span data-place-tag style={{ position: 'absolute', left: 18, top: 18, maxWidth: '68%', display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: '1px solid rgba(17,18,15,.16)', background: 'rgba(255,255,255,.88)', backdropFilter: 'blur(10px)', fontSize: 9, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>
@@ -2131,7 +2132,7 @@ function EventCommerceCard({ profile, event, rooms = [] }: { profile: GuideProfi
   const place = event.location || event.venue || (event.format === 'virtual' ? 'Online' : 'Location to be announced');
   return <article data-event-card {...tiltHandlers(4)} style={tiltStyle({ minHeight: 520, border: '1px solid rgba(242,239,231,.28)', display: 'flex', flexDirection: 'column', background: '#FFFFFF', color: '#11120F', overflow: 'hidden' })}>
     <DestinationHeader profile={profile} place={place} lines={[event.location, event.venue, event.title]} kind="event" virtual={event.format === 'virtual'} />
-    <div style={{ padding: 22, display: 'flex', flex: 1, flexDirection: 'column' }}><div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><span style={{ color: '#667245', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{eventDay(event.start_at, event.timezone, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span><span style={{ border: '1px solid rgba(102,114,69,.55)', borderRadius: 999, color: '#667245', padding: '4px 7px', fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{eventFormatLabel(event.format)}</span></div><h3 style={{ fontFamily: serif, fontSize: 31, fontWeight: 300, lineHeight: 1.05, margin: '11px 0 9px' }}>{event.title}</h3><p style={{ color: '#66645F', fontSize: 13, lineHeight: 1.5, margin: '0 0 8px' }}>{event.venue || place}</p>{event.description && <p style={{ color: '#66645F', fontSize: 12, lineHeight: 1.5, margin: '0 0 20px' }}>{clipCopy(event.description, 145)}</p>}<RoomSelectors title={event.title} rooms={rooms} choice={choice} /><div style={{ marginTop: choice.room ? 16 : 'auto', paddingTop: 18, borderTop: '1px solid rgba(17,18,15,.18)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}><RoomPrice choice={choice} fallback={event.price_label || 'See booking price'} />{href && <a href={href} target="_blank" rel="noreferrer" style={publicCommerceCardCta}>Book <ArrowRight size={13} /></a>}</div></div>
+    <div style={{ padding: 22, display: 'flex', flex: 1, flexDirection: 'column' }}><div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><span style={{ color: '#667245', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{eventDay(event.start_at, event.timezone, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span><span style={{ border: '1px solid rgba(102,114,69,.55)', borderRadius: 999, color: '#667245', padding: '4px 7px', fontSize: 8, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>{eventFormatLabel(event.format)}</span></div><h3 style={{ fontFamily: serif, fontSize: 31, fontWeight: 300, lineHeight: 1.05, margin: '11px 0 9px' }}>{event.title}</h3><p style={{ color: '#66645F', fontSize: 13, lineHeight: 1.5, margin: '0 0 8px' }}>{event.venue || place}</p>{event.description && <p style={{ color: '#66645F', fontSize: 12, lineHeight: 1.5, margin: '0 0 20px' }}>{clipCopy(event.description, 260)}</p>}<RoomSelectors title={event.title} rooms={rooms} choice={choice} /><div style={{ marginTop: choice.room ? 16 : 'auto', paddingTop: 18, borderTop: '1px solid rgba(17,18,15,.18)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}><RoomPrice choice={choice} fallback={event.price_label || 'See booking price'} />{href && <a href={href} target="_blank" rel="noreferrer" style={publicCommerceCardCta}>Book <ArrowRight size={13} /></a>}</div></div>
   </article>;
 }
 
@@ -2150,6 +2151,20 @@ function GuardianEvents({ retreats = [], profile, events, sourceUrl, canEditSour
   // The events are one horizontal slide; choosing a day scrolls it to the first event on that day instead of hiding the rest.
   const slide = useRef<HTMLDivElement | null>(null);
   const slideBy = (direction: -1 | 1) => { const el = slide.current; if (!el) return; const left = el.scrollLeft + direction * Math.max(280, el.clientWidth * .8); if (el.scrollTo) el.scrollTo({ left, behavior: prefersReducedMotionNow() ? 'auto' : 'smooth' }); else el.scrollLeft = left; };
+  // Hover links the calendar and the cards both ways: a day under the pointer rings the cards on it, a card under the pointer rings its days.
+  const [hoverDay, setHoverDay] = useState<string | null>(null);
+  const [hoverEvent, setHoverEvent] = useState<string | null>(null);
+  const cardsOnHoverDay = new Set(hoverDay ? eventsInRange(upcoming, { from: hoverDay, to: hoverDay }).map((event) => event.id) : []);
+  const daysOfHoverEvent = new Set(hoverEvent ? eventDays(upcoming.find((event) => event.id === hoverEvent) as GuideEvent) : []);
+  useEffect(() => {
+    const el = slide.current;
+    const first = [...cardsOnHoverDay][0];
+    if (!el || !first) return;
+    const card = el.querySelector<HTMLElement>(`[data-event-id="${first}"]`);
+    if (!card) return;
+    const left = card.offsetLeft - el.offsetLeft;
+    if (left < el.scrollLeft || left + card.offsetWidth > el.scrollLeft + el.clientWidth) { if (el.scrollTo) el.scrollTo({ left: left - 6, behavior: prefersReducedMotionNow() ? 'auto' : 'smooth' }); else el.scrollLeft = left - 6; }
+  }, [hoverDay]);
   const firstOnDay = range ? fitting[0]?.id : undefined;
   useEffect(() => {
     const el = slide.current;
@@ -2187,8 +2202,8 @@ function GuardianEvents({ retreats = [], profile, events, sourceUrl, canEditSour
         </div>}
       </div>
       {upcoming.length ? <div className="g-events-layout">
-        <style>{`.g-events-layout{display:grid;grid-template-columns:minmax(260px,300px) minmax(0,1fr);gap:36px;align-items:start}.g-events-calendar{position:sticky;top:84px}.g-events-slide{display:flex;gap:16px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scroll-padding-left:6px;padding:6px 6px 14px}.g-events-slide-item{flex:0 0 clamp(270px,47%,380px);scroll-snap-align:start;display:flex;flex-direction:column}.g-events-slide-item>article{flex:1 1 auto}.g-events-slide-item[data-on-day=true]>article{outline:2px solid #C7D8A3;outline-offset:3px}@media (max-width:860px){.g-events-layout{grid-template-columns:minmax(0,1fr)}.g-events-calendar{position:static}.g-events-slide-item{flex-basis:min(86%,380px)}}`}</style>
-        <div className="g-events-calendar"><EventsCalendar events={upcoming} range={range} onChange={setRange} ink={P.ink} surface={P.bg} line={tone === 'light' ? 'rgba(17,18,15,.5)' : 'rgba(242,239,231,.55)'} light={tone === 'light'} /></div>
+        <style>{`.g-events-layout{display:grid;grid-template-columns:minmax(260px,300px) minmax(0,1fr);gap:36px;align-items:start}.g-events-calendar{position:sticky;top:84px}.g-events-slide{display:flex;gap:16px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scroll-padding-left:6px;padding:6px 6px 14px}.g-events-slide-item{flex:0 0 clamp(270px,47%,380px);scroll-snap-align:start;display:flex;flex-direction:column}.g-events-slide-item>article{flex:1 1 auto}.g-events-slide-item[data-on-day=true]>article,.g-events-slide-item[data-linked=true]>article{outline:2px solid #C7D8A3;outline-offset:3px}@media (max-width:860px){.g-events-layout{grid-template-columns:minmax(0,1fr)}.g-events-calendar{position:static}.g-events-slide-item{flex-basis:min(86%,380px)}}`}</style>
+        <div className="g-events-calendar"><EventsCalendar events={upcoming} range={range} onChange={setRange} onHoverDay={setHoverDay} highlight={daysOfHoverEvent} ink={P.ink} surface={P.bg} line={tone === 'light' ? 'rgba(17,18,15,.5)' : 'rgba(242,239,231,.55)'} light={tone === 'light'} /></div>
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, margin: '0 0 14px' }}>
             <p data-events-count role="status" style={{ color: P.muted, fontSize: 12, margin: 0 }}>{range ? (fitting.length ? `${fitting.length} on your day${fitting.length === 1 ? '' : 's'} · ${upcoming.length} upcoming` : `Nothing on those days · ${upcoming.length} upcoming`) : `${upcoming.length} upcoming`}</p>
@@ -2196,7 +2211,7 @@ function GuardianEvents({ retreats = [], profile, events, sourceUrl, canEditSour
               {([-1, 1] as const).map((direction) => <button key={direction} type="button" aria-label={direction < 0 ? 'Previous events' : 'Next events'} onClick={() => slideBy(direction)} style={{ width: 30, height: 30, display: 'grid', placeItems: 'center', border: 0, padding: 0, background: 'transparent', color: P.ink, cursor: 'pointer' }}>{direction < 0 ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}</button>)}
             </span>
           </div>
-          <div ref={slide} className="g-events-slide" role="region" aria-label="Events" tabIndex={0}>{upcoming.map((event) => <div key={event.id} data-event-id={event.id} data-on-day={onDay.has(event.id) ? 'true' : undefined} className="g-events-slide-item"><EventCommerceCard profile={profile} event={event} rooms={roomsFor(event)} /></div>)}</div>
+          <div ref={slide} className="g-events-slide" role="region" aria-label="Events" tabIndex={0}>{upcoming.map((event) => <div key={event.id} data-event-id={event.id} data-on-day={onDay.has(event.id) ? 'true' : undefined} data-linked={cardsOnHoverDay.has(event.id) || hoverEvent === event.id ? 'true' : undefined} className="g-events-slide-item" onPointerEnter={() => setHoverEvent(event.id)} onPointerLeave={() => setHoverEvent(null)} onFocus={() => setHoverEvent(event.id)} onBlur={() => setHoverEvent(null)}><EventCommerceCard profile={profile} event={event} rooms={roomsFor(event)} /></div>)}</div>
           {range && !fitting.length && <p style={{ color: P.accent, fontSize: 14 }}>Nothing is on for those dates. Choose other days, or <button type="button" onClick={() => setRange(null)} style={{ border: 0, background: 'transparent', color: P.accent, padding: 0, font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>clear the dates</button>.</p>}
         </div>
       </div> : <div style={{ border: `1px dashed ${P.line}`, padding: 32, color: P.muted }}>No upcoming events yet, so visitors do not see this section. Add one in the Guardian workspace or pull from the official events page.</div>}
@@ -2267,7 +2282,7 @@ function RetreatCard({ profile, retreat, sessions = [] }: { profile: GuideProfil
   const [sessionIndex, setSessionIndex] = useState(0);
   const session = sessions[Math.min(sessionIndex, sessions.length - 1)];
   return <article data-retreat-card {...tiltHandlers(4)} style={tiltStyle({ border: '1px solid rgba(17,18,15,.2)', background: '#FFFFFF', overflow: 'hidden', display: 'flex', flexDirection: 'column' })}>
-    <DestinationHeader profile={profile} place={retreat.location || 'Misty Mountain, Australia'} lines={[retreat.location, retreat.title]} kind="retreat" />
+    <DestinationHeader profile={profile} place={retreat.location || 'Misty Mountain, Australia'} lines={[retreat.location, retreat.title]} kind="retreat" height={105} />
     <div style={{ padding: 24, display: 'flex', flex: 1, flexDirection: 'column' }}><span style={{ color: '#667245', fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>{[retreat.duration_days && `${retreat.duration_days} days`, retreat.location || 'Retreat'].filter(Boolean).join(' · ')}</span><h3 style={{ fontFamily: serif, fontSize: 36, fontWeight: 300, lineHeight: 1.05, margin: '10px 0' }}>{retreat.title}</h3><p style={{ color: '#66645F', fontSize: 14, lineHeight: 1.55 }}>{retreat.description}</p>
       <RoomSelectors title={retreat.title} rooms={rooms} choice={choice} />
       <DatesSelect title={retreat.title} sessions={sessions} index={Math.min(sessionIndex, sessions.length - 1)} onChange={setSessionIndex} />
@@ -2280,6 +2295,8 @@ function RetreatCard({ profile, retreat, sessions = [] }: { profile: GuideProfil
 function GuardianRetreats({ profile, retreats, events = [], tone = 'light' }: { profile: GuideProfile; retreats: GuideRetreat[]; events?: GuideEvent[]; tone?: Tone }) {
   if (!retreats.length) return null;
   const P = TONE_PALETTE[tone];
+  const places = [...new Set(retreats.map((retreat) => (retreat.location || '').trim()).filter(Boolean))];
+  const commonPlace = places.length === 1 && retreats.every((retreat) => (retreat.location || '').trim()) ? places[0] : '';
   // A programme and its sessions share a name; only sessions still to come are offered, soonest first.
   const sessionsOf = (retreat: GuideRetreat) => events
     .filter((event) => event.title.trim().toLowerCase() === retreat.title.trim().toLowerCase() && new Date(event.end_at || event.start_at).getTime() >= Date.now() - 86400000)
@@ -2287,7 +2304,8 @@ function GuardianRetreats({ profile, retreats, events = [], tone = 'light' }: { 
   return <section id="retreats" data-tone={tone} aria-label={`${profile.display_name}'s retreats`} style={{ background: P.bg, color: P.ink, padding: `clamp(72px,10vw,132px) ${PAGE_X}` }}>
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
       <span style={{ color: P.accent, fontSize: 11, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>Stay and learn · {retreats.length}</span>
-      <h2 style={{ fontFamily: serif, fontSize: 'clamp(36px,5vw,60px)', fontWeight: 300, lineHeight: 1, letterSpacing: '-.04em', margin: '12px 0 34px' }}>Retreats.</h2>
+      <h2 style={{ fontFamily: serif, fontSize: 'clamp(36px,5vw,60px)', fontWeight: 300, lineHeight: 1, letterSpacing: '-.04em', margin: `12px 0 ${commonPlace ? 10 : 34}px` }}>Retreats.</h2>
+      {commonPlace && <p data-retreats-place style={{ margin: '0 0 30px', color: P.muted, fontFamily: APP.font, fontSize: 15, fontWeight: 600 }}>{commonPlace}</p>}
       <div className="g-retreats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 18 }}><style>{`@media (max-width:760px){.g-retreats-grid{grid-template-columns:minmax(0,1fr)!important}}`}</style>{retreats.map((retreat) => <RetreatCard key={retreat.id} profile={profile} retreat={retreat} sessions={sessionsOf(retreat)} />)}</div>
     </div>
   </section>;
@@ -2390,7 +2408,9 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   const isOwner = isSignedIn && user?.id === profile.user_id;
   const siteEvents = events.filter((event) => onSite(event));
   // The main page also offers the company retreats (Misty Mountain); a brand's own page shows only its own.
+  // (declared before the offers below)
   const siteProtocols = guardianProtocols.filter((protocol) => protocol.is_active !== false && protocolOnSite(activeBrand?.id, personalBrandId, protocolBrands[protocol.id]));
+  const catalogOffers = siteProtocols.length ? publishedOffers.filter((offer) => offer.kind !== 'routine' && offer.kind !== 'routine_guidance') : publishedOffers;
   const siteRetreats = activeBrand ? retreats.filter((retreat) => onSite(retreat)) : retreats;
   const profileSections = profileSectionStates({ offers: publishedOffers, products: shopProducts.filter((product) => onSite(product)).length, events: siteEvents.length, retreats: siteRetreats.length, protocols: siteProtocols.length });
   const sectionTags: HeroSection[] = profileSections.filter((section) => section.filled || isOwner).map((section): HeroSection => section.filled ? [section.anchor, section.label, 'filled', section.category] : [`section-${section.id}`, section.label, 'empty']);
@@ -2434,7 +2454,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   const upcomingHere = siteEvents.filter((event) => new Date(event.end_at || event.start_at).getTime() >= Date.now() - 86400000);
   const ofKind = (kind: string) => offers.filter((offer) => offer.kind === kind && offer.status === 'published' && onSite(offer)).length > 0;
   const shownSections = new Set<PageSectionKey>();
-  if (publishedOffers.length) shownSections.add('offers');
+  if (catalogOffers.length) shownSections.add('offers');
   if (shopProducts.some((product) => product.status === 'published' && onSite(product))) shownSections.add('shop');
   if (upcomingHere.length || (isSignedIn && user?.id === profile.user_id)) shownSections.add('events');
   if (ofKind('talk')) shownSections.add('talks');
@@ -2454,12 +2474,12 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   const brandLinks: BrandLink[] = brandTiles.filter((tile) => tile.href).map((tile) => ({ key: tile.key, name: tile.title || tile.name, logo: tile.logo, href: tile.href, here: !!tile.here }));
   // The sections between the hero and the footer, in the order the owner chose (see pageSections). Each is a whole section that draws nothing when it has nothing to show.
   const sectionNodes: Record<PageSectionKey, React.ReactNode> = {
-    offers: <GuardianOfferCatalog tone={tones.offers || 'light'} hiddenCategories={siteProtocols.length ? ['Protocols'] : []} profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} categoryOrder={socials.protocol_filter_order} />,
+    offers: <GuardianOfferCatalog tone={tones.offers || 'light'} hiddenCategories={siteProtocols.length ? ['Protocols'] : []} profile={profile} offers={catalogOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} categoryOrder={socials.protocol_filter_order} />,
     shop: <GuardianShop tone={tones.shop || 'dark'} guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} protocols={guardianProtocols} owns={onSite} brandId={brandSlug ? activeBrand?.id : null} logoUrl={profile.avatar_url} localePreference={localePreference} categoryOrder={socials.product_filter_order} />,
     events: <GuardianEvents tone={tones.events || 'dark'} retreats={siteRetreats} profile={profile} events={siteEvents} sourceUrl={eventSource} canEditSource={isSignedIn && user?.id === profile.user_id} onImported={setEvents} onSourceChanged={setEventSource} />,
     talks: <GuardianOfferShelf tone={tones.talks || 'light'} kind="talk" profile={profile} offers={offers.filter((offer) => onSite(offer))} pagePadding={PAGE_X} />,
     treats: <GuardianOfferShelf tone={tones.treats || 'dark'} kind="treat" profile={profile} offers={offers.filter((offer) => onSite(offer))} pagePadding={PAGE_X} />,
-    protocols: <GuardianProtocols protocols={siteProtocols} profile={profile} pagePadding={PAGE_X} tone={tones.protocols || 'light'} accent={publicAccent} headingFont={publicHeadingFont} linkToOffers={publishedOffers.length > 0} />,
+    protocols: <GuardianProtocols catalogCount={publishedOffers.length} protocols={siteProtocols} profile={profile} pagePadding={PAGE_X} tone={tones.protocols || 'light'} accent={publicAccent} headingFont={publicHeadingFont} linkToOffers={emailCaptureOn || !!pathSlug} />,
     forum: <GuardianForumTeaser teaser={forumTeaser} tone={tones.forum || 'light'} profile={profile} pagePadding={PAGE_X} />,
     retreats: <GuardianRetreats tone={tones.retreats || 'light'} profile={profile} retreats={siteRetreats} events={siteEvents} />,
     funnel: <>{reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}{isOwner && <ProfileSectionSkeleton sections={profileSections} />}{emailCaptureOn || pathSlug ? (funnelHasEntry ? <GuardianFunnel key={selectedRamp?.id || 'default'} backdrop={emailBackdrop} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} /> : <FollowSignup profile={profile} accent={publicAccent} headingFont={publicHeadingFont} tone={tones.funnel || 'dark'} />) : null}</>,
