@@ -41,7 +41,7 @@ export function GuardianOfferShelf({ kind, profile, offers, pagePadding, tone }:
     <section id={theme.id} data-tone={tone || (kind === 'treat' ? 'dark' : 'light')} aria-label={`${profile.display_name}'s ${label.many.toLowerCase()}`} style={{ background: theme.bg, color: theme.ink, padding: `clamp(72px,10vw,124px) ${pagePadding}` }}>
       <div style={{ maxWidth: 1240, margin: '0 auto' }}>
         <div style={{ color: theme.accent, fontFamily: sans, fontSize: 11, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>{label.many} · {published.length}</div>
-        <h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 'clamp(40px,6vw,72px)', lineHeight: 1, margin: '14px 0 12px' }}>{theme.heading}</h2>
+        <h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 'clamp(36px,5vw,60px)', lineHeight: 1, margin: '14px 0 12px' }}>{theme.heading}</h2>
         <p style={{ color: theme.muted, fontFamily: sans, fontSize: 15, lineHeight: 1.6, maxWidth: 620, margin: '0 0 28px' }}>{theme.intro}</p>
         {categories.length > 1 && (
           <div role="group" aria-label={`Filter ${label.many.toLowerCase()} by type`} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 28 }}>

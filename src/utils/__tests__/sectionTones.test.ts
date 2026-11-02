@@ -35,17 +35,11 @@ describe('sectionTones', () => {
   });
 });
 
-describe('protocolsSecond', () => {
+describe('protocolsSecond (the hero is first, so Protocols come directly under it)', () => {
   const keys = (order: string[]) => order.filter((key) => ['offers', 'shop', 'protocols', 'events'].includes(key));
-  it('moves Protocols to just after the first shown section, whatever order was saved', () => {
+  it('moves Protocols ahead of every other section, whatever order was saved', () => {
     const order = orderPageSections('events,shop,offers,protocols');
-    const shownKeys = new Set(['events', 'shop', 'offers', 'protocols'] as any);
-    expect(keys(protocolsSecond(order, shownKeys))).toEqual(['events', 'protocols', 'shop', 'offers']);
-  });
-  it('counts only the sections that show', () => {
-    const order = orderPageSections('offers,shop,protocols,events');
-    expect(keys(protocolsSecond(order, new Set(['shop', 'protocols', 'events'] as any)))).toEqual(['offers', 'shop', 'protocols', 'events']);
-    expect(protocolsSecond(order, new Set(['protocols'] as any))[0]).toBe('protocols');
+    expect(keys(protocolsSecond(order, new Set(['events', 'shop', 'offers', 'protocols'] as any)))).toEqual(['protocols', 'events', 'shop', 'offers']);
   });
   it('leaves everything alone when Protocols do not show', () => {
     const order = orderPageSections('events,shop');

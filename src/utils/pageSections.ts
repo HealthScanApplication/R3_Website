@@ -5,8 +5,8 @@
  * saved order does not mention keeps its default place after the ones it does.
  */
 export const PAGE_SECTIONS = [
-  { key: 'offers', label: 'Offers' },
   { key: 'protocols', label: 'Protocols' },
+  { key: 'offers', label: 'Offers' },
   { key: 'shop', label: 'Shop' },
   { key: 'events', label: 'Events' },
   { key: 'talks', label: 'Talks' },
@@ -32,16 +32,12 @@ export function orderPageSections(saved?: string | null): PageSectionKey[] {
 }
 
 /**
- * Protocols are always the second section of the page. Given the sections that will show, in page order, this moves Protocols
- * to just after the first of them (or leaves it first when it is the only one), whatever order the Guardian saved.
+ * Protocols are always the second section of the page: the hero is the first, so Protocols come directly under it, ahead of
+ * whatever else shows, whatever order the Guardian saved.
  */
 export function protocolsSecond(order: PageSectionKey[], shown?: ReadonlySet<PageSectionKey>): PageSectionKey[] {
-  const visible = (key: PageSectionKey) => !shown || shown.has(key);
-  if (!order.includes('protocols') || !visible('protocols')) return order;
-  const rest = order.filter((key) => key !== 'protocols');
-  const firstShown = rest.findIndex(visible);
-  if (firstShown < 0) return ['protocols', ...rest];
-  return [...rest.slice(0, firstShown + 1), 'protocols', ...rest.slice(firstShown + 1)];
+  if (!order.includes('protocols') || (shown && !shown.has('protocols'))) return order;
+  return ['protocols', ...order.filter((key) => key !== 'protocols')];
 }
 
 /** One step up (-1) or down (1). A section already at the end stays put. */
