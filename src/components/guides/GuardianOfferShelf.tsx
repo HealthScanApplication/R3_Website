@@ -44,9 +44,9 @@ export function GuardianOfferShelf({ kind, profile, offers, pagePadding, tone }:
         <h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 'clamp(36px,5vw,60px)', lineHeight: 1, margin: '14px 0 12px' }}>{theme.heading}</h2>
         <p style={{ color: theme.muted, fontFamily: sans, fontSize: 15, lineHeight: 1.6, maxWidth: 620, margin: '0 0 28px' }}>{theme.intro}</p>
         {categories.length > 1 && (
-          <div role="group" aria-label={`Filter ${label.many.toLowerCase()} by type`} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 28 }}>
+          <div role="group" aria-label={`Filter ${label.many.toLowerCase()} by type`} style={{ display: 'flex', flexWrap: 'wrap', gap: 24, marginBottom: 28 }}>
             {['all', ...categories].map((category) => (
-              <button key={category} type="button" aria-pressed={filter === category} onClick={() => setFilter(category)} style={{ minHeight: 36, padding: '0 14px', border: `1px solid ${filter === category ? theme.ink : theme.line}`, background: filter === category ? theme.ink : 'transparent', color: filter === category ? theme.bg : theme.ink, fontFamily: sans, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{category === 'all' ? 'All' : category}</button>
+              <button key={category} type="button" aria-pressed={filter === category} onClick={() => setFilter(category)} style={{ minHeight: 36, padding: '0 2px', border: 0, borderBottom: `2px solid ${filter === category ? theme.ink : 'transparent'}`, background: 'transparent', color: theme.ink, opacity: filter === category ? 1 : .62, fontFamily: sans, fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer' }}>{category === 'all' ? 'All' : category}</button>
             ))}
           </div>
         )}
