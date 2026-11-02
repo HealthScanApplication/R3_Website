@@ -110,6 +110,9 @@ describe('events calendar', () => {
     expect(marked[0].textContent).toMatch(/Lifestyle Retreat/);
     expect(scrolled.length).toBeGreaterThan(0); // the slide moved to it
     expect(root.querySelector('[data-events-count]')!.textContent).toMatch(/1 on your day/);
+    const dimmed = [...root.querySelectorAll('.g-events-slide-item[data-dim="true"]')];
+    expect(dimmed.length).toBe(2); // the other events fade back
+    expect(root.querySelector('.g-events-slide-item[data-on-day="true"]')!.getAttribute('data-settle')).toMatch(/^[ab]$/); // and the chosen one settles into place
     fireEvent.click(day(root, '2099-03-05')); // another day moves the marker
     expect(day(root, '2099-03-05').getAttribute('aria-pressed')).toBe('true');
     expect(day(root, '2099-03-09').getAttribute('aria-pressed')).not.toBe('true');
@@ -118,6 +121,7 @@ describe('events calendar', () => {
     expect(root.querySelector('[data-on-day="true"]')!.textContent).not.toMatch(/Lifestyle Retreat/);
     fireEvent.click(within(root).getByRole('button', { name: 'Clear dates' }));
     expect(root.querySelectorAll('[data-on-day="true"]').length).toBe(0);
+    expect(root.querySelectorAll('[data-dim="true"]').length).toBe(0); // clearing brings them all back
     expect(root.querySelector('[data-calendar-range]')).toBeNull();
   });
 
