@@ -1804,7 +1804,7 @@ export function protocolFits(protocol: AdminProtocol, chosen: Record<string, str
 }
 
 /** The "Protocols" section of a public page: the routines selected for this page (the same records appear on every page that lists them). */
-export function GuardianProtocols({ protocols, profile, pagePadding, tone, accent, headingFont, linkToOffers }: { protocols: AdminProtocol[]; profile: GuideProfile; pagePadding: string; tone: 'light' | 'dark'; accent: string; headingFont: string; linkToOffers: boolean }) {
+export function GuardianProtocols({ protocols, profile, pagePadding, tone, accent, headingFont, linkToOffers, catalogCount }: { /** How many offers the page has: the heading then reads as the complete catalog. */ catalogCount?: number; protocols: AdminProtocol[]; profile: GuideProfile; pagePadding: string; tone: 'light' | 'dark'; accent: string; headingFont: string; linkToOffers: boolean }) {
   const known = useContext(CardBrandsContext);
   const [chosen, setChosen] = useState<Record<string, string>>({});
   if (!protocols.length) return null;
@@ -1815,8 +1815,9 @@ export function GuardianProtocols({ protocols, profile, pagePadding, tone, accen
   const tab = (active: boolean): React.CSSProperties => ({ ...TAB_TEXT, borderBottom: `2px solid ${active ? P.ink : 'transparent'}`, color: P.ink, opacity: active ? 1 : .62, fontFamily: APP.font });
   return <section id="protocols" aria-labelledby="guardian-protocols-title" data-page-section="protocols" data-tone={tone} style={{ padding: `clamp(54px,7vw,100px) ${pagePadding}`, background: P.bg, color: P.ink }}>
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
-      <span style={{ color: P.accent, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Routines · {Object.keys(chosen).length ? `${shown.length} of ${protocols.length}` : protocols.length}</span>
-      <h2 id="guardian-protocols-title" style={{ margin: '12px 0 22px', fontFamily: headingFont, fontWeight: 300, fontSize: 'clamp(36px,5vw,60px)', lineHeight: 1 }}>Protocols.</h2>
+      <span style={{ display: 'block', color: P.accent, fontSize: 12, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 12 }}>Complete catalog · {catalogCount ?? protocols.length} {(catalogCount ?? protocols.length) === 1 ? 'offer' : 'offers'}{Object.keys(chosen).length ? ` · ${shown.length} of ${protocols.length} routines` : ''}</span>
+      <h2 id="guardian-protocols-title" style={{ margin: '0 0 18px', maxWidth: 760, fontFamily: headingFont, fontWeight: 300, fontSize: 'clamp(36px,5vw,60px)', lineHeight: 1, letterSpacing: '-.04em' }}>Explore every way to work with {profile.display_name}.</h2>
+      <p style={{ color: P.muted, fontFamily: APP.font, fontSize: 16, lineHeight: 1.55, maxWidth: 620, margin: '0 0 28px' }}>Browse the full published collection—free resources, protocols, sessions, communities and programs.</p>
       {groups.length > 0 && <div data-protocol-filters style={{ display: 'grid', gap: 6, margin: '0 0 26px' }}>
         {groups.map((group) => <div key={group.key} role="group" aria-label={`Filter by ${group.label.toLowerCase()}`} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 22 }}>
           <span style={{ width: 54, color: P.muted, fontFamily: APP.font, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>{group.label}</span>
@@ -1963,11 +1964,11 @@ function GuardianOfferCatalog({ profile, offers, ramps, reviews, accent, protoco
   };
   return <section id="catalog" aria-label={`${profile.display_name}'s complete offer catalog`} data-tone={tone} style={{ background: P.bg, color: P.ink, padding: `clamp(72px,10vw,132px) ${PAGE_X}` }}>
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
-      <div style={{ maxWidth: 760, marginBottom: 'clamp(30px,5vw,52px)' }}>
+      {!hiddenCategories.includes('Protocols') && <div style={{ maxWidth: 760, marginBottom: 'clamp(30px,5vw,52px)' }}>
         <span style={{ display: 'block', color: P.accent, fontFamily: APP.font, fontSize: 12, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 12 }}>Complete catalog · {offers.length} {offers.length === 1 ? 'offer' : 'offers'}</span>
         <h2 style={{ fontFamily: serif, fontSize: 'clamp(36px,5vw,60px)', fontWeight: 300, lineHeight: 1, letterSpacing: '-.04em', margin: '0 0 18px' }}>Explore every way to work with {profile.display_name}.</h2>
         <p style={{ color: P.muted, fontFamily: APP.font, fontSize: 16, lineHeight: 1.55, maxWidth: 620, margin: 0 }}>Browse the full published collection—free resources, protocols, sessions, communities and programs.</p>
-      </div>
+      </div>}
       <div role="tablist" aria-label="Offer categories" style={{ display: 'flex', flexWrap: 'wrap', gap: 24, margin: '0 0 26px' }}>{categories.map((category) => <button key={category} type="button" role="tab" aria-selected={activeCategory === category} onClick={() => setActiveCategory(category)} style={{ ...TAB_TEXT, borderBottom: `2px solid ${activeCategory === category ? P.ink : 'transparent'}`, color: P.ink, opacity: activeCategory === category ? 1 : .62, fontFamily: APP.font }}>{category}</button>)}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,300px),1fr))', gap: 18 }}>
         {visibleOffers.map((offer) => {
@@ -2456,7 +2457,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
     events: <GuardianEvents tone={tones.events || 'dark'} retreats={siteRetreats} profile={profile} events={siteEvents} sourceUrl={eventSource} canEditSource={isSignedIn && user?.id === profile.user_id} onImported={setEvents} onSourceChanged={setEventSource} />,
     talks: <GuardianOfferShelf tone={tones.talks || 'light'} kind="talk" profile={profile} offers={offers.filter((offer) => onSite(offer))} pagePadding={PAGE_X} />,
     treats: <GuardianOfferShelf tone={tones.treats || 'dark'} kind="treat" profile={profile} offers={offers.filter((offer) => onSite(offer))} pagePadding={PAGE_X} />,
-    protocols: <GuardianProtocols protocols={siteProtocols} profile={profile} pagePadding={PAGE_X} tone={tones.protocols || 'light'} accent={publicAccent} headingFont={publicHeadingFont} linkToOffers={publishedOffers.length > 0} />,
+    protocols: <GuardianProtocols catalogCount={publishedOffers.length} protocols={siteProtocols} profile={profile} pagePadding={PAGE_X} tone={tones.protocols || 'light'} accent={publicAccent} headingFont={publicHeadingFont} linkToOffers={publishedOffers.length > 0} />,
     forum: <GuardianForumTeaser teaser={forumTeaser} tone={tones.forum || 'light'} profile={profile} pagePadding={PAGE_X} />,
     retreats: <GuardianRetreats tone={tones.retreats || 'light'} profile={profile} retreats={siteRetreats} events={siteEvents} />,
     funnel: <>{reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}{isOwner && <ProfileSectionSkeleton sections={profileSections} />}{emailCaptureOn || pathSlug ? (funnelHasEntry ? <GuardianFunnel key={selectedRamp?.id || 'default'} backdrop={emailBackdrop} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} /> : <FollowSignup profile={profile} accent={publicAccent} headingFont={publicHeadingFont} tone={tones.funnel || 'dark'} />) : null}</>,
