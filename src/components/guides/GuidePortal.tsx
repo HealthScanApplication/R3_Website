@@ -26,7 +26,7 @@ import { PublicLocaleContext, useDisplayMoney } from '../../utils/displayMoney';
 import { EventsCalendar } from './EventsCalendar';
 import { guestsLabel, parseRetreatOptions, roomPrice, type RetreatRoomOption } from '../../utils/retreatRooms';
 import { eventsInRange, type DayRange } from '../../utils/eventCalendar';
-import { DEFAULT_SECTION_ORDER, PAGE_SECTIONS, moveSection, orderPageSections, serializeSectionOrder, type PageSectionKey } from '../../utils/pageSections';
+import { DEFAULT_SECTION_ORDER, PAGE_SECTIONS, moveSection, orderPageSections, protocolsSecond, serializeSectionOrder, type PageSectionKey } from '../../utils/pageSections';
 import { BrandScopeCircles, useBrandScope } from './BrandScopeBar';
 import { brandSiteProfile, brandSitePath, brandSlugFromPath, cardByline, protocolOnSite, savedBrandId, savedBrandMoves, siteOwns } from '../../utils/brandSite';
 import { inBrandScope } from '../../utils/brandScope';
@@ -1786,7 +1786,7 @@ function GuardianProtocols({ protocols, profile, pagePadding, tone, accent, head
   const byline = cardByline({ brand_id: known?.activeId }, known?.brands || [], known?.activeId, { name: profile.display_name, avatarUrl: profile.avatar_url });
   return <section id="protocols" aria-labelledby="guardian-protocols-title" data-page-section="protocols" data-tone={tone} style={{ padding: `clamp(54px,7vw,100px) ${pagePadding}`, background: light ? '#E7E1D5' : '#11120F', color: light ? '#11120F' : '#F2EFE7' }}>
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
-      <span style={{ color: light ? '#667245' : accent, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Routines · {protocols.length}</span>
+      <span style={{ color: TONE_PALETTE[tone].accent, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Routines · {protocols.length}</span>
       <h2 id="guardian-protocols-title" style={{ margin: '12px 0 28px', fontFamily: headingFont, fontWeight: 300, fontSize: 'clamp(42px,6vw,78px)', lineHeight: .98 }}>Protocols.</h2>
       <ProtocolCardGrid min={290}>{protocols.map((protocol) => <ProtocolCard key={protocol.id} kicker={daysLabel(protocol.total_days)} tags={completeProtocolTags(protocol)} title={protocol.name.replace(/^(R3 Protocol\s*>\s*|Barbara O'Neill\s*•\s*)/i, '')} imageUrl={protocol.image_url} copy={clipCopy(protocol.description)} by={byline.name} byAvatar={byline.avatarUrl ? <img src={byline.avatarUrl} alt="" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover', marginRight: 6, verticalAlign: 'middle' }} /> : undefined} corner={<ProtocolOutputTags />} cta="Get this routine" href={linkToOffers ? '#offers' : undefined} inert={!linkToOffers} />)}</ProtocolCardGrid>
     </div>
@@ -2388,7 +2388,8 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   if (forumTeaser && (forumTeaser.questions.length || forumTeaser.membershipOffer)) shownSections.add('forum');
   if (emailCaptureOn || pathSlug) shownSections.add('funnel');
   if (brandsShown) shownSections.add('brands');
-  const tones = sectionTones(orderPageSections(socials.section_order), shownSections, funnelHasEntry ? { funnel: emailBackdrop ? 'dark' : 'light' } : {});
+  const pageOrder = protocolsSecond(orderPageSections(socials.section_order), shownSections);
+  const tones = sectionTones(pageOrder, shownSections, funnelHasEntry ? { funnel: emailBackdrop ? 'dark' : 'light' } : {});
   const ownerName = ownerProfile?.display_name || profile.display_name;
   const ownerLinks = (ownerProfile?.social_links || {}) as Record<string, string>;
   const brandTiles = publicBrands.map((brand) => brand.kind === 'personal'
@@ -2433,7 +2434,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
       <GuardianSiteHero audience={heroAudience} reviewSummary={reviewStats(reviews)} headlineStyle={publicHeadlineStyle} name={heroIdentity?.title || profile.display_name} identityLine={heroIdentity?.blurb || undefined} avatarUrl={profile.avatar_url} specialties={heroSpecialties} headline={heroHeadline} tags={heroTags} bio={heroBio} accent={publicAccent} headingFont={publicHeadingFont} background={socials.theme_background} backgroundIsVideo={publicBackgroundIsVideo} clips={clipsFromLinks(socials.theme_background_clips)} typeVideo={publicTypeVideo} glass={publicGlass} sections={sectionTags} greyscale={publicGreyscale}
         guideId={profile.user_id} sourceOfferId={heroSourceOfferId}
         cards={publishedRamps.length ? (onOfferPath ? [selectedRamp!] : publishedRamps).slice(0, 1).map((ramp) => { const offer = publishedOffers.find((item) => item.id === ramp.offer_ids[0]); return { key: ramp.id, offerTitle: offer?.title || ramp.name, eyebrow: ramp.problem || undefined, title: customerFacingOfferTitle(offer?.title || ramp.name), copy: offer?.description || '', kind: offer?.kind, price: offer?.access_model === 'free' ? 'Free' : undefined, imageUrl: offer?.cover_url, href: pathSlug === encodeURIComponent(ramp.slug) ? '#offers' : `/guardians/${profile.slug}/value-ramp/${encodeURIComponent(ramp.slug)}` }; }) : freeOffers.slice(0, 1).map((offer) => ({ key: offer.id, offerTitle: offer.title, eyebrow: profile.specialties.slice(0, 2).join(' · '), title: customerFacingOfferTitle(offer.title), copy: offer.description || '', kind: offer.kind, price: 'Free', imageUrl: offer.cover_url, href: '#start' }))} />
-      {orderPageSections(socials.section_order).map((key) => <Fragment key={key}>{sectionNodes[key]}</Fragment>)}
+      {pageOrder.map((key) => <Fragment key={key}>{sectionNodes[key]}</Fragment>)}
       <footer style={{ padding: `28px ${PAGE_X}`, borderTop: '1px solid rgba(17,18,15,.2)', color: '#66645F', fontSize: 11, lineHeight: 1.6 }}>
         {brandLinks.length > 1 && <div style={{ marginBottom: 22 }}><BrandLinks links={brandLinks} variant="footer" color="#11120F" /></div>}
         {profile.display_name} shares general wellbeing guidance, not medical advice. Speak to your GP or doctor before changing medication, diet or exercise, and about any health concern. Individual results vary.

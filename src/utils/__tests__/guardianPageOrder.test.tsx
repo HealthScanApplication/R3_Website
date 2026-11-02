@@ -36,7 +36,7 @@ describe('page section order in the site builder', () => {
   it('lists every section in the default order, hero and footer not among them', async () => {
     setup();
     const panel = await openOrder();
-    expect(rows(panel)).toEqual(['offers', 'shop', 'events', 'talks', 'treats', 'protocols', 'forum', 'retreats', 'funnel', 'brands']);
+    expect(rows(panel)).toEqual(['offers', 'protocols', 'shop', 'events', 'talks', 'treats', 'forum', 'retreats', 'funnel', 'brands']);
     expect(within(panel).getByRole('button', { name: 'Move Offers up' }).hasAttribute('disabled')).toBe(true); // the first cannot go up
     expect(within(panel).getByRole('button', { name: 'Move Official brands down' }).hasAttribute('disabled')).toBe(true); // nor the last down
   });
@@ -50,7 +50,7 @@ describe('page section order in the site builder', () => {
     fireEvent.click(within(panel).getByRole('button', { name: 'Move Retreats down' }));
     expect(rows(panel).indexOf('retreats')).toBe(6);
     fireEvent.click(within(panel).getByRole('button', { name: 'Reset order' }));
-    expect(rows(panel)).toEqual(['offers', 'shop', 'events', 'talks', 'treats', 'protocols', 'forum', 'retreats', 'funnel', 'brands']);
+    expect(rows(panel)).toEqual(['offers', 'protocols', 'shop', 'events', 'talks', 'treats', 'forum', 'retreats', 'funnel', 'brands']);
   });
 
   it('saves the chosen order with the page, and nothing when it is the default', async () => {
@@ -60,7 +60,7 @@ describe('page section order in the site builder', () => {
     expect(rows(panel)[0]).toBe('retreats');
     fireEvent.click(await screen.findByRole('button', { name: /^Save/ }));
     await waitFor(() => expect(mocks.save).toHaveBeenCalled());
-    expect(mocks.save.mock.calls[0][0].social_links.section_order).toMatch(/^retreats,offers,shop,events/);
+    expect(mocks.save.mock.calls[0][0].social_links.section_order).toMatch(/^retreats,offers,protocols,shop,events/);
   });
 });
 

@@ -6,11 +6,11 @@
  */
 export const PAGE_SECTIONS = [
   { key: 'offers', label: 'Offers' },
+  { key: 'protocols', label: 'Protocols' },
   { key: 'shop', label: 'Shop' },
   { key: 'events', label: 'Events' },
   { key: 'talks', label: 'Talks' },
   { key: 'treats', label: 'Treats' },
-  { key: 'protocols', label: 'Protocols' },
   { key: 'forum', label: 'Ask a question' },
   { key: 'retreats', label: 'Retreats' },
   { key: 'funnel', label: 'Follow and subscribe' },
@@ -29,6 +29,19 @@ export function orderPageSections(saved?: string | null): PageSectionKey[] {
     if (KNOWN.has(key) && !named.includes(key as PageSectionKey)) named.push(key as PageSectionKey);
   }
   return [...named, ...DEFAULT_SECTION_ORDER.filter((key) => !named.includes(key))];
+}
+
+/**
+ * Protocols are always the second section of the page. Given the sections that will show, in page order, this moves Protocols
+ * to just after the first of them (or leaves it first when it is the only one), whatever order the Guardian saved.
+ */
+export function protocolsSecond(order: PageSectionKey[], shown?: ReadonlySet<PageSectionKey>): PageSectionKey[] {
+  const visible = (key: PageSectionKey) => !shown || shown.has(key);
+  if (!order.includes('protocols') || !visible('protocols')) return order;
+  const rest = order.filter((key) => key !== 'protocols');
+  const firstShown = rest.findIndex(visible);
+  if (firstShown < 0) return ['protocols', ...rest];
+  return [...rest.slice(0, firstShown + 1), 'protocols', ...rest.slice(firstShown + 1)];
 }
 
 /** One step up (-1) or down (1). A section already at the end stays put. */
