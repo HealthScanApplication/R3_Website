@@ -51,15 +51,16 @@ export function EventsCalendar({ events, range, onChange, ink = '#F2EFE7', surfa
           return <button key={cell.key} type="button" data-day={cell.key} data-has-event={count ? 'true' : undefined} aria-pressed={chosen}
             aria-label={`${longDay(cell.key)}${count ? `, ${count} ${count === 1 ? 'event' : 'events'}${mark!.days.length ? `, ${mark!.days.map((day) => `day ${day.n} of ${day.of}`).join(' and ')}` : ''}` : ', no events'}`}
             onClick={() => onChange(pickDay(range, cell.key))}
-            style={{ position: 'relative', minHeight: 38, border: 0, padding: '3px 0 11px', backgroundColor: filled ? accent : surface, backgroundImage: underWay ? HATCH : 'none', color: filled ? '#11150F' : ink, fontFamily: sans, fontSize: 11, fontWeight: filled ? 800 : 500, lineHeight: 1.2, cursor: 'pointer', boxShadow: chosen ? (filled ? `inset 0 0 0 2px ${surface}, inset 0 0 0 4px ${ink}` : `inset 0 0 0 2px ${ink}`) : 'none' }}>
+            style={{ position: 'relative', minHeight: 38, border: 0, padding: '3px 0 11px', backgroundColor: chosen ? accent : filled ? ink : surface, backgroundImage: underWay && !chosen ? HATCH : 'none', color: chosen ? '#11150F' : filled ? surface : ink, fontFamily: sans, fontSize: 11, fontWeight: filled || chosen ? 800 : 500, lineHeight: 1.2, cursor: 'pointer', boxShadow: 'none' }}>
             {cell.day}
             {label ? <span data-day-label aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, bottom: 2, fontSize: 7, fontWeight: 700, letterSpacing: '.02em', whiteSpace: 'nowrap', opacity: .85 }}>{label}</span> : null}
           </button>;
         })}
       </div>
       <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 9, color: light ? 'rgba(17,18,15,.7)' : 'rgba(242,239,231,.7)', flexWrap: 'wrap' }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><i aria-hidden="true" style={{ width: 9, height: 9, background: accent, display: 'inline-block' }} />Event starts</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><i aria-hidden="true" style={{ width: 9, height: 9, background: ink, display: 'inline-block' }} />Event starts</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><i aria-hidden="true" style={{ width: 9, height: 9, backgroundImage: HATCH, border: `1px solid ${line}`, display: 'inline-block' }} />Days of the event</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><i aria-hidden="true" style={{ width: 9, height: 9, background: accent, display: 'inline-block' }} />Chosen day</span>
         <span style={{ marginLeft: 'auto' }}>Choose a day to see what is on</span>
       </div>
       {range && <p data-calendar-range role="status" style={{ margin: '8px 0 0', fontSize: 11 }}>{range.from === range.to ? shortDay(range.from) : `${shortDay(range.from)} – ${shortDay(range.to)}`} · <button type="button" onClick={() => onChange(null)} style={{ border: 0, background: 'transparent', color: ink, padding: 0, font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>Clear dates</button></p>}
