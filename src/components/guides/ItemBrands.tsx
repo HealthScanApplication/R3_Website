@@ -9,9 +9,11 @@ import { brandSelection, itemBrandSelection } from '../../utils/brandSite';
 
 const sans = '"EuclidCircularA", "DM Sans", "Helvetica Neue", Arial, sans-serif';
 
-export function ItemBrands({ guideId, table, item, onSaved, onDark = true }: {
+export function ItemBrands({ guideId, table, item, onSaved, save, onDark = true }: {
   guideId: string;
-  table: ItemBrandTable;
+  table?: ItemBrandTable;
+  /** Stores the choice somewhere other than the item's own row (protocols keep theirs in a link table). */
+  save?: (brands: { brand_id: string | null; brand_ids: string[] }) => Promise<unknown>;
   item: { id: string; brand_id?: string | null; brand_ids?: string[] | null };
   onSaved?: (item: { brand_id: string | null; brand_ids: string[] }) => void;
   onDark?: boolean;
@@ -29,7 +31,11 @@ export function ItemBrands({ guideId, table, item, onSaved, onDark = true }: {
     const next = selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id];
     if (!next.length) { setError('Keep at least one page.'); return; }
     setError(''); setSaving(true); setChosen(next);
-    try { onSaved?.(await setItemBrands(table, guideId, item.id, brandSelection(next, personal?.id))); }
+    try {
+      const brands = brandSelection(next, personal?.id);
+      if (save) await save(brands); else await setItemBrands(table!, guideId, item.id, brands);
+      onSaved?.(brands);
+    }
     catch (cause: any) { setChosen(null); setError(cause?.message?.includes('brand_ids') ? 'Showing on more than one page needs the database update first.' : (cause?.message || 'Could not save.')); }
     finally { setSaving(false); }
   }

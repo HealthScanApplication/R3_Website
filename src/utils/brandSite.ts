@@ -96,3 +96,10 @@ export function savedBrandMoves(drafts: { localId: string; name: string; kind: s
   }
   return moves;
 }
+
+/** Whether a protocol shows on this page. A brand's page shows the protocols that list it; the personal page shows those that list it or list no brand at all. */
+export function protocolOnSite(activeBrandId: string | null | undefined, personalBrandId: string | null | undefined, listed: string[] | undefined): boolean {
+  const ids = listed || [];
+  if (activeBrandId) return ids.includes(activeBrandId);
+  return !ids.length || (!!personalBrandId && ids.includes(personalBrandId));
+}

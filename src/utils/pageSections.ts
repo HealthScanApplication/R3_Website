@@ -10,6 +10,7 @@ export const PAGE_SECTIONS = [
   { key: 'events', label: 'Events' },
   { key: 'talks', label: 'Talks' },
   { key: 'treats', label: 'Treats' },
+  { key: 'protocols', label: 'Protocols' },
   { key: 'forum', label: 'Ask a question' },
   { key: 'retreats', label: 'Retreats' },
   { key: 'funnel', label: 'Follow and subscribe' },

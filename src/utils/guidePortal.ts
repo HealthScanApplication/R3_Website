@@ -601,6 +601,24 @@ export async function setItemBrands(table: ItemBrandTable, guideId: string, id: 
   return brands;
 }
 
+/** Which brand pages list each protocol: protocol id -> brand ids. Empty (or the table missing) means every protocol is on the personal page only. */
+export async function listProtocolBrands(guideId: string): Promise<Record<string, string[]>> {
+  const { data, error } = await db().from('guide_protocol_brands').select('protocol_id,brand_id').eq('guide_id', guideId);
+  if (error) return {};
+  const map: Record<string, string[]> = {};
+  for (const row of (data || []) as { protocol_id: string; brand_id: string }[]) (map[row.protocol_id] ||= []).push(row.brand_id);
+  return map;
+}
+
+/** Puts a protocol on exactly these brand pages (none: the personal page only). */
+export async function setProtocolBrands(guideId: string, protocolId: string, brandIds: string[]): Promise<void> {
+  const removed = await db().from('guide_protocol_brands').delete().eq('guide_id', guideId).eq('protocol_id', protocolId);
+  if (removed.error) throw removed.error;
+  if (!brandIds.length) return;
+  const added = await db().from('guide_protocol_brands').insert(brandIds.map((brand_id) => ({ guide_id: guideId, protocol_id: protocolId, brand_id })));
+  if (added.error) throw added.error;
+}
+
 export async function listGuideOffers(userId: string): Promise<GuideOffer[]> {
   const { data, error } = await db().from('guide_offers').select('*').eq('guide_id', userId).order('created_at', { ascending: false });
   if (error) throw error;
