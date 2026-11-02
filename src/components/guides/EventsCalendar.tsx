@@ -30,7 +30,7 @@ export function EventsCalendar({ events, range, onChange, ink = '#F2EFE7', surfa
   const canPrev = index(view) > index(bounds.first), canNext = index(view) < index(bounds.last);
   const cells = monthCells(view.year, view.month); // days of the neighbouring months fill the first and last weeks and look like any other day
   const inRange = (key: string) => !!range && key >= range.from && key <= range.to;
-  const nav: React.CSSProperties = { width: 28, height: 28, display: 'grid', placeItems: 'center', border: `1px solid ${line}`, background: 'transparent', color: ink, cursor: 'pointer' };
+  const nav: React.CSSProperties = { width: 28, height: 28, display: 'grid', placeItems: 'center', border: 0, padding: 0, background: 'transparent', color: ink, cursor: 'pointer' }; // arrows only, no box
   /** "Day 3" for one event; "D1 · D3" when several overlap (the cell is small). */
   const dayLabel = (days: { n: number; of: number }[]) => (days.length === 0 ? '' : days.length === 1 ? `Day ${days[0].n}` : `${days.slice(0, 2).map((day) => `D${day.n}`).join(' · ')}${days.length > 2 ? ` +${days.length - 2}` : ''}`);
   return (

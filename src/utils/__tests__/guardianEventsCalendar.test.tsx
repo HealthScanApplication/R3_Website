@@ -73,6 +73,7 @@ describe('events calendar', () => {
     expect(stack.querySelectorAll('article').length).toBe(3);
     expect(layout.querySelector('.g-events-calendar')!.nextElementSibling!.contains(stack)).toBe(true); // the stack is the column to the right of the calendar
     expect(root.textContent).toMatch(/Days of the event/); // the legend says what the lines are
+    expect((root.querySelector('button[aria-label="Next month"]') as HTMLElement).style.border).toMatch(/^0|none/); // arrows only, no boxes
     expect(stack.style.gridTemplateColumns).toMatch(/repeat\(auto-fill/); // as many cards across as fit, two in the wide column
     const card = stack.querySelector('article') as HTMLElement;
     fireEvent.pointerMove(card, { clientX: 10, clientY: 10, pointerType: 'mouse' });

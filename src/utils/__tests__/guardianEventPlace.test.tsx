@@ -40,6 +40,8 @@ describe('event places', () => {
     expect(dubaiUrl.searchParams.get('output')).toBe('embed'); // a real map, not a drawing
     expect(dubaiUrl.searchParams.get('q')).toBe('Arjaan by Rotana, Dubai');
     expect(dubaiMap.getAttribute('loading')).toBe('lazy');
+    expect(dubaiMap.style.filter).not.toMatch(/invert/); // a light, quiet map, not the dark inverted one
+    expect((dubai.querySelector('[data-destination-header]') || dubai).getAttribute('style') || '').not.toMatch(/202A21/);
 
     // The venue alone has no country: it comes from the title, and the map is asked for the whole address.
     const capeTown = headers.find((h) => /Rots Church/.test(h.textContent || ''))!;
