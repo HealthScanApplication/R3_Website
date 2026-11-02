@@ -3,6 +3,7 @@
  * category and length, the description, the price in its own currency and a way to book. Everything comes from the Guardian's
  * offers (managed in their admin); with none published, the section is not shown.
  */
+import { TONE_PALETTE, type Tone } from '../../utils/sectionTones';
 import { useMemo, useState } from 'react';
 import type { GuideOffer, GuideProfile } from '../../utils/guidePortal';
 import { KIND_LABEL, formatMinutes, groupByCategory, parseOfferMeta, type TreatKind } from '../../utils/treatOffers';
@@ -24,8 +25,10 @@ export function bookingHref(profile: Pick<GuideProfile, 'contact_email' | 'displ
   return `mailto:${to}?subject=${encodeURIComponent(`${KIND_LABEL[offer.kind as TreatKind]?.one || 'Booking'}: ${offer.title}`)}`;
 }
 
-export function GuardianOfferShelf({ kind, profile, offers, pagePadding }: { kind: TreatKind; profile: GuideProfile; offers: GuideOffer[]; pagePadding: string }) {
-  const theme = THEMES[kind];
+export function GuardianOfferShelf({ kind, profile, offers, pagePadding, tone }: { /** Light or dark; without it the shelf keeps its own (talks light, treats dark). */ tone?: Tone; kind: TreatKind; profile: GuideProfile; offers: GuideOffer[]; pagePadding: string }) {
+  const own = THEMES[kind];
+  const P = TONE_PALETTE[tone || (kind === 'treat' ? 'dark' : 'light')];
+  const theme = { ...own, bg: P.bg, ink: P.ink, muted: P.muted, line: P.line, accent: P.accent, card: P.card };
   const money = useDisplayMoney();
   const published = useMemo(() => offers.filter((offer) => offer.kind === kind && offer.status === 'published'), [offers, kind]);
   const groups = useMemo(() => groupByCategory(published), [published]);
@@ -35,7 +38,7 @@ export function GuardianOfferShelf({ kind, profile, offers, pagePadding }: { kin
   const categories = groups.map((group) => group.category).filter(Boolean);
   const label = KIND_LABEL[kind];
   return (
-    <section id={theme.id} aria-label={`${profile.display_name}'s ${label.many.toLowerCase()}`} style={{ background: theme.bg, color: theme.ink, padding: `clamp(72px,10vw,124px) ${pagePadding}` }}>
+    <section id={theme.id} data-tone={tone || (kind === 'treat' ? 'dark' : 'light')} aria-label={`${profile.display_name}'s ${label.many.toLowerCase()}`} style={{ background: theme.bg, color: theme.ink, padding: `clamp(72px,10vw,124px) ${pagePadding}` }}>
       <div style={{ maxWidth: 1240, margin: '0 auto' }}>
         <div style={{ color: theme.accent, fontFamily: sans, fontSize: 11, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>{label.many} · {published.length}</div>
         <h2 style={{ fontFamily: serif, fontWeight: 300, fontSize: 'clamp(40px,6vw,72px)', lineHeight: 1, margin: '14px 0 12px' }}>{theme.heading}</h2>

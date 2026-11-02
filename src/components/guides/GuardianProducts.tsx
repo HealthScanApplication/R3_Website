@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Check, Copy, Download, ExternalLink, Grid2X2, List, Loader2, Pencil, Plus, ShoppingBag, Smartphone, Trash2, X } from 'lucide-react';
 import { CoverImageActions } from './CoverImageActions';
 import { useBrandScope } from './BrandScopeBar';
+import { TONE_PALETTE, type Tone } from '../../utils/sectionTones';
 import { LogoBadge } from './LogoBadge';
 import { ALL_BRANDS, PERSONAL_BRAND, inBrandScope } from '../../utils/brandScope';
 import { deleteGuideProduct, listGuideProducts, listPublicGuideProducts, saveGuideProduct, type GuideProduct } from '../../utils/guidePortal';
@@ -326,7 +327,8 @@ const publicProductCardStyle: React.CSSProperties = {
 };
 
 /** Public "Shop" block on a Guardian's site. Renders nothing until there are published products. */
-export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding, protocols = [], localePreference, categoryOrder, owns, brandId, logoUrl }: { /** The brand's logo (or the Guardian's portrait): shown as a badge across the edge of each product's picture. */ logoUrl?: string | null; /** The brand whose products to fetch: its id, null for the Guardian's own page, omitted for all. */ brandId?: string | null; /** Which products belong on this page: a brand's page shows only its own. Omitted, the page shows them all. */ owns?: (item: Pick<GuideProduct, 'brand_id' | 'brand_ids'>) => boolean; guideId: string; guardianSlug: string; guardianName: string; pagePadding: string; protocols?: AdminProtocol[]; localePreference?: GuardianLocalePreference; categoryOrder?: string }) {
+export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding, protocols = [], localePreference, categoryOrder, owns, brandId, logoUrl, tone = 'dark' }: { /** Which colours the section is drawn in (the page alternates light and dark). */ tone?: Tone; /** The brand's logo (or the Guardian's portrait): shown as a badge across the edge of each product's picture. */ logoUrl?: string | null; /** The brand whose products to fetch: its id, null for the Guardian's own page, omitted for all. */ brandId?: string | null; /** Which products belong on this page: a brand's page shows only its own. Omitted, the page shows them all. */ owns?: (item: Pick<GuideProduct, 'brand_id' | 'brand_ids'>) => boolean; guideId: string; guardianSlug: string; guardianName: string; pagePadding: string; protocols?: AdminProtocol[]; localePreference?: GuardianLocalePreference; categoryOrder?: string }) {
+  const P = TONE_PALETTE[tone];
   const [products, setProducts] = useState<GuideProduct[]>([]);
   const [usage, setUsage] = useState<Record<string, string[]>>({});
   const [downloading, setDownloading] = useState('');
@@ -377,14 +379,14 @@ export function GuardianShop({ guideId, guardianSlug, guardianName, pagePadding,
     if (!rates || !sourceRate || !targetRate || target === product.currency) return formatProductPrice(product.price_cents, product.currency, localePreference?.locale);
     return `≈ ${formatProductPrice(Math.round(product.price_cents * targetRate / sourceRate), target, localePreference?.locale)}`;
   };
-  return <section id="shop" aria-label={`Shop ${guardianName}'s products`} style={{ padding: `clamp(72px,10vw,132px) ${pagePadding}`, borderTop: '1px solid rgba(242,239,231,.18)', background: '#11120F', color: '#F2EFE7' }}>
+  return <section id="shop" data-tone={tone} aria-label={`Shop ${guardianName}'s products`} style={{ padding: `clamp(72px,10vw,132px) ${pagePadding}`, borderTop: `1px solid ${P.line}`, background: tone === 'light' ? P.bg : '#11120F', color: P.ink }}>
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
     <div style={{ fontFamily: APP.font, margin: '0 0 clamp(30px,5vw,52px)', maxWidth: 760 }}>
-      <span style={{ display: 'block', color: '#CADA91', fontSize: 12, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 12 }}>Local shop · {regionalProducts.length} products</span>
-      <h2 style={{ fontFamily: serif, fontSize: 'clamp(42px,7vw,82px)', fontWeight: 300, lineHeight: .94, letterSpacing: '-.045em', color: '#F2EFE7', margin: '0 0 18px' }}>{shopHeading}</h2>
-      <p style={{ color: '#B8B6AF', fontSize: 16, lineHeight: 1.55, margin: 0, maxWidth: 620 }}>Shop products directly, then open the Protocols that use them in ROUTINE³ or keep a printable PDF.</p>
+      <span style={{ display: 'block', color: tone === 'light' ? P.accent : '#CADA91', fontSize: 12, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 12 }}>Local shop · {regionalProducts.length} products</span>
+      <h2 style={{ fontFamily: serif, fontSize: 'clamp(42px,7vw,82px)', fontWeight: 300, lineHeight: .94, letterSpacing: '-.045em', color: P.ink, margin: '0 0 18px' }}>{shopHeading}</h2>
+      <p style={{ color: P.muted, fontSize: 16, lineHeight: 1.55, margin: 0, maxWidth: 620 }}>Shop products directly, then open the Protocols that use them in ROUTINE³ or keep a printable PDF.</p>
     </div>
-    <div role="tablist" aria-label="Product categories" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '0 0 26px' }}>{categories.map((category) => <button key={category} type="button" role="tab" aria-selected={activeCategory === category} onClick={() => setActiveCategory(category)} style={{ border: `1px solid ${activeCategory === category ? '#F2EFE7' : 'rgba(242,239,231,.34)'}`, background: activeCategory === category ? '#F2EFE7' : 'transparent', color: activeCategory === category ? '#11120F' : '#F2EFE7', minHeight: 38, padding: '0 14px', fontFamily: APP.font, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{category}</button>)}</div>
+    <div role="tablist" aria-label="Product categories" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '0 0 26px' }}>{categories.map((category) => <button key={category} type="button" role="tab" aria-selected={activeCategory === category} onClick={() => setActiveCategory(category)} style={{ border: `1px solid ${activeCategory === category ? P.ink : P.line}`, background: activeCategory === category ? P.ink : 'transparent', color: activeCategory === category ? P.bg : P.ink, minHeight: 38, padding: '0 14px', fontFamily: APP.font, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{category}</button>)}</div>
     {message && <p role="alert" style={{ color: '#8A3D2F', fontSize: 12 }}>{message}</p>}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,280px),1fr))', gap: 18 }}>
       {shownProducts.map(({ source: product, regional }) => { const linkedIds = [...new Set([...product.protocol_ids, ...(product.catalog_product_id ? usage[product.catalog_product_id] || [] : [])])]; const linked = linkedIds.map((id) => protocols.find((protocol) => protocol.id === id)).filter((protocol): protocol is AdminProtocol => !!protocol); return <article key={product.id} {...publicProductCardMotion} style={publicProductCardStyle} onPointerDown={(event) => { if (event.pointerType !== 'mouse') { event.currentTarget.style.setProperty('--product-lift', '-2px'); event.currentTarget.style.setProperty('--product-gray', '0'); } }} onPointerUp={(event) => { if (event.pointerType !== 'mouse') event.currentTarget.style.setProperty('--product-lift', '0px'); }}>

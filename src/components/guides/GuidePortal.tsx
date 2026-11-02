@@ -21,7 +21,7 @@ import { createMonoLogo, isMonoLogoUrl, logoImageStyle } from '../../utils/brand
 import { PullFromLink } from './PullFromLink';
 import { eventDay, eventRangeLabel, eventYear } from '../../utils/eventDates';
 import { LogoBadge } from './LogoBadge';
-import { sectionTones, type Tone } from '../../utils/sectionTones';
+import { TONE_PALETTE, sectionTones, type Tone } from '../../utils/sectionTones';
 import { PublicLocaleContext, useDisplayMoney } from '../../utils/displayMoney';
 import { EventsCalendar } from './EventsCalendar';
 import { guestsLabel, parseRetreatOptions, roomPrice, type RetreatRoomOption } from '../../utils/retreatRooms';
@@ -90,7 +90,7 @@ import {
   recoverUpsellPayment, createGuideLead, createGuideOffer, createGuideRecipe, createGuideValueRamp, getGuideProfile, getGuideProfileBySlug, canonicalGuideSlug,
   importGuideProfile, listGuideLeads, listGuideOffers, listGuideProducts, listGuideRecipes, listGuideValueRamps, listRoutineOwners, upsertGuideOffer, upsertGuideValueRamp, listPublicGuideProfiles, saveGuideProfile, listGuardianReviews, listGuardianReviewRequests, createGuardianReviewRequest, submitGuardianReview, setGuardianReviewStatus, createOfferPayment, confirmOfferPayment, buyUpsellOneClick, getFreeOfferDownload, requestGuardianReview, decideGuardianSite, listAllGuideProfiles, listGuardianSuggestions, setGuardianSuggestionStatus, listPublicGuardianOffers, listReviewSummaries, type AdminGuideProfile, type GuardianSuggestionRow, type GuardianReview, type GuardianReviewRequest, submitGuardianSuggestion, submitGuardianOptIn,
   createGuideLibraryFolder, createGuideLibraryItem, deleteGuideLibraryItem, getGuideFileDownloadUrl,
-  listGuideLibraryFolders, listGuideLibraryItems, listProtocolBrands, setProtocolBrands as saveProtocolBrands, replaceGuideBrands, listGuideBrands, listPublicGuideBrands, updateGuideRecipe, saveGuideRecipeDraft, listPersonalProtocolPeople, uploadGuideFile, uploadGuideImage, uploadGuideLibraryAudio,
+  listGuideLibraryFolders, listGuideLibraryItems, getGuideForumTeaser, type GuideForumTeaser, listProtocolBrands, setProtocolBrands as saveProtocolBrands, replaceGuideBrands, listGuideBrands, listPublicGuideBrands, updateGuideRecipe, saveGuideRecipeDraft, listPersonalProtocolPeople, uploadGuideFile, uploadGuideImage, uploadGuideLibraryAudio,
   updateGuideLead, deleteGuideLead, updateGuideValueRamp, deleteGuideValueRamp, deleteGuideRecipe, deleteGuideOffer,
   updateGuideLibraryFolder, deleteGuideLibraryFolder, updateGuideLibraryItem,
   getOfferCommunityChannel, saveOfferCommunityChannel, getCommunityChannelByRoute, joinGuideCommunity, isGuideCommunityMember, listGuideCommunityMessages, postGuideCommunityMessage,
@@ -1893,9 +1893,10 @@ function ProfileSectionSkeleton({ sections }: { sections: ProfileSectionState[] 
   </section>;
 }
 
-function GuardianOfferCatalog({ profile, offers, ramps, reviews, accent, protocols, categoryOrder }: { profile: GuideProfile; offers: GuideOffer[]; ramps: GuideValueRamp[]; reviews: GuardianReview[]; accent: string; protocols: AdminProtocol[]; categoryOrder?: string }) {
+function GuardianOfferCatalog({ profile, offers, ramps, reviews, accent, protocols, categoryOrder, tone = 'light' }: { tone?: Tone; profile: GuideProfile; offers: GuideOffer[]; ramps: GuideValueRamp[]; reviews: GuardianReview[]; accent: string; protocols: AdminProtocol[]; categoryOrder?: string }) {
   const knownBrands = useContext(CardBrandsContext);
   const bylineOf = (item: GuideOffer) => cardByline(item, knownBrands?.brands || [], knownBrands?.activeId, { name: profile.display_name, avatarUrl: profile.avatar_url });
+  const P = TONE_PALETTE[tone];
   const [activeCategory, setActiveCategory] = useState('All');
   useEffect(() => {
     const open = (event: Event) => { const category = (event as CustomEvent<string>).detail; if (category) setActiveCategory(category); };
@@ -1925,14 +1926,14 @@ function GuardianOfferCatalog({ profile, offers, ramps, reviews, accent, protoco
     if (ramp) return `/guardians/${encodeURIComponent(profile.slug)}/value-ramp/${encodeURIComponent(ramp.slug)}`;
     return offer.access_model === 'free' ? '#start' : '#offers';
   };
-  return <section id="catalog" aria-label={`${profile.display_name}'s complete offer catalog`} style={{ background: '#E7E1D5', color: '#11120F', padding: `clamp(72px,10vw,132px) ${PAGE_X}` }}>
+  return <section id="catalog" aria-label={`${profile.display_name}'s complete offer catalog`} data-tone={tone} style={{ background: P.bg, color: P.ink, padding: `clamp(72px,10vw,132px) ${PAGE_X}` }}>
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
       <div style={{ maxWidth: 760, marginBottom: 'clamp(30px,5vw,52px)' }}>
-        <span style={{ display: 'block', color: '#667245', fontFamily: APP.font, fontSize: 12, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 12 }}>Complete catalog · {offers.length} {offers.length === 1 ? 'offer' : 'offers'}</span>
+        <span style={{ display: 'block', color: P.accent, fontFamily: APP.font, fontSize: 12, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 12 }}>Complete catalog · {offers.length} {offers.length === 1 ? 'offer' : 'offers'}</span>
         <h2 style={{ fontFamily: serif, fontSize: 'clamp(42px,7vw,82px)', fontWeight: 300, lineHeight: .94, letterSpacing: '-.045em', margin: '0 0 18px' }}>Explore every way to work with {profile.display_name}.</h2>
-        <p style={{ color: '#66645F', fontFamily: APP.font, fontSize: 16, lineHeight: 1.55, maxWidth: 620, margin: 0 }}>Browse the full published collection—free resources, protocols, sessions, communities and programs.</p>
+        <p style={{ color: P.muted, fontFamily: APP.font, fontSize: 16, lineHeight: 1.55, maxWidth: 620, margin: 0 }}>Browse the full published collection—free resources, protocols, sessions, communities and programs.</p>
       </div>
-      <div role="tablist" aria-label="Offer categories" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '0 0 26px' }}>{categories.map((category) => <button key={category} type="button" role="tab" aria-selected={activeCategory === category} onClick={() => setActiveCategory(category)} style={{ minHeight: 38, padding: '0 14px', border: `1px solid ${activeCategory === category ? '#11120F' : 'rgba(17,18,15,.34)'}`, background: activeCategory === category ? '#11120F' : 'transparent', color: activeCategory === category ? '#F2EFE7' : '#11120F', fontFamily: APP.font, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{category}</button>)}</div>
+      <div role="tablist" aria-label="Offer categories" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '0 0 26px' }}>{categories.map((category) => <button key={category} type="button" role="tab" aria-selected={activeCategory === category} onClick={() => setActiveCategory(category)} style={{ minHeight: 38, padding: '0 14px', border: `1px solid ${activeCategory === category ? P.ink : P.line}`, background: activeCategory === category ? P.ink : 'transparent', color: activeCategory === category ? P.bg : P.ink, fontFamily: APP.font, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>{category}</button>)}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,300px),1fr))', gap: 18 }}>
         {visibleOffers.map((offer) => {
           const wanted = offerProtocolKey(offer.title);
@@ -2096,7 +2097,8 @@ function EventCommerceCard({ profile, event, rooms = [] }: { profile: GuideProfi
   </article>;
 }
 
-function GuardianEvents({ retreats = [], profile, events, sourceUrl, canEditSource, onImported, onSourceChanged }: { retreats?: GuideRetreat[]; profile: GuideProfile; events: GuideEvent[]; sourceUrl: string; canEditSource: boolean; onImported: (events: GuideEvent[]) => void; onSourceChanged: (sourceUrl: string) => void }) {
+function GuardianEvents({ retreats = [], profile, events, sourceUrl, canEditSource, onImported, onSourceChanged, tone = 'dark' }: { tone?: Tone; retreats?: GuideRetreat[]; profile: GuideProfile; events: GuideEvent[]; sourceUrl: string; canEditSource: boolean; onImported: (events: GuideEvent[]) => void; onSourceChanged: (sourceUrl: string) => void }) {
+  const P = TONE_PALETTE[tone];
   const [draftSourceUrl, setDraftSourceUrl] = useState(sourceUrl);
   const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [message, setMessage] = useState('');
@@ -2122,26 +2124,26 @@ function GuardianEvents({ retreats = [], profile, events, sourceUrl, canEditSour
       setState('done'); setMessage(`${result.imported} ${result.imported === 1 ? 'event' : 'events'} pulled from the source.`);
     } catch (error: any) { setState('error'); setMessage(error?.message || 'Could not pull events.'); }
   }
-  return <section id="events" aria-label={`${profile.display_name}'s events`} style={{ background: '#11150F', color: '#F2EFE7', padding: `clamp(72px,10vw,124px) ${PAGE_X}` }}>
+  return <section id="events" data-tone={tone} aria-label={`${profile.display_name}'s events`} style={{ background: P.bg, color: P.ink, padding: `clamp(72px,10vw,124px) ${PAGE_X}` }}>
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap', marginBottom: 34 }}>
-        <div style={{ maxWidth: 700 }}><span style={{ color: '#C7D8A3', fontSize: 11, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase' }}>Meet in person · {upcoming.length} upcoming</span><h2 style={{ fontFamily: serif, fontSize: 'clamp(46px,7vw,82px)', fontWeight: 300, lineHeight: .96, letterSpacing: '-.04em', margin: '12px 0 0' }}>Upcoming events.</h2></div>
+        <div style={{ maxWidth: 700 }}><span style={{ color: P.accent, fontSize: 11, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase' }}>Meet in person · {upcoming.length} upcoming</span><h2 style={{ fontFamily: serif, fontSize: 'clamp(46px,7vw,82px)', fontWeight: 300, lineHeight: .96, letterSpacing: '-.04em', margin: '12px 0 0' }}>Upcoming events.</h2></div>
         {canEditSource && <div style={{ width: 'min(100%,520px)', display: 'grid', gridTemplateColumns: canEditSource ? 'minmax(0,1fr) auto' : 'auto', justifyItems: canEditSource ? 'stretch' : 'end' }}>
-          {canEditSource && <><label htmlFor="event-source-url" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)' }}>Events page URL</label><input id="event-source-url" type="url" value={draftSourceUrl} onChange={(event) => setDraftSourceUrl(event.target.value)} placeholder="https://your-site.com/events" style={{ minWidth: 0, height: 46, boxSizing: 'border-box', border: '1px solid rgba(242,239,231,.45)', background: 'transparent', color: '#F2EFE7', padding: '0 12px', fontSize: 12, outline: 0 }} /></>}
-          <button type="button" onClick={pull} disabled={state === 'loading'} style={{ height: 46, border: '1px solid #C7D8A3', background: '#C7D8A3', color: '#11150F', padding: '0 15px', fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', cursor: state === 'loading' ? 'wait' : 'pointer' }}>{state === 'loading' ? 'Refreshing…' : canEditSource ? 'Save & refresh events' : 'Refresh events'}</button>
-          {canEditSource && <span style={{ gridColumn: '1 / -1', color: '#9FA897', fontSize: 10, marginTop: 7 }}>Only you can change this source URL.</span>}
-          {message && <span role={state === 'error' ? 'alert' : 'status'} style={{ gridColumn: '1 / -1', color: state === 'error' ? '#FFB4A8' : '#C7D8A3', fontSize: 11, marginTop: 8 }}>{message}</span>}
+          {canEditSource && <><label htmlFor="event-source-url" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)' }}>Events page URL</label><input id="event-source-url" type="url" value={draftSourceUrl} onChange={(event) => setDraftSourceUrl(event.target.value)} placeholder="https://your-site.com/events" style={{ minWidth: 0, height: 46, boxSizing: 'border-box', border: `1px solid ${P.line}`, background: 'transparent', color: P.ink, padding: '0 12px', fontSize: 12, outline: 0 }} /></>}
+          <button type="button" onClick={pull} disabled={state === 'loading'} style={{ height: 46, border: `1px solid ${P.accent}`, background: P.accent, color: P.bg, padding: '0 15px', fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', cursor: state === 'loading' ? 'wait' : 'pointer' }}>{state === 'loading' ? 'Refreshing…' : canEditSource ? 'Save & refresh events' : 'Refresh events'}</button>
+          {canEditSource && <span style={{ gridColumn: '1 / -1', color: P.muted, fontSize: 10, marginTop: 7 }}>Only you can change this source URL.</span>}
+          {message && <span role={state === 'error' ? 'alert' : 'status'} style={{ gridColumn: '1 / -1', color: state === 'error' ? (tone === 'light' ? '#A33B2B' : '#FFB4A8') : P.accent, fontSize: 11, marginTop: 8 }}>{message}</span>}
         </div>}
       </div>
       {upcoming.length ? <div className="g-events-layout">
         <style>{`.g-events-layout{display:grid;grid-template-columns:minmax(260px,300px) minmax(0,1fr);gap:36px;align-items:start}.g-events-calendar{position:sticky;top:84px}.g-events-stack{max-height:min(80vh,860px);overflow-y:auto;overscroll-behavior:contain;padding:6px}@media (max-width:860px){.g-events-layout{grid-template-columns:minmax(0,1fr)}.g-events-calendar{position:static}.g-events-stack{max-height:none;overflow:visible;padding-right:0}}`}</style>
-        <div className="g-events-calendar"><EventsCalendar events={upcoming} range={range} onChange={setRange} /></div>
+        <div className="g-events-calendar"><EventsCalendar events={upcoming} range={range} onChange={setRange} ink={P.ink} surface={P.bg} line={tone === 'light' ? 'rgba(17,18,15,.5)' : 'rgba(242,239,231,.55)'} light={tone === 'light'} /></div>
         <div style={{ minWidth: 0 }}>
-          <p data-events-count role="status" style={{ color: '#9FA897', fontSize: 12, margin: '0 0 14px' }}>{range ? `${fitting.length} of ${upcoming.length} events fit your dates` : `${upcoming.length} upcoming`}</p>
+          <p data-events-count role="status" style={{ color: P.muted, fontSize: 12, margin: '0 0 14px' }}>{range ? `${fitting.length} of ${upcoming.length} events fit your dates` : `${upcoming.length} upcoming`}</p>
           {fitting.length ? <div className="g-events-stack" role="region" aria-label="Events" tabIndex={0} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,300px),1fr))', gap: 16, alignContent: 'start' }}>{fitting.map((event) => <EventCommerceCard key={event.id} profile={profile} event={event} rooms={roomsFor(event)} />)}</div>
-            : <p style={{ color: '#C7D8A3', fontSize: 14 }}>Nothing is on for those dates. Choose other days, or <button type="button" onClick={() => setRange(null)} style={{ border: 0, background: 'transparent', color: '#C7D8A3', padding: 0, font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>clear the dates</button>.</p>}
+            : <p style={{ color: P.accent, fontSize: 14 }}>Nothing is on for those dates. Choose other days, or <button type="button" onClick={() => setRange(null)} style={{ border: 0, background: 'transparent', color: P.accent, padding: 0, font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>clear the dates</button>.</p>}
         </div>
-      </div> : <div style={{ border: '1px dashed rgba(242,239,231,.3)', padding: 32, color: '#B8B6AF' }}>No upcoming events yet, so visitors do not see this section. Add one in the Guardian workspace or pull from the official events page.</div>}
+      </div> : <div style={{ border: `1px dashed ${P.line}`, padding: 32, color: P.muted }}>No upcoming events yet, so visitors do not see this section. Add one in the Guardian workspace or pull from the official events page.</div>}
     </div>
   </section>;
 }
@@ -2219,15 +2221,16 @@ function RetreatCard({ profile, retreat, sessions = [] }: { profile: GuideProfil
   </article>;
 }
 
-function GuardianRetreats({ profile, retreats, events = [] }: { profile: GuideProfile; retreats: GuideRetreat[]; events?: GuideEvent[] }) {
+function GuardianRetreats({ profile, retreats, events = [], tone = 'light' }: { profile: GuideProfile; retreats: GuideRetreat[]; events?: GuideEvent[]; tone?: Tone }) {
   if (!retreats.length) return null;
+  const P = TONE_PALETTE[tone];
   // A programme and its sessions share a name; only sessions still to come are offered, soonest first.
   const sessionsOf = (retreat: GuideRetreat) => events
     .filter((event) => event.title.trim().toLowerCase() === retreat.title.trim().toLowerCase() && new Date(event.end_at || event.start_at).getTime() >= Date.now() - 86400000)
     .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
-  return <section id="retreats" aria-label={`${profile.display_name}'s retreats`} style={{ background: '#E7E1D5', color: '#11120F', padding: `clamp(72px,10vw,132px) ${PAGE_X}` }}>
+  return <section id="retreats" data-tone={tone} aria-label={`${profile.display_name}'s retreats`} style={{ background: P.bg, color: P.ink, padding: `clamp(72px,10vw,132px) ${PAGE_X}` }}>
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
-      <span style={{ color: '#667245', fontSize: 11, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>Stay and learn · {retreats.length}</span>
+      <span style={{ color: P.accent, fontSize: 11, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase' }}>Stay and learn · {retreats.length}</span>
       <h2 style={{ fontFamily: serif, fontSize: 'clamp(46px,7vw,82px)', fontWeight: 300, lineHeight: .96, letterSpacing: '-.04em', margin: '12px 0 34px' }}>Retreats.</h2>
       <div className="g-retreats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 18 }}><style>{`@media (max-width:760px){.g-retreats-grid{grid-template-columns:minmax(0,1fr)!important}}`}</style>{retreats.map((retreat) => <RetreatCard key={retreat.id} profile={profile} retreat={retreat} sessions={sessionsOf(retreat)} />)}</div>
     </div>
@@ -2267,6 +2270,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   const [shopProducts, setShopProducts] = useState<GuideProduct[]>([]);
   const [publicBrands, setPublicBrands] = useState<GuideBrand[]>([]);
   const [protocolBrands, setProtocolBrands] = useState<Record<string, string[]>>({});
+  const [forumTeaser, setForumTeaser] = useState<GuideForumTeaser | null>(null);
   // A brand's page (/guardians/<guardian>/<brand>) is the Guardian's page with the brand's own name, logo, links and content.
   const activeBrand = brandSlug ? publicBrands.find((brand) => (brand.slug || '').toLowerCase() === brandSlug.toLowerCase()) : undefined;
   const personalBrandId = publicBrands.find((brand) => brand.kind === 'personal')?.id;
@@ -2312,6 +2316,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
       setReviews(found ? await listGuardianReviews(found.user_id).catch(() => []) : []);
       setGuardianProtocols(found ? (await listPublicProtocols('').catch(() => [])).filter((protocol) => protocol.user_id === found.user_id) : []);
       setProtocolBrands(found ? await listProtocolBrands(found.user_id).catch(() => ({})) : {});
+      setForumTeaser(found ? await getGuideForumTeaser(found.user_id).catch(() => null) : null);
       setEvents(found ? await listGuideEvents(found.user_id).catch(() => []) : []);
       setRetreats(found ? await listGuideRetreats(found.user_id).catch(() => []) : []);
       setShopProducts(found ? await listGuideProducts(found.user_id).catch(() => []) : []);
@@ -2380,6 +2385,7 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   if (ofKind('treat')) shownSections.add('treats');
   if (siteRetreats.length) shownSections.add('retreats');
   if (siteProtocols.length) shownSections.add('protocols');
+  if (forumTeaser && (forumTeaser.questions.length || forumTeaser.membershipOffer)) shownSections.add('forum');
   if (emailCaptureOn || pathSlug) shownSections.add('funnel');
   if (brandsShown) shownSections.add('brands');
   const tones = sectionTones(orderPageSections(socials.section_order), shownSections, funnelHasEntry ? { funnel: emailBackdrop ? 'dark' : 'light' } : {});
@@ -2391,14 +2397,14 @@ export function GuardianWebsite({ slug, brandSlug, isSignedIn }: { slug: string;
   const brandLinks: BrandLink[] = brandTiles.filter((tile) => tile.href).map((tile) => ({ key: tile.key, name: tile.title || tile.name, logo: tile.logo, href: tile.href, here: !!tile.here }));
   // The sections between the hero and the footer, in the order the owner chose (see pageSections). Each is a whole section that draws nothing when it has nothing to show.
   const sectionNodes: Record<PageSectionKey, React.ReactNode> = {
-    offers: <GuardianOfferCatalog profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} categoryOrder={socials.protocol_filter_order} />,
-    shop: <GuardianShop guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} protocols={guardianProtocols} owns={onSite} brandId={brandSlug ? activeBrand?.id : null} logoUrl={profile.avatar_url} localePreference={localePreference} categoryOrder={socials.product_filter_order} />,
-    events: <GuardianEvents retreats={siteRetreats} profile={profile} events={siteEvents} sourceUrl={eventSource} canEditSource={isSignedIn && user?.id === profile.user_id} onImported={setEvents} onSourceChanged={setEventSource} />,
-    talks: <GuardianOfferShelf kind="talk" profile={profile} offers={offers.filter((offer) => onSite(offer))} pagePadding={PAGE_X} />,
-    treats: <GuardianOfferShelf kind="treat" profile={profile} offers={offers.filter((offer) => onSite(offer))} pagePadding={PAGE_X} />,
+    offers: <GuardianOfferCatalog tone={tones.offers || 'light'} profile={profile} offers={publishedOffers} ramps={publishedRamps} reviews={reviews.filter((review) => review.status === 'published')} accent={publicAccent} protocols={guardianProtocols} categoryOrder={socials.protocol_filter_order} />,
+    shop: <GuardianShop tone={tones.shop || 'dark'} guideId={profile.user_id} guardianSlug={profile.slug} guardianName={profile.display_name} pagePadding={PAGE_X} protocols={guardianProtocols} owns={onSite} brandId={brandSlug ? activeBrand?.id : null} logoUrl={profile.avatar_url} localePreference={localePreference} categoryOrder={socials.product_filter_order} />,
+    events: <GuardianEvents tone={tones.events || 'dark'} retreats={siteRetreats} profile={profile} events={siteEvents} sourceUrl={eventSource} canEditSource={isSignedIn && user?.id === profile.user_id} onImported={setEvents} onSourceChanged={setEventSource} />,
+    talks: <GuardianOfferShelf tone={tones.talks || 'light'} kind="talk" profile={profile} offers={offers.filter((offer) => onSite(offer))} pagePadding={PAGE_X} />,
+    treats: <GuardianOfferShelf tone={tones.treats || 'dark'} kind="treat" profile={profile} offers={offers.filter((offer) => onSite(offer))} pagePadding={PAGE_X} />,
     protocols: <GuardianProtocols protocols={siteProtocols} profile={profile} pagePadding={PAGE_X} tone={tones.protocols || 'light'} accent={publicAccent} headingFont={publicHeadingFont} linkToOffers={publishedOffers.length > 0} />,
-    forum: <GuardianForumTeaser profile={profile} pagePadding={PAGE_X} />,
-    retreats: <GuardianRetreats profile={profile} retreats={siteRetreats} events={siteEvents} />,
+    forum: <GuardianForumTeaser teaser={forumTeaser} tone={tones.forum || 'light'} profile={profile} pagePadding={PAGE_X} />,
+    retreats: <GuardianRetreats tone={tones.retreats || 'light'} profile={profile} retreats={siteRetreats} events={siteEvents} />,
     funnel: <>{reviewToken && <ReviewForm token={reviewToken} guardianName={profile.display_name} accent={publicAccent} />}{isOwner && <ProfileSectionSkeleton sections={profileSections} />}{emailCaptureOn || pathSlug ? (funnelHasEntry ? <GuardianFunnel key={selectedRamp?.id || 'default'} backdrop={emailBackdrop} headlineStyle={publicHeadlineStyle} reviews={reviews.filter((r) => r.status === 'published')} profile={profile} offers={publishedOffers} ramp={selectedRamp || null} accent={publicAccent} headingFont={publicHeadingFont} /> : <FollowSignup profile={profile} accent={publicAccent} headingFont={publicHeadingFont} tone={tones.funnel || 'dark'} />) : null}</>,
     brands: brandsShown ? <section aria-labelledby="guardian-brands-title" data-page-section="brands" data-tone={tones.brands || 'dark'} style={{ padding: `clamp(54px,7vw,100px) ${PAGE_X}`, background: tones.brands === 'light' ? '#E7E1D5' : '#11120F', color: tones.brands === 'light' ? '#11120F' : ink }}>
       <span style={{ color: publicAccent, fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>Official brands</span>

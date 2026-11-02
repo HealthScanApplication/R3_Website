@@ -73,7 +73,7 @@ describe('saving a brand keeps what it already has', () => {
     window.history.replaceState({}, '', '/guardians/workspace?step=1');
     setup();
     await screen.findByDisplayValue('Test Guide');
-    fireEvent.click((await screen.findAllByRole('button', { name: /Tre Lune/ })).find((button) => button.getAttribute('aria-pressed') !== null && /^TTre Lune$/.test(button.textContent || ''))!);
+    fireEvent.click((await screen.findAllByRole('button', { name: /Tre Lune/ })).find((button) => button.getAttribute('aria-pressed') !== null && !button.closest('[data-brand-scope="circles"]') && /^TTre Lune$/.test(button.textContent || ''))!);
     await screen.findByDisplayValue('Tre Lune');
     await new Promise((resolve) => setTimeout(resolve, 30));
     fireEvent.click(within(screen.getByRole('region', { name: 'R3 house style profile image' })).getByRole('button', { name: 'Save' }));
@@ -114,7 +114,7 @@ describe('the email sign-up switch and the brands\' page addresses in the builde
     window.history.replaceState({}, '', '/guardians/workspace?step=1');
     setup();
     await screen.findByDisplayValue('Test Guide');
-    const chip = async (text: string) => (await screen.findAllByRole('button')).find((button) => button.getAttribute('aria-pressed') !== null && button.textContent === text)!;
+    const chip = async (text: string) => (await screen.findAllByRole('button')).find((button) => button.getAttribute('aria-pressed') !== null && !button.closest('[data-brand-scope="circles"]') && button.textContent === text)!;
     await waitFor(() => expect(screen.getAllByText('/guardians/test-guide/tre-lune').length).toBeGreaterThan(0));
     fireEvent.click(await chip('TTre Lune')); // open the brand
     await screen.findByDisplayValue('Tre Lune');
